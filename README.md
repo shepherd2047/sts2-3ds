@@ -28,7 +28,7 @@ test/sim.cpp        无界面自动对战，用来查崩溃和规则问题
 
 ## 构建
 
-1. 提取素材（需要 Python 3 + Pillow + numpy，默认读取 Steam 安装的 `Slay the Spire 2.pck`）：
+1. 提取素材（需要 Python 3 + Pillow + numpy；自动在 Mac/Windows/Linux 的 Steam 库里找游戏，也可用 `STS2_DIR` 指定）：
 
    ```bash
    python3 tools/build_assets.py
@@ -52,6 +52,6 @@ test/sim.cpp        无界面自动对战，用来查崩溃和规则问题
 
 ## 3DS 操作
 
-- 触摸：点手牌查看，再点一次打出；需要目标的牌在下屏点敌人名字
+- 触摸：点手牌放大查看；按住往上拖过手牌区出牌（自动锁定最近的敌人，左右滑换目标），拖回手牌区或按 B 取消
 - ←→ 选牌 / 选目标，A 确认，B 取消，L/R 切换手牌，X 结束回合，Y 查看牌组
 - START + SELECT 退出

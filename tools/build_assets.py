@@ -403,6 +403,20 @@ def build(args):
     build_font(chars, args.font)
 
 
+def default_font():
+    """A font committed under tools/fonts/ keeps both machines' output identical;
+    otherwise fall back to the system CJK font."""
+    here = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'fonts')
+    for f in sorted(glob.glob(os.path.join(here, '*'))):
+        if f.lower().endswith(('.otf', '.ttf', '.ttc')):
+            return f
+    for f in ('/System/Library/Fonts/STHeiti Medium.ttc', r'C:\Windows\Fonts\msyh.ttc',
+              '/c/Windows/Fonts/msyh.ttc', '/usr/share/fonts/opentype/noto/NotoSansCJK-Medium.ttc'):
+        if os.path.exists(f):
+            return f
+    sys.exit('no CJK font found; pass --font')
+
+
 def build_font(chars, font_path):
     sizes = [12, 16]
     page_size = 1024
@@ -444,6 +458,8 @@ def build_font(chars, font_path):
 if __name__ == '__main__':
     ap = argparse.ArgumentParser()
     ap.add_argument('--pck', help='path to "Slay the Spire 2.pck" (default: Steam install)')
-    ap.add_argument('--font', default='/System/Library/Fonts/STHeiti Medium.ttc')
+    ap.add_argument('--font', default=None, help='CJK font (default: tools/fonts/*, else a system font)')
     ap.add_argument('--preview', action='store_true', help='also write PNG previews')
-    build(ap.parse_args())
+    args = ap.parse_args()
+    args.font = args.font or default_font()
+    build(args)

@@ -8,19 +8,16 @@ import sys
 
 from PIL import Image
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'tools'))
+sys.path.insert(0, os.path.dirname(__file__))
 from pck import Pck  # noqa: E402
-
-DEFAULT_PCK = os.path.expanduser(
-    '~/Library/Application Support/Steam/steamapps/common/Slay the Spire 2/'
-    'SlayTheSpire2.app/Contents/Resources/Slay the Spire 2.pck')
+from gamepaths import find_pck  # noqa: E402
 
 BCN = {17: 1, 18: 2, 19: 3, 22: 7}  # Godot Image::Format -> Pillow bcn decoder
 
 
 class Game:
-    def __init__(self, path=DEFAULT_PCK):
-        self.pck = Pck(path)
+    def __init__(self, path=None):
+        self.pck = Pck(path or find_pck())
 
     def imported_path(self, res):
         imp = self.pck.read(res + '.import').decode()
