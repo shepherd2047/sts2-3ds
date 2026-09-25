@@ -116,6 +116,13 @@ scripts drift; delete the debug file afterwards.
   shared bag. Skipped relics are listed at the end of each file with the missing
   feature (potions, shop, card-reward hooks, death prevention, ...).
 - Debug: `STS_ROOM=Treasure|Rest|Elite|Boss` makes the first room that type.
+- Development build: `Run::freeMap` (default on; `STS_PATH_ONLY=1` off) lets any
+  map node be entered. SELECT (Backspace in the preview) or 开发 on the map opens
+  the developer menu: god mode, heal, gold, max HP, obtain any relic, add any
+  card, upgrade deck, pick the next encounter, kill all enemies, free map toggle.
+- Map follows the RGDSplus proportions (paper strip ~65% wide, 30 px rows, 36 px
+  columns, 16 px nodes, legend on the right). START opens it for a look from any
+  room, with a red 返回 in the bottom-left corner.
 - `Res` frees monster Spine pages when a new fight starts (only IRONCLAD stays);
   3DS textures live in limited linear memory.
 

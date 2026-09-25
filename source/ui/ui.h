@@ -84,6 +84,10 @@ class App {
   void drawEnd(bool top, bool won);
   void drawRelicOffer(bool top);  // elite relic reward / treasure chest
   void drawRelics(bool top);      // owned relics: grid below, the picked one above
+  // Developer menu (SELECT, or 开发 on the map): cheats and pickers for testing.
+  void drawDev(bool top);
+  void updateDev(const gfx::Input& in);
+  void devApply(int page, int index);
 
   void updateTitle(const gfx::Input& in);
   void updateMap(const gfx::Input& in);
@@ -130,6 +134,12 @@ class App {
   std::vector<Hit> hits_;
   bool deckOpen_ = false;
   bool relicsOpen_ = false;
+  bool mapView_ = false;  // map opened from another room (START): look only, red 返回 below
+  bool devOpen_ = false;
+  int devPage_ = 0;  // 0 actions, 1 relics, 2 cards, 3 encounters
+  std::vector<std::unique_ptr<sts::Relic>> devRelics_;  // every registered relic, for the picker
+  std::vector<std::unique_ptr<sts::Card>> devCards_;    // every registered pool card
+  std::vector<std::string> devEncounters_;
 
   // selection state
   int sel_ = -1;       // hand index / reward index / grid index

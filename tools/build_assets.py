@@ -373,11 +373,12 @@ def build(args):
         os.makedirs(os.path.join(ROOT, 'build'), exist_ok=True)
         canvas.save(os.path.join(ROOT, 'build', 'preview_bg.png'))
         fcanvas.save(os.path.join(ROOT, 'build', 'preview_floor.png'))
-    # Map paper: one 400x495 sheet behind both screens (top 240 + hinge 15 + bottom 240),
-    # the map is continuous across them like RGDSplus U07. The middle piece tiles vertically.
+    # Map paper: one 260x495 strip behind both screens (top 240 + hinge 15 + bottom 240),
+    # continuous across them like RGDSplus U07; like there, the paper covers ~65% of the
+    # width with dark sides. The middle piece tiles vertically.
     mapbg = g.image('images/packed/map/map_bgs/overgrowth/map_middle_overgrowth.png')
-    piece = mapbg.resize((400, round(mapbg.height * 400 / mapbg.width)), Image.LANCZOS)
-    sheet = Image.new('RGBA', (400, 495), (0, 0, 0, 255))
+    piece = mapbg.resize((260, round(mapbg.height * 260 / mapbg.width)), Image.LANCZOS)
+    sheet = Image.new('RGBA', (260, 495), (0, 0, 0, 255))
     for y in range(0, 495, piece.height):
         sheet.paste(piece, (0, y))
     mb = Image.new('RGBA', (512, 512), (0, 0, 0, 255))

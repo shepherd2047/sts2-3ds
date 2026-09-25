@@ -84,6 +84,8 @@ Task<> Run::obtainRelic(std::unique_ptr<Relic> rel) {
   rel->run = this;
   rel->combat = combat && combat->inProgress ? combat.get() : nullptr;
   Relic* raw = rel.get();
+  for (auto& [k, v] : relicBag) v.erase(std::remove(v.begin(), v.end(), raw->id), v.end());
+  for (auto& [k, v] : sharedRelicBag) v.erase(std::remove(v.begin(), v.end(), raw->id), v.end());
   relics.push_back(std::move(rel));
   raw->doFlash();
   co_await raw->afterObtained();
@@ -134,6 +136,7 @@ void Run::start(uint64_t s) {
   bossId = rng("Encounters").nextItem(db::act1Bosses());
   generateMap();
   currentNode = -1;
+  freeMap = getenv("STS_PATH_ONLY") == nullptr;
 }
 
 void Run::generateMap() {
@@ -195,13 +198,21 @@ void Run::generateMap() {
   }
 }
 
-std::vector<int> Run::reachableNodes() const {
+std::vector<int> Run::pathNodes() const {
   std::vector<int> out;
   if (currentNode < 0) {
     for (int i = 0; i < (int)nodes.size(); ++i) if (nodes[i].row == 0) out.push_back(i);
   } else {
     out = nodes[currentNode].next;
   }
+  return out;
+}
+
+std::vector<int> Run::reachableNodes() const {
+  std::vector<int> out = pathNodes();
+  if (!freeMap) return out;
+  for (int i = 0; i < (int)nodes.size(); ++i)
+    if (std::find(out.begin(), out.end(), i) == out.end()) out.push_back(i);
   return out;
 }
 
@@ -301,6 +312,7 @@ Task<> Run::main() {
       if (type == RoomType::Monster) ++fightsDone;
       // Debug: STS_ENCOUNTER=<EncounterId> makes the first fight that encounter.
       if (const char* forced = getenv("STS_ENCOUNTER"); forced && floor == 1 && db::encounter(forced)) id = forced;
+      if (!devNextEncounter.empty() && db::encounter(devNextEncounter)) { id = devNextEncounter; devNextEncounter.clear(); }
 
       bool won = co_await fight(id);
       if (!won) { screen = Screen::GameOver; co_return; }

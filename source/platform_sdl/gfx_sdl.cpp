@@ -63,6 +63,7 @@ void parseScript() {
       else if (k == "LEFT") sc.btn = BTN_LEFT; else if (k == "RIGHT") sc.btn = BTN_RIGHT;
       else if (k == "UP") sc.btn = BTN_UP; else if (k == "DOWN") sc.btn = BTN_DOWN;
       else if (k == "START") sc.btn = BTN_START;
+      else if (k == "SELECT") sc.btn = BTN_SELECT;
       script.push_back(sc);
     }
   }

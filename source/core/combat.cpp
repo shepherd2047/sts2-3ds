@@ -302,6 +302,7 @@ Task<std::vector<DamageResult>> damage(std::vector<Creature*> targets, Dec amoun
     r.receiver = target;
     r.props = props;
     int before = target->hp;
+    if (target->isPlayer && c.run->devGod) unblocked = 0;  // developer menu: invincible
     bool killed = target->hp > 0 && unblocked >= Dec(target->hp);
     int n = std::clamp(unblocked.toInt(), 0, 999999999);
     target->hp = std::max(target->hp - n, 0);
@@ -670,6 +671,13 @@ Task<> Combat::runCombat() {
         PlayerAction a = co_await actions.next();
         if (over) break;
         if (a.kind == PlayerAction::EndTurn) break;
+        if (a.kind == PlayerAction::DevKillAll) {
+          playerPhase = false;
+          co_await cmd::kill(aliveEnemies());
+          co_await checkWinCondition();
+          playerPhase = !over;
+          continue;
+        }
         if (a.card && canPlay(a.card) && (a.card->target != TargetType::AnyEnemy || isValidTarget(a.card, a.target))) {
           playerPhase = false;
           co_await playCard(a.card, a.target);

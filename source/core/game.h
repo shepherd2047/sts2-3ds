@@ -439,7 +439,7 @@ struct VisualEvent {
 };
 
 struct PlayerAction {
-  enum Kind { PlayCard, EndTurn } kind = EndTurn;
+  enum Kind { PlayCard, EndTurn, DevKillAll } kind = EndTurn;  // DevKillAll: developer menu
   Card* card = nullptr;
   Creature* target = nullptr;
 };
@@ -634,7 +634,14 @@ struct Run {
   }
   void start(uint64_t seed);
   void generateMap();
-  std::vector<int> reachableNodes() const;
+  // Development build: every node can be entered, not only the next ones on the path.
+  // STS_PATH_ONLY=1 restores the normal rule.
+  bool freeMap = true;
+  // Developer menu state.
+  bool devGod = false;             // the player loses no HP
+  std::string devNextEncounter;    // the next fight is this encounter (then cleared)
+  std::vector<int> pathNodes() const;       // the game's rule: the next row along the paths
+  std::vector<int> reachableNodes() const;  // pathNodes first, then (freeMap) every other node
   Task<> main();
   Task<bool> fight(const std::string& encounterId);
 };

@@ -28,10 +28,15 @@ inline void toLocal(bool top, float& x, float& y) {
 }
 
 // Map (RGDSplus U07): one sheet running through both screens, bottom = lower rows.
-constexpr float kRowH = 34.f;
-constexpr float kMapBase = 455.f;        // virtual y of row 0 at scroll 0
-constexpr float kMapMaxScroll = 11.5f;   // rows; enough to bring the boss onto the bottom screen
-constexpr float kMapBgH = 495.f;         // bg_map.t3t sheet height (both screens + hinge)
+// Proportions follow the RGDSplus port: a paper strip ~65% of the width, small nodes,
+// ~7-8 rows per screen so the whole act nearly fits on the two screens.
+constexpr float kRowH = 30.f;
+constexpr float kColW = 36.f;            // column spacing, centred on the top screen
+constexpr float kMapBase = 451.f;        // virtual y of row 0 at scroll 0 (just above the HUD)
+constexpr float kMapMaxScroll = 13.5f;   // rows; enough to bring the boss down to the bottom screen
+constexpr float kMapBgW = 260.f, kMapBgH = 495.f;  // bg_map.t3t paper strip (both screens + hinge)
+constexpr float kMapBgX = (gfx::kTopW - kMapBgW) / 2.f;
+constexpr float kNodeSize = 16.f, kBossSize = 44.f;
 constexpr float kMapTapSlop = 5.f;       // 12 px of 768 on RGDSplus, rounded up for a stylus
 
 // Button ids
@@ -49,11 +54,16 @@ enum : int {
   ID_RESTART,
   ID_TAKE,
   ID_RELICS,
+  ID_DEVMENU,
+  ID_PGUP,
+  ID_PGDN,
   ID_TARGET0 = 100,   // + enemy index
   ID_HAND0 = 200,     // + hand index
   ID_NODE0 = 300,     // + reachable index
   ID_REWARD0 = 400,   // + reward index
   ID_RELIC0 = 500,    // + owned relic index
+  ID_DEV0 = 600,      // + developer action
+  ID_DEVITEM0 = 700,  // + developer picker row/cell
   ID_GRID0 = 1000,    // + grid index
 };
 
@@ -517,6 +527,23 @@ void App::update(const gfx::Input& in, double dt) {
   }
 
   if (autoplay_) autoplay(dt);
+  if ((in.down & gfx::BTN_SELECT) && scr != Screen::Title) {
+    devOpen_ = !devOpen_;
+    devPage_ = 0;
+    sel_ = -1;
+    scroll_ = 0;
+    return;
+  }
+  if (devOpen_) { updateDev(in); return; }
+  // START opens the map for a look from any room (RGDSplus: map entry on the top bar).
+  if ((in.down & gfx::BTN_START) && !mapView_ && scr != Screen::Title && scr != Screen::Map &&
+      scr != Screen::GameOver && scr != Screen::Victory) {
+    mapView_ = true;
+    mapTouch_ = {};
+    mapUserScroll_ = false;
+    return;
+  }
+  if (mapView_) { updateMap(in); return; }
   if (relicsOpen_) { updateRelics(in); return; }
   if (deckOpen_) { updateDeck(in); return; }
   switch (scr) {
@@ -589,6 +616,8 @@ void App::draw() {
   for (int pass = 0; pass < 2; ++pass) {
     bool top = pass == 0;
     gfx::screen(top ? gfx::TOP : gfx::BOTTOM, 0x0B0B12FF);
+    if (devOpen_) { drawDev(top); continue; }
+    if (mapView_) { drawMap(top); continue; }
     if (relicsOpen_) { drawRelics(top); continue; }
     if (deckOpen_) { drawDeck(top); continue; }
     switch (scr) {
@@ -731,7 +760,7 @@ void App::drawSceneBg(bool top, float dim) {
   if (run_->screen == Screen::Map) {
     float bx = 0, by = 0;
     toLocal(top, bx, by);
-    gfx::image(R().texture("gfx/bg_map.t3t"), 0, 0, kTop, kMapBgH, bx, by, kTop, kMapBgH, 0x000000FF, 0.1f);
+    gfx::image(R().texture("gfx/bg_map.t3t"), 0, 0, kMapBgW, kMapBgH, bx + kMapBgX, by, kMapBgW, kMapBgH, 0x000000FF, 0.1f);
   } else {
     gfx::image(R().texture("gfx/bg_overgrowth.t3t"), top ? 0 : kBotOX, 0, w, kH, 0, 0, w, kH, 0x000000FF, 0.15f);
   }
@@ -740,7 +769,7 @@ void App::drawSceneBg(bool top, float dim) {
 
 // Node centre on the two-screen virtual canvas.
 std::pair<float, float> App::mapPos(const MapNode& n) const {
-  return {58 + n.x * 47, kMapBase - (n.y - mapScroll_) * kRowH};
+  return {kTop / 2.f + (n.x - 3) * kColW, kMapBase - (n.y - mapScroll_) * kRowH};
 }
 
 // Reachable index under a bottom-screen point, or -1.
@@ -753,7 +782,7 @@ int App::mapNodeAt(float tx, float ty) {
   for (int i = 0; i < (int)reach.size(); ++i) {
     auto& n = r.nodes[reach[i]];
     auto [x, y] = mapPos(n);
-    float d = std::hypot(vx - x, vy - y), radius = n.type == RoomType::Boss ? 32.f : 17.f;
+    float d = std::hypot(vx - x, vy - y), radius = n.type == RoomType::Boss ? 26.f : 15.f;
     if (d < radius && d < bestD) { best = i; bestD = d; }
   }
   return best;
@@ -765,14 +794,14 @@ void App::drawMap(bool top) {
   if (mapSel_ >= (int)reach.size()) mapSel_ = 0;
   if (top && !mapUserScroll_) {  // once per frame: keep the next row low on the bottom screen
     int curRow = r.currentNode >= 0 ? r.nodes[r.currentNode].row : -1;
-    float target = std::clamp((float)curRow - 0.75f, 0.f, kMapMaxScroll);
+    float target = std::clamp((float)curRow - 0.5f, 0.f, kMapMaxScroll);  // next row ~1.5 rows above the HUD
     mapScroll_ += (target - mapScroll_) * 0.15f;
   }
 
   // One sheet of map paper behind both screens.
   float bx = 0, by = 0;
   toLocal(top, bx, by);
-  gfx::image(R().texture("gfx/bg_map.t3t"), 0, 0, kTop, kMapBgH, bx, by, kTop, kMapBgH, 0x000000FF, 0.1f);
+  gfx::image(R().texture("gfx/bg_map.t3t"), 0, 0, kMapBgW, kMapBgH, bx + kMapBgX, by, kMapBgW, kMapBgH, 0x000000FF, 0.1f);
 
   auto pos = [&](const MapNode& n) {
     auto p = mapPos(n);
@@ -792,19 +821,21 @@ void App::drawMap(bool top) {
       for (int d = 0; d < dashes; d += 2) {
         float t0 = (float)d / dashes, t1 = (float)(d + 1) / dashes;
         gfx::line(x0 + (x1 - x0) * t0, y0 + (y1 - y0) * t0, x0 + (x1 - x0) * t1, y0 + (y1 - y0) * t1, 2,
-                  travelled ? 0x28231DFF : 0x87725699);
+                  travelled ? 0x28231DFF : 0x6E5B42E0);
       }
     }
   }
-  // Nodes
+  // Nodes. Only the normal next steps pulse; in the free (development) map every
+  // node is still enterable, and the selected one is highlighted wherever it is.
+  auto path = r.pathNodes();
   for (int i = 0; i < (int)r.nodes.size(); ++i) {
     auto& n = r.nodes[i];
     auto [x, y] = pos(n);
     if (y < -40 || y > kH + 40) continue;
-    bool reachable = std::find(reach.begin(), reach.end(), i) != reach.end();
-    bool chosen = reachable && reach[mapSel_] == i;
+    bool chosen = !reach.empty() && reach[mapSel_] == i;
+    bool reachable = chosen || std::find(path.begin(), path.end(), i) != path.end();
     Sprite ic = roomIcon(n.type);
-    float sz = n.type == RoomType::Boss ? 56 : 22;
+    float sz = n.type == RoomType::Boss ? kBossSize : kNodeSize;
     if (reachable) {
       float pulse = 1.f + 0.15f * std::sin((float)time_ * 6);
       sz *= chosen ? 1.35f * pulse : pulse;
@@ -817,9 +848,33 @@ void App::drawMap(bool top) {
   }
 
   if (top) { drawTopBar(); return; }
-  // Bottom HUD in the corners, clear of row 0.
-  button(4, 210, 64, 26, "牌组", ID_DECK);
-  button(72, 210, 64, 26, "遗物", ID_RELICS);
+  // Bottom HUD in the corners, clear of row 0. Looking at the map from another room
+  // (START) shows only the red 返回 in the bottom-left corner, as on RGDSplus.
+  if (mapView_) {
+    const float bx = 4, by = 208, bw = 72, bh = 26;
+    gfx::rect(bx, by, bw, bh, 0xB83A3AF0);
+    gfx::rect(bx, by, bw, 2, 0xFF8A8AFF);
+    gfx::rect(bx + bw - 8, by, 8, bh, 0x8A2020F0);
+    R().text(bx + (bw - 8) / 2, by + (bh - R().lineHeight(F16)) / 2, "返回", ts(F16, col::white, CENTER));
+    hits_.push_back({bx, by, bw, bh, ID_BACK});
+  } else {
+    button(4, 210, 64, 26, "牌组", ID_DECK);
+    button(72, 210, 64, 26, "遗物", ID_RELICS);
+    button(140, 210, 56, 26, "开发", ID_DEVMENU);
+  }
+  // Legend panel on the right, as on RGDSplus (the map's own legend, lower screen).
+  {
+    const float lx = kBot - 62, ly = 104, lw = 58;
+    const RoomType types[] = {RoomType::Monster, RoomType::Elite, RoomType::Rest, RoomType::Treasure};
+    panel(lx, ly, lw, 18 + 4 * 17, 0x2A2418D8, 0x8A7A5AFF);
+    R().text(lx + lw / 2, ly + 3, "图例", ts(F12, col::gold, CENTER));
+    for (int i = 0; i < 4; ++i) {
+      float y = ly + 19 + i * 17;
+      Sprite ic = roomIcon(types[i]);
+      spr(ic, lx + 4, y, 14, 14);
+      R().text(lx + 22, y + 1, roomName(types[i]), ts(F12, col::white, LEFT, 0, 0.85f));
+    }
+  }
   if (!reach.empty()) {
     std::string label = roomName(r.nodes[reach[mapSel_]].type);
     float w = R().measure(label, ts(F12)) + 12;
@@ -832,21 +887,29 @@ void App::drawMap(bool top) {
 // the slop and started on a reachable node enters it on release. A/←→ still work.
 void App::updateMap(const gfx::Input& in) {
   Run& r = *run_;
-  if (!r.mapChoice.waiting()) { mapTouch_ = {}; return; }
+  // Opened from another room (mapView_): look and drag only; 返回 / B / START go back.
+  if (mapView_ && ((in.down & (gfx::BTN_B | gfx::BTN_START)) || (in.touchDown && hitAt(in.tx, in.ty) == ID_BACK))) {
+    mapView_ = false;
+    mapTouch_ = {};
+    return;
+  }
+  bool choosing = !mapView_ && r.mapChoice.waiting();
+  if (!choosing && !mapView_) { mapTouch_ = {}; return; }
   auto reach = r.reachableNodes();
   int n = (int)reach.size();
   if (n == 0) return;
-  if (in.down & (gfx::BTN_LEFT | gfx::BTN_RIGHT)) {
+  if (choosing && (in.down & (gfx::BTN_LEFT | gfx::BTN_RIGHT))) {
     mapSel_ = (mapSel_ + ((in.down & gfx::BTN_LEFT) ? n - 1 : 1)) % n;
     mapUserScroll_ = false;
   }
-  if (in.down & gfx::BTN_Y) { deckOpen_ = true; sel_ = -1; scroll_ = 0; mapTouch_ = {}; return; }
+  if (choosing && (in.down & gfx::BTN_Y)) { deckOpen_ = true; sel_ = -1; scroll_ = 0; mapTouch_ = {}; return; }
   int pick = -1;
-  if (in.down & gfx::BTN_A) pick = mapSel_;
+  if (choosing && (in.down & gfx::BTN_A)) pick = mapSel_;
   if (in.touchDown) {
-    int hud = hitAt(in.tx, in.ty);
+    int hud = choosing ? hitAt(in.tx, in.ty) : ID_NONE;
     if (hud == ID_DECK) { deckOpen_ = true; sel_ = -1; scroll_ = 0; mapTouch_ = {}; return; }
     if (hud == ID_RELICS) { relicsOpen_ = true; sel_ = run_->relics.empty() ? -1 : 0; scroll_ = 0; mapTouch_ = {}; return; }
+    if (hud == ID_DEVMENU) { devOpen_ = true; devPage_ = 0; sel_ = -1; scroll_ = 0; mapTouch_ = {}; return; }
     mapTouch_ = {};
     mapTouch_.down = true;
     mapTouch_.startX = in.tx;
@@ -862,7 +925,9 @@ void App::updateMap(const gfx::Input& in) {
     mapTouch_.lastY = in.ty;
   }
   if (in.touchUp && mapTouch_.down) {
-    if (!mapTouch_.dragged && mapTouch_.node >= 0) pick = mapTouch_.node;
+    // MapGesture.release: a tap needs no drag and the release over the pressed node.
+    if (choosing && !mapTouch_.dragged && mapTouch_.node >= 0 && mapNodeAt(in.tx, in.ty) == mapTouch_.node)
+      pick = mapTouch_.node;
     mapTouch_ = {};
   }
   if (pick >= 0) {
@@ -1926,6 +1991,170 @@ void App::updateRelics(const gfx::Input& in) {
     if (id >= ID_RELIC0 && id < ID_RELIC0 + n) sel_ = id - ID_RELIC0;
     if (id == ID_BACK) close();
     if (id == ID_DECK) { close(); deckOpen_ = true; }
+  }
+}
+
+// ================================================================ developer menu
+
+namespace {
+const char* kDevActions[] = {"无敌", "回满血", "金币 +100", "最大生命 +10", "获得遗物…",
+                             "加入卡牌…", "升级全部卡牌", "指定下一场战斗…", "秒杀敌人", "自由地图"};
+constexpr int kDevActionCount = 10;
+constexpr int kDevRows = 9;  // encounter list rows per page
+}  // namespace
+
+void App::drawDev(bool top) {
+  Run& r = *run_;
+  if (devRelics_.empty()) {
+    std::vector<std::string> ids = db::sharedRelicPool();
+    for (auto& id : db::ironcladRelicPool()) ids.push_back(id);
+    for (auto& id : ids) if (auto rel = db::relic(id)) { rel->run = run_.get(); devRelics_.push_back(std::move(rel)); }
+    for (auto& id : db::ironcladPool()) if (auto c = db::card(id)) devCards_.push_back(std::move(c));
+    for (auto* list : {&db::act1Weak, &db::act1Normal, &db::act1Elites, &db::act1Bosses})
+      for (auto& id : (*list)()) devEncounters_.push_back(id);
+  }
+  for (auto& rel : devRelics_) rel->run = run_.get();
+  if (top) {
+    drawSceneBg(true, 0.75f);
+    drawTopBar();
+    R().text(kTop / 2, 22, "开发者模式", ts(F16, col::gold, CENTER));
+    if (devPage_ == 1 && sel_ >= 0 && sel_ < (int)devRelics_.size()) drawRelicDetail(devRelics_[sel_].get(), 90);
+    else if (devPage_ == 2 && sel_ >= 0 && sel_ < (int)devCards_.size()) drawCard(devCards_[sel_].get(), (kTop - 132) / 2, 44, 1.1f, false, true);
+    else if (devPage_ == 3 && sel_ >= 0 && sel_ < (int)devEncounters_.size()) {
+      R().text(kTop / 2, 100, devEncounters_[sel_], ts(F16, col::white, CENTER));
+      R().text(kTop / 2, 124, "再点一次：下一场战斗就是它", ts(F12, col::gray, CENTER));
+    } else {
+      auto line = [&](float y, const std::string& k, const std::string& v, uint32_t c) {
+        R().text(120, y, k, ts(F12, col::gray, RIGHT));
+        R().text(130, y, v, ts(F12, c));
+      };
+      line(60, "无敌", r.devGod ? "开" : "关", r.devGod ? col::green : col::white);
+      line(80, "自由地图", r.freeMap ? "开（任意房间可进）" : "关", r.freeMap ? col::green : col::white);
+      line(100, "下一场战斗", r.devNextEncounter.empty() ? "随机" : r.devNextEncounter, col::white);
+      line(120, "牌组 / 遗物", num((int)r.deck.size()) + " 张 / " + num((int)r.relics.size()) + " 个", col::white);
+      R().text(kTop / 2, 160, devPage_ == 0 ? "SELECT 或 B 关闭" : "点一下选中，再点一次确认", ts(F12, col::gray, CENTER));
+    }
+    return;
+  }
+  drawSceneBg(false, 0.75f);
+  if (devPage_ == 0) {
+    for (int i = 0; i < kDevActionCount; ++i) {
+      float x = i % 2 ? 164 : 6, y = 6 + (i / 2) * 38;
+      std::string label = kDevActions[i];
+      bool on = (i == 0 && r.devGod) || (i == 9 && r.freeMap);
+      if (i == 0 || i == 9) label += on ? "：开" : "：关";
+      bool enabled = i != 8 || (r.combat && r.combat->playerPhase && r.combat->actions.waiting());
+      button(x, y, 150, 32, label, ID_DEV0 + i, enabled, on);
+    }
+    button(10, 200, 100, 34, "关闭", ID_BACK);
+  } else if (devPage_ == 1) {
+    const int cols = 6;
+    const float cell = 48, x0 = (kBot - cols * cell) / 2;
+    for (int i = 0; i < (int)devRelics_.size(); ++i) {
+      float x = x0 + (i % cols) * cell, y = 6 + (i / cols - scroll_) * cell;
+      if (y < 0 || y > 150) continue;
+      if (i == sel_) gfx::rect(x + 2, y + 2, cell - 4, cell - 4, 0xFFE07060);
+      bool owned = r.hasRelic(devRelics_[i]->id);
+      spr(R().sprite("relic/" + devRelics_[i]->icon), x + 6, y + 6, cell - 12, cell - 12, owned ? 0x000000FF : 0xFFFFFFFF, owned ? 0.6f : 0.f);
+      hits_.push_back({x, y, cell, cell, ID_DEVITEM0 + i});
+    }
+  } else if (devPage_ == 2) {
+    std::vector<Card*> cards;
+    for (auto& c : devCards_) cards.push_back(c.get());
+    drawCardGrid(cards, sel_, 0, 196, scroll_);
+  } else {
+    for (int k = 0; k < kDevRows; ++k) {
+      int i = scroll_ * kDevRows + k;
+      if (i >= (int)devEncounters_.size()) break;
+      float y = 4 + k * 21;
+      bool hl = i == sel_;
+      gfx::rect(6, y, kBot - 12, 19, hl ? 0x8A5A20F0 : 0x00000080);
+      R().text(12, y + 2, devEncounters_[i], ts(F12, hl ? col::gold : col::white));
+      hits_.push_back({6, y, kBot - 12.f, 19, ID_DEVITEM0 + i});
+    }
+  }
+  if (devPage_ != 0) {
+    gfx::rect(0, 196, kBot, 44, 0x000000A0);
+    button(10, 200, 90, 34, "返回", ID_BACK);
+    button(kBot - 150, 200, 66, 34, "上页", ID_PGUP);
+    button(kBot - 78, 200, 66, 34, "下页", ID_PGDN);
+  }
+  if (toastT_ > 0) {
+    float w = R().measure(toast_, ts(F12)) + 16;
+    gfx::rect((kBot - w) / 2, 172, w, 20, 0x000000C0);
+    R().text(kBot / 2, 175, toast_, ts(F12, col::gold, CENTER));
+  }
+}
+
+void App::devApply(int page, int i) {
+  Run& r = *run_;
+  auto say = [&](const std::string& s) { toast_ = s; toastT_ = 1.2f; };
+  if (page == 1 && i < (int)devRelics_.size()) {
+    const std::string& id = devRelics_[i]->id;
+    if (r.hasRelic(id)) { say("已经有了"); return; }
+    Scheduler::get().spawn(r.obtainRelic(db::relic(id)));
+    say("获得遗物：" + L("relics." + devRelics_[i]->locKey + ".title"));
+  } else if (page == 2 && i < (int)devCards_.size()) {
+    r.deck.push_back(db::card(devCards_[i]->id));
+    say("加入牌组：" + cardTitle(devCards_[i].get()));
+  } else if (page == 3 && i < (int)devEncounters_.size()) {
+    r.devNextEncounter = devEncounters_[i];
+    say("下一场战斗：" + devEncounters_[i]);
+    devPage_ = 0; sel_ = -1; scroll_ = 0;
+  }
+}
+
+void App::updateDev(const gfx::Input& in) {
+  Run& r = *run_;
+  auto close = [&] { devOpen_ = false; devPage_ = 0; sel_ = -1; scroll_ = 0; };
+  auto toPage = [&](int p) { devPage_ = p; sel_ = -1; scroll_ = 0; };
+  if (in.down & gfx::BTN_B) { if (devPage_ == 0) close(); else toPage(0); return; }
+  int count = devPage_ == 1 ? (int)devRelics_.size() : devPage_ == 2 ? (int)devCards_.size() : (int)devEncounters_.size();
+  int perRow = devPage_ == 1 ? 6 : devPage_ == 2 ? 5 : 1;
+  int pageRows = devPage_ == 1 ? 3 : devPage_ == 2 ? 2 : 1;
+  int maxScroll = devPage_ == 3 ? (count - 1) / kDevRows : std::max(0, (count + perRow - 1) / perRow - pageRows);
+  if (devPage_ != 0) {
+    if (in.down & gfx::BTN_RIGHT) sel_ = std::min(count - 1, sel_ + 1);
+    if (in.down & gfx::BTN_LEFT) sel_ = std::max(0, sel_ - 1);
+    if (in.down & gfx::BTN_DOWN) sel_ = std::min(count - 1, sel_ + perRow);
+    if (in.down & gfx::BTN_UP) sel_ = std::max(0, sel_ - perRow);
+    if ((in.down & (gfx::BTN_LEFT | gfx::BTN_RIGHT | gfx::BTN_UP | gfx::BTN_DOWN)) && sel_ >= 0)
+      scroll_ = devPage_ == 3 ? sel_ / kDevRows : std::clamp(sel_ / perRow - 1, 0, maxScroll);
+    if ((in.down & gfx::BTN_A) && sel_ >= 0) { devApply(devPage_, sel_); return; }
+  }
+  if (!in.touchDown) return;
+  int id = hitAt(in.tx, in.ty);
+  if (id == ID_BACK) { if (devPage_ == 0) close(); else toPage(0); return; }
+  if (id == ID_PGUP) { scroll_ = std::max(0, scroll_ - (devPage_ == 3 ? 1 : pageRows)); return; }
+  if (id == ID_PGDN) { scroll_ = std::min(maxScroll, scroll_ + (devPage_ == 3 ? 1 : pageRows)); return; }
+  if (devPage_ == 0 && id >= ID_DEV0 && id < ID_DEV0 + kDevActionCount) {
+    Creature* p = r.player.get();
+    switch (id - ID_DEV0) {
+      case 0: r.devGod = !r.devGod; break;
+      case 1: p->hp = p->maxHp; break;
+      case 2: r.gold += 100; break;
+      case 3: p->maxHp += 10; p->hp += 10; break;
+      case 4: toPage(1); break;
+      case 5: toPage(2); break;
+      case 6: for (auto& c : r.deck) c->upgrade(); toast_ = "牌组已全部升级"; toastT_ = 1.2f; break;
+      case 7: toPage(3); break;
+      case 8:
+        if (r.combat && r.combat->playerPhase && r.combat->actions.waiting()) {
+          PlayerAction a;
+          a.kind = PlayerAction::DevKillAll;
+          r.combat->actions.fire(a);
+          close();
+        }
+        break;
+      case 9: r.freeMap = !r.freeMap; break;
+    }
+    return;
+  }
+  int card = devPage_ == 2 && id >= ID_GRID0 ? id - ID_GRID0 : -1;
+  int item = devPage_ != 2 && id >= ID_DEVITEM0 && id < ID_GRID0 ? id - ID_DEVITEM0 : card;
+  if (item >= 0 && item < count) {
+    if (sel_ == item) devApply(devPage_, item);
+    else sel_ = item;
   }
 }
 
