@@ -3,3 +3,4 @@
 *.otf binary
 *.ttf binary
 *.ttc binary
+*.ps1 text eol=crlf

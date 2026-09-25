@@ -28,6 +28,10 @@ The owner works on this from a Mac and a Windows PC. Talk to them in Chinese.
 
 ## Setup
 
+New Windows PC: run `tools/setup_windows.ps1` (installs Git, gh, Python,
+.NET + ilspycmd via winget, clones to `C:\dev\sts2-3ds`, decompiles, builds
+assets); devkitPro and Azahar are manual installs it links to.
+
 - Python 3 + Pillow + numpy. `python3 tools/gamepaths.py` must find the game
   (Steam; override with `STS2_DIR` / `STS2_PCK`).
 - Assets: `python3 tools/build_assets.py` → `romfs/` (and `icon.png`). Rerun
