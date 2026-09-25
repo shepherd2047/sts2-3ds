@@ -72,8 +72,11 @@ so it stays installed. The 3DS SD card is also reachable over SMB1 as
 Preview automation (env vars): `STS_HIDDEN=1 STS_FIXED_STEP=1 STS_SEED=42`,
 `STS_SCRIPT="40:A,100:A,300:T30x190,420:P200x200,425:M200x160,440:U,500:X"`
 (button / tap T / press-hold P / move M / release U at a frame),
-`STS_SHOTS="435:build/a.bmp,..."`, `STS_ALLCARDS=1`, `STS_AUTOPLAY=1`.
-From title: 40:A, 100:A reaches the map, 300:T30x190 enters the first fight.
+`STS_SHOTS="435:build/a.bmp,..."`, `STS_ALLCARDS=1`, `STS_AUTOPLAY=1`,
+`STS_ENCOUNTER=<EncounterId>` (first fight is that encounter; also works for
+`build/sim`). From title: 40:A reaches the map, 100:A enters the first room.
+Headless checks: `SIM_FIGHTS=1 ./build/sim N` prints each fight; add a second
+argument for a verbose event log.
 
 On 3DS/Azahar the same keys go in `sdmc:/sts2-debug.txt` (KEY=VALUE lines);
 shots land in `sdmc:/sts2-shots/<name>.bmp`. Emulator timing is real-time, so
@@ -93,14 +96,28 @@ scripts drift; delete the debug file afterwards.
   drag above the play line (top of the fan) = arm + lock nearest enemy in
   virtual two-screen space, sideways 20 px = switch target, back into the
   hand / screen edge / B = cancel, cross-screen bezier arrow, card flight.
-  Status strip on top (block, HP bar with damage preview, total intent).
+  Layout measured from a photo of the RGDSplus port (the owner's reference):
+  creatures at native scale, bottom = room bg, no status strip, hand centred
+  with card text, energy left / "结束" right below it, piles in the corners.
   Hand animation: draw from pile with stagger, ease to slots, discard ghosts.
+- Content files: `content.cpp` (starter/common cards, first act 1 monsters,
+  registry), `content_act1.cpp` (remaining normals + Bygone Effigy),
+  `content_phrog.cpp` (Phrog Parasite split into Wrigglers),
+  `content_bosses.cpp` (Ceremonial Beast, The Kin, Fogmog + illusions).
+  Engine supports mid-combat spawns (`cmd::addMonster`), stuns
+  (`Monster::stun`), minions / secondary enemies, creatures that die without
+  leaving (illusions revive), turn-end-in-hand cards, `shouldPlay` and
+  `tryModifyPowerAmountReceived` (Artifact) hooks.
+- `Res` frees monster Spine pages when a new fight starts (only IRONCLAD stays);
+  3DS textures live in limited linear memory.
 
 ## Status / TODO
 
-Done: Ironclad full card pool, Act 1 fights (weak/normal/elite/boss), map,
-card rewards (rarity odds), rest sites, Spine creature animation, touch UI.
+Done: Ironclad full card pool, all 22 Act 1 encounters (4 weak, 12 normal,
+3 elites, 3 bosses), continuous two-screen map with drag/tap, card rewards
+(rarity odds), rest sites, Spine creature animation, touch UI.
 
-Not done: events, shop, treasure, potions, Phrog elite, saves, other
-characters/acts, audio, RGDSplus-style two-screen map with drag/tap,
-real-hardware performance test.
+Not done: events, shop, treasure, potions, relics beyond Burning Blood,
+StS2's real map generator (unknown/treasure/shop rooms), saves, other
+characters/acts, audio, real-hardware performance test. romfs is ~66 MB
+(Spine pages are uncompressed RGBA8).

@@ -569,6 +569,15 @@ struct Vantom : Monster {
   }
 };
 
+// Factory functions so content_act1.cpp (Overgrowth/Flyconid/etc. encounters) can place
+// these monsters in its own encounters without duplicating their definitions.
+std::unique_ptr<Monster> makeShrinkerBeetle() { return std::make_unique<ShrinkerBeetle>(); }
+std::unique_ptr<Monster> makeFuzzyWurmCrawler() { return std::make_unique<FuzzyWurmCrawler>(); }
+std::unique_ptr<Monster> makeLeafSlimeS() { return std::make_unique<LeafSlimeS>(); }
+std::unique_ptr<Monster> makeTwigSlimeS() { return std::make_unique<TwigSlimeS>(); }
+std::unique_ptr<Monster> makeLeafSlimeM() { return std::make_unique<LeafSlimeM>(); }
+std::unique_ptr<Monster> makeTwigSlimeM() { return std::make_unique<TwigSlimeM>(); }
+
 // ================================================================ registry
 
 namespace {
@@ -597,11 +606,19 @@ template <class... Ms> std::vector<std::unique_ptr<Monster>> list() {
 void registerIroncladPowers();
 void registerIroncladUncommon();
 void registerIroncladRare();
+// Filled in by content_act1.cpp.
+void registerAct1Monsters();
+void registerPhrog();        // content_phrog.cpp
+void registerAct1Bosses();   // content_bosses.cpp: Ceremonial Beast, The Kin, Fogmog
 
 namespace db {
 
 void registerCard(const std::string& id, CardFactory f) { cardReg()[id] = f; }
 void registerPower(const std::string& id, PowerFactory f) { powerReg()[id] = f; }
+void registerEncounter(const std::string& id, RoomType room, bool weak,
+                        std::function<std::vector<std::unique_ptr<Monster>>(Rng&)> gen) {
+  regEncounter(id, room, weak, std::move(gen));
+}
 
 const std::vector<std::string>& ironcladPool() {
   static const std::vector<std::string> pool = {"Aggression", "Anger", "Armaments", "AshenStrike", "Barricade", "Bash", "BattleTrance", "Blaze", "BloodWall", "Bloodletting", "Bludgeon", "BodySlam", "Brand", "Break", "Breakthrough", "Bully", "BurningPact", "Cascade", "Cinder", "Colossus", "Conflagration", "Corruption", "CrimsonMantle", "Cruelty", "DarkEmbrace", "DefendIronclad", "DemonForm", "DemonicShield", "Dismantle", "Dominate", "DrumOfBattle", "EvilEye", "ExpectAFight", "Feed", "FeelNoPain", "FiendFire", "FightMe", "FlameBarrier", "ForgottenRitual", "Havoc", "Headbutt", "Hellraiser", "Hemokinesis", "HowlFromBeyond", "Impervious", "InfernalBlade", "Inferno", "Inflame", "IronWave", "Juggernaut", "Juggling", "Mangle", "Midnight", "MoltenFist", "NotYet", "Offering", "OneTwoPunch", "Outrage", "PactsEnd", "PerfectedStrike", "Pillage", "PommelStrike", "PrimalForce", "Pyre", "Rage", "Rampage", "Rupture", "SecondWind", "SetupStrike", "ShrugItOff", "Spite", "Stampede", "Stoke", "Stomp", "StoneArmor", "StrikeIronclad", "SwordBoomerang", "Tank", "Taunt", "TearAsunder", "Thrash", "Thunderclap", "Tremble", "TrueGrit", "TwinStrike", "Unmovable", "Unrelenting", "Uppercut", "Vicious", "Whirlwind"};
@@ -684,6 +701,10 @@ void init() {
   });
   regEncounter("ByrdonisElite", RoomType::Elite, false, [](Rng&) { return list<Byrdonis>(); });
   regEncounter("VantomBoss", RoomType::Boss, false, [](Rng&) { return list<Vantom>(); });
+
+  registerAct1Monsters();
+  registerPhrog();
+  registerAct1Bosses();
 }
 
 std::unique_ptr<Card> card(const std::string& id) {
@@ -715,9 +736,13 @@ std::vector<std::string> ironcladRewardPool() {
 }
 // Overgrowth: first-run order puts these weak fights first.
 std::vector<std::string> act1Weak() { return {"NibbitsWeak", "SlimesWeak", "ShrinkerBeetleWeak", "FuzzyWurmCrawlerWeak"}; }
-std::vector<std::string> act1Normal() { return {"InkletsNormal", "MawlerNormal", "NibbitsNormal", "SlimesNormal"}; }
-std::vector<std::string> act1Elites() { return {"ByrdonisElite"}; }
-std::vector<std::string> act1Bosses() { return {"VantomBoss"}; }
+std::vector<std::string> act1Normal() {
+  return {"InkletsNormal", "MawlerNormal", "NibbitsNormal", "SlimesNormal", "OvergrowthCrawlers",
+          "FlyconidNormal", "SnappingJaxfruitNormal", "SlitheringStranglerNormal", "VineShamblerNormal",
+          "CubexConstructNormal", "RubyRaidersNormal", "FogmogNormal"};
+}
+std::vector<std::string> act1Elites() { return {"ByrdonisElite", "BygoneEffigyElite", "PhrogParasiteElite"}; }
+std::vector<std::string> act1Bosses() { return {"VantomBoss", "CeremonialBeastBoss", "TheKinBoss"}; }
 
 }  // namespace db
 }  // namespace sts

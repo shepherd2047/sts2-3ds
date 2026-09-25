@@ -93,6 +93,9 @@ class App {
   void updateEnd(const gfx::Input& in);
 
   // pieces
+  // RGDSplus B02-B06: pages show the current scene's own background (room, or the map
+  // when opened from it) under a dark overlay of `dim` (0..1), not a flat fill.
+  void drawSceneBg(bool top, float dim);
   std::pair<float, float> mapPos(const sts::MapNode& n) const;
   int mapNodeAt(float tx, float ty);
   void drawTopBar();

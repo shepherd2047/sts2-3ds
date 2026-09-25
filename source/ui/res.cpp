@@ -1,5 +1,6 @@
 #include "res.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <sstream>
 
@@ -115,6 +116,18 @@ const spine::SkeletonData* Res::skeleton(const std::string& key) {
   auto* raw = sd.get();
   skeletons_[key] = std::move(sd);
   return raw;
+}
+
+void Res::releaseSkeletons(const std::vector<std::string>& keep) {
+  for (auto it = skeletons_.begin(); it != skeletons_.end();) {
+    if (std::find(keep.begin(), keep.end(), it->first) != keep.end()) { ++it; continue; }
+    if (it->second)
+      for (auto& p : it->second->pages) {
+        auto t = textures_.find(p);
+        if (t != textures_.end()) { gfx::freeTexture(t->second); textures_.erase(t); }
+      }
+    it = skeletons_.erase(it);
+  }
 }
 
 // ---------------------------------------------------------------- text

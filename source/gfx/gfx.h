@@ -37,6 +37,8 @@ void endFrame();
 // Reads romfs:/<path> (3DS) or ./romfs/<path> (desktop).
 bool readFile(const std::string& path, std::string& out);
 Texture* loadTexture(const std::string& path);
+// Only between frames' draws (e.g. from App::update): the GPU is done with the last frame.
+void freeTexture(Texture* t);
 int texWidth(Texture* t);
 int texHeight(Texture* t);
 

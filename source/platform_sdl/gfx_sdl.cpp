@@ -250,6 +250,12 @@ Texture* loadTexture(const std::string& path) {
   return new Texture{t, w, h};
 }
 
+void freeTexture(Texture* t) {
+  if (!t) return;
+  SDL_DestroyTexture(t->tex);
+  delete t;
+}
+
 int texWidth(Texture* t) { return t ? t->w : 0; }
 int texHeight(Texture* t) { return t ? t->h : 0; }
 

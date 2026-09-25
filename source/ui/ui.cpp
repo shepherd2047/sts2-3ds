@@ -162,22 +162,37 @@ void App::trigger(Creature* c, const std::string& what, int amount) {
     play(v->puffed && has("hurt_puffed") ? "hurt_puffed" : "hurt");
     return;
   }
+  // First animation that exists, else any whose name starts with the first candidate.
+  auto playAny = [&](std::initializer_list<const char*> names) {
+    for (const char* n : names) if (has(n)) { play(n); return; }
+    std::string prefix = *names.begin();
+    for (auto& a : v->data->animations)
+      if (a.name.rfind(prefix, 0) == 0) { play(a.name); return; }
+  };
   if (what == "Attack" || what == "AttackHeavy") {
     int hits = amount / 1000, dmg = amount % 1000;
     v->puffed = false;
-    std::string a = "attack";
-    if (k == "VANTOM") a = dmg >= 20 ? "attack_heavy" : hits >= 2 ? "attack_double" : "attack";
-    else if (k == "INKLET" && hits >= 3) a = "attack_triple";
-    else if (what == "AttackHeavy" && has("attack_heavy")) a = "attack_heavy";
-    play(a);
+    if (k == "VANTOM") play(dmg >= 20 ? "attack_heavy" : hits >= 2 ? "attack_double" : "attack");
+    else if (k == "INKLET" && hits >= 3) play("attack_triple");
+    else if (k == "KIN_PRIEST") play(hits >= 3 ? "attack_laser" : "attack_grenade");
+    else if (k == "KIN_FOLLOWER") play(hits >= 2 ? "attack_boomerang" : "attack_slash");
+    else if (what == "AttackHeavy" && has("attack_heavy")) play("attack_heavy");
+    else playAny({"attack"});
     return;
   }
+  if (what == "Stun") {
+    if (has("stun")) v->anim->play("stun", false, has("stun_loop") ? "stun_loop" : idleAnim(*v));
+    return;
+  }
+  if (what == "Unstun") { playAny({"wake_up"}); return; }
+  if (what == "Summon") { playAny({"summon", "cast"}); return; }
   // Cast / Debuff
   if (k == "NIBBIT") play("hiss");
   else if (k == "MAWLER") play("roar");
   else if (k == "FUZZY_WURM_CRAWLER") { v->puffed = true; play("inhale"); }
   else if (k == "VANTOM") play(what == "Debuff" ? "debuff" : "buff");
-  else play("cast");
+  else if (what == "Debuff") playAny({"debuff", "cast", "buff", "shrill", "rally"});
+  else playAny({"cast", "buff", "rally", "shrill", "summon"});
 }
 
 // ================================================================ text helpers
@@ -419,6 +434,9 @@ void App::update(const gfx::Input& in, double dt) {
   if (run_->combat.get() != lastCombat_) {
     lastCombat_ = run_->combat.get();
     visuals_.clear();
+    // Only the player stays cached across fights; each monster's Spine pages
+    // are a few MB of linear memory on the 3DS.
+    R().releaseSkeletons({"IRONCLAD"});
     centers_.clear();
     flights_.clear();
     poses_.clear();
@@ -627,6 +645,18 @@ void App::drawTopBar() {
 
 // ================================================================ map
 
+void App::drawSceneBg(bool top, float dim) {
+  const int w = top ? kTop : kBot;
+  if (run_->screen == Screen::Map) {
+    float bx = 0, by = 0;
+    toLocal(top, bx, by);
+    gfx::image(R().texture("gfx/bg_map.t3t"), 0, 0, kTop, kMapBgH, bx, by, kTop, kMapBgH, 0x000000FF, 0.1f);
+  } else {
+    gfx::image(R().texture("gfx/bg_overgrowth.t3t"), top ? 0 : kBotOX, 0, w, kH, 0, 0, w, kH, 0x000000FF, 0.15f);
+  }
+  if (dim > 0) gfx::rect(0, 0, w, kH, (uint32_t)(std::clamp(dim, 0.f, 1.f) * 255));
+}
+
 // Node centre on the two-screen virtual canvas.
 std::pair<float, float> App::mapPos(const MapNode& n) const {
   return {58 + n.x * 47, kMapBase - (n.y - mapScroll_) * kRowH};
@@ -779,6 +809,11 @@ void App::drawCreature(Creature* c, float x, float feetY, bool targeted) {
   float flash = c->hitFlash;
   c->hitFlash = std::max(0.f, c->hitFlash - 0.08f);
   if (Visual* v = visual(c)) {
+    if (v->dying && c->alive()) {  // an illusion came back
+      v->dying = false;
+      v->fade = 1.f;
+      v->anim->play(idleAnim(*v), true);
+    }
     if (v->fade <= 0) return;
     v->anim->apply(*v->skel);
     v->skel->updateWorldTransform();
@@ -871,7 +906,12 @@ void App::drawCreature(Creature* c, float x, float feetY, bool targeted) {
         case Intent::Debuff:
         case Intent::DebuffStrong: ic = R().sprite("intent/debuff"); break;
         case Intent::Status: ic = R().sprite("intent/status"); label = num(in.count); break;
-        default: ic = R().sprite("intent/buff"); break;
+        case Intent::Stun: ic = R().sprite("intent/stun"); break;
+        case Intent::Summon: ic = R().sprite("intent/summon"); break;
+        case Intent::Heal: ic = R().sprite("intent/heal"); break;
+        case Intent::Escape: ic = R().sprite("intent/escape"); break;
+        case Intent::Sleep: ic = R().sprite("intent/sleep"); break;
+        default: ic = R().sprite("intent/unknown"); break;
       }
     }
     float bob = 2 * std::sin((float)time_ * 3 + x);
@@ -1553,7 +1593,7 @@ void App::drawReward(bool top) {
     }
     return;
   }
-  gfx::rectGradient(0, 0, kBot, kH, 0x2A2016FF, 0x100C08FF);
+  drawSceneBg(false, 0.55f);
   R().text(kBot / 2, 4, L("gameplay_ui.CHOOSE_CARD_HEADER"), ts(F16, col::gold, CENTER));
   const float s = 0.78f, cw = 120 * s;
   float gap = (kBot - 3 * cw) / 4;
@@ -1604,26 +1644,35 @@ void App::drawRest(bool top) {
     drawTopBar();
     return;
   }
-  gfx::rectGradient(0, 0, kBot, kH, 0x2A1A10FF, 0x100C08FF);
+  drawSceneBg(false, 0.5f);
   bool canSmith = false;
   for (auto& c : r.deck) if (c->upgradable()) canSmith = true;
   button(16, 30, 138, 100, L("rest_site_ui.OPTION_HEAL.name"), ID_HEAL, r.restChoice.waiting(), sel_ == 0);
   button(166, 30, 138, 100, L("rest_site_ui.OPTION_SMITH.name"), ID_SMITH, r.restChoice.waiting() && canSmith, sel_ == 1);
   R().text(85, 140, "回复 " + num(heal) + " 点生命", ts(F12, col::green, CENTER));
   R().text(235, 140, "升级一张牌", ts(F12, col::gold, CENTER));
-  R().text(kBot / 2, 200, "生命 " + num(r.player->hp) + "/" + num(r.player->maxHp), ts(F16, col::red, CENTER));
+  R().text(80, 206, "生命 " + num(r.player->hp) + "/" + num(r.player->maxHp), ts(F16, col::red, CENTER));
+  // RGDSplus U22: pick an option, then confirm.
+  button(kBot - 120, 196, 110, 36, "确认", ID_CONFIRM, r.restChoice.waiting() && (sel_ == 0 || (sel_ == 1 && canSmith)), true);
 }
 
 void App::updateRest(const gfx::Input& in) {
   Run& r = *run_;
   if (!r.restChoice.waiting()) return;
+  bool canSmith = false;
+  for (auto& c : r.deck) if (c->upgradable()) canSmith = true;
+  auto valid = [&](int s) { return s == 0 || (s == 1 && canSmith); };
   if (in.down & gfx::BTN_LEFT) sel_ = 0;
   if (in.down & gfx::BTN_RIGHT) sel_ = 1;
-  if ((in.down & gfx::BTN_A) && sel_ >= 0) { r.restChoice.fire(sel_); return; }
+  if ((in.down & gfx::BTN_A) && valid(sel_)) { r.restChoice.fire(sel_); return; }
   if (in.touchDown) {
     int id = hitAt(in.tx, in.ty);
-    if (id == ID_HEAL) r.restChoice.fire(0);
-    if (id == ID_SMITH) r.restChoice.fire(1);
+    int pick = id == ID_HEAL ? 0 : id == ID_SMITH ? 1 : -1;
+    if (pick >= 0) {
+      if (sel_ == pick) { r.restChoice.fire(pick); return; }  // second tap confirms
+      sel_ = pick;
+    }
+    if (id == ID_CONFIRM && valid(sel_)) r.restChoice.fire(sel_);
   }
 }
 
@@ -1631,7 +1680,7 @@ void App::drawUpgrade(bool top) {
   Run& r = *run_;
   auto& opts = r.upgradeOptions;
   if (top) {
-    gfx::rectGradient(0, 0, kTop, kH, 0x1A1410FF, 0x0B0B12FF);
+    drawSceneBg(true, 0.7f);
     drawTopBar();
     if (sel_ >= 0 && sel_ < (int)opts.size()) {
       Card* c = opts[sel_];
@@ -1645,9 +1694,9 @@ void App::drawUpgrade(bool top) {
     }
     return;
   }
-  gfx::rectGradient(0, 0, kBot, kH, 0x2A1A10FF, 0x100C08FF);
+  drawSceneBg(false, 0.65f);
   drawCardGrid(opts, sel_, 0, 196, scroll_);
-  gfx::rect(0, 196, kBot, 44, 0x100C08FF);
+  gfx::rect(0, 196, kBot, 44, 0x000000A0);
   button(10, 200, 100, 34, "返回", ID_BACK);
   button(kBot - 110, 200, 100, 34, "升级", ID_CONFIRM, sel_ >= 0 && sel_ < (int)opts.size(), true);
 }
@@ -1680,15 +1729,15 @@ void App::drawDeck(bool top) {
   std::vector<Card*> cards;
   for (auto& c : run_->deck) cards.push_back(c.get());
   if (top) {
-    gfx::rectGradient(0, 0, kTop, kH, 0x1A1410FF, 0x0B0B12FF);
+    drawSceneBg(true, 0.7f);
     drawTopBar();
     if (sel_ >= 0 && sel_ < (int)cards.size()) drawCard(cards[sel_], (kTop - 132) / 2, 34, 1.1f, false, true);
     else R().text(kTop / 2, 100, "牌组（" + num((int)cards.size()) + " 张）", ts(F16, col::gold, CENTER));
     return;
   }
-  gfx::rectGradient(0, 0, kBot, kH, 0x1E1812FF, 0x100C08FF);
+  drawSceneBg(false, 0.65f);
   drawCardGrid(cards, sel_, 0, 196, scroll_);
-  gfx::rect(0, 196, kBot, 44, 0x100C08FF);
+  gfx::rect(0, 196, kBot, 44, 0x000000A0);
   button(10, 200, 100, 34, "返回", ID_BACK);
   R().text(kBot - 10, 212, "↑↓ 滚动", ts(F12, col::gray, RIGHT));
 }

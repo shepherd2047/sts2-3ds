@@ -1,5 +1,6 @@
 // Run flow: map, room dispatch, rewards and rest sites.
 #include <algorithm>
+#include <cstdlib>
 #include <set>
 
 #include "game.h"
@@ -163,29 +164,7 @@ Task<bool> Run::fight(const std::string& encounterId) {
   std::stable_sort(c.draw.begin(), c.draw.end(), [](Card* a, Card* b) { return a->id < b->id; });
   rng("Shuffle").shuffle(c.draw);
 
-  Rng& hpRng = rng("Niche");
-  for (auto& m : enc->generate(rng("Encounters"))) {
-    auto cr = std::make_unique<Creature>();
-    cr->side = Side::Enemy;
-    cr->combat = &c;
-    // Creature.SetUniqueMonsterHpValue: prefer an HP no other enemy has.
-    std::vector<int> options;
-    for (int hp = m->minHp(); hp <= m->maxHp(); ++hp) {
-      bool taken = false;
-      for (auto& other : c.ownedEnemies) if (other->maxHp == hp) taken = true;
-      if (!taken) options.push_back(hp);
-    }
-    int hp = options.empty() ? hpRng.nextInt(m->minHp(), m->maxHp() + 1) : hpRng.nextItem(options);
-    cr->hp = cr->maxHp = hp;
-    m->creature = cr.get();
-    m->combat = &c;
-    m->buildMoves();          // MonsterModel.SetUpForCombat
-    m->spawnedThisTurn = true;
-    cr->name = m->locKey;
-    cr->monster = std::move(m);
-    c.enemies.push_back(cr.get());
-    c.ownedEnemies.push_back(std::move(cr));
-  }
+  for (auto& m : enc->generate(rng("Encounters"))) c.createEnemy(std::move(m));
 
   screen = Screen::Combat;
   co_await c.runCombat();
@@ -215,6 +194,8 @@ Task<> Run::main() {
       else if (fightsDone < kWeakFights) id = weakQueue[fightsDone % weakQueue.size()];
       else id = normalQueue[(fightsDone - kWeakFights) % normalQueue.size()];
       if (type == RoomType::Monster) ++fightsDone;
+      // Debug: STS_ENCOUNTER=<EncounterId> makes the first fight that encounter.
+      if (const char* forced = getenv("STS_ENCOUNTER"); forced && floor == 1 && db::encounter(forced)) id = forced;
 
       bool won = co_await fight(id);
       if (!won) { screen = Screen::GameOver; co_return; }

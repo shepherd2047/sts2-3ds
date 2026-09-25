@@ -70,10 +70,10 @@ Task<> Monster::performMove() {
   std::vector<Creature*> targets;
   if (combat->player->alive()) targets.push_back(combat->player);
   // Moves without an attack play the creature's cast animation up front;
-  // attacks trigger theirs from Attack::execute.
-  bool attacks = false;
-  for (auto& in : move->intents) attacks |= in.kind == Intent::Attack;
-  if (!attacks) {
+  // attacks trigger theirs from Attack::execute. A stunned creature does nothing visible.
+  bool attacks = false, onlyStun = !move->intents.empty();
+  for (auto& in : move->intents) { attacks |= in.kind == Intent::Attack; onlyStun &= in.kind == Intent::Stun; }
+  if (!attacks && !onlyStun) {
     bool debuff = false;
     for (auto& in : move->intents) debuff |= in.kind == Intent::Debuff || in.kind == Intent::DebuffStrong;
     combat->push({VisualEvent::Anim, creature, 0, debuff ? "Debuff" : "Cast"});
@@ -93,6 +93,31 @@ Task<> Monster::attack(int damage, int hits) {
 }
 
 Task<> Monster::gainBlock(int amount) { co_await cmd::gainBlock(creature, amount, kMove, nullptr); }
+
+void Monster::setMoveImmediate(MoveState* s, bool force) {
+  if (!nextMove || nextMove->canTransitionAway() || force) {
+    nextMove = s;
+    machine.setCurrent(s);
+  }
+}
+
+// Creature.StunInternal
+void Monster::stun(std::function<Task<>(const std::vector<Creature*>&)> stunMove, std::string nextMoveId) {
+  if (!creature || creature->dead()) return;
+  if (nextMoveId.empty() && !machine.stateLog.empty()) nextMoveId = machine.stateLog.back()->id;
+  auto s = std::make_unique<MoveState>();
+  s->id = "STUNNED";
+  if (stunMove) s->perform = std::move(stunMove);
+  else s->perform = [](const std::vector<Creature*>&) -> Task<> { co_return; };
+  Intent i;
+  i.kind = Intent::Stun;
+  s->intents = {i};
+  s->followUpId = nextMoveId;
+  s->mustPerformOnce = true;
+  MoveState* raw = s.get();
+  machine.transient.push_back(std::move(s));
+  setMoveImmediate(raw);
+}
 
 // ---------------------------------------------------------------- cards
 
@@ -149,6 +174,31 @@ Card* Combat::addCard(std::unique_ptr<Card> c) {
   c->combat = this;
   cardStore.push_back(std::move(c));
   return cardStore.back().get();
+}
+
+Creature* Combat::createEnemy(std::unique_ptr<Monster> m) {
+  auto cr = std::make_unique<Creature>();
+  cr->side = Side::Enemy;
+  cr->combat = this;
+  // Creature.SetUniqueMonsterHpValue: prefer an HP no other enemy on the side has.
+  std::vector<int> options;
+  for (int hp = m->minHp(); hp <= m->maxHp(); ++hp) {
+    bool taken = false;
+    for (auto* other : enemies) if (!other->removed && other->maxHp == hp) taken = true;
+    if (!taken) options.push_back(hp);
+  }
+  Rng& hpRng = rng("Niche");
+  int hp = options.empty() ? hpRng.nextInt(m->minHp(), m->maxHp() + 1) : hpRng.nextItem(options);
+  cr->hp = cr->maxHp = hp;
+  m->creature = cr.get();
+  m->combat = this;
+  m->buildMoves();          // MonsterModel.SetUpForCombat
+  m->spawnedThisTurn = true;
+  cr->name = m->locKey;
+  cr->monster = std::move(m);
+  enemies.push_back(cr.get());
+  ownedEnemies.push_back(std::move(cr));
+  return enemies.back();
 }
 
 std::vector<Creature*> Combat::aliveEnemies() {
@@ -211,6 +261,8 @@ bool Combat::canPlay(Card* c, std::string* reason) {
   if (c->has(kwUnplayable) || (c->cost < 0 && !c->costsX)) { if (reason) *reason = "UNPLAYABLE"; return false; }
   if (!c->costsX && energyCost(c) > energy) { if (reason) *reason = "ENERGY"; return false; }
   if (c->target == TargetType::AnyEnemy && aliveEnemies().empty()) return false;
+  for (Model* m : listeners())
+    if (!m->shouldPlay(c)) { if (reason) *reason = "UNPLAYABLE"; return false; }
   return true;
 }
 
@@ -286,20 +338,46 @@ Task<std::vector<DamageResult>> damage(std::vector<Creature*> targets, Dec amoun
 Task<> kill(std::vector<Creature*> creatures) {
   for (Creature* cr : creatures) {
     Combat& c = *cr->combat;
+    cr->hp = 0;  // Kill works on living creatures too (minions dying with their leader)
     c.push({VisualEvent::Death, cr, 0});
     for (Model* m : c.listeners()) co_await m->afterDeath(cr);
+    std::vector<Creature*> teammates;
+    if (cr->side == Side::Enemy)
+      for (auto* e : c.enemies) if (e != cr && e->alive() && !e->removed) teammates.push_back(e);
+    bool primary = cr->isPrimaryEnemy();
+    bool leaves = !cr->isPlayer;
+    for (Model* m : c.listeners()) leaves = leaves && m->shouldCreatureBeRemovedFromCombatAfterDeath(cr);
     // Creature.RemoveAllPowersAfterDeath. Hook snapshots may still point at
     // these, so they are parked rather than freed.
-    for (auto& p : cr->powers) c.graveyard.push_back(std::move(p));
-    cr->powers.clear();
+    auto ls = c.listeners();
+    std::vector<Power*> removed;
+    for (auto it = cr->powers.begin(); it != cr->powers.end();) {
+      bool drop = (*it)->removedAfterOwnerDeath();
+      for (Model* m : ls) drop = drop && m->shouldPowerBeRemovedOnDeath(it->get());
+      if (!drop) { ++it; continue; }
+      removed.push_back(it->get());
+      c.graveyard.push_back(std::move(*it));
+      it = cr->powers.erase(it);
+    }
+    for (Power* p : removed) co_await p->afterRemoved(cr);
+    if (!leaves && !cr->isPlayer) c.stayingDead.push_back(cr);
     if (cr->isPlayer) {
       c.over = true;
       c.won = false;
       c.ending = true;
+    } else if (primary && !teammates.empty() &&
+               std::all_of(teammates.begin(), teammates.end(), [](Creature* t) { return t->isSecondaryEnemy(); })) {
+      co_await kill(teammates);  // minions leave with the last primary enemy
     }
   }
   if (!creatures.empty()) co_await wait(0.35);
-  for (Creature* cr : creatures) if (!cr->isPlayer) cr->removed = true;
+  for (Creature* cr : creatures) {
+    if (cr->isPlayer) continue;
+    auto& stay = cr->combat->stayingDead;
+    auto it = std::find(stay.begin(), stay.end(), cr);
+    if (it != stay.end()) stay.erase(it);  // stays in the room, dead
+    else cr->removed = true;
+  }
 }
 
 Task<Dec> gainBlock(Creature* cr, Dec amount, int props, Card* src, bool fast) {
@@ -328,6 +406,23 @@ Task<> applyPower(std::unique_ptr<Power> power, Creature* target, Dec amount, Cr
   if (!c || c->ending || amount == Dec(0)) co_return;
   Power* p = power.get();
   p->applier = applier;
+  // Hook.ModifyPowerAmountReceived (Artifact blocks debuffs).
+  std::vector<Model*> receivedModifiers;
+  for (Model* m : c->listeners()) {
+    Dec out = amount;
+    if (m->tryModifyPowerAmountReceived(p, target, amount, applier, out)) { amount = out; receivedModifiers.push_back(m); }
+  }
+  if (amount == Dec(0)) {
+    for (Model* m : receivedModifiers) co_await m->afterModifyingPowerAmountReceived(p);
+    c->graveyard.push_back(std::move(power));  // listeners may still hold it
+    co_return;
+  }
+  if (Power* existing = target->power(p->id)) {
+    // PowerCmd.Apply -> ModifyAmount on the stack already there.
+    co_await modifyPowerAmount(existing, amount, applier, src, silent);
+    for (Model* m : receivedModifiers) co_await m->afterModifyingPowerAmountReceived(existing);
+    co_return;
+  }
   co_await p->beforeApplied(target, amount, applier, src);
   if (target->power(p->id)) {
     // beforeApplied can itself stack the same power (it never does for the
@@ -512,6 +607,15 @@ Task<> autoPlayFromDrawPile(Combat& c, int count, bool forceExhaust) {
   }
 }
 
+Task<Creature*> addMonster(Combat& c, std::unique_ptr<Monster> m) {
+  Creature* cr = c.createEnemy(std::move(m));
+  // CombatManager.AfterCreatureAdded
+  co_await cr->monster->afterAddedToRoom();
+  if (c.currentSide == Side::Player) cr->monster->rollMove(c.rng("MonsterAi"));
+  for (Model* l : c.listeners()) co_await l->afterCreatureAddedToCombat(cr);
+  co_return cr;
+}
+
 Task<> Attack::execute(Combat& c) {
   if (!attacker || attacker->dead() || c.ending) co_return;
   for (int i = 0; i < hits; ++i) {
@@ -628,6 +732,7 @@ Task<> Combat::startTurn() {
 Task<> Combat::setupPlayerTurn() {
   // Hook.ShouldPlayerResetEnergy -> ResetEnergy
   energy = maxEnergyNow();
+  cardsPlayedThisTurn = 0;
   Dec handDraw = 5;
   for (Model* m : listeners()) handDraw = m->modifyHandDraw(handDraw);
   if (turnNumber == 1) {
@@ -644,7 +749,8 @@ Task<> Combat::setupPlayerTurn() {
 Task<> Combat::executeEnemyTurn() {
   auto list = enemies;
   for (Creature* e : list) {
-    if (e->removed || e->dead()) continue;
+    // Dead creatures still in the room (illusions) take their turn too: they revive.
+    if (e->removed) continue;
     if (!e->monster->spawnedThisTurn) co_await e->monster->performMove();
     co_await wait(0.25);
     co_await checkWinCondition();
@@ -669,10 +775,24 @@ Task<> Combat::endPlayerTurnPhaseOne() {
   for (Model* m : listeners()) co_await m->beforeSideTurnEndEarly(Side::Player, ps);
   for (Model* m : listeners()) co_await m->beforeSideTurnEnd(Side::Player, ps);
   if (co_await checkWinCondition()) co_return;
-  // DoTurnEnd: ethereal cards exhaust.
-  std::vector<Card*> ethereal;
-  for (Card* c : hand) if (c->has(kwEthereal)) ethereal.push_back(c);
+  // DoTurnEnd: ethereal cards exhaust, then turn-end-in-hand cards resolve one by one
+  // (through the play pile) and go to the bottom of the discard, or exhaust if ethereal.
+  std::vector<Card*> ethereal, turnEnd;
+  for (Card* c : hand) {
+    if (c->hasTurnEndInHandEffect()) turnEnd.push_back(c);
+    else if (c->has(kwEthereal)) ethereal.push_back(c);
+  }
   for (Card* c : ethereal) co_await cmd::exhaustCard(*this, c, true);
+  for (Card* c : turnEnd) {
+    if (over || ending) break;
+    removeFromPiles(c);
+    play.push_back(c);
+    co_await wait(0.3);
+    co_await c->onTurnEndInHand();
+    if (pileOf(c) != Pile::Play) continue;
+    if (c->has(kwEthereal)) co_await cmd::exhaustCard(*this, c, true);
+    else { removeFromPiles(c); discard.push_back(c); }
+  }
   co_await checkWinCondition();
 }
 
@@ -703,6 +823,8 @@ Task<bool> Combat::checkWinCondition() {
   bool anyPrimary = false;
   for (auto* e : enemies) if (!e->removed && e->alive() && e->isPrimaryEnemy()) anyPrimary = true;
   if (!anyPrimary) {
+    for (Model* m : listeners())
+      if (m->shouldStopCombatFromEnding()) co_return false;  // Hook.ShouldStopCombatFromEnding
     ending = true;
     over = true;
     won = true;
@@ -719,6 +841,7 @@ Task<> Combat::playCard(Card* card, Creature* target, bool autoPlay, bool forceE
     energy -= std::max(spent, 0);
   }
   if (card->costsX) card->xValue = spent;
+  ++cardsPlayedThisTurn;
   removeFromPiles(card);
   play.push_back(card);
 

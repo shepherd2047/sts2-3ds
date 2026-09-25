@@ -103,6 +103,18 @@ struct Model {
   // TryModifyEnergyCostInCombat / ...Late: return the new cost (or `cost` unchanged).
   virtual int modifyEnergyCost(Card*, int cost) { return cost; }
   virtual int modifyEnergyCostLate(Card*, int cost) { return cost; }
+  // Added for act 1 monsters.
+  virtual bool shouldStopCombatFromEnding() { return false; }
+  virtual Task<> afterCreatureAddedToCombat(Creature*) { return {}; }
+  virtual bool shouldPlay(Card*) { return true; }  // Hook.ShouldPlay (RingingPower, ...)
+  // Illusions stay in the room (dead) with their buffs and revive.
+  virtual bool shouldCreatureBeRemovedFromCombatAfterDeath(Creature*) { return true; }
+  virtual bool shouldPowerBeRemovedOnDeath(Power*) { return true; }
+  // Hook.ModifyPowerAmountReceived (ArtifactPower): return true and set `out` to change
+  // the amount a creature is about to receive; the modifier then gets the After... call.
+  virtual bool tryModifyPowerAmountReceived(Power* /*incoming*/, Creature* /*target*/, Dec /*amount*/,
+                                            Creature* /*applier*/, Dec& /*out*/) { return false; }
+  virtual Task<> afterModifyingPowerAmountReceived(Power*) { return {}; }
 };
 
 // ---------------------------------------------------------------- powers
@@ -120,10 +132,17 @@ struct Power : Model {
   virtual PowerType type() const { return PowerType::Buff; }
   virtual StackType stackType() const { return StackType::Counter; }
   virtual bool allowNegative() const { return false; }
+  virtual bool ownerIsSecondaryEnemy() const { return false; }  // MinionPower
+  virtual bool removedAfterOwnerDeath() const { return true; }  // ShouldPowerBeRemovedAfterOwnerDeath
   virtual Task<> beforeApplied(Creature*, Dec, Creature*, Card*) { return {}; }
   virtual Task<> afterApplied(Creature*, Card*) { return {}; }
   virtual Task<> afterRemoved(Creature*) { return {}; }
 
+  // PowerModel.GetTypeForAmount: a negative stack of an allow-negative buff is a debuff.
+  PowerType typeForAmount(Dec a) const {
+    if (allowNegative() && a < Dec(0)) return type() == PowerType::Buff ? PowerType::Debuff : PowerType::Buff;
+    return type();
+  }
   bool shouldRemoveDueToAmount() const {
     if (allowNegative() || amount > 0) return allowNegative() ? amount == 0 : false;
     return true;
@@ -169,6 +188,9 @@ struct Card : Model {
   virtual ~Card() = default;
   virtual Task<> onPlay(CardPlay&) { return {}; }
   virtual void onUpgrade() {}
+  // HasTurnEndInHandEffect / OnTurnEndInHand (Burn, Infection, ...)
+  virtual bool hasTurnEndInHandEffect() const { return false; }
+  virtual Task<> onTurnEndInHand() { return {}; }
   virtual std::unique_ptr<Card> clone() const = 0;
 
   // CardEnergyCost setters.
@@ -216,7 +238,7 @@ using CardFactory = std::unique_ptr<Card> (*)();
 // ---------------------------------------------------------------- monsters
 
 struct Intent {
-  enum Kind { Attack, Defend, Buff, Debuff, DebuffStrong, Status, Stun, Escape, Unknown } kind = Unknown;
+  enum Kind { Attack, Defend, Buff, Debuff, DebuffStrong, Status, Stun, Escape, Unknown, Summon, Heal, Sleep } kind = Unknown;
   int damage = 0;  // per hit, before modifiers
   int hits = 1;
   int count = 0;   // status cards
@@ -295,6 +317,8 @@ struct MoveStateMachine {
   }
   MoveState* rollMove(Monster& m, Rng& rng);
   void setCurrent(MonsterState* s) { current->onExit(); current = s; }
+  // States made at runtime (STUNNED) are not registered but must outlive their turn.
+  std::vector<std::unique_ptr<MonsterState>> transient;
 };
 
 struct Monster : Model {
@@ -313,6 +337,12 @@ struct Monster : Model {
 
   void rollMove(Rng& rng) { nextMove = machine.rollMove(*this, rng); }
   Task<> performMove();
+  // CreatureCmd.Stun: the next move becomes STUNNED (running stunMove, if any), then
+  // nextMoveId (default: the last logged state).
+  void stun(std::function<Task<>(const std::vector<Creature*>&)> stunMove = nullptr, std::string nextMoveId = "");
+  // MonsterModel.SetMoveImmediate
+  void setMoveImmediate(MoveState* s, bool force = false);
+  bool stunned() const { return nextMove && nextMove->id == "STUNNED"; }
 
   // Helpers used by the translated monster code.
   Task<> attack(int damage, int hits = 1);
@@ -347,7 +377,11 @@ struct Creature {
   }
   template <class P> P* get() { return static_cast<P*>(power(P::kId)); }
   template <class P> int powerAmount() { auto* p = get<P>(); return p ? p->amount : 0; }
-  bool isSecondaryEnemy() const { return false; }  // MinionPower etc. not in this build
+  bool isSecondaryEnemy() const {
+    if (side != Side::Enemy) return false;
+    for (auto& p : powers) if (p->ownerIsSecondaryEnemy()) return true;
+    return false;
+  }
   bool isPrimaryEnemy() const { return side == Side::Enemy && !isSecondaryEnemy(); }
 };
 
@@ -396,10 +430,12 @@ struct Combat {
   std::vector<std::unique_ptr<Creature>> ownedEnemies;
   std::vector<std::unique_ptr<Card>> cardStore;
   std::vector<std::unique_ptr<Power>> graveyard;  // removed powers, freed with the combat
+  std::vector<Creature*> stayingDead;             // being killed but not leaving (illusions)
   std::vector<Card*> draw, hand, discard, exhaust, play;
 
   int energy = 0, maxEnergy = 3;
   int turnNumber = 1, roundNumber = 1;
+  int cardsPlayedThisTurn = 0;  // CombatHistory.CardPlaysStarted this turn (player)
   Side currentSide = Side::Player;
   bool inProgress = false, ending = false, over = false, won = false;
   bool playerPhase = false;  // UI may submit actions
@@ -442,6 +478,8 @@ struct Combat {
   void removeFromPiles(Card* c);
   std::vector<Card*> allCards();
   Card* addCard(std::unique_ptr<Card> c);
+  // CombatState.CreateCreature + monster SetUpForCombat: unique HP, move machine.
+  Creature* createEnemy(std::unique_ptr<Monster> m);
   void push(VisualEvent e) { events.push_back(std::move(e)); }
   Rng& rng(const char* stream);
 };
@@ -473,6 +511,8 @@ void upgradeCard(Card* card);  // CardCmd.Upgrade
 Task<> addStatusCards(Combat& c, std::string cardId, Pile to, int count);
 Task<std::vector<Card*>> selectCards(Combat& c, std::string prompt, std::vector<Card*> options, int minCount, int maxCount);
 Task<> autoPlayFromDrawPile(Combat& c, int count, bool forceExhaust);
+// CreatureCmd.Add: a monster joins mid-combat (summons, splits).
+Task<Creature*> addMonster(Combat& c, std::unique_ptr<Monster> m);
 
 // Attack builder (AttackCommand), covering the targeting modes in this build.
 struct Attack {
@@ -568,6 +608,7 @@ std::vector<std::string> act1Elites();
 std::vector<std::string> act1Bosses();
 void registerCard(const std::string& id, CardFactory f);
 void registerPower(const std::string& id, PowerFactory f);
+void registerEncounter(const std::string& id, RoomType room, bool weak, std::function<std::vector<std::unique_ptr<Monster>>(Rng&)> gen);
 // Every card in IroncladCardPool, in the pool's order (registered or not).
 const std::vector<std::string>& ironcladPool();
 // Registered pool cards matching a filter, e.g. for "add a random Attack".
@@ -575,12 +616,9 @@ std::vector<std::string> ironcladCards(std::function<bool(const Card&)> filter);
 }  // namespace db
 
 template <class P> Task<> applyPower(Creature* target, Dec amount, Creature* applier, Card* src, bool silent) {
-  // PowerCmd.Apply<T>: stack onto an existing instance or create a new one.
+  // PowerCmd.Apply<T>: cmd::applyPower stacks onto an existing instance or adds this one
+  // (after Hook.ModifyPowerAmountReceived either way).
   if (target->combat && target->combat->ending) co_return;
-  if (Power* existing = target->power(P::kId)) {
-    co_await cmd::modifyPowerAmount(existing, amount, applier, src, silent);
-    co_return;
-  }
   co_await cmd::applyPower(std::make_unique<P>(), target, amount, applier, src, silent);
 }
 

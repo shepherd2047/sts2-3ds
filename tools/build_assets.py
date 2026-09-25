@@ -24,6 +24,12 @@ import spine_render  # noqa: E402
 ROOT = os.path.dirname(HERE)
 OUT = os.path.join(ROOT, 'romfs')
 
+def skeleton_res(scene_text):
+    """res:// path of the SpineSkeletonDataResource a creature scene uses."""
+    m = re.search(r'type="SpineSkeletonDataResource"[^\n]*path="res://([^"]+\.tres)"', scene_text)
+    return m.group(1)
+
+
 def keys_from_source(macro):
     """Loc keys declared in C++ via CARD_HEADER / POWER_HEADER."""
     keys = []
@@ -39,8 +45,7 @@ CARDS_FIXED = ['STRIKE_IRONCLAD', 'DEFEND_IRONCLAD', 'BASH', 'ANGER', 'TWIN_STRI
 STATUS_CARDS = {'SLIMED', 'WOUND'}
 POWERS_FIXED = ['STRENGTH_POWER', 'DEXTERITY_POWER', 'VULNERABLE_POWER', 'WEAK_POWER', 'FRAIL_POWER',
           'SHRINK_POWER', 'SLIPPERY_POWER', 'TERRITORIAL_POWER', 'TEMPORARY_STRENGTH_POWER']
-MONSTERS = ['NIBBIT', 'LEAF_SLIME_S', 'TWIG_SLIME_S', 'LEAF_SLIME_M', 'TWIG_SLIME_M', 'SHRINKER_BEETLE',
-            'INKLET', 'MAWLER', 'FUZZY_WURM_CRAWLER', 'BYRDONIS', 'VANTOM']
+# Monster keys come from MONSTER_HEADER(Name, "KEY") in source/core (see build()).
 RELICS = ['BURNING_BLOOD']
 
 # 1920x1080 game space -> 400x240 top screen is ~0.21. Creatures keep the game's own
@@ -161,7 +166,7 @@ class Assets:
         snake = key.lower()
         scene = f'scenes/creature_visuals/{snake}.tscn'
         t = self.g.pck.read(scene).decode()
-        skel_res = re.search(r'path="res://([^"]+(?:skel_data|skeleton_data)\.tres)"', t).group(1)
+        skel_res = skeleton_res(t)
         # Scale of the SpineSprite "Visuals" node.
         vis = t[t.find('[node name="Visuals"'):]
         m = re.search(r'\nscale = Vector2\(([-\d.]+), ([-\d.]+)\)', vis.split('\n[node', 1)[0])
@@ -233,9 +238,10 @@ def export_spine(g, key, skel_res, skel, atlas, load, scale):
 
 
 def build(args):
-    global CARDS, POWERS
+    global CARDS, POWERS, MONSTERS
     CARDS = sorted(set(CARDS_FIXED) | set(keys_from_source('CARD_HEADER')))
     POWERS = sorted(set(POWERS_FIXED) | set(keys_from_source('POWER_HEADER')))
+    MONSTERS = keys_from_source('MONSTER_HEADER')
     g = Game(args.pck) if args.pck else Game()
     a = Assets(g)
     os.makedirs(os.path.join(OUT, 'gfx'), exist_ok=True)
@@ -256,7 +262,7 @@ def build(args):
     os.makedirs(os.path.join(OUT, 'spine'), exist_ok=True)
     for key in MONSTERS + ['IRONCLAD']:
         t = g.pck.read(f'scenes/creature_visuals/{key.lower()}.tscn').decode()
-        skel_res = re.search(r'path="res://([^"]+(?:skel_data|skeleton_data)\.tres)"', t).group(1)
+        skel_res = skeleton_res(t)
         vis = t[t.find('[node name="Visuals"'):]
         m = re.search(r'\nscale = Vector2\(([-\d.]+), ([-\d.]+)\)', vis.split('\n[node', 1)[0])
         vscale = float(m.group(1)) if m else 1.0
@@ -289,6 +295,8 @@ def build(args):
     for name, path in [('buff', 'buff/intent_buff_00'), ('defend', 'defend/intent_defend_00'),
                        ('debuff', 'debuff/intent_megadebuff_00'), ('status', 'card_debuff/intent_carddebuff_00')]:
         packer.add('intent/' + name, fit(g.image(f'images/packed/intents/{path}.png'), (30, 30)))
+    for name in ('stun', 'summon', 'heal', 'unknown', 'escape', 'sleep'):
+        packer.add('intent/' + name, fit(g.image(f'images/packed/intents/intent_{name}.png'), (30, 30)))
     for extra in ('debuff/intent_debuff_00', 'weak/intent_weak_00'):
         p = f'images/packed/intents/{extra}.png'
         if p + '.import' in g.pck.files:

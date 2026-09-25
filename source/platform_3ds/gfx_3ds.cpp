@@ -284,6 +284,13 @@ Texture* loadTexture(const std::string& path) {
   return t;
 }
 
+// Called from App::update, after C3D_FrameBegin(SYNCDRAW) waited for the previous frame.
+void freeTexture(Texture* t) {
+  if (!t) return;
+  C3D_TexDelete(&t->tex);
+  delete t;
+}
+
 int texWidth(Texture* t) { return t ? t->w : 0; }
 int texHeight(Texture* t) { return t ? t->h : 0; }
 

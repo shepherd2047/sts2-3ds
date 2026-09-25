@@ -112,7 +112,7 @@ int main(int argc, char** argv) {
       if (run.combat) {
         if (verbose)
           for (auto& e : run.combat->events) {
-            static const char* names[] = {"Damage", "Blocked", "Block", "Heal", "PowerUp", "PowerDown", "Death", "Exhaust", "Shuffle", "Banner"};
+            static const char* names[] = {"Damage", "Blocked", "Block", "Heal", "PowerUp", "PowerDown", "Death", "Exhaust", "Shuffle", "Banner", "Anim"};
             printf("    [%s] %s %d %s | hp=%d blk=%d\n", names[e.kind], e.who ? e.who->name.c_str() : "-", e.amount, e.text.c_str(),
                    e.who ? e.who->hp : 0, e.who ? e.who->block : 0);
           }

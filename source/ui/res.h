@@ -51,6 +51,9 @@ class Res {
   gfx::Texture* texture(const std::string& path);
   // romfs/spine/KEY.*; null if missing or unreadable.
   const spine::SkeletonData* skeleton(const std::string& key);
+  // Frees every loaded skeleton (and its texture pages) whose key is not in keep.
+  // Callers must drop all Skeleton/AnimationState objects built on them first.
+  void releaseSkeletons(const std::vector<std::string>& keep);
 
   const std::string& loc(const std::string& key) const;
   bool hasLoc(const std::string& key) const { return strings_.count(key) > 0; }
