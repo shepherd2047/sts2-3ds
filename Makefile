@@ -69,10 +69,15 @@ ifneq ($(ROMFS),)
 	export _3DSXFLAGS += --romfs=$(CURDIR)/$(ROMFS)
 endif
 
-.PHONY: all clean
+.PHONY: all clean link
 
 all: $(BUILD)
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
+
+# Send to a 3DS waiting in Homebrew Launcher (press Y). hbmenu saves it to
+# sdmc:/3ds/ and runs it. IP=192.168.x.x if auto-discovery fails.
+link: all
+	$(DEVKITPRO)/tools/bin/3dslink $(if $(IP),-a $(IP)) $(TARGET).3dsx
 
 $(BUILD):
 	@mkdir -p $@

@@ -39,13 +39,18 @@ assets); devkitPro and Azahar are manual installs it links to.
   game's loc text and by string literals in `source/`.
 - Decompile: .NET SDK + `dotnet tool install -g ilspycmd`, then
   `python3 tools/decompile.py`.
-- 3DS: devkitPro with `3ds-dev` (Windows: devkitPro installer; macOS: pkg +
-  `sudo dkp-pacman -S 3ds-dev`). devkitPro's make breaks on paths with spaces
+- 3DS: devkitPro with `3ds-dev` (Windows: devkitPro installer, or — as on the
+  current PC — the dkp pacman repos added to a plain MSYS2 at `C:\msys64`,
+  toolchain in `/opt/devkitpro`; macOS: pkg + `sudo dkp-pacman -S 3ds-dev`). devkitPro's make breaks on paths with spaces
   (and is unreliable with non-ASCII); on the Mac the repo lives under a Chinese
   path, so 3DS builds are done from an ASCII-path copy (rsync source over).
 - Desktop preview: SDL2 + clang/g++. `Makefile.sdl` uses `sdl2-config`
-  (macOS: `brew install sdl2`; Windows: MSYS2 `mingw-w64-ucrt-x86_64-SDL2`
-  — not yet tried on Windows).
+  (macOS: `brew install sdl2`; Windows: MSYS2 UCRT64 with
+  `mingw-w64-ucrt-x86_64-{gcc,SDL2,pkgconf}` + `make`, built from the UCRT64
+  shell; `Makefile.sdl` strips SDL's `main` wrapper there).
+- Windows gotcha: Python writes text as CRLF unless told otherwise; romfs text
+  files must be LF (the Spine atlas parser keeps `\r` in texture paths), so
+  pass `newline='\n'` to any new `open(..., 'w')` in `tools/`.
 - Emulator: Azahar. Its SD card: macOS `~/Library/Application Support/Azahar/sdmc`,
   Windows `%APPDATA%\Azahar\sdmc`.
 
@@ -55,7 +60,14 @@ assets); devkitPro and Azahar are manual installs it links to.
 make -f Makefile.sdl            # build/sts2-preview + build/sim
 ./build/sim 200                 # headless fights; SIM_ALLCARDS=1 plays every card
 make                            # sts2-3ds.3dsx (devkitPro env)
+make link                       # build + send to the 3DS over Wi-Fi (IP=... if needed)
 ```
+
+Real 3DS: the owner's preferred loop is `make link` with the 3DS in Homebrew
+Launcher → Y (NetLoader). hbmenu writes the file to `sdmc:/3ds/` and runs it,
+so it stays installed. The 3DS SD card is also reachable over SMB1 as
+`\\3DS-5341\microSD` while System Settings → microSD Management is open
+(slow, ~180 KB/s).
 
 Preview automation (env vars): `STS_HIDDEN=1 STS_FIXED_STEP=1 STS_SEED=42`,
 `STS_SCRIPT="40:A,100:A,300:T30x190,420:P200x200,425:M200x160,440:U,500:X"`
@@ -91,4 +103,4 @@ card rewards (rarity odds), rest sites, Spine creature animation, touch UI.
 
 Not done: events, shop, treasure, potions, Phrog elite, saves, other
 characters/acts, audio, RGDSplus-style two-screen map with drag/tap,
-real-hardware performance test, Windows preview build.
+real-hardware performance test.
