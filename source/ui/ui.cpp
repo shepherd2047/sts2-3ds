@@ -28,16 +28,28 @@ inline void toLocal(bool top, float& x, float& y) {
 }
 
 // Map (RGDSplus U07): one sheet running through both screens, bottom = lower rows.
-// Proportions follow the RGDSplus port: a paper strip ~65% of the width, small nodes,
-// ~7-8 rows per screen so the whole act nearly fits on the two screens.
-constexpr float kRowH = 30.f;
-constexpr float kColW = 36.f;            // column spacing, centred on the top screen
-constexpr float kMapBase = 451.f;        // virtual y of row 0 at scroll 0 (just above the HUD)
-constexpr float kMapMaxScroll = 13.5f;   // rows; enough to bring the boss down to the bottom screen
-constexpr float kMapBgW = 260.f, kMapBgH = 495.f;  // bg_map.t3t paper strip (both screens + hinge)
+// Geometry is the game's own (NMapScreen / map_screen.tscn, 1920x1080 units, x from the
+// screen centre): column c at x = c*150 - 450, row r (1-based there) at y = 790 - r*155,
+// boss centred at (0, -1780), parchment stacked from y = -1620 to +1620, 1527 wide.
+// Everything is scaled by kMapS, which gives the RGDSplus look: paper ~65% of the width,
+// small nodes, the whole act on the two screens with a little scrolling.
+constexpr float kMapS = 0.17f;
+constexpr float kRowH = 155.f * kMapS;   // one map row, in pixels
+// Virtual y of native y = 0 at scroll 0: row 0 just above the HUD, and no row in the
+// 15 px hinge between the screens in the opening view.
+constexpr float kMapY0 = 337.f;
+constexpr float kMapScrollMin = -60.f, kMapScrollMax = 300.f;  // px
+constexpr float kMapBgW = 260.f, kMapBgH = 552.f;  // bg_map.t3t parchment strip (1527x3240 * kMapS)
 constexpr float kMapBgX = (gfx::kTopW - kMapBgW) / 2.f;
-constexpr float kNodeSize = 16.f, kBossSize = 44.f;
+constexpr float kNodeScale = kMapS * 1.15f;  // node icons: native size, a touch larger for the stylus
+constexpr float kBossSize = 352.f * kMapS;
 constexpr float kMapTapSlop = 5.f;       // 12 px of 768 on RGDSplus, rounded up for a stylus
+
+// Native map coordinates (NMapScreen): our row r is the game's row r + 1.
+inline std::pair<float, float> mapNative(const MapNode& n) {
+  if (n.type == RoomType::Boss) return {0.f, -1780.f};
+  return {n.x * 150.f - 450.f, 790.f - (n.y + 1.f) * 155.f};
+}
 
 // Button ids
 enum : int {
@@ -97,12 +109,12 @@ std::string roomName(RoomType t) {
   }
 }
 
-Sprite roomIcon(RoomType t) {
+Sprite roomIcon(RoomType t, const std::string& bossId = "VantomBoss") {
   switch (t) {
     case RoomType::Monster: return R().sprite("map/monster");
     case RoomType::Elite: return R().sprite("map/elite");
     case RoomType::Rest: return R().sprite("map/rest");
-    case RoomType::Boss: return R().sprite("map/boss_vantom");
+    case RoomType::Boss: return R().sprite("map/boss_" + bossId);
     case RoomType::Treasure: return R().sprite("map/chest");
     default: return R().sprite("map/unknown");
   }
@@ -760,7 +772,7 @@ void App::drawSceneBg(bool top, float dim) {
   if (run_->screen == Screen::Map) {
     float bx = 0, by = 0;
     toLocal(top, bx, by);
-    gfx::image(R().texture("gfx/bg_map.t3t"), 0, 0, kMapBgW, kMapBgH, bx + kMapBgX, by, kMapBgW, kMapBgH, 0x000000FF, 0.1f);
+    gfx::image(R().texture("gfx/bg_map.t3t"), 0, 0, kMapBgW, kMapBgH, bx + kMapBgX, by + kMapY0 - 1620.f * kMapS + mapScroll_, kMapBgW, kMapBgH);
   } else {
     gfx::image(R().texture("gfx/bg_overgrowth.t3t"), top ? 0 : kBotOX, 0, w, kH, 0, 0, w, kH, 0x000000FF, 0.15f);
   }
@@ -769,7 +781,8 @@ void App::drawSceneBg(bool top, float dim) {
 
 // Node centre on the two-screen virtual canvas.
 std::pair<float, float> App::mapPos(const MapNode& n) const {
-  return {kTop / 2.f + (n.x - 3) * kColW, kMapBase - (n.y - mapScroll_) * kRowH};
+  auto [nx, ny] = mapNative(n);
+  return {kTop / 2.f + nx * kMapS, kMapY0 + ny * kMapS + mapScroll_};
 }
 
 // Reachable index under a bottom-screen point, or -1.
@@ -782,7 +795,7 @@ int App::mapNodeAt(float tx, float ty) {
   for (int i = 0; i < (int)reach.size(); ++i) {
     auto& n = r.nodes[reach[i]];
     auto [x, y] = mapPos(n);
-    float d = std::hypot(vx - x, vy - y), radius = n.type == RoomType::Boss ? 26.f : 15.f;
+    float d = std::hypot(vx - x, vy - y), radius = n.type == RoomType::Boss ? kBossSize / 2 : 12.f;
     if (d < radius && d < bestD) { best = i; bestD = d; }
   }
   return best;
@@ -794,14 +807,16 @@ void App::drawMap(bool top) {
   if (mapSel_ >= (int)reach.size()) mapSel_ = 0;
   if (top && !mapUserScroll_) {  // once per frame: keep the next row low on the bottom screen
     int curRow = r.currentNode >= 0 ? r.nodes[r.currentNode].row : -1;
-    float target = std::clamp((float)curRow - 0.5f, 0.f, kMapMaxScroll);  // next row ~1.5 rows above the HUD
+    // Keep the next row ~1.5 rows above the HUD (never above the opening view).
+    float nextY = kMapY0 + (790.f - (curRow + 2) * 155.f) * kMapS;
+    float target = std::clamp(406.f - nextY, 0.f, kMapScrollMax);
     mapScroll_ += (target - mapScroll_) * 0.15f;
   }
 
   // One sheet of map paper behind both screens.
   float bx = 0, by = 0;
   toLocal(top, bx, by);
-  gfx::image(R().texture("gfx/bg_map.t3t"), 0, 0, kMapBgW, kMapBgH, bx + kMapBgX, by, kMapBgW, kMapBgH, 0x000000FF, 0.1f);
+  gfx::image(R().texture("gfx/bg_map.t3t"), 0, 0, kMapBgW, kMapBgH, bx + kMapBgX, by + kMapY0 - 1620.f * kMapS + mapScroll_, kMapBgW, kMapBgH);
 
   auto pos = [&](const MapNode& n) {
     auto p = mapPos(n);
@@ -815,13 +830,15 @@ void App::drawMap(bool top) {
       auto [x1, y1] = pos(r.nodes[ni]);
       if (std::max(y0, y1) < -20 || std::min(y0, y1) > kH + 20) continue;
       bool travelled = n.visited && r.nodes[ni].visited;
-      // dashed line
+      // NMapScreen.DrawPaths: a dot (map_dot) every 22 units, clear of both icons;
+      // travelled dots are darker and 1.2x.
       float len = std::hypot(x1 - x0, y1 - y0);
-      int dashes = (int)(len / 6);
-      for (int d = 0; d < dashes; d += 2) {
-        float t0 = (float)d / dashes, t1 = (float)(d + 1) / dashes;
-        gfx::line(x0 + (x1 - x0) * t0, y0 + (y1 - y0) * t0, x0 + (x1 - x0) * t1, y0 + (y1 - y0) * t1, 2,
-                  travelled ? 0x28231DFF : 0x6E5B42E0);
+      float step = 22.f * kMapS, clear = 40.f * kMapS;
+      float ds = travelled ? 2.4f : 2.f;
+      uint32_t dc = travelled ? 0x2A2118F0 : 0x5A4833C8;
+      for (float d = clear; d < len - clear; d += step) {
+        float t = d / len;
+        gfx::rect(x0 + (x1 - x0) * t - ds / 2, y0 + (y1 - y0) * t - ds / 2, ds, ds, dc);
       }
     }
   }
@@ -834,17 +851,19 @@ void App::drawMap(bool top) {
     if (y < -40 || y > kH + 40) continue;
     bool chosen = !reach.empty() && reach[mapSel_] == i;
     bool reachable = chosen || std::find(path.begin(), path.end(), i) != path.end();
-    Sprite ic = roomIcon(n.type);
-    float sz = n.type == RoomType::Boss ? kBossSize : kNodeSize;
-    if (reachable) {
+    Sprite ic = roomIcon(n.type, r.bossId);
+    // Icon height at its native size (ui_atlas map icons) times the map scale.
+    float nativeH = n.type == RoomType::Elite ? 70 : n.type == RoomType::Rest ? 90 : n.type == RoomType::Treasure ? 59 : 68;
+    float sz = n.type == RoomType::Boss ? kBossSize : nativeH * kNodeScale;
+    if (reachable && n.type != RoomType::Boss) {
       float pulse = 1.f + 0.15f * std::sin((float)time_ * 6);
-      sz *= chosen ? 1.35f * pulse : pulse;
-      gfx::circle(x, y, sz * 0.7f, chosen ? 0xFFE07080 : 0xFFFFFF40);
+      sz *= chosen ? 1.4f * pulse : pulse;
+      gfx::circle(x, y, sz * 0.75f, chosen ? 0xFFE07070 : 0xFFFFFF38);
     }
     uint32_t tint = n.visited ? 0x404040FF : 0xFFFFFFFF;
     float w = ic.w / ic.h * sz;
     spr(ic, x - w / 2, y - sz / 2, w, sz, tint, n.visited ? 0.5f : 0.f);
-    if (i == r.currentNode) spr(R().sprite("map/marker"), x - 13, y - 30, 26, 26);
+    if (i == r.currentNode) spr(R().sprite("map/marker"), x - 7, y - sz / 2 - 14, 14, 16);
   }
 
   if (top) { drawTopBar(); return; }
@@ -919,7 +938,7 @@ void App::updateMap(const gfx::Input& in) {
   } else if (mapTouch_.down && in.touching) {
     if (std::hypot(in.tx - mapTouch_.startX, in.ty - mapTouch_.startY) > kMapTapSlop) mapTouch_.dragged = true;
     if (mapTouch_.dragged) {
-      mapScroll_ = std::clamp(mapScroll_ + (in.ty - mapTouch_.lastY) / kRowH, 0.f, kMapMaxScroll);
+      mapScroll_ = std::clamp(mapScroll_ + (in.ty - mapTouch_.lastY), kMapScrollMin, kMapScrollMax);
       mapUserScroll_ = true;
     }
     mapTouch_.lastY = in.ty;

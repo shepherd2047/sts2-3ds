@@ -324,9 +324,11 @@ def build(args):
     for name in ('monster', 'elite', 'rest', 'unknown', 'chest', 'node_background'):
         packer.add('map/' + name, fit(a.sprite(f'images/atlases/ui_atlas.sprites/map/icons/map_{name}.tres'), (22, 22)))
     packer.add('map/marker', fit(a.sprite('images/atlases/ui_atlas.sprites/map/icons/map_marker_ironclad.tres'), (26, 26)))
-    boss_tres = 'images/atlases/ui_atlas.sprites/map/placeholder/vantom_boss_icon.tres'
-    boss = a.sprite(boss_tres) if boss_tres in g.pck.files else g.image('images/map/placeholder/vantom_boss_icon.png')
-    packer.add('map/boss_vantom', fit_height(boss, 56))
+    # Boss map nodes, one per act 1 boss (map/boss_<EncounterId>).
+    for enc, path in (('VantomBoss', 'images/map/placeholder/vantom_boss_icon.png'),
+                      ('TheKinBoss', 'images/map/placeholder/the_kin_boss_icon.png'),
+                      ('CeremonialBeastBoss', 'animations/map/ceremonial_beast_boss/boss_node_ceremonial_beast.png')):
+        packer.add('map/boss_' + enc, fit_height(g.image(path), 64))
     select = g.image('images/packed/character_select/char_select_ironclad.png')
     packer.add('ui/ironclad_select', fit_height(select, 120))
     icon = Image.new('RGBA', (48, 48), (40, 10, 10, 255))
@@ -373,15 +375,17 @@ def build(args):
         os.makedirs(os.path.join(ROOT, 'build'), exist_ok=True)
         canvas.save(os.path.join(ROOT, 'build', 'preview_bg.png'))
         fcanvas.save(os.path.join(ROOT, 'build', 'preview_floor.png'))
-    # Map paper: one 260x495 strip behind both screens (top 240 + hinge 15 + bottom 240),
-    # continuous across them like RGDSplus U07; like there, the paper covers ~65% of the
-    # width with dark sides. The middle piece tiles vertically.
-    mapbg = g.image('images/packed/map/map_bgs/overgrowth/map_middle_overgrowth.png')
-    piece = mapbg.resize((260, round(mapbg.height * 260 / mapbg.width)), Image.LANCZOS)
-    sheet = Image.new('RGBA', (260, 495), (0, 0, 0, 255))
-    for y in range(0, 495, piece.height):
-        sheet.paste(piece, (0, y))
-    mb = Image.new('RGBA', (512, 512), (0, 0, 0, 255))
+    # Map paper: the game's own MapBg (map_screen.tscn): top / middle / bottom parchment,
+    # each fitted into a 1920x1080 box (keep-aspect -> 1527x1080) and stacked from y=-1620
+    # to +1620. Baked at MAP_SCALE (ui.cpp kMapS) into one 260x551 strip.
+    MAP_SCALE = 0.17
+    parts = [g.image(f'images/packed/map/map_bgs/overgrowth/map_{p}_overgrowth.png') for p in ('top', 'middle', 'bottom')]
+    pw, ph = round(1527 * MAP_SCALE), round(1080 * MAP_SCALE)
+    sheet = Image.new('RGBA', (pw, ph * 3), (0, 0, 0, 0))
+    for i, part in enumerate(parts):
+        sheet.alpha_composite(part.resize((pw, ph), Image.LANCZOS), (0, i * ph))
+    print('  map paper', sheet.size)
+    mb = Image.new('RGBA', (512, 1024), (0, 0, 0, 0))
     mb.paste(sheet, (0, 0))
     write_t3t(os.path.join(OUT, 'gfx', 'bg_map.t3t'), mb)
     if args.preview:

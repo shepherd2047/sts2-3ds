@@ -26,6 +26,14 @@ The owner works on this from a Mac and a Windows PC. Talk to them in Chinese.
   sts2-decompiled/   python3 tools/decompile.py  (porting reference, not in git)
 ```
 
+## Layout rule: the bottom screen is narrower
+
+The bottom screen is 320 px wide, the top 400 px; in the virtual two-screen
+canvas the bottom sits centred (x 40..360). Anything drawn continuously across
+both screens (map parchment, arrows, tall backgrounds) must keep its content
+within that width so it doesn't overflow the bottom screen. Check both screens
+in preview screenshots.
+
 ## Setup
 
 New Windows PC: run `tools/setup_windows.ps1` (installs Git, gh, Python,
