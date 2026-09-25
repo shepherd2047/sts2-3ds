@@ -32,7 +32,7 @@ enum class TargetType { None, Self, AnyEnemy, AllEnemies, RandomEnemy };
 enum class PowerType { Buff, Debuff };
 enum class StackType { Counter, Single };
 enum class Pile { None, Draw, Hand, Discard, Exhaust, Play };
-enum class RoomType { Monster, Elite, Rest, Treasure, Unknown, Boss, Start };
+enum class RoomType { Monster, Elite, Rest, Treasure, Unknown, Boss, Start, Shop };
 enum class RelicRarity { None, Starter, Common, Uncommon, Rare, Shop, Event, Ancient };
 
 // ValueProp flags.
@@ -574,7 +574,15 @@ struct MapNode {
   std::vector<int> next;  // indices into Run::nodes
   bool visited = false;
   float x = 0, y = 0;     // layout in map space
+  float jx = 0, jy = 0;   // NMapScreen jitter in native map units (±21, ±25)
+  float angle = 0;        // icon tilt in degrees (NextGaussianFloat(0, 8))
 };
+
+// StandardActMap (+ MapPathPruning, MapPostProcessing, Overgrowth.GetMapPointTypes):
+// the act's rooms in our indexing (row 0 = the game's row 1, the start point is
+// dropped; the boss is the last node, row 15, col 3). next = child indices.
+// Implemented in mapgen.cpp.
+std::vector<MapNode> generateStandardActMap(Rng& mapRng);
 
 struct Encounter {
   std::string id;
@@ -583,7 +591,7 @@ struct Encounter {
   std::function<std::vector<std::unique_ptr<Monster>>(Rng&)> generate;
 };
 
-enum class Screen { Title, Map, Combat, Reward, Rest, RestUpgrade, GameOver, Victory, DeckView, RelicOffer };
+enum class Screen { Title, Map, Combat, Reward, Rest, RestUpgrade, GameOver, Victory, DeckView, RelicOffer, Placeholder };
 
 struct Run {
   uint64_t seed = 1;
@@ -611,6 +619,12 @@ struct Run {
   std::vector<Card*> upgradeOptions;
   Signal<int> upgradeChoice;         // index or -1 back
   int lastHeal = 0;
+  // A room that is not ported yet (events, shops): Screen::Placeholder shows this text.
+  std::string placeholderText;
+  Signal<int> placeholderDone;
+  // UnknownMapPointOdds: current odds of the non-event outcomes of a "?" room.
+  float unknownMonsterOdds = 0.1f, unknownTreasureOdds = 0.02f, unknownShopOdds = 0.03f;
+  RoomType rollUnknownRoom();      // returns Unknown for "event"
   std::unique_ptr<Relic> relicOffer;  // RelicReward / treasure chest, shown on Screen::RelicOffer
   bool relicOfferFromChest = false;
   Signal<int> relicChoice;           // 1 take, 0 skip

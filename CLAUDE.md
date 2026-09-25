@@ -128,8 +128,12 @@ scripts drift; delete the debug file afterwards.
   map node be entered. SELECT (Backspace in the preview) or 开发 on the map opens
   the developer menu: god mode, heal, gold, max HP, obtain any relic, add any
   card, upgrade deck, pick the next encounter, kill all enemies, free map toggle.
-- Map follows the RGDSplus proportions (paper strip ~65% wide, 30 px rows, 36 px
-  columns, 16 px nodes, legend on the right). START opens it for a look from any
+- Map: `mapgen.cpp` is the game's StandardActMap (paths without crossings, pruning,
+  centring/spreading/straightening, room types incl. ? and shops). Drawn with the
+  game's own parchment and NMapScreen geometry (columns 150, rows 155 units, ±21/±25
+  jitter, tilt) scaled by `kMapS` = 0.17 for the RGDSplus look; icons ~9 px, dotted
+  paths every 22 units, legend on the right. "?" rooms roll UnknownMapPointOdds;
+  events and shops show a "not ported yet" page. START opens it for a look from any
   room, with a red 返回 in the bottom-left corner.
 - `Res` frees monster Spine pages when a new fight starts (only IRONCLAD stays);
   3DS textures live in limited linear memory.

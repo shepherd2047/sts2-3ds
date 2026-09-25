@@ -321,13 +321,13 @@ def build(args):
         layer = g.image(f'images/ui/combat/energy_counters/ironclad/ironclad_orb_layer_{i}.png')
         orb = layer if orb is None else Image.alpha_composite(orb, layer.resize(orb.size))
     packer.add('ui/energy_orb', fit(orb, (44, 44)))
-    for name in ('monster', 'elite', 'rest', 'unknown', 'chest', 'node_background'):
+    for name in ('monster', 'elite', 'rest', 'unknown', 'chest', 'shop', 'node_background'):
         packer.add('map/' + name, fit(a.sprite(f'images/atlases/ui_atlas.sprites/map/icons/map_{name}.tres'), (22, 22)))
     packer.add('map/marker', fit(a.sprite('images/atlases/ui_atlas.sprites/map/icons/map_marker_ironclad.tres'), (26, 26)))
     # Boss map nodes, one per act 1 boss (map/boss_<EncounterId>).
+    # (Ceremonial Beast's map node is a Spine animation; the UI inks its creature sprite.)
     for enc, path in (('VantomBoss', 'images/map/placeholder/vantom_boss_icon.png'),
-                      ('TheKinBoss', 'images/map/placeholder/the_kin_boss_icon.png'),
-                      ('CeremonialBeastBoss', 'animations/map/ceremonial_beast_boss/boss_node_ceremonial_beast.png')):
+                      ('TheKinBoss', 'images/map/placeholder/the_kin_boss_icon.png')):
         packer.add('map/boss_' + enc, fit_height(g.image(path), 64))
     select = g.image('images/packed/character_select/char_select_ironclad.png')
     packer.add('ui/ironclad_select', fit_height(select, 120))

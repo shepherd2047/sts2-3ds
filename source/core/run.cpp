@@ -1,5 +1,6 @@
 // Run flow: map, room dispatch, rewards and rest sites.
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <set>
 
@@ -8,12 +9,7 @@
 namespace sts {
 
 namespace {
-constexpr int kCols = 7;
-constexpr int kRows = 15;  // Overgrowth.BaseNumberOfRooms
-constexpr int kPaths = 6;
 constexpr int kWeakFights = 3;  // Overgrowth.NumberOfWeakEncounters
-// GetRowCount() - 7 in StandardActMap, whose row 0 is the start point: row 8 here.
-constexpr int kTreasureRow = kRows - 7;
 }  // namespace
 
 Creature* Relic::owner() const { return run->player.get(); }
@@ -102,6 +98,24 @@ Task<> Run::offerRelic(std::unique_ptr<Relic> rel, bool fromChest) {
   relicOffer.reset();
 }
 
+// UnknownMapPointOdds.Roll (single player, no blacklist): Monster 10%, Treasure 2%,
+// Shop 3%, else Event; the rolled type resets to its base odds, the others grow by theirs.
+RoomType Run::rollUnknownRoom() {
+  float roll = rng("UnknownMapPoint").nextFloat();
+  RoomType result = RoomType::Unknown;  // event
+  float sum = 0;
+  const std::pair<RoomType, float*> odds[] = {{RoomType::Monster, &unknownMonsterOdds},
+                                              {RoomType::Treasure, &unknownTreasureOdds},
+                                              {RoomType::Shop, &unknownShopOdds}};
+  for (auto& [t, p] : odds) {
+    sum += *p;
+    if (roll <= sum) { result = t; break; }
+  }
+  const float base[] = {0.1f, 0.02f, 0.03f};
+  for (int i = 0; i < 3; ++i) *odds[i].second = odds[i].first == result ? base[i] : *odds[i].second + base[i];
+  return result;
+}
+
 Task<> Run::gainGold(int amount) {
   Dec a = amount;
   for (Model* m : listeners()) a = m->modifyGoldGained(a);
@@ -140,64 +154,21 @@ void Run::start(uint64_t s) {
 }
 
 void Run::generateMap() {
-  nodes.clear();
-  Rng& r = rng("Map");
-  int grid[kRows][kCols];
-  for (auto& row : grid) for (int& c : row) c = -1;
-  auto nodeAt = [&](int row, int col) {
-    if (grid[row][col] < 0) {
-      MapNode n;
-      n.row = row;
-      n.col = col;
-      grid[row][col] = (int)nodes.size();
-      nodes.push_back(n);
-    }
-    return grid[row][col];
-  };
-
-  int firstStart = -1;
-  for (int p = 0; p < kPaths; ++p) {
-    int col = r.nextInt(kCols);
-    if (p == 1) while (col == firstStart) col = r.nextInt(kCols);
-    if (p == 0) firstStart = col;
-    int prev = nodeAt(0, col);
-    for (int row = 1; row < kRows; ++row) {
-      int nc = std::clamp(col + r.nextInt(-1, 2), 0, kCols - 1);
-      int cur = nodeAt(row, nc);
-      auto& nx = nodes[prev].next;
-      if (std::find(nx.begin(), nx.end(), cur) == nx.end()) nx.push_back(cur);
-      prev = cur;
-      col = nc;
-    }
-  }
-
-  // Room types. Row 0 fights, the last row rests before the boss, and
-  // StandardActMap.AssignPointTypes makes the 7th row from the top all treasure.
+  // StandardActMap (mapgen.cpp): the game's own generator, paths, pruning and types.
+  nodes = generateStandardActMap(rng("Map"));
+  // NMapScreen layout: each point jittered by up to ±21 / ±25 units (map_jitter stream)
+  // and tilted by NextGaussianFloat(0, 8) degrees (Rng.Chaotic in C#: cosmetic only).
+  Rng& j = rng("MapJitter");
   for (auto& n : nodes) {
-    if (n.row == 0) { n.type = RoomType::Monster; continue; }
-    if (n.row == kRows - 1) { n.type = RoomType::Rest; continue; }
-    if (n.row == kTreasureRow) { n.type = RoomType::Treasure; continue; }
-    float roll = r.nextFloat();
-    if (n.row >= 5 && roll < 0.14f) n.type = RoomType::Elite;
-    else if (n.row >= 5 && n.row != kRows - 2 && roll < 0.30f) n.type = RoomType::Rest;
-    else n.type = RoomType::Monster;
-  }
-
-  // Boss node above everything.
-  MapNode boss;
-  boss.row = kRows;
-  boss.col = kCols / 2;
-  boss.type = RoomType::Boss;
-  int bossIdx = (int)nodes.size();
-  nodes.push_back(boss);
-  for (auto& n : nodes) if (n.row == kRows - 1) n.next.push_back(bossIdx);
-
-  for (auto& n : nodes) {
-    n.x = (float)n.col + (n.type == RoomType::Boss ? 0.f : (r.nextFloat() - 0.5f) * 0.35f);
+    n.x = (float)n.col;
     n.y = (float)n.row;
+    if (n.type == RoomType::Boss) continue;
+    n.jx = j.nextFloat(42.f) - 21.f;
+    n.jy = j.nextFloat(50.f) - 25.f;
+    float u1 = std::max(1e-6f, j.nextFloat()), u2 = j.nextFloat();
+    n.angle = 8.f * std::sqrt(-2.f * std::log(u1)) * std::cos(6.2831853f * u2);
   }
 }
-
 std::vector<int> Run::pathNodes() const {
   std::vector<int> out;
   if (currentNode < 0) {
@@ -301,6 +272,16 @@ Task<> Run::main() {
       std::string f = forced;
       type = f == "Treasure" ? RoomType::Treasure : f == "Rest" ? RoomType::Rest : f == "Elite" ? RoomType::Elite
            : f == "Boss" ? RoomType::Boss : type;
+    }
+    // "?" rooms resolve when entered (UnknownMapPointOdds); Unknown afterwards means an event.
+    if (type == RoomType::Unknown) type = rollUnknownRoom();
+    if (type == RoomType::Unknown || type == RoomType::Shop) {
+      // PORT NOTE: events and the merchant are not ported yet; say so and move on.
+      for (Model* m : listeners()) co_await m->afterRoomEntered(type);
+      placeholderText = type == RoomType::Shop ? "商店（尚未实现）" : "事件（尚未实现）";
+      screen = Screen::Placeholder;
+      co_await placeholderDone.next();
+      continue;
     }
 
     if (type == RoomType::Monster || type == RoomType::Elite || type == RoomType::Boss) {

@@ -41,14 +41,14 @@ constexpr float kMapY0 = 337.f;
 constexpr float kMapScrollMin = -60.f, kMapScrollMax = 300.f;  // px
 constexpr float kMapBgW = 260.f, kMapBgH = 552.f;  // bg_map.t3t parchment strip (1527x3240 * kMapS)
 constexpr float kMapBgX = (gfx::kTopW - kMapBgW) / 2.f;
-constexpr float kNodeScale = kMapS * 1.15f;  // node icons: native size, a touch larger for the stylus
+constexpr float kNodeScale = kMapS * 0.8f;  // node icons: ~9 px, as small as on RGDSplus
 constexpr float kBossSize = 352.f * kMapS;
 constexpr float kMapTapSlop = 5.f;       // 12 px of 768 on RGDSplus, rounded up for a stylus
 
 // Native map coordinates (NMapScreen): our row r is the game's row r + 1.
 inline std::pair<float, float> mapNative(const MapNode& n) {
   if (n.type == RoomType::Boss) return {0.f, -1780.f};
-  return {n.x * 150.f - 450.f, 790.f - (n.y + 1.f) * 155.f};
+  return {n.col * 150.f - 450.f + n.jx, 790.f - (n.row + 1.f) * 155.f + n.jy};
 }
 
 // Button ids
@@ -105,6 +105,7 @@ std::string roomName(RoomType t) {
     case RoomType::Rest: return L("map.LEGEND_REST.title");
     case RoomType::Boss: return "Boss";
     case RoomType::Treasure: return L("map.LEGEND_TREASURE.title");
+    case RoomType::Shop: return L("map.LEGEND_MERCHANT.title");
     default: return L("map.LEGEND_UNKNOWN.title");
   }
 }
@@ -114,8 +115,10 @@ Sprite roomIcon(RoomType t, const std::string& bossId = "VantomBoss") {
     case RoomType::Monster: return R().sprite("map/monster");
     case RoomType::Elite: return R().sprite("map/elite");
     case RoomType::Rest: return R().sprite("map/rest");
-    case RoomType::Boss: return R().sprite("map/boss_" + bossId);
+    case RoomType::Boss:  // Ceremonial Beast's map node is a Spine animation: use its creature sprite
+      return bossId == "CeremonialBeastBoss" ? R().sprite("creature/CEREMONIAL_BEAST") : R().sprite("map/boss_" + bossId);
     case RoomType::Treasure: return R().sprite("map/chest");
+    case RoomType::Shop: return R().sprite("map/shop");
     default: return R().sprite("map/unknown");
   }
 }
@@ -568,6 +571,11 @@ void App::update(const gfx::Input& in, double dt) {
     case Screen::GameOver: updateEnd(in); break;
     case Screen::Victory: updateEnd(in); break;
     case Screen::RelicOffer: updateRelicOffer(in); break;
+    case Screen::Placeholder:
+      if (run_->placeholderDone.waiting() &&
+          ((in.down & gfx::BTN_A) || (in.touchDown && hitAt(in.tx, in.ty) == ID_CONFIRM)))
+        run_->placeholderDone.fire(0);
+      break;
     default: break;
   }
 }
@@ -642,6 +650,16 @@ void App::draw() {
       case Screen::GameOver: drawEnd(top, false); break;
       case Screen::Victory: drawEnd(top, true); break;
       case Screen::RelicOffer: drawRelicOffer(top); break;
+      case Screen::Placeholder:  // a room that is not ported yet (event / shop)
+        drawSceneBg(top, 0.6f);
+        if (top) {
+          drawTopBar();
+          R().text(kTop / 2, 90, run_->placeholderText, ts(F16, col::gold, CENTER, 0, 1.3f));
+          R().text(kTop / 2, 124, "这个房间还没有移植，先跳过。", ts(F12, col::white, CENTER));
+        } else {
+          button(kBot / 2 - 60, 100, 120, 40, "继续", ID_CONFIRM, true, true);
+        }
+        break;
       default: break;
     }
     if (!top && toastT_ > 0) {
@@ -696,6 +714,9 @@ void App::autoplay(double dt) {
       break;
     case Screen::RelicOffer:
       if (r.relicChoice.waiting()) r.relicChoice.fire(1); else acted = false;
+      break;
+    case Screen::Placeholder:
+      if (r.placeholderDone.waiting()) r.placeholderDone.fire(0); else acted = false;
       break;
     case Screen::RestUpgrade:
       if (r.upgradeChoice.waiting()) {
@@ -795,7 +816,7 @@ int App::mapNodeAt(float tx, float ty) {
   for (int i = 0; i < (int)reach.size(); ++i) {
     auto& n = r.nodes[reach[i]];
     auto [x, y] = mapPos(n);
-    float d = std::hypot(vx - x, vy - y), radius = n.type == RoomType::Boss ? kBossSize / 2 : 12.f;
+    float d = std::hypot(vx - x, vy - y), radius = n.type == RoomType::Boss ? kBossSize / 2 : 11.f;
     if (d < radius && d < bestD) { best = i; bestD = d; }
   }
   return best;
@@ -853,7 +874,8 @@ void App::drawMap(bool top) {
     bool reachable = chosen || std::find(path.begin(), path.end(), i) != path.end();
     Sprite ic = roomIcon(n.type, r.bossId);
     // Icon height at its native size (ui_atlas map icons) times the map scale.
-    float nativeH = n.type == RoomType::Elite ? 70 : n.type == RoomType::Rest ? 90 : n.type == RoomType::Treasure ? 59 : 68;
+    float nativeH = n.type == RoomType::Elite ? 70 : n.type == RoomType::Rest ? 90 : n.type == RoomType::Treasure ? 59
+                  : n.type == RoomType::Unknown ? 72 : 68;
     float sz = n.type == RoomType::Boss ? kBossSize : nativeH * kNodeScale;
     if (reachable && n.type != RoomType::Boss) {
       float pulse = 1.f + 0.15f * std::sin((float)time_ * 6);
@@ -862,7 +884,12 @@ void App::drawMap(bool top) {
     }
     uint32_t tint = n.visited ? 0x404040FF : 0xFFFFFFFF;
     float w = ic.w / ic.h * sz;
-    spr(ic, x - w / 2, y - sz / 2, w, sz, tint, n.visited ? 0.5f : 0.f);
+    gfx::pushTransform(gfx::Affine::rotateAround(x, y, n.angle * 3.14159265f / 180.f));  // NMapPoint.SetAngle
+    if (n.type == RoomType::Boss)
+      spr(ic, x - w / 2, y - sz / 2, w, sz, 0x2E241AFF, 1.f);  // boss icons are masks/sprites: ink them
+    else
+      spr(ic, x - w / 2, y - sz / 2, w, sz, tint, n.visited ? 0.5f : 0.f);
+    gfx::popTransform();
     if (i == r.currentNode) spr(R().sprite("map/marker"), x - 7, y - sz / 2 - 14, 14, 16);
   }
 
@@ -883,11 +910,12 @@ void App::drawMap(bool top) {
   }
   // Legend panel on the right, as on RGDSplus (the map's own legend, lower screen).
   {
-    const float lx = kBot - 62, ly = 104, lw = 58;
-    const RoomType types[] = {RoomType::Monster, RoomType::Elite, RoomType::Rest, RoomType::Treasure};
-    panel(lx, ly, lw, 18 + 4 * 17, 0x2A2418D8, 0x8A7A5AFF);
+    const float lx = kBot - 62, ly = 88, lw = 58;
+    const RoomType types[] = {RoomType::Unknown, RoomType::Shop, RoomType::Treasure, RoomType::Rest,
+                              RoomType::Monster, RoomType::Elite};
+    panel(lx, ly, lw, 18 + 6 * 17, 0x2A2418D8, 0x8A7A5AFF);
     R().text(lx + lw / 2, ly + 3, "图例", ts(F12, col::gold, CENTER));
-    for (int i = 0; i < 4; ++i) {
+    for (int i = 0; i < 6; ++i) {
       float y = ly + 19 + i * 17;
       Sprite ic = roomIcon(types[i]);
       spr(ic, lx + 4, y, 14, 14);
