@@ -214,7 +214,10 @@ struct MapBuilder {
         return;
       }
     }
-    throw std::runtime_error("Cannot find next node");
+    // C# throws here ("Cannot find next node"); it cannot happen (going straight never
+    // crosses), and the 3DS build has no exceptions: go straight.
+    outCol = col;
+    outRow = current->row + 1;
   }
 
   void pathGenerate(Node* startingNode) {
@@ -492,7 +495,7 @@ struct MapBuilder {
     auto matching = findMatchingSegments(startingPoint);
     while (prunePaths(matching)) {
       iterations++;
-      if (iterations > 50) throw std::runtime_error("Unable to prune matching segments");
+      if (iterations > 50) break;  // C# throws; no exceptions on the 3DS: keep the map as is
       matching = findMatchingSegments(startingPoint);
     }
   }
