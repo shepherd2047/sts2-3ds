@@ -26,6 +26,13 @@ The owner works on this from a Mac and a Windows PC. Talk to them in Chinese.
   sts2-decompiled/   python3 tools/decompile.py  (porting reference, not in git)
 ```
 
+## Build rule: no RTTI, no exceptions on the 3DS
+
+devkitARM builds with `-fno-rtti -fno-exceptions`: no `dynamic_cast`, `typeid`,
+`throw` or `try`. Identify types by id fields (e.g. `Monster::id`) and handle
+"impossible" cases with a fallback. Always check `make` (3DS) as well as the
+preview build before committing.
+
 ## Layout rule: the bottom screen is narrower
 
 The bottom screen is 320 px wide, the top 400 px; in the virtual two-screen
