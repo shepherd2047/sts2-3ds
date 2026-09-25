@@ -1,0 +1,24 @@
+# Desktop preview build (macOS/Linux with SDL2).
+CXX ?= clang++
+CXXFLAGS := -std=c++20 -O2 -g -Wall -Wno-missing-field-initializers -Wno-unused-parameter $(shell sdl2-config --cflags)
+LDFLAGS := $(shell sdl2-config --libs)
+CORE := $(wildcard source/core/*.cpp)
+SRC := $(CORE) source/spine/spine.cpp source/gfx/gfx_common.cpp source/platform_sdl/gfx_sdl.cpp source/ui/res.cpp source/ui/ui.cpp source/main.cpp
+
+all: build/sts2-preview build/sim
+
+build/sts2-preview: $(SRC) $(wildcard source/*/*.h)
+	@mkdir -p build
+	$(CXX) $(CXXFLAGS) $(SRC) -o $@ $(LDFLAGS)
+
+build/sim: $(CORE) test/sim.cpp $(wildcard source/core/*.h)
+	@mkdir -p build
+	$(CXX) -std=c++20 -O2 -g -Wno-missing-field-initializers $(CORE) test/sim.cpp -o $@
+
+sim: build/sim
+	./build/sim 200
+
+clean:
+	rm -rf build
+
+.PHONY: all sim clean
