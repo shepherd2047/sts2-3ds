@@ -17,6 +17,23 @@ namespace {
 
 constexpr int kTop = gfx::kTopW, kBot = gfx::kBottomW, kH = gfx::kScreenH;
 
+// The two screens as one virtual canvas: bottom sits under the top screen,
+// centred, with a hinge gap (48 px of 768 on RGDSplus -> 15 of 240 here).
+constexpr float kGap = 15.f;
+constexpr float kBotOX = (gfx::kTopW - gfx::kBottomW) / 2.f;
+constexpr float kBotOY = gfx::kScreenH + kGap;
+
+inline void toLocal(bool top, float& x, float& y) {
+  if (!top) { x -= kBotOX; y -= kBotOY; }
+}
+
+// Map (RGDSplus U07): one sheet running through both screens, bottom = lower rows.
+constexpr float kRowH = 34.f;
+constexpr float kMapBase = 455.f;        // virtual y of row 0 at scroll 0
+constexpr float kMapMaxScroll = 11.5f;   // rows; enough to bring the boss onto the bottom screen
+constexpr float kMapBgH = 495.f;         // bg_map.t3t sheet height (both screens + hinge)
+constexpr float kMapTapSlop = 5.f;       // 12 px of 768 on RGDSplus, rounded up for a stylus
+
 // Button ids
 enum : int {
   ID_NONE = -1,
@@ -103,6 +120,7 @@ void App::startRun() {
   visuals_.clear();
   sel_ = -1;
   mapSel_ = 0;
+  mapScroll_ = 0;
   deckOpen_ = false;
 }
 
@@ -316,8 +334,13 @@ void App::drawCard(Card* c, float x, float y, float s, bool dim, bool desc, bool
   float tw = R().measure(title, tt);
   float maxW = 104 * s;
   if (tw > maxW) tt.scale = maxW / tw;
-  float th = R().lineHeight(f) * tt.scale;
-  R().text(x + 60 * s, y + 3 * s + (26 * s - th) / 2, title, tt);
+  // The title must never reach the art: its line box ends above the portrait's top edge
+  // and any extra height grows upward, past the card's top edge if need be.
+  const float maxH = 23 * s, artTop = y + 17 * s;
+  float lh = R().lineHeight(f);
+  if (lh * tt.scale > maxH) tt.scale = maxH / lh;
+  float th = lh * tt.scale;
+  R().text(x + 60 * s, artTop - th, title, tt);
 
   // Cost orb.
   if ((c->cost >= 0 || c->costsX) && !c->has(kwUnplayable)) {
@@ -343,6 +366,16 @@ void App::drawCard(Card* c, float x, float y, float s, bool dim, bool desc, bool
     for (int k = 0; k < 6 && dh > bottom - top && dt.scale > 0.5f; ++k) {
       dt.scale *= 0.9f;
       R().measure(d, dt, &dh);
+    }
+    // A lone wrapped character (usually the full stop) reads badly on small cards: shrink to one line less.
+    if (s < 0.8f) {
+      float lh = R().lineHeight(F12) * dt.scale, dh1;
+      TextStyle t2 = dt;
+      for (int k = 0; k < 3; ++k) {
+        t2.scale *= 0.92f;
+        R().measure(d, t2, &dh1);
+        if (dh1 < dh - lh * 0.5f) { dt = t2; dh = dh1; break; }
+      }
     }
     R().text(x + 60 * s, top + std::max(0.f, (bottom - top - dh) / 2), d, dt);
   }
@@ -379,6 +412,8 @@ void App::update(const gfx::Input& in, double dt) {
   if (scr != lastScreen_) {
     sel_ = -1;
     scroll_ = 0;
+    mapTouch_ = {};
+    mapUserScroll_ = false;
     lastScreen_ = scr;
   }
   if (run_->combat.get() != lastCombat_) {
@@ -592,107 +627,134 @@ void App::drawTopBar() {
 
 // ================================================================ map
 
+// Node centre on the two-screen virtual canvas.
+std::pair<float, float> App::mapPos(const MapNode& n) const {
+  return {58 + n.x * 47, kMapBase - (n.y - mapScroll_) * kRowH};
+}
+
+// Reachable index under a bottom-screen point, or -1.
+int App::mapNodeAt(float tx, float ty) {
+  Run& r = *run_;
+  auto reach = r.reachableNodes();
+  float vx = tx + kBotOX, vy = ty + kBotOY;
+  int best = -1;
+  float bestD = 1e9f;
+  for (int i = 0; i < (int)reach.size(); ++i) {
+    auto& n = r.nodes[reach[i]];
+    auto [x, y] = mapPos(n);
+    float d = std::hypot(vx - x, vy - y), radius = n.type == RoomType::Boss ? 32.f : 17.f;
+    if (d < radius && d < bestD) { best = i; bestD = d; }
+  }
+  return best;
+}
+
 void App::drawMap(bool top) {
   Run& r = *run_;
   auto reach = r.reachableNodes();
   if (mapSel_ >= (int)reach.size()) mapSel_ = 0;
-  if (top) {
-    gfx::Texture* bg = R().texture("gfx/bg_map.t3t");
-    gfx::image(bg, 0, 0, kTop, kH, 0, 0, kTop, kH, 0x000000FF, 0.1f);
+  if (top && !mapUserScroll_) {  // once per frame: keep the next row low on the bottom screen
     int curRow = r.currentNode >= 0 ? r.nodes[r.currentNode].row : -1;
-    float target = std::max(0.f, (float)curRow - 0.5f);
+    float target = std::clamp((float)curRow - 0.75f, 0.f, kMapMaxScroll);
     mapScroll_ += (target - mapScroll_) * 0.15f;
-    auto pos = [&](const MapNode& n) {
-      float x = 58 + n.x * 47;
-      float y = 216 - (n.y - mapScroll_) * 34;
-      return std::pair<float, float>(x, y);
-    };
-    // Edges
-    for (auto& n : r.nodes) {
-      auto [x0, y0] = pos(n);
-      for (int ni : n.next) {
-        auto [x1, y1] = pos(r.nodes[ni]);
-        if (std::max(y0, y1) < -20 || std::min(y0, y1) > kH + 20) continue;
-        bool travelled = n.visited && r.nodes[ni].visited;
-        // dashed line
-        float len = std::hypot(x1 - x0, y1 - y0);
-        int dashes = (int)(len / 6);
-        for (int d = 0; d < dashes; d += 2) {
-          float t0 = (float)d / dashes, t1 = (float)(d + 1) / dashes;
-          gfx::line(x0 + (x1 - x0) * t0, y0 + (y1 - y0) * t0, x0 + (x1 - x0) * t1, y0 + (y1 - y0) * t1, 2,
-                    travelled ? 0x28231DFF : 0x87725699);
-        }
-      }
-    }
-    // Nodes
-    for (int i = 0; i < (int)r.nodes.size(); ++i) {
-      auto& n = r.nodes[i];
-      auto [x, y] = pos(n);
-      if (y < -40 || y > kH + 20) continue;
-      bool reachable = std::find(reach.begin(), reach.end(), i) != reach.end();
-      bool chosen = reachable && reach[mapSel_] == i;
-      Sprite ic = roomIcon(n.type);
-      float sz = n.type == RoomType::Boss ? 56 : 22;
-      if (reachable) {
-        float pulse = 1.f + 0.15f * std::sin((float)time_ * 6);
-        sz *= chosen ? 1.35f * pulse : pulse;
-        gfx::circle(x, y, sz * 0.7f, chosen ? 0xFFE07080 : 0xFFFFFF40);
-      }
-      uint32_t tint = n.visited ? 0x404040FF : 0xFFFFFFFF;
-      float w = ic.w / ic.h * sz;
-      spr(ic, x - w / 2, y - sz / 2, w, sz, tint, n.visited ? 0.5f : 0.f);
-      if (i == r.currentNode) spr(R().sprite("map/marker"), x - 13, y - 30, 26, 26);
-    }
-    drawTopBar();
-    return;
   }
 
-  gfx::rectGradient(0, 0, kBot, kH, 0x2A2016FF, 0x100C08FF);
-  R().text(kBot / 2, 6, "选择下一个房间", ts(F16, col::gold, CENTER));
-  int n = (int)reach.size();
-  float bw = std::min(90.f, (kBot - 16.f) / std::max(1, n) - 6);
-  float total = n * bw + (n - 1) * 6;
-  for (int i = 0; i < n; ++i) {
-    float x = (kBot - total) / 2 + i * (bw + 6), y = 36;
-    auto& node = r.nodes[reach[i]];
-    bool hl = i == mapSel_;
-    panel(x, y, bw, 100, hl ? 0x6A4A20F0 : 0x302418F0, hl ? 0xFFD870FF : 0x8A7A5AFF);
-    Sprite ic = roomIcon(node.type);
-    float sz = node.type == RoomType::Boss ? 60 : 44;
-    float w = ic.w / ic.h * sz;
-    spr(ic, x + (bw - w) / 2, y + 12, w, sz);
-    R().text(x + bw / 2, y + 74, roomName(node.type), ts(F16, col::white, CENTER));
-    hits_.push_back({x, y, bw, 100, ID_NODE0 + i});
+  // One sheet of map paper behind both screens.
+  float bx = 0, by = 0;
+  toLocal(top, bx, by);
+  gfx::image(R().texture("gfx/bg_map.t3t"), 0, 0, kTop, kMapBgH, bx, by, kTop, kMapBgH, 0x000000FF, 0.1f);
+
+  auto pos = [&](const MapNode& n) {
+    auto p = mapPos(n);
+    toLocal(top, p.first, p.second);
+    return p;
+  };
+  // Edges
+  for (auto& n : r.nodes) {
+    auto [x0, y0] = pos(n);
+    for (int ni : n.next) {
+      auto [x1, y1] = pos(r.nodes[ni]);
+      if (std::max(y0, y1) < -20 || std::min(y0, y1) > kH + 20) continue;
+      bool travelled = n.visited && r.nodes[ni].visited;
+      // dashed line
+      float len = std::hypot(x1 - x0, y1 - y0);
+      int dashes = (int)(len / 6);
+      for (int d = 0; d < dashes; d += 2) {
+        float t0 = (float)d / dashes, t1 = (float)(d + 1) / dashes;
+        gfx::line(x0 + (x1 - x0) * t0, y0 + (y1 - y0) * t0, x0 + (x1 - x0) * t1, y0 + (y1 - y0) * t1, 2,
+                  travelled ? 0x28231DFF : 0x87725699);
+      }
+    }
   }
-  Creature* p = r.player.get();
-  R().text(10, 150, "生命 " + num(p->hp) + "/" + num(p->maxHp) + "    金币 " + num(r.gold) + "    第 " + num(r.floor) + " 层",
-           ts(F12, col::white));
-  button(10, 180, 120, 44, "查看牌组", ID_DECK);
-  R().text(kBot - 10, 196, "A 进入  ←→ 选择", ts(F12, col::gray, RIGHT));
+  // Nodes
+  for (int i = 0; i < (int)r.nodes.size(); ++i) {
+    auto& n = r.nodes[i];
+    auto [x, y] = pos(n);
+    if (y < -40 || y > kH + 40) continue;
+    bool reachable = std::find(reach.begin(), reach.end(), i) != reach.end();
+    bool chosen = reachable && reach[mapSel_] == i;
+    Sprite ic = roomIcon(n.type);
+    float sz = n.type == RoomType::Boss ? 56 : 22;
+    if (reachable) {
+      float pulse = 1.f + 0.15f * std::sin((float)time_ * 6);
+      sz *= chosen ? 1.35f * pulse : pulse;
+      gfx::circle(x, y, sz * 0.7f, chosen ? 0xFFE07080 : 0xFFFFFF40);
+    }
+    uint32_t tint = n.visited ? 0x404040FF : 0xFFFFFFFF;
+    float w = ic.w / ic.h * sz;
+    spr(ic, x - w / 2, y - sz / 2, w, sz, tint, n.visited ? 0.5f : 0.f);
+    if (i == r.currentNode) spr(R().sprite("map/marker"), x - 13, y - 30, 26, 26);
+  }
+
+  if (top) { drawTopBar(); return; }
+  // Bottom HUD in the corners, clear of row 0.
+  button(4, 210, 64, 26, "牌组", ID_DECK);
+  if (!reach.empty()) {
+    std::string label = roomName(r.nodes[reach[mapSel_]].type);
+    float w = R().measure(label, ts(F12)) + 12;
+    gfx::rect(kBot - w - 4, 214, w, 20, 0x000000A0);
+    R().text(kBot - 10, 217, label, ts(F12, col::gold, RIGHT));
+  }
 }
 
+// RGDSplus R4_MAP_TOUCH: drag anywhere to scroll; a press that never moved more than
+// the slop and started on a reachable node enters it on release. A/←→ still work.
 void App::updateMap(const gfx::Input& in) {
   Run& r = *run_;
-  if (!r.mapChoice.waiting()) return;
+  if (!r.mapChoice.waiting()) { mapTouch_ = {}; return; }
   auto reach = r.reachableNodes();
   int n = (int)reach.size();
   if (n == 0) return;
-  if (in.down & gfx::BTN_LEFT) mapSel_ = (mapSel_ + n - 1) % n;
-  if (in.down & gfx::BTN_RIGHT) mapSel_ = (mapSel_ + 1) % n;
-  if (in.down & gfx::BTN_Y) { deckOpen_ = true; sel_ = -1; scroll_ = 0; return; }
+  if (in.down & (gfx::BTN_LEFT | gfx::BTN_RIGHT)) {
+    mapSel_ = (mapSel_ + ((in.down & gfx::BTN_LEFT) ? n - 1 : 1)) % n;
+    mapUserScroll_ = false;
+  }
+  if (in.down & gfx::BTN_Y) { deckOpen_ = true; sel_ = -1; scroll_ = 0; mapTouch_ = {}; return; }
   int pick = -1;
   if (in.down & gfx::BTN_A) pick = mapSel_;
   if (in.touchDown) {
-    int id = hitAt(in.tx, in.ty);
-    if (id >= ID_NODE0 && id < ID_NODE0 + n) {
-      if (mapSel_ == id - ID_NODE0) pick = mapSel_;
-      mapSel_ = id - ID_NODE0;
+    if (hitAt(in.tx, in.ty) == ID_DECK) { deckOpen_ = true; sel_ = -1; scroll_ = 0; mapTouch_ = {}; return; }
+    mapTouch_ = {};
+    mapTouch_.down = true;
+    mapTouch_.startX = in.tx;
+    mapTouch_.startY = mapTouch_.lastY = in.ty;
+    mapTouch_.node = mapNodeAt(in.tx, in.ty);
+    if (mapTouch_.node >= 0) mapSel_ = mapTouch_.node;
+  } else if (mapTouch_.down && in.touching) {
+    if (std::hypot(in.tx - mapTouch_.startX, in.ty - mapTouch_.startY) > kMapTapSlop) mapTouch_.dragged = true;
+    if (mapTouch_.dragged) {
+      mapScroll_ = std::clamp(mapScroll_ + (in.ty - mapTouch_.lastY) / kRowH, 0.f, kMapMaxScroll);
+      mapUserScroll_ = true;
     }
-    if (id == ID_DECK) { deckOpen_ = true; sel_ = -1; scroll_ = 0; return; }
+    mapTouch_.lastY = in.ty;
+  }
+  if (in.touchUp && mapTouch_.down) {
+    if (!mapTouch_.dragged && mapTouch_.node >= 0) pick = mapTouch_.node;
+    mapTouch_ = {};
   }
   if (pick >= 0) {
     r.mapChoice.fire(reach[pick]);
     mapSel_ = 0;
+    mapUserScroll_ = false;
   }
 }
 
@@ -761,7 +823,7 @@ void App::drawCreature(Creature* c, float x, float feetY, bool targeted) {
   }
 
   // HP bar
-  float bw = std::clamp(s ? s.w * 0.8f : 50.f, 56.f, 84.f);
+  float bw = std::clamp(s ? s.w * 0.9f : 50.f, 48.f, 72.f);
   float by = feetY + 4;
   if (c->displayHp < 0) c->displayHp = (float)c->hp;
   c->displayHp += ((float)c->hp - c->displayHp) * 0.15f;
@@ -821,12 +883,6 @@ void App::drawCreature(Creature* c, float x, float feetY, bool targeted) {
 // ---------------------------------------------------------------- dual-screen hand
 
 namespace {
-// The two screens as one virtual canvas: bottom sits under the top screen,
-// centred, with a hinge gap (48 px of 768 on RGDSplus -> 15 of 240 here).
-constexpr float kGap = 15.f;
-constexpr float kBotOX = (gfx::kTopW - gfx::kBottomW) / 2.f;
-constexpr float kBotOY = gfx::kScreenH + kGap;
-
 // HandPosHelper._cardPositionData / _cardAngleData (StS2).
 const float kHandPos[10][10][2] = {
     {{0, -50}},
@@ -847,18 +903,16 @@ const float kHandAngle[10][10] = {
 
 constexpr float kCardW = 120.f, kCardH = 169.f;   // drawCard size at s = 1
 constexpr float kPreviewS = 0.95f;                 // tapped card, readable text
-constexpr float kPreviewY = 26.f;                  // below the status bar
+constexpr float kPreviewY = 6.f;                   // near the top edge (no status strip)
 constexpr float kDragS = 0.62f;
 constexpr float kArm = 8.f;      // lift to arm (24 px on RGDSplus)
 constexpr float kSwitch = 20.f;  // sideways travel per target switch (64 px)
 constexpr float kTapSlop = 5.f;
+// Fan baseline: the hand is centred between the status bar and the bottom control row.
+constexpr float kHandY = 130.f;  // centre card at ~49% of the screen, as on RGDSplus
 // Top of the hand area. A card is played only when dragged above it; dragging it
 // back below disarms it, so releasing over the hand always cancels.
-constexpr float kPlayLine = 138.f;
-
-inline void toLocal(bool top, float& x, float& y) {
-  if (!top) { x -= kBotOX; y -= kBotOY; }
-}
+constexpr float kPlayLine = 76.f;
 }  // namespace
 
 App::HandSlot App::handSlot(int n, int i) const {
@@ -869,7 +923,7 @@ App::HandSlot App::handSlot(int n, int i) const {
   float mult = n == 8 ? 0.95f : n == 9 ? 0.9f : n == 10 ? 0.85f : 1.f;  // HandPosHelper.GetScale
   HandSlot h;
   h.x = kBot / 2.f + kHandPos[n - 1][i][0] * k;
-  h.y = 184.f + kHandPos[n - 1][i][1] * k;
+  h.y = kHandY + kHandPos[n - 1][i][1] * k;
   h.angle = kHandAngle[n - 1][i] * 3.14159265f / 180.f;
   h.s = k * 2.f * mult;
   return h;
@@ -1022,7 +1076,7 @@ void App::drawStatusBar(float y) {
 }
 
 namespace {
-constexpr float kDrawPileX = 19, kDrawPileY = 221, kDiscardX = 301, kDiscardY = 221;
+constexpr float kDrawPileX = 16, kDrawPileY = 222, kDiscardX = 304, kDiscardY = 222;
 constexpr float kDrawTime = 0.34f, kDrawGap = 0.12f, kLeaveTime = 0.28f, kLeaveGap = 0.045f;
 float easeOut(float t) { t = 1 - t; return 1 - t * t * t; }
 float easeIn(float t) { return t * t; }
@@ -1155,7 +1209,7 @@ void App::drawCombat(bool top) {
     gfx::Texture* bg = R().texture("gfx/bg_overgrowth.t3t");
     gfx::image(bg, 0, 0, kTop, kH, 0, 0, kTop, kH);
     gfx::rectGradient(0, 150, kTop, 90, 0x00000000, 0x00000060);
-    const float feet = 196;
+    const float feet = 170;  // ~70% down the screen, the room's floor line (RGDSplus/native)
     auto center = [&](Creature* c, float x) {
       Sprite s = R().sprite("creature/" + (c->isPlayer ? std::string("IRONCLAD") : c->name));
       centers_[c] = {x, s ? feet - s.ay + s.h / 2.f : feet - 30};
@@ -1193,9 +1247,10 @@ void App::drawCombat(bool top) {
     return;
   }
 
-  // ---- bottom screen: the room's floor, controls in the corners, the hand fanned across the middle.
-  gfx::Texture* floor = R().texture("gfx/bg_overgrowth_floor.t3t");
-  gfx::image(floor, 0, 0, kBot, kH, 0, 0, kBot, kH);
+  // ---- bottom screen (RGDSplus layout): the same room behind, no status strip, the hand
+  // centred, energy and end turn at the sides below it, piles in the bottom corners.
+  gfx::Texture* room = R().texture("gfx/bg_overgrowth.t3t");
+  gfx::image(room, kBotOX, 0, kBot, kH, 0, 0, kBot, kH, 0x000000FF, 0.15f);
 
   if (cb->choice.active) {
     gfx::rect(0, 0, kBot, kH, 0x000000A0);
@@ -1206,26 +1261,38 @@ void App::drawCombat(bool top) {
     return;
   }
 
-  // Energy orb (left) and end turn (right) above the fan; piles in the bottom corners.
+  // Energy orb left and end turn right, level with each other a little below the hand
+  // (~77% down, ~10% / ~87% across on RGDSplus).
   Sprite orb = R().sprite("ui/energy_orb");
-  spr(orb, 2, 98, 50, 50);
-  TextStyle et = ts(F16, cb->energy > 0 ? col::white : col::gray, CENTER);
-  et.scale = 1.15f;
-  R().text(27, 112, num(cb->energy) + "/" + num(cb->maxEnergyNow()), et);
+  const float ox = 32, oy = 185, od = 34;
+  spr(orb, ox - od / 2, oy - od / 2, od, od);
+  TextStyle et = ts(F12, cb->energy > 0 ? col::white : col::gray, CENTER);
+  R().text(ox, oy - R().lineHeight(F12) / 2, num(cb->energy) + "/" + num(cb->maxEnergyNow()), et);
   Sprite endTurn = R().sprite("ui/end_turn");
-  spr(endTurn, kBot - 96, 102, 94, 46, canAct ? 0xFFFFFFFF : 0x000000FF, canAct ? 0 : 0.5f);
-  R().text(kBot - 49, 117, "结束回合", ts(F16, canAct ? col::white : col::gray, CENTER));
-  if (canAct) hits_.push_back({kBot - 96, 102, 94, 46, ID_END_TURN});
-  spr(R().sprite("ui/draw_pile"), 2, 204, 34, 34);
+  const float ew = 64, eh = 32, ex = 278 - ew / 2, ey = oy - eh / 2;  // sprite is 2:1
+  spr(endTurn, ex, ey, ew, eh, canAct ? 0xFFFFFFFF : 0x000000FF, canAct ? 0 : 0.5f);
+  {
+    // The visible plate is ~78% x 62% of the sprite, centred; the label fills 80% of it.
+    const float pw = ew * 0.78f, ph = eh * 0.62f;
+    TextStyle lt = ts(F16, canAct ? col::white : col::gray, CENTER);
+    // The text box takes 80% of the plate; CJK ink sits a little below the box middle (measured).
+    const float inkMid = 0.53f;
+    float lw = R().measure("结束", lt), lh = R().lineHeight(F16);
+    lt.scale = std::min(0.8f * pw / lw, 0.8f * ph / lh);
+    R().text(ex + ew / 2, ey + eh / 2 - lh * lt.scale * inkMid, "结束", lt);
+  }
+  if (canAct) hits_.push_back({ex, ey - 4, ew, eh + 8, ID_END_TURN});
+  // Piles: small icons in the corners with a red count badge.
+  auto pile = [&](const char* sprite, float cx, float cy, int count) {
+    spr(R().sprite(sprite), cx - 12, cy - 12, 24, 24);
+    gfx::circle(cx + 10, cy + 8, 7, 0xC02828FF);
+    R().text(cx + 10, cy + 8 - R().lineHeight(F12) * 0.4f, num(count), ts(F12, col::white, CENTER, 0, 0.8f));
+  };
   int waiting = 0;  // drawn cards still sitting on the pile, waiting for their turn to fly
   for (auto& [c, p] : poses_) waiting += p.delay > 0;
-  R().text(19, 222, num((int)cb->draw.size() + waiting), ts(F12, col::white, CENTER));
-  spr(R().sprite("ui/discard_pile"), kBot - 36, 204, 34, 34);
-  R().text(kBot - 19, 222, num((int)cb->discard.size()), ts(F12, col::white, CENTER));
-  if (!cb->exhaust.empty()) R().text(kBot - 4, 190, "消耗 " + num((int)cb->exhaust.size()), ts(F12, col::gray, RIGHT));
-
-  drawStatusBar(2);
-  if (!selCard && !drag_.down && canAct) R().text(kBot / 2, 30, "点牌查看 · 按住向上拖动出牌", ts(F12, 0xFFFFFF70, CENTER));
+  pile("ui/draw_pile", kDrawPileX, kDrawPileY, (int)cb->draw.size() + waiting);
+  pile("ui/discard_pile", kDiscardX, kDiscardY, (int)cb->discard.size());
+  if (!cb->exhaust.empty()) R().text(kBot - 4, 200, "消耗 " + num((int)cb->exhaust.size()), ts(F12, col::gray, RIGHT));
 
   auto flying = [&](Card* c) {
     for (auto& f : flights_) if (f.card == c) return true;
@@ -1243,7 +1310,7 @@ void App::drawCombat(bool top) {
       const Pose& p = it->second;
       if ((p.drawT < 1) != (pass == 1)) continue;
       gfx::pushTransform(gfx::Affine::rotateAround(p.x, p.y, p.angle));
-      drawCard(c, p.x - kCardW * p.s / 2, p.y - kCardH * p.s / 2, p.s, !cb->canPlay(c) && canAct, false, false);
+      drawCard(c, p.x - kCardW * p.s / 2, p.y - kCardH * p.s / 2, p.s, !cb->canPlay(c) && canAct, true, false);
       gfx::popTransform();
     }
   // Tapped card: raised and enlarged so its text is readable (native hover).
@@ -1257,8 +1324,8 @@ void App::drawCombat(bool top) {
       R().text(cx, kPreviewY + kCardH * kPreviewS + 2, msg, ts(F12, col::red, CENTER));
     }
   }
-  // Play line and cancel zone while dragging; the hint sits under the status bar where
-  // neither the finger nor the card covers it.
+  // Play line and cancel zone while dragging; the hint sits between the energy orb and
+  // end turn, below the hand, where neither the finger nor the card covers it.
   if (drag_.down && drag_.moved && drag_.card && !flying(drag_.card)) {
     float pulse = 0.5f + 0.5f * std::sin(clock_ * 6.f);
     std::string hint;
@@ -1269,15 +1336,15 @@ void App::drawCombat(bool top) {
       hint = "松手打出 · 拖回手牌取消";
       hc = 0x90FF90FF;
     } else {
-      gfx::rect(0, 26, kBot, kPlayLine - 26, 0x60C0FF00 | (uint32_t)(0x10 + pulse * 0x18));
+      gfx::rect(0, 0, kBot, kPlayLine, 0x60C0FF00 | (uint32_t)(0x10 + pulse * 0x18));
       for (float x = 4; x < kBot; x += 12) gfx::rect(x, kPlayLine, 6, 2, 0x60C0FFC0);
       hint = "↑ 拖过虚线出牌 · 松手取消";
       hc = 0x90D0FFFF;
     }
     TextStyle st = ts(F12, hc, CENTER);
     float w = R().measure(hint, st);
-    gfx::rect(kBot / 2 - w / 2 - 6, 27, w + 12, 16, 0x000000B0);
-    R().text(kBot / 2, 28, hint, st);
+    gfx::rect(kBot / 2 - w / 2 - 6, 200, w + 12, 16, 0x000000B0);
+    R().text(kBot / 2, 201, hint, st);
   }
   // Card being dragged, following the finger; glows when it is in the play zone.
   if (drag_.down && drag_.moved && drag_.card && !flying(drag_.card)) {

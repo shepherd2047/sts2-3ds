@@ -93,6 +93,8 @@ class App {
   void updateEnd(const gfx::Input& in);
 
   // pieces
+  std::pair<float, float> mapPos(const sts::MapNode& n) const;
+  int mapNodeAt(float tx, float ty);
   void drawTopBar();
   void drawStatusBar(float y);
   void drawCreature(sts::Creature* c, float x, float feetY, bool targeted);
@@ -122,7 +124,9 @@ class App {
   int target_ = 0;     // index into alive enemies
   int mapSel_ = 0;
   int scroll_ = 0;
-  float mapScroll_ = 0;
+  float mapScroll_ = 0;        // rows; see kMapBase in ui.cpp
+  bool mapUserScroll_ = false;  // dragged by hand: stop auto-following the current row
+  struct MapTouch { bool down = false, dragged = false; int node = -1; float startX = 0, startY = 0, lastY = 0; } mapTouch_;
   sts::Combat* lastCombat_ = nullptr;
   std::map<sts::Creature*, Visual> visuals_;
   std::map<sts::Creature*, std::pair<float, float>> centers_;  // top-screen body centres, refreshed each frame

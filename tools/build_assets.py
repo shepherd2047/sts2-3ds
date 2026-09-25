@@ -43,8 +43,9 @@ MONSTERS = ['NIBBIT', 'LEAF_SLIME_S', 'TWIG_SLIME_S', 'LEAF_SLIME_M', 'TWIG_SLIM
             'INKLET', 'MAWLER', 'FUZZY_WURM_CRAWLER', 'BYRDONIS', 'VANTOM']
 RELICS = ['BURNING_BLOOD']
 
-# 1920x1080 game space -> 400x240 top screen is ~0.21; creatures read better a bit larger.
-CREATURE_SCALE = 0.34
+# 1920x1080 game space -> 400x240 top screen is ~0.21. Creatures keep the game's own
+# proportions against the room, like the RGDSplus port (no enlargement).
+CREATURE_SCALE = 0.21
 CREATURE_BOX = (170, 150)  # largest sprite that still fits beside the others
 # Slots whose pose depends on constraints the offline renderer does not solve.
 HIDE_SLOTS = {'VANTOM': ('mega', 'whip', 'tail')}
@@ -362,9 +363,15 @@ def build(args):
         os.makedirs(os.path.join(ROOT, 'build'), exist_ok=True)
         canvas.save(os.path.join(ROOT, 'build', 'preview_bg.png'))
         fcanvas.save(os.path.join(ROOT, 'build', 'preview_floor.png'))
+    # Map paper: one 400x495 sheet behind both screens (top 240 + hinge 15 + bottom 240),
+    # the map is continuous across them like RGDSplus U07. The middle piece tiles vertically.
     mapbg = g.image('images/packed/map/map_bgs/overgrowth/map_middle_overgrowth.png')
-    mb = Image.new('RGBA', (512, 256), (0, 0, 0, 255))
-    mb.paste(mapbg.resize((400, round(mapbg.height * 400 / mapbg.width)), Image.LANCZOS).crop((0, 0, 400, 240)), (0, 0))
+    piece = mapbg.resize((400, round(mapbg.height * 400 / mapbg.width)), Image.LANCZOS)
+    sheet = Image.new('RGBA', (400, 495), (0, 0, 0, 255))
+    for y in range(0, 495, piece.height):
+        sheet.paste(piece, (0, y))
+    mb = Image.new('RGBA', (512, 512), (0, 0, 0, 255))
+    mb.paste(sheet, (0, 0))
     write_t3t(os.path.join(OUT, 'gfx', 'bg_map.t3t'), mb)
     if args.preview:
         canvas.save(os.path.join(ROOT, 'build', 'preview_bg.png'))
