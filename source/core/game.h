@@ -32,6 +32,8 @@ enum class TargetType { None, Self, AnyEnemy, AllEnemies, RandomEnemy };
 enum class PowerType { Buff, Debuff };
 enum class StackType { Counter, Single };
 enum class Pile { None, Draw, Hand, Discard, Exhaust, Play };
+enum class RoomType { Monster, Elite, Rest, Treasure, Unknown, Boss, Start };
+enum class RelicRarity { None, Starter, Common, Uncommon, Rare, Shop, Event, Ancient };
 
 // ValueProp flags.
 enum : int { kUnblockable = 2, kUnpowered = 4, kMove = 8, kSkipHurtAnim = 16 };
@@ -115,6 +117,18 @@ struct Model {
   virtual bool tryModifyPowerAmountReceived(Power* /*incoming*/, Creature* /*target*/, Dec /*amount*/,
                                             Creature* /*applier*/, Dec& /*out*/) { return false; }
   virtual Task<> afterModifyingPowerAmountReceived(Power*) { return {}; }
+
+  // Added for relics (Hook.* of the same names).
+  virtual Task<> afterCombatEnd() { return {}; }              // victory, before afterCombatVictory
+  virtual Task<> afterRoomEntered(RoomType) { return {}; }
+  virtual Task<> afterBlockCleared(Creature*) { return {}; }
+  virtual Task<> afterEnergyReset() { return {}; }
+  virtual Task<> beforeHandDraw() { return {}; }
+  virtual Task<> afterCurrentHpChanged(Creature*, Dec /*delta*/) { return {}; }
+  virtual Dec modifyRestSiteHealAmount(Creature*, Dec amount) { return amount; }
+  virtual Task<> afterRestSiteHeal() { return {}; }
+  virtual Dec modifyGoldGained(Dec amount) { return amount; }
+  virtual Task<> afterGoldGained(int) { return {}; }
 };
 
 // ---------------------------------------------------------------- powers
@@ -389,10 +403,30 @@ struct Creature {
 
 struct Relic : Model {
   std::string id, locKey, icon;
+  RelicRarity rarity = RelicRarity::Common;
   Combat* combat = nullptr;
   Run* run = nullptr;
   float flash = 0;
+  bool usedUp = false;           // IsUsedUp: greyed out, does nothing more
+  std::vector<DynVar> vars;      // CanonicalVars, for the description
+
+  virtual bool showCounter() const { return false; }
+  virtual int displayAmount() const { return 0; }
+  virtual bool allowedInShops() const { return true; }
+  virtual Task<> afterObtained() { return {}; }  // AfterObtained (pickup effects)
+
+  Creature* owner() const;  // the player
+  void doFlash() { flash = 1.f; }
+  DynVar* var(const char* n) { for (auto& v : vars) if (v.name == n) return &v; return nullptr; }
+  Dec val(const char* n) { auto* v = var(n); return v ? v->base : Dec(0); }
+  void addVar(const char* n, Dec v) { vars.push_back({n, v, v}); }
 };
+
+// Relic class boilerplate: RELIC_HEADER(Anchor, "ANCHOR", Common) { ...vars... }
+#define RELIC_HEADER(Name, Key, Rar)  \
+  static constexpr const char* kId = #Name; \
+  Name() { id = #Name; locKey = Key; icon = Key; rarity = RelicRarity::Rar;
+using RelicFactoryFn = std::unique_ptr<Relic> (*)();
 
 // ---------------------------------------------------------------- UI plumbing
 
@@ -534,8 +568,6 @@ template <class P> Task<> applyPower(Creature* target, Dec amount, Creature* app
 
 // ---------------------------------------------------------------- run / map
 
-enum class RoomType { Monster, Elite, Rest, Treasure, Unknown, Boss, Start };
-
 struct MapNode {
   int col = 0, row = 0;
   RoomType type = RoomType::Monster;
@@ -551,7 +583,7 @@ struct Encounter {
   std::function<std::vector<std::unique_ptr<Monster>>(Rng&)> generate;
 };
 
-enum class Screen { Title, Map, Combat, Reward, Rest, RestUpgrade, GameOver, Victory, DeckView };
+enum class Screen { Title, Map, Combat, Reward, Rest, RestUpgrade, GameOver, Victory, DeckView, RelicOffer };
 
 struct Run {
   uint64_t seed = 1;
@@ -579,6 +611,21 @@ struct Run {
   std::vector<Card*> upgradeOptions;
   Signal<int> upgradeChoice;         // index or -1 back
   int lastHeal = 0;
+  std::unique_ptr<Relic> relicOffer;  // RelicReward / treasure chest, shown on Screen::RelicOffer
+  bool relicOfferFromChest = false;
+  Signal<int> relicChoice;           // 1 take, 0 skip
+
+  // RelicGrabBag: per-rarity relic ids, shuffled once per run (player bag = shared +
+  // Ironclad pools; the shared bag feeds treasure chests).
+  std::map<RelicRarity, std::vector<std::string>> relicBag, sharedRelicBag;
+  void populateRelicBags();
+  RelicRarity rollRelicRarity(Rng& rng);  // RelicFactory.RollRarity
+  std::unique_ptr<Relic> pullRelicFromFront(std::map<RelicRarity, std::vector<std::string>>& bag, RelicRarity r);
+  Task<> obtainRelic(std::unique_ptr<Relic> r);   // RelicCmd.Obtain
+  Task<> offerRelic(std::unique_ptr<Relic> r, bool fromChest);
+  Task<> gainGold(int amount);                     // PlayerCmd.GainGold
+  bool hasRelic(const std::string& id) const;
+  std::vector<Model*> listeners();                 // run-level hook listeners (relics)
 
   Rng& rng(const char* stream) {
     auto& r = rngs[stream];
@@ -608,6 +655,11 @@ std::vector<std::string> act1Elites();
 std::vector<std::string> act1Bosses();
 void registerCard(const std::string& id, CardFactory f);
 void registerPower(const std::string& id, PowerFactory f);
+void registerRelic(const std::string& id, RelicFactoryFn f);
+// SharedRelicPool / IroncladRelicPool ids in the game's order (registered or not).
+const std::vector<std::string>& sharedRelicPool();
+const std::vector<std::string>& ironcladRelicPool();
+bool relicRegistered(const std::string& id);
 void registerEncounter(const std::string& id, RoomType room, bool weak, std::function<std::vector<std::unique_ptr<Monster>>(Rng&)> gen);
 // Every card in IroncladCardPool, in the pool's order (registered or not).
 const std::vector<std::string>& ironcladPool();

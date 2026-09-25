@@ -46,7 +46,8 @@ STATUS_CARDS = {'SLIMED', 'WOUND'}
 POWERS_FIXED = ['STRENGTH_POWER', 'DEXTERITY_POWER', 'VULNERABLE_POWER', 'WEAK_POWER', 'FRAIL_POWER',
           'SHRINK_POWER', 'SLIPPERY_POWER', 'TERRITORIAL_POWER', 'TEMPORARY_STRENGTH_POWER']
 # Monster keys come from MONSTER_HEADER(Name, "KEY") in source/core (see build()).
-RELICS = ['BURNING_BLOOD']
+# Relic keys come from RELIC_HEADER(Name, "KEY", Rarity) in source/core (see build()).
+RELIC_ICON = 48  # drawn at 18 px in the top bar, 48-64 px when a relic is shown on its own
 
 # 1920x1080 game space -> 400x240 top screen is ~0.21. Creatures keep the game's own
 # proportions against the room, like the RGDSplus port (no enlargement).
@@ -238,10 +239,11 @@ def export_spine(g, key, skel_res, skel, atlas, load, scale):
 
 
 def build(args):
-    global CARDS, POWERS, MONSTERS
+    global CARDS, POWERS, MONSTERS, RELICS
     CARDS = sorted(set(CARDS_FIXED) | set(keys_from_source('CARD_HEADER')))
     POWERS = sorted(set(POWERS_FIXED) | set(keys_from_source('POWER_HEADER')))
     MONSTERS = keys_from_source('MONSTER_HEADER')
+    RELICS = keys_from_source('RELIC_HEADER')
     g = Game(args.pck) if args.pck else Game()
     a = Assets(g)
     os.makedirs(os.path.join(OUT, 'gfx'), exist_ok=True)
@@ -289,7 +291,7 @@ def build(args):
             img = g.image(path)
         packer.add('power/' + key, fit(img, (24, 24)))
     for key in RELICS:
-        packer.add('relic/' + key, fit(g.image(f'images/relics/{key.lower()}.png'), (32, 32)))
+        packer.add('relic/' + key, fit(g.image(f'images/relics/{key.lower()}.png'), (RELIC_ICON, RELIC_ICON)))
     for i in range(1, 6):
         packer.add(f'intent/attack_{i}', fit(g.image(f'images/packed/intents/attack/intent_attack_{i}.png'), (30, 30)))
     for name, path in [('buff', 'buff/intent_buff_00'), ('defend', 'defend/intent_defend_00'),

@@ -12,7 +12,101 @@ constexpr int kCols = 7;
 constexpr int kRows = 15;  // Overgrowth.BaseNumberOfRooms
 constexpr int kPaths = 6;
 constexpr int kWeakFights = 3;  // Overgrowth.NumberOfWeakEncounters
+// GetRowCount() - 7 in StandardActMap, whose row 0 is the start point: row 8 here.
+constexpr int kTreasureRow = kRows - 7;
 }  // namespace
+
+Creature* Relic::owner() const { return run->player.get(); }
+
+std::vector<Model*> Run::listeners() {
+  std::vector<Model*> out;
+  for (auto& r : relics) out.push_back(r.get());
+  return out;
+}
+
+bool Run::hasRelic(const std::string& id) const {
+  for (auto& r : relics) if (r->id == id) return true;
+  return false;
+}
+
+// RunManager: the shared bag (shared pool) then the player's bag (shared + Ironclad
+// pools), both from the UpFront stream; each rarity deque is shuffled once.
+// PORT NOTE: C# shuffles the deques in dictionary insertion order; here in rarity order.
+void Run::populateRelicBags() {
+  relicBag.clear();
+  sharedRelicBag.clear();
+  Rng& r = rng("UpFront");
+  auto fill = [&](std::map<RelicRarity, std::vector<std::string>>& bag, std::vector<std::string> ids) {
+    for (auto& id : ids) {
+      auto rel = db::relic(id);
+      if (!rel) continue;  // not ported yet
+      RelicRarity k = rel->rarity;
+      if (k == RelicRarity::Common || k == RelicRarity::Uncommon || k == RelicRarity::Rare || k == RelicRarity::Shop)
+        bag[k].push_back(id);
+    }
+    for (auto& [k, v] : bag) r.shuffle(v);
+  };
+  fill(sharedRelicBag, db::sharedRelicPool());
+  std::vector<std::string> all = db::sharedRelicPool();
+  for (auto& id : db::ironcladRelicPool()) all.push_back(id);
+  fill(relicBag, all);
+  for (auto& rel : relics) {  // owned relics never drop again
+    for (auto& [k, v] : relicBag) v.erase(std::remove(v.begin(), v.end(), rel->id), v.end());
+    for (auto& [k, v] : sharedRelicBag) v.erase(std::remove(v.begin(), v.end(), rel->id), v.end());
+  }
+}
+
+RelicRarity Run::rollRelicRarity(Rng& rr) {
+  float f = rr.nextFloat();
+  return f < 0.5f ? RelicRarity::Common : f < 0.83f ? RelicRarity::Uncommon : RelicRarity::Rare;
+}
+
+// RelicGrabBag.PullFromFront: an empty rarity falls through Shop -> Common ->
+// Uncommon -> Rare, then RelicFactory.FallbackRelic (Circlet).
+std::unique_ptr<Relic> Run::pullRelicFromFront(std::map<RelicRarity, std::vector<std::string>>& bag, RelicRarity k) {
+  while (k != RelicRarity::None) {
+    auto& v = bag[k];
+    if (!v.empty()) {
+      std::string id = v.front();
+      for (auto& [kk, vv] : relicBag) vv.erase(std::remove(vv.begin(), vv.end(), id), vv.end());
+      for (auto& [kk, vv] : sharedRelicBag) vv.erase(std::remove(vv.begin(), vv.end(), id), vv.end());
+      return db::relic(id);
+    }
+    k = k == RelicRarity::Shop ? RelicRarity::Common
+      : k == RelicRarity::Common ? RelicRarity::Uncommon
+      : k == RelicRarity::Uncommon ? RelicRarity::Rare : RelicRarity::None;
+  }
+  return db::relic("Circlet");
+}
+
+Task<> Run::obtainRelic(std::unique_ptr<Relic> rel) {
+  if (!rel) co_return;
+  rel->run = this;
+  rel->combat = combat && combat->inProgress ? combat.get() : nullptr;
+  Relic* raw = rel.get();
+  relics.push_back(std::move(rel));
+  raw->doFlash();
+  co_await raw->afterObtained();
+}
+
+Task<> Run::offerRelic(std::unique_ptr<Relic> rel, bool fromChest) {
+  if (!rel) co_return;
+  rel->run = this;
+  relicOffer = std::move(rel);
+  relicOfferFromChest = fromChest;
+  screen = Screen::RelicOffer;
+  int take = co_await relicChoice.next();
+  if (take == 1) co_await obtainRelic(std::move(relicOffer));
+  relicOffer.reset();
+}
+
+Task<> Run::gainGold(int amount) {
+  Dec a = amount;
+  for (Model* m : listeners()) a = m->modifyGoldGained(a);
+  int n = std::max(0, a.toInt());
+  gold += n;
+  for (Model* m : listeners()) co_await m->afterGoldGained(n);
+}
 
 void Run::start(uint64_t s) {
   db::init();
@@ -31,6 +125,7 @@ void Run::start(uint64_t s) {
   auto bb = db::relic("BurningBlood");
   bb->run = this;
   relics.push_back(std::move(bb));
+  populateRelicBags();
 
   weakQueue = db::act1Weak();
   normalQueue = db::act1Normal();
@@ -73,10 +168,12 @@ void Run::generateMap() {
     }
   }
 
-  // Room types. Row 0 fights, the last row rests before the boss.
+  // Room types. Row 0 fights, the last row rests before the boss, and
+  // StandardActMap.AssignPointTypes makes the 7th row from the top all treasure.
   for (auto& n : nodes) {
     if (n.row == 0) { n.type = RoomType::Monster; continue; }
     if (n.row == kRows - 1) { n.type = RoomType::Rest; continue; }
+    if (n.row == kTreasureRow) { n.type = RoomType::Treasure; continue; }
     float roll = r.nextFloat();
     if (n.row >= 5 && roll < 0.14f) n.type = RoomType::Elite;
     else if (n.row >= 5 && n.row != kRows - 2 && roll < 0.30f) n.type = RoomType::Rest;
@@ -167,6 +264,8 @@ Task<bool> Run::fight(const std::string& encounterId) {
   for (auto& m : enc->generate(rng("Encounters"))) c.createEnemy(std::move(m));
 
   screen = Screen::Combat;
+  // CombatRoom.EnterInternal: Hook.AfterRoomEntered once the fight is set up.
+  for (Model* m : c.listeners()) co_await m->afterRoomEntered(enc->room);
   co_await c.runCombat();
   bool won = c.won && player->alive();
   co_await wait(won ? 0.8 : 1.2);
@@ -186,6 +285,12 @@ Task<> Run::main() {
     nodes[choice].visited = true;
     ++floor;
     RoomType type = nodes[choice].type;
+    // Debug: STS_ROOM=Treasure|Rest|Elite|Boss turns the first room into that type.
+    if (const char* forced = getenv("STS_ROOM"); forced && floor == 1) {
+      std::string f = forced;
+      type = f == "Treasure" ? RoomType::Treasure : f == "Rest" ? RoomType::Rest : f == "Elite" ? RoomType::Elite
+           : f == "Boss" ? RoomType::Boss : type;
+    }
 
     if (type == RoomType::Monster || type == RoomType::Elite || type == RoomType::Boss) {
       std::string id;
@@ -201,25 +306,35 @@ Task<> Run::main() {
       if (!won) { screen = Screen::GameOver; co_return; }
       if (type == RoomType::Boss) { screen = Screen::Victory; co_return; }
 
-      // Rewards: gold and a pick of three cards.
+      // Rewards (RewardsSet): gold, then for elites a relic, then a pick of three cards.
       Rng& rr = rng("Rewards");
-      gold += type == RoomType::Elite ? rr.nextInt(25, 36) : rr.nextInt(10, 21);
+      co_await gainGold(type == RoomType::Elite ? rr.nextInt(25, 36) : rr.nextInt(10, 21));
+      combat.reset();
+      for (auto& rel : relics) rel->combat = nullptr;
+      if (type == RoomType::Elite) co_await offerRelic(pullRelicFromFront(relicBag, rollRelicRarity(rr)), false);
       rewardCards = cardReward(type, 3);
       screen = Screen::Reward;
       int pick = co_await rewardChoice.next();
       if (pick >= 0 && pick < (int)rewardCards.size()) deck.push_back(std::move(rewardCards[pick]));
       rewardCards.clear();
-      combat.reset();
+    } else if (type == RoomType::Treasure) {
+      // TreasureRoom: 42-52 gold, then one relic from the shared bag.
+      for (Model* m : listeners()) co_await m->afterRoomEntered(type);
+      co_await gainGold(rng("Rewards").nextInt(42, 53));
+      co_await offerRelic(pullRelicFromFront(sharedRelicBag, rollRelicRarity(rng("TreasureRoomRelics"))), true);
     } else if (type == RoomType::Rest) {
+      for (Model* m : listeners()) co_await m->afterRoomEntered(type);
       for (;;) {
         screen = Screen::Rest;
         int opt = co_await restChoice.next();
         if (opt == 0) {
-          // HealRestSiteOption: 30% of max HP.
+          // HealRestSiteOption: 30% of max HP, through Hook.ModifyRestSiteHealAmount.
           Dec amount = Dec(player->maxHp) * Dec::lit(0.3);
+          for (Model* m : listeners()) amount = m->modifyRestSiteHealAmount(player.get(), amount);
           int before = player->hp;
           player->hp = std::min(player->maxHp, player->hp + amount.toInt());
           lastHeal = player->hp - before;
+          for (Model* m : listeners()) co_await m->afterRestSiteHeal();
           co_await wait(0.6);
           break;
         }

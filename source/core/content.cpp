@@ -307,12 +307,20 @@ struct Wound : IroncladT<Wound> {
 // ================================================================ relics
 
 struct BurningBlood : Relic {
-  BurningBlood() { id = "BurningBlood"; locKey = "BURNING_BLOOD"; icon = "BURNING_BLOOD"; }
+  RELIC_HEADER(BurningBlood, "BURNING_BLOOD", Starter)
+    addVar("Heal", 6);
+  }
   Task<> afterCombatVictory() override {
-    Creature* p = run->player.get();
+    Creature* p = owner();
     if (p->dead()) co_return;
-    flash = 1.f;
-    co_await cmd::heal(p, 6);
+    doFlash();
+    co_await cmd::heal(p, val("Heal"));
+  }
+};
+
+// RelicFactory.FallbackRelic: handed out when a grab bag runs dry.
+struct Circlet : Relic {
+  RELIC_HEADER(Circlet, "CIRCLET", None)
   }
 };
 
@@ -584,6 +592,7 @@ namespace {
 std::map<std::string, CardFactory>& cardReg() { static std::map<std::string, CardFactory> m; return m; }
 std::map<std::string, PowerFactory>& powerReg() { static std::map<std::string, PowerFactory> m; return m; }
 std::map<std::string, Encounter>& encounterReg() { static std::map<std::string, Encounter> m; return m; }
+std::map<std::string, RelicFactoryFn>& relicReg() { static std::map<std::string, RelicFactoryFn> m; return m; }
 
 template <class C> void regCard() { cardReg()[C().id] = [] { return std::unique_ptr<Card>(new C()); }; }
 template <class P> void regPower() { powerReg()[P::kId] = [] { return std::unique_ptr<Power>(new P()); }; }
@@ -610,11 +619,23 @@ void registerIroncladRare();
 void registerAct1Monsters();
 void registerPhrog();        // content_phrog.cpp
 void registerAct1Bosses();   // content_bosses.cpp: Ceremonial Beast, The Kin, Fogmog
+void registerRelics();       // relics*.cpp
 
 namespace db {
 
 void registerCard(const std::string& id, CardFactory f) { cardReg()[id] = f; }
 void registerPower(const std::string& id, PowerFactory f) { powerReg()[id] = f; }
+void registerRelic(const std::string& id, RelicFactoryFn f) { relicReg()[id] = f; }
+bool relicRegistered(const std::string& id) { return relicReg().count(id) > 0; }
+
+const std::vector<std::string>& sharedRelicPool() {
+  static const std::vector<std::string> pool = {"Akabeko", "AmethystAubergine", "Anchor", "ArtOfWar", "BagOfMarbles", "BagOfPreparation", "BeatingRemnant", "Bellows", "BeltBuckle", "BloodVial", "BookOfFiveRings", "BowlerHat", "Bread", "BronzeScales", "BurningSticks", "Candelabra", "CaptainsWheel", "Cauldron", "CentennialPuzzle", "Chandelier", "ChemicalX", "CloakClasp", "DingyRug", "DollysMirror", "DragonFruit", "EternalFeather", "FestivePopper", "FresnelLens", "FrozenEgg", "GamblingChip", "GamePiece", "GhostSeed", "Girya", "GnarledHammer", "Gorget", "GremlinHorn", "HappyFlower", "HornCleat", "IceCream", "IntimidatingHelmet", "JossPaper", "JuzuBracelet", "Kifuda", "Kunai", "Kusarigama", "Lantern", "LastingCandy", "LavaLamp", "LeesWaffle", "LetterOpener", "LizardTail", "LoomingFruit", "LuckyFysh", "Mango", "MealTicket", "MeatOnTheBone", "MembershipCard", "MercuryHourglass", "MiniatureCannon", "MiniatureTent", "MoltenEgg", "MummifiedHand", "MysticLighter", "Nunchaku", "OddlySmoothStone", "OldCoin", "Orichalcum", "OrnamentalFan", "Orrery", "Pantograph", "ParryingShield", "Pear", "PenNib", "Pendulum", "Permafrost", "PetrifiedToad", "Planisphere", "Pocketwatch", "PotionBelt", "PrayerWheel", "PunchDagger", "RainbowRing", "RazorTooth", "RedMask", "RegalPillow", "ReptileTrinket", "RingingTriangle", "RippleBasin", "RoyalStamp", "ScreamingFlagon", "Shovel", "Shuriken", "SlingOfCourage", "SparklingRouge", "StoneCalendar", "StoneCracker", "Strawberry", "StrikeDummy", "SturdyClamp", "TheAbacus", "TheCourier", "TinyMailbox", "Toolbox", "ToxicEgg", "TungstenRod", "TuningFork", "UnceasingTop", "UnsettlingLamp", "Vajra", "Vambrace", "VenerableTeaSet", "VeryHotCocoa", "VexingPuzzlebox", "WarPaint", "Whetstone", "WhiteBeastStatue", "WhiteStar", "WingCharm"};
+  return pool;
+}
+const std::vector<std::string>& ironcladRelicPool() {
+  static const std::vector<std::string> pool = {"Brimstone", "BurningBlood", "CharonsAshes", "DemonTongue", "PaperPhrog", "RedSkull", "RuinedHelmet", "SelfFormingClay"};
+  return pool;
+}
 void registerEncounter(const std::string& id, RoomType room, bool weak,
                         std::function<std::vector<std::unique_ptr<Monster>>(Rng&)> gen) {
   regEncounter(id, room, weak, std::move(gen));
@@ -705,6 +726,9 @@ void init() {
   registerAct1Monsters();
   registerPhrog();
   registerAct1Bosses();
+  registerRelic("BurningBlood", [] { return std::unique_ptr<Relic>(new BurningBlood()); });
+  registerRelic("Circlet", [] { return std::unique_ptr<Relic>(new Circlet()); });
+  registerRelics();
 }
 
 std::unique_ptr<Card> card(const std::string& id) {
@@ -720,8 +744,8 @@ const Encounter* encounter(const std::string& id) {
   return it == encounterReg().end() ? nullptr : &it->second;
 }
 std::unique_ptr<Relic> relic(const std::string& id) {
-  if (id == "BurningBlood") return std::make_unique<BurningBlood>();
-  return nullptr;
+  auto it = relicReg().find(id);
+  return it == relicReg().end() ? nullptr : it->second();
 }
 
 std::vector<std::string> ironcladStarterDeck() {

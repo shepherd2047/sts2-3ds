@@ -106,6 +106,12 @@ int main(int argc, char** argv) {
         case Screen::RestUpgrade:
           if (run.upgradeChoice.waiting()) run.upgradeChoice.fire(run.upgradeOptions.empty() ? -1 : 0);
           break;
+        case Screen::RelicOffer:
+          if (run.relicChoice.waiting()) {
+            if (getenv("SIM_FIGHTS") && run.relicOffer) printf("  relic %s\n", run.relicOffer->id.c_str());
+            run.relicChoice.fire(1);
+          }
+          break;
         default:
           break;
       }

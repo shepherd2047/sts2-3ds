@@ -47,10 +47,13 @@ enum : int {
   ID_HEAL,
   ID_SMITH,
   ID_RESTART,
+  ID_TAKE,
+  ID_RELICS,
   ID_TARGET0 = 100,   // + enemy index
   ID_HAND0 = 200,     // + hand index
   ID_NODE0 = 300,     // + reachable index
   ID_REWARD0 = 400,   // + reward index
+  ID_RELIC0 = 500,    // + owned relic index
   ID_GRID0 = 1000,    // + grid index
 };
 
@@ -79,6 +82,7 @@ std::string roomName(RoomType t) {
     case RoomType::Elite: return L("map.LEGEND_ELITE.hoverTip.title");
     case RoomType::Rest: return L("map.LEGEND_REST.title");
     case RoomType::Boss: return "Boss";
+    case RoomType::Treasure: return L("map.LEGEND_TREASURE.title");
     default: return L("map.LEGEND_UNKNOWN.title");
   }
 }
@@ -89,6 +93,7 @@ Sprite roomIcon(RoomType t) {
     case RoomType::Elite: return R().sprite("map/elite");
     case RoomType::Rest: return R().sprite("map/rest");
     case RoomType::Boss: return R().sprite("map/boss_vantom");
+    case RoomType::Treasure: return R().sprite("map/chest");
     default: return R().sprite("map/unknown");
   }
 }
@@ -122,6 +127,7 @@ void App::startRun() {
   mapSel_ = 0;
   mapScroll_ = 0;
   deckOpen_ = false;
+  relicsOpen_ = false;
 }
 
 // ================================================================ creature animation
@@ -291,6 +297,62 @@ std::string App::describe(Card* c) {
   return d;
 }
 
+// Relic text: the card SmartFormat subset, fed by the relic's own DynamicVars.
+std::string App::describeRelic(Relic* r) {
+  std::string src = L("relics." + r->locKey + ".description");
+  if (!R().hasLoc("relics." + r->locKey + ".description")) return {};
+  auto raw = [&](const std::string& n) -> Dec { DynVar* v = r->var(n.c_str()); return v ? v->base : Dec(0); };
+  std::function<std::string(const std::string&)> expand = [&](const std::string& s) -> std::string {
+    std::string out;
+    for (size_t i = 0; i < s.size();) {
+      if (s[i] != '{') { out += s[i++]; continue; }
+      int depth = 0;
+      size_t j = i;
+      for (; j < s.size(); ++j) {
+        if (s[j] == '{') ++depth;
+        else if (s[j] == '}' && --depth == 0) break;
+      }
+      std::string body = s.substr(i + 1, j - i - 1);
+      i = j + 1;
+      size_t colon = body.find(':');
+      std::string name = body.substr(0, colon);
+      std::string rest = colon == std::string::npos ? "" : body.substr(colon + 1);
+      auto choose = [&](const std::string& alts, bool first) {
+        int d = 0;
+        for (size_t k = 0; k < alts.size(); ++k) {
+          if (alts[k] == '{') ++d;
+          else if (alts[k] == '}') --d;
+          else if (alts[k] == '|' && d == 0) return expand(first ? alts.substr(0, k) : alts.substr(k + 1));
+        }
+        return first ? expand(alts) : std::string();
+      };
+      if (name == "InCombat") out += choose(rest, r->combat != nullptr);
+      else if (name == "IfUpgraded") out += choose(rest.substr(rest.find(':') + 1), false);
+      else if (rest.rfind("energyIcons", 0) == 0)
+        out += name == "energyPrefix" ? std::string("点能量") : "[gold]" + num(raw(name).toInt()) + "点能量[/gold]";
+      else if (rest.rfind("percentMore", 0) == 0) out += num(((raw(name) - Dec(1)) * Dec(100)).toInt());
+      else if (rest.rfind("percentLess", 0) == 0) out += num(((Dec(1) - raw(name)) * Dec(100)).toInt());
+      else if (rest.rfind("plural:", 0) == 0) out += choose(rest.substr(7), raw(name) == Dec(1));
+      else if (r->var(name.c_str())) out += num(raw(name).toInt());
+      else out += "?";
+    }
+    return out;
+  };
+  return expand(src);
+}
+
+void App::drawRelicDetail(Relic* r, float cy) {
+  const float big = 56;
+  gfx::circle(kTop / 2.f, cy, 38, 0xFFE07030);
+  drawRelicIcon(r, kTop / 2.f - big / 2, cy - big / 2, big);
+  static const char* rarities[] = {"", "初始", "普通", "罕见", "稀有", "商店", "事件", "先古"};
+  TextStyle nt = ts(F16, col::gold, CENTER);
+  nt.scale = 1.2f;
+  R().text(kTop / 2.f, cy + 36, L("relics." + r->locKey + ".title"), nt);
+  R().text(kTop / 2.f, cy + 60, rarities[(int)r->rarity], ts(F12, col::gray, CENTER));
+  R().text(kTop / 2.f, cy + 78, describeRelic(r), ts(F12, col::white, CENTER, kTop - 60));
+}
+
 // ================================================================ widgets
 
 void App::panel(float x, float y, float w, float h, uint32_t fill, uint32_t border) {
@@ -455,6 +517,7 @@ void App::update(const gfx::Input& in, double dt) {
   }
 
   if (autoplay_) autoplay(dt);
+  if (relicsOpen_) { updateRelics(in); return; }
   if (deckOpen_) { updateDeck(in); return; }
   switch (scr) {
     case Screen::Title: updateTitle(in); break;
@@ -465,6 +528,7 @@ void App::update(const gfx::Input& in, double dt) {
     case Screen::RestUpgrade: updateUpgrade(in); break;
     case Screen::GameOver: updateEnd(in); break;
     case Screen::Victory: updateEnd(in); break;
+    case Screen::RelicOffer: updateRelicOffer(in); break;
     default: break;
   }
 }
@@ -525,6 +589,7 @@ void App::draw() {
   for (int pass = 0; pass < 2; ++pass) {
     bool top = pass == 0;
     gfx::screen(top ? gfx::TOP : gfx::BOTTOM, 0x0B0B12FF);
+    if (relicsOpen_) { drawRelics(top); continue; }
     if (deckOpen_) { drawDeck(top); continue; }
     switch (scr) {
       case Screen::Title: drawTitle(top); break;
@@ -535,6 +600,7 @@ void App::draw() {
       case Screen::RestUpgrade: drawUpgrade(top); break;
       case Screen::GameOver: drawEnd(top, false); break;
       case Screen::Victory: drawEnd(top, true); break;
+      case Screen::RelicOffer: drawRelicOffer(top); break;
       default: break;
     }
     if (!top && toastT_ > 0) {
@@ -587,6 +653,9 @@ void App::autoplay(double dt) {
     case Screen::Rest:
       if (r.restChoice.waiting()) r.restChoice.fire(1); else acted = false;
       break;
+    case Screen::RelicOffer:
+      if (r.relicChoice.waiting()) r.relicChoice.fire(1); else acted = false;
+      break;
     case Screen::RestUpgrade:
       if (r.upgradeChoice.waiting()) {
         if (sel_ < 0) { sel_ = 9; autoT_ = -0.6; return; }
@@ -634,12 +703,24 @@ void App::drawTopBar() {
   R().text(96, 2, "金币 " + num(run_->gold), ts(F12, col::gold));
   R().text(170, 2, "第 " + num(run_->floor) + " 层", ts(F12, col::white));
   R().text(230, 2, "牌组 " + num((int)run_->deck.size()), ts(F12, col::white));
+  // Relics from the right edge; the rest are counted as "+N" (all of them are in the
+  // relic page).
+  const int n = (int)run_->relics.size();
+  const int fit = n > 5 ? 4 : n;
   float x = kTop - 20;
-  for (auto& r : run_->relics) {
-    uint32_t tint = r->flash > 0 ? 0xFFFFFFFF : 0xFFFFFFFF;
-    spr(R().sprite("relic/" + r->icon), x, 0, 18, 18, tint, 0);
-    r->flash = std::max(0.f, r->flash - 0.02f);
-    x -= 20;
+  for (int i = 0; i < fit; ++i, x -= 20) drawRelicIcon(run_->relics[i].get(), x, 0, 18);
+  if (n > fit) R().text(x + 18, 3, "+" + num(n - fit), ts(F12, col::gold, RIGHT));
+}
+
+void App::drawRelicIcon(Relic* r, float x, float y, float size) {
+  float pulse = r->flash > 0 ? 1.f + 0.25f * r->flash : 1.f;
+  float s = size * pulse, off = (s - size) / 2;
+  if (r->flash > 0) gfx::circle(x + size / 2, y + size / 2, s * 0.6f, 0xFFE07000 | (uint32_t)(r->flash * 0x90));
+  spr(R().sprite("relic/" + r->icon), x - off, y - off, s, s, r->usedUp ? 0x000000FF : 0xFFFFFFFF, r->usedUp ? 0.55f : 0.f);
+  r->flash = std::max(0.f, r->flash - 0.02f);
+  if (r->showCounter()) {
+    std::string c = num(r->displayAmount());
+    R().text(x + size, y + size - 10, c, ts(F12, col::white, RIGHT, 0, size < 24 ? 0.8f : 1.f));
   }
 }
 
@@ -738,6 +819,7 @@ void App::drawMap(bool top) {
   if (top) { drawTopBar(); return; }
   // Bottom HUD in the corners, clear of row 0.
   button(4, 210, 64, 26, "牌组", ID_DECK);
+  button(72, 210, 64, 26, "遗物", ID_RELICS);
   if (!reach.empty()) {
     std::string label = roomName(r.nodes[reach[mapSel_]].type);
     float w = R().measure(label, ts(F12)) + 12;
@@ -762,7 +844,9 @@ void App::updateMap(const gfx::Input& in) {
   int pick = -1;
   if (in.down & gfx::BTN_A) pick = mapSel_;
   if (in.touchDown) {
-    if (hitAt(in.tx, in.ty) == ID_DECK) { deckOpen_ = true; sel_ = -1; scroll_ = 0; mapTouch_ = {}; return; }
+    int hud = hitAt(in.tx, in.ty);
+    if (hud == ID_DECK) { deckOpen_ = true; sel_ = -1; scroll_ = 0; mapTouch_ = {}; return; }
+    if (hud == ID_RELICS) { relicsOpen_ = true; sel_ = run_->relics.empty() ? -1 : 0; scroll_ = 0; mapTouch_ = {}; return; }
     mapTouch_ = {};
     mapTouch_.down = true;
     mapTouch_.startX = in.tx;
@@ -1739,7 +1823,7 @@ void App::drawDeck(bool top) {
   drawCardGrid(cards, sel_, 0, 196, scroll_);
   gfx::rect(0, 196, kBot, 44, 0x000000A0);
   button(10, 200, 100, 34, "返回", ID_BACK);
-  R().text(kBot - 10, 212, "↑↓ 滚动", ts(F12, col::gray, RIGHT));
+  button(kBot - 110, 200, 100, 34, "遗物", ID_RELICS);
 }
 
 void App::updateDeck(const gfx::Input& in) {
@@ -1754,6 +1838,94 @@ void App::updateDeck(const gfx::Input& in) {
     int id = hitAt(in.tx, in.ty);
     if (id >= ID_GRID0) sel_ = id - ID_GRID0;
     if (id == ID_BACK) { deckOpen_ = false; sel_ = -1; }
+    if (id == ID_RELICS) { deckOpen_ = false; relicsOpen_ = true; sel_ = run_->relics.empty() ? -1 : 0; scroll_ = 0; }
+  }
+}
+
+// ================================================================ relics
+
+// Elite relic reward / treasure chest: the relic is shown large on top (RGDSplus
+// U19/U23: focus on top, take/skip below).
+void App::drawRelicOffer(bool top) {
+  Run& r = *run_;
+  Relic* rel = r.relicOffer.get();
+  if (top) {
+    drawSceneBg(true, 0.6f);
+    drawTopBar();
+    TextStyle t = ts(F16, col::gold, CENTER);
+    R().text(kTop / 2, 24, r.relicOfferFromChest ? "宝箱" : "精英战利品", t);
+    if (rel) drawRelicDetail(rel, 88);
+    return;
+  }
+  drawSceneBg(false, 0.55f);
+  if (r.relicOfferFromChest) {
+    Sprite chest = R().sprite("map/chest");
+    spr(chest, kBot / 2 - 22, 18, 44, 44);
+  }
+  if (rel) {
+    float s = 40, x = kBot / 2 - s / 2, y = 74;
+    gfx::circle(kBot / 2.f, y + s / 2, 30, 0xFFE07040);
+    drawRelicIcon(rel, x, y, s);
+    hits_.push_back({x - 10, y - 10, s + 20, s + 20, ID_TAKE});
+    R().text(kBot / 2, y + s + 8, L("relics." + rel->locKey + ".title"), ts(F16, col::white, CENTER));
+  }
+  button(10, 196, 110, 36, "跳过", ID_SKIP);
+  button(kBot - 120, 196, 110, 36, "拿取", ID_TAKE, rel != nullptr, true);
+}
+
+void App::updateRelicOffer(const gfx::Input& in) {
+  Run& r = *run_;
+  if (!r.relicChoice.waiting()) return;
+  if (in.down & gfx::BTN_A) { r.relicChoice.fire(1); return; }
+  if (in.down & gfx::BTN_B) { r.relicChoice.fire(0); return; }
+  if (in.touchDown) {
+    int id = hitAt(in.tx, in.ty);
+    if (id == ID_TAKE) r.relicChoice.fire(1);
+    else if (id == ID_SKIP) r.relicChoice.fire(0);
+  }
+}
+
+// Owned relics: a grid below, the selected one described above (RGDSplus U24/U25).
+void App::drawRelics(bool top) {
+  auto& rels = run_->relics;
+  int n = (int)rels.size();
+  if (sel_ >= n) sel_ = n - 1;
+  if (top) {
+    drawSceneBg(true, 0.7f);
+    drawTopBar();
+    if (sel_ >= 0) drawRelicDetail(rels[sel_].get(), 84);
+    else R().text(kTop / 2, 100, "遗物（" + num(n) + " 个）", ts(F16, col::gold, CENTER));
+    return;
+  }
+  drawSceneBg(false, 0.65f);
+  const int cols = 6;
+  const float cell = 48, x0 = (kBot - cols * cell) / 2, y0 = 8;
+  for (int i = 0; i < n; ++i) {
+    float x = x0 + (i % cols) * cell, y = y0 + (i / cols - scroll_) * cell;
+    if (y < 0 || y > 190) continue;
+    if (i == sel_) gfx::rect(x + 2, y + 2, cell - 4, cell - 4, 0xFFE07060);
+    drawRelicIcon(rels[i].get(), x + 6, y + 6, cell - 12);
+    hits_.push_back({x, y, cell, cell, ID_RELIC0 + i});
+  }
+  gfx::rect(0, 196, kBot, 44, 0x000000A0);
+  button(10, 200, 100, 34, "返回", ID_BACK);
+  button(kBot - 110, 200, 100, 34, "牌组", ID_DECK);
+}
+
+void App::updateRelics(const gfx::Input& in) {
+  int n = (int)run_->relics.size();
+  auto close = [&] { relicsOpen_ = false; sel_ = -1; scroll_ = 0; };
+  if (in.down & gfx::BTN_RIGHT) sel_ = std::min(n - 1, sel_ + 1);
+  if (in.down & gfx::BTN_LEFT) sel_ = std::max(0, sel_ - 1);
+  if (in.down & gfx::BTN_DOWN) sel_ = std::min(n - 1, sel_ + 6);
+  if (in.down & gfx::BTN_UP) sel_ = std::max(0, sel_ - 6);
+  if (sel_ >= 0) scroll_ = std::max(0, sel_ / 6 - 2);
+  if (in.down & gfx::BTN_B) { close(); return; }
+  if (in.touchDown) {
+    int id = hitAt(in.tx, in.ty);
+    if (id >= ID_RELIC0 && id < ID_RELIC0 + n) sel_ = id - ID_RELIC0;
+    if (id == ID_BACK) close();
+    if (id == ID_DECK) { close(); deckOpen_ = true; }
   }
 }
 

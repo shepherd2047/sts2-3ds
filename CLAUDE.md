@@ -108,6 +108,14 @@ scripts drift; delete the debug file afterwards.
   (`Monster::stun`), minions / secondary enemies, creatures that die without
   leaving (illusions revive), turn-end-in-hand cards, `shouldPlay` and
   `tryModifyPowerAmountReceived` (Artifact) hooks.
+- Relics: `Relic` + `RELIC_HEADER(Name, "KEY", Rarity)` with DynVars named like
+  the C# vars (the UI formats descriptions from them). `relics.cpp` registers
+  `relics_common/uncommon/rare.cpp`; only registered relics enter the grab bags
+  (`Run::populateRelicBags`, rarity roll 50/33/17, fallback Circlet). Elites
+  drop a relic, the treasure row (map row 8) gives 42-52 gold + a relic from the
+  shared bag. Skipped relics are listed at the end of each file with the missing
+  feature (potions, shop, card-reward hooks, death prevention, ...).
+- Debug: `STS_ROOM=Treasure|Rest|Elite|Boss` makes the first room that type.
 - `Res` frees monster Spine pages when a new fight starts (only IRONCLAD stays);
   3DS textures live in limited linear memory.
 
@@ -115,9 +123,11 @@ scripts drift; delete the debug file afterwards.
 
 Done: Ironclad full card pool, all 22 Act 1 encounters (4 weak, 12 normal,
 3 elites, 3 bosses), continuous two-screen map with drag/tap, card rewards
-(rarity odds), rest sites, Spine creature animation, touch UI.
+(rarity odds), rest sites, Spine creature animation, touch UI, relic system
+with ~70 relics (common/uncommon/rare + Ironclad), elite relic rewards,
+treasure rooms, relic page.
 
-Not done: events, shop, treasure, potions, relics beyond Burning Blood,
+Not done: events, shop (and Shop-rarity relics), potions,
 StS2's real map generator (unknown/treasure/shop rooms), saves, other
 characters/acts, audio, real-hardware performance test. romfs is ~66 MB
 (Spine pages are uncompressed RGBA8).

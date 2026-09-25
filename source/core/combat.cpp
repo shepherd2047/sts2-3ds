@@ -321,6 +321,9 @@ Task<std::vector<DamageResult>> damage(std::vector<Creature*> targets, Dec amoun
     results.push_back(r);
   }
 
+  for (auto& r : results)
+    if (r.unblocked > 0)
+      for (Model* m : c.listeners()) co_await m->afterCurrentHpChanged(r.receiver, Dec(-r.unblocked));
   std::vector<Creature*> killedCreatures;
   for (auto& r : results) {
     Creature* t = r.receiver;
@@ -397,7 +400,8 @@ Task<> heal(Creature* cr, Dec amount) {
   int before = cr->hp;
   cr->hp = std::min(cr->hp + amount.toInt(), cr->maxHp);
   if (cr->combat) cr->combat->push({VisualEvent::Heal, cr, cr->hp - before});
-  co_return;
+  if (cr->hp != before && cr->combat)
+    for (Model* m : cr->combat->listeners()) co_await m->afterCurrentHpChanged(cr, Dec(cr->hp - before));
 }
 
 // PowerCmd.Apply(PowerModel, ...) for a fresh instance.
@@ -685,8 +689,9 @@ Task<> Combat::runCombat() {
   }
   inProgress = false;
   if (won) {
-    // Run-level hook: relics still listen after combat ends.
-    for (auto& r : run->relics) co_await r->afterCombatVictory();
+    // CombatManager.EndCombatInternal: run-level hooks, relics still listen.
+    for (Model* m : run->listeners()) co_await m->afterCombatEnd();
+    for (Model* m : run->listeners()) co_await m->afterCombatVictory();
   }
 }
 
@@ -715,7 +720,10 @@ Task<> Combat::startTurn() {
     if (cr->isPlayer && turnNumber == 1) continue;
     bool clear = true;
     for (Model* m : listeners()) clear = clear && m->shouldClearBlock(cr);
-    if (clear) cr->block = 0;
+    if (clear) {
+      cr->block = 0;
+      for (Model* m : listeners()) co_await m->afterBlockCleared(cr);
+    }
   }
 
   if (currentSide == Side::Player) co_await setupPlayerTurn();
@@ -733,6 +741,8 @@ Task<> Combat::setupPlayerTurn() {
   // Hook.ShouldPlayerResetEnergy -> ResetEnergy
   energy = maxEnergyNow();
   cardsPlayedThisTurn = 0;
+  for (Model* m : listeners()) co_await m->afterEnergyReset();
+  for (Model* m : listeners()) co_await m->beforeHandDraw();
   Dec handDraw = 5;
   for (Model* m : listeners()) handDraw = m->modifyHandDraw(handDraw);
   if (turnNumber == 1) {

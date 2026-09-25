@@ -82,6 +82,8 @@ class App {
   void drawUpgrade(bool top);
   void drawDeck(bool top);
   void drawEnd(bool top, bool won);
+  void drawRelicOffer(bool top);  // elite relic reward / treasure chest
+  void drawRelics(bool top);      // owned relics: grid below, the picked one above
 
   void updateTitle(const gfx::Input& in);
   void updateMap(const gfx::Input& in);
@@ -91,6 +93,8 @@ class App {
   void updateUpgrade(const gfx::Input& in);
   void updateDeck(const gfx::Input& in);
   void updateEnd(const gfx::Input& in);
+  void updateRelicOffer(const gfx::Input& in);
+  void updateRelics(const gfx::Input& in);
 
   // pieces
   // RGDSplus B02-B06: pages show the current scene's own background (room, or the map
@@ -108,6 +112,10 @@ class App {
               bool highlight = false);
   void panel(float x, float y, float w, float h, uint32_t fill = 0x1A1A24E0, uint32_t border = 0x8A7A5AFF);
   std::string describe(sts::Card* c);
+  std::string describeRelic(sts::Relic* r);
+  void drawRelicIcon(sts::Relic* r, float x, float y, float size);
+  // A relic on its own on the top screen: big icon, name, rarity, description.
+  void drawRelicDetail(sts::Relic* r, float cy);
   std::string cardTitle(sts::Card* c);
   std::vector<sts::Creature*> visibleEnemies();
   float enemyX(int i, int n);
@@ -121,6 +129,7 @@ class App {
   float toastT_ = 0;
   std::vector<Hit> hits_;
   bool deckOpen_ = false;
+  bool relicsOpen_ = false;
 
   // selection state
   int sel_ = -1;       // hand index / reward index / grid index
