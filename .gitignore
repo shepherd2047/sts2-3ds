@@ -5,6 +5,8 @@
 /*
 !/.gitignore
 !/README.md
+!/CLAUDE.md
+!/.gitattributes
 !/Makefile
 !/Makefile.sdl
 !/source/
