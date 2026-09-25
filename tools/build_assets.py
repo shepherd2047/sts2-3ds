@@ -227,7 +227,7 @@ def export_spine(g, key, skel_res, skel, atlas, load, scale):
         lines.append(f'mix {m.group(1)} {m.group(2)} {m.group(3)}')
     dm = re.search(r'default_mix = ([\d.]+)', tres)
     lines.append(f'defaultmix {dm.group(1) if dm else "0.1"}')
-    with open(os.path.join(out, key + '.txt'), 'w') as f:
+    with open(os.path.join(out, key + '.txt'), 'w', newline='\n') as f:
         f.write('\n'.join(lines) + '\n')
 
 
@@ -323,7 +323,7 @@ def build(args):
     icon.alpha_composite(head)
     icon.save(os.path.join(ROOT, 'icon.png'))
 
-    with open(os.path.join(OUT, 'gfx', 'atlas.txt'), 'w') as f:
+    with open(os.path.join(OUT, 'gfx', 'atlas.txt'), 'w', newline='\n') as f:
         for (name, page, x, y, w, h, ax, ay) in packer.entries:
             f.write(f'{name} {page} {x} {y} {w} {h} {ax} {ay}\n')
     for i, page in enumerate(packer.pages):
@@ -385,7 +385,7 @@ def build(args):
               'card_selection', 'intents', 'game_over_screen', 'characters'):
         take(t, (lambda k: not k.startswith(('DAILY', 'DISCOVERY'))) if t == 'game_over_screen'
              else (lambda k: k.startswith('IRONCLAD')) if t == 'characters' else (lambda k: True))
-    with open(os.path.join(OUT, 'loc.txt'), 'w', encoding='utf-8') as f:
+    with open(os.path.join(OUT, 'loc.txt'), 'w', encoding='utf-8', newline='\n') as f:
         for k in sorted(strings):
             v = strings[k].replace('\\', '\\\\').replace('\n', '\\n').replace('\t', ' ')
             f.write(f'{k}\t{v}\n')
@@ -450,7 +450,7 @@ def build_font(chars, font_path):
             row_h = max(row_h, h)
     page = shrink_page(page)
     write_t3t(os.path.join(OUT, 'font', 'font_0.t3t'), page)
-    with open(os.path.join(OUT, 'font', 'font.txt'), 'w') as f:
+    with open(os.path.join(OUT, 'font', 'font.txt'), 'w', newline='\n') as f:
         f.write('\n'.join(lines) + '\n')
     print(f'  {len(chars)} glyphs x {len(sizes)} sizes, page {page.size}')
 
