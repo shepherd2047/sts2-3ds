@@ -255,20 +255,86 @@ bool readFile(const std::string& path, std::string& out) {
   return got == (size_t)n;
 }
 
+namespace {
+// tex3ds compression header (0x00 raw copy, 0x11 LZ11) followed by the payload. Decodes straight
+// into `out` (texture memory) and returns false unless exactly `outSize` bytes come out.
+bool unpackGpuData(const u8* in, size_t inSize, u8* out, size_t outSize) {
+  if (inSize < 4) return false;
+  size_t size = in[1] | (in[2] << 8) | (in[3] << 16), pos = 4;
+  if (in[0] & 0x80) {
+    if (inSize < 8) return false;
+    size = in[4] | (in[5] << 8) | (in[6] << 16) | ((size_t)in[7] << 24);
+    pos = 8;
+  }
+  if (size != outSize) return false;
+  if (in[0] == 0x00) {
+    if (inSize - pos < size) return false;
+    memcpy(out, in + pos, size);
+    return true;
+  }
+  if ((in[0] & 0x7F) != 0x11) return false;
+  size_t o = 0;
+  while (o < size) {
+    if (pos >= inSize) return false;
+    u8 flags = in[pos++];
+    for (int bit = 0; bit < 8 && o < size; ++bit, flags <<= 1) {
+      if (!(flags & 0x80)) {
+        if (pos >= inSize) return false;
+        out[o++] = in[pos++];
+        continue;
+      }
+      if (pos + 2 > inSize) return false;
+      u32 b0 = in[pos++], b1 = in[pos++], len, disp;
+      if ((b0 >> 4) == 0) {
+        if (pos >= inSize) return false;
+        len = (((b0 & 0xF) << 4) | (b1 >> 4)) + 0x11;
+        disp = (((b1 & 0xF) << 8) | in[pos++]) + 1;
+      } else if ((b0 >> 4) == 1) {
+        if (pos + 2 > inSize) return false;
+        u32 b2 = in[pos++], b3 = in[pos++];
+        len = (((b0 & 0xF) << 12) | (b1 << 4) | (b2 >> 4)) + 0x111;
+        disp = (((b2 & 0xF) << 8) | b3) + 1;
+      } else {
+        len = (b0 >> 4) + 1;
+        disp = (((b0 & 0xF) << 8) | b1) + 1;
+      }
+      if (disp > o || o + len > size) return false;
+      for (u32 i = 0; i < len; ++i, ++o) out[o] = out[o - disp];
+    }
+  }
+  return true;
+}
+}  // namespace
+
+// T3T1 fmt byte: 0 = RGBA8 (linear, swizzled here), 1 = ETC1A4, 2 = ETC1, 3 = RGBA4444 (tools/compress_romfs.py;
+// the GPU formats are stored ready to upload).
 Texture* loadTexture(const std::string& path) {
   std::string data;
   if (!readFile(path, data) || data.size() < 12 || memcmp(data.data(), "T3T1", 4) != 0) return nullptr;
   u16 w, h;
   memcpy(&w, data.data() + 4, 2);
   memcpy(&h, data.data() + 6, 2);
+  u8 fmt = (u8)data[8];
   auto* t = new Texture{};
   t->w = w;
   t->h = h;
-  if (!C3D_TexInit(&t->tex, w, h, GPU_RGBA8)) {
+  static const GPU_TEXCOLOR kFormats[] = {GPU_RGBA8, GPU_ETC1A4, GPU_ETC1, GPU_RGBA4};
+  if (fmt > 3 || !C3D_TexInit(&t->tex, w, h, kFormats[fmt])) {
     delete t;
     return nullptr;
   }
   const u8* src = (const u8*)data.data() + 12;
+  if (fmt != 0) {
+    if (!unpackGpuData(src, data.size() - 12, (u8*)t->tex.data, t->tex.size)) {
+      C3D_TexDelete(&t->tex);
+      delete t;
+      return nullptr;
+    }
+    C3D_TexFlush(&t->tex);
+    C3D_TexSetFilter(&t->tex, GPU_LINEAR, GPU_LINEAR);
+    C3D_TexSetWrap(&t->tex, GPU_CLAMP_TO_EDGE, GPU_CLAMP_TO_EDGE);
+    return t;
+  }
   u32* dst = (u32*)t->tex.data;
   for (u32 y = 0; y < h; ++y) {
     u32 ty = y;  // tile rows follow image rows; the subtexture v coordinates do the flip

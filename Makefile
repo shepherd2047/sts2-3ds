@@ -18,7 +18,7 @@ SOURCES     := source source/core source/ui source/spine source/gfx source/platf
 DATA        :=
 INCLUDES    := source
 GRAPHICS    :=
-ROMFS       := romfs
+ROMFS       := romfs_3ds
 
 APP_TITLE       := Slay the Spire 2 (3DS)
 APP_DESCRIPTION := Unofficial personal port - Ironclad, Act 1
@@ -71,7 +71,11 @@ endif
 
 .PHONY: all clean link
 
+# romfs_3ds/ = romfs/ with the textures converted to GPU formats (tools/compress_romfs.py).
+PYTHON ?= $(shell for p in python3 python; do $$p -c 'import numpy, PIL' >/dev/null 2>&1 && { echo $$p; break; }; done)
+
 all: $(BUILD)
+	@if [ -n "$(PYTHON)" ]; then $(PYTHON) tools/compress_romfs.py || exit 1; 	elif [ -d romfs_3ds ]; then echo "warning: no Python with Pillow+numpy here, romfs_3ds may be stale (run tools/compress_romfs.py, or PYTHON=...)"; 	else echo "romfs_3ds missing: run python3 tools/compress_romfs.py first"; exit 1; fi
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
 
 # Send to a 3DS waiting in Homebrew Launcher (press Y). hbmenu saves it to

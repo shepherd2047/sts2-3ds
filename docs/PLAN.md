@@ -83,7 +83,7 @@ file and run it with bash.
 | 10 | Remaining relics (skipped ones + Shop rarity) | content | 8, 9 | todo |
 | 11 | Ancients (Neow, act-start events) | content + UI | 3 | todo |
 | 12 | Saves | engine | 3 | todo |
-| 13 | Texture compression (romfs is ~70 MB) | tools + 3DS gfx | – | todo |
+| 13 | Texture compression (romfs is ~70 MB) | tools + 3DS gfx | – | done (`tools/compress_romfs.py` → `romfs_3ds/` ETC1A4/ETC1/RGBA4 + LZ11, 146 → 15 MB; make runs it; needs a real-hardware check, package 19) |
 | 14 | Other characters | big | 3 | later |
 | 15 | RGDSplus page audit (U01-U33) | UI | 3, 8, 9, 11 | todo |
 | 16 | Title / main menu / character select (U01-U04) | UI | – | todo |
