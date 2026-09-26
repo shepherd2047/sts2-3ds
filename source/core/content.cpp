@@ -620,6 +620,7 @@ void registerAct1Monsters();
 void registerPhrog();        // content_phrog.cpp
 void registerAct2A();        // content_act2a.cpp
 void registerAct2B();        // content_act2b.cpp
+void registerAct2C();        // content_act2c.cpp: elites + bosses
 void registerAct3A();        // content_act3a.cpp
 void registerAct3B();        // content_act3b.cpp
 void registerAct1Bosses();   // content_bosses.cpp: Ceremonial Beast, The Kin, Fogmog
@@ -734,6 +735,7 @@ void init() {
   registerAct1Bosses();
   registerAct2A();
   registerAct2B();
+  registerAct2C();
   registerAct3A();
   registerAct3B();
   registerRelic("BurningBlood", [] { return std::unique_ptr<Relic>(new BurningBlood()); });

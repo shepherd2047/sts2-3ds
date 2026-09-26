@@ -116,10 +116,6 @@ struct Dominate : IroncladT<Dominate> {
   void onUpgrade() override { upgradeVar("VulnerablePower", 1); }
 };
 
-// PORT NOTE: C# skips the max-HP gain when every power on the target reports
-// ShouldOwnerDeathTriggerFatal() == false (a niche "can't actually die"
-// interaction); that per-power hook isn't modeled here, so Feed always gains
-// max HP on a kill.
 struct Feed : IroncladT<Feed> {
   CARD_HEADER(Feed, "FEED", 1, Attack, Rare, AnyEnemy)
     keywords = kwExhaust;
@@ -127,6 +123,7 @@ struct Feed : IroncladT<Feed> {
     addVar("MaxHp", 3);
   }
   Task<> onPlay(CardPlay& p) override {
+    bool fatal = p.target && p.target->deathIsFatal();  // checked before the hit, as in C#
     cmd::Attack a;
     a.damagePerHit = val("Damage");
     a.hits = 1;
@@ -138,7 +135,7 @@ struct Feed : IroncladT<Feed> {
     for (auto& hitResults : a.results)
       for (auto& r : hitResults)
         if (r.killed) killed = true;
-    if (killed) co_await cmd::gainMaxHp(me(), val("MaxHp").toInt());
+    if (killed && fatal) co_await cmd::gainMaxHp(me(), val("MaxHp").toInt());
   }
   void onUpgrade() override { upgradeVar("Damage", 2); upgradeVar("MaxHp", 1); }
 };

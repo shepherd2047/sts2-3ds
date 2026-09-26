@@ -73,7 +73,7 @@ file and run it with bash.
 | 3 | Multi-act run structure | engine, *Opus* | – | done (acts.cpp; TheArchitect ending not ported) |
 | 4a | Act 2 monsters A | content | – | done |
 | 4b | Act 2 monsters B | content | – | done |
-| 4c | Act 2 elites + bosses | content (+engine likely) | – | todo |
+| 4c | Act 2 elites + bosses | content (+engine likely) | – | in progress (content_act2c.cpp written + compiles; NOT sim-tested; TODO: sim each encounter, build_assets, Kaiser Crab visuals = kaiser_crab background skeleton + player centred + facing flip, choice prompt key for Knowledge Demon in ui.cpp) |
 | 5 | Act 2 events (10) | content | 0 | done (9 of 10: ColorfulPhilosophers needs a 2nd character; FieldOfManSizedHoles ENTER_YOUR_HOLE locked = PerfectFit enchantment; act pool list is `db::act2Events()` in events_act2.cpp, to be wired by package 3) |
 | 6a | Act 3 monsters A | content | – | done |
 | 6b | Act 3 elites + bosses | content (+engine likely) | – | done (content_act3b.cpp, sim-tested only, no screenshots; Hex/Dampen/Chains of Binding/Wither are per-power approximations of the affliction system, Intangible caps HP loss only; run build_assets once 4c's monsters have scenes) |
