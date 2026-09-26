@@ -106,7 +106,7 @@ int main(int argc, char** argv) {
               else if (card->var("Block") && wantBlock) score = 40;
               else if (card->type == CardType::Attack) score = 20 + card->val("Damage").toInt();
               else if (card->var("Block")) score = 5;
-              if (card->type == CardType::Status) score = 0;
+              if (card->type == CardType::Status) score = card->id == "FranticEscape" ? 100 : 0;  // buys turns in the Insatiable's sandpit
               if (score > bestScore) { bestScore = score; best = card; }
             }
             if (best && bestScore > 0) {

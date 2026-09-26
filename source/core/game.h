@@ -151,6 +151,9 @@ struct Power : Model {
   virtual bool allowNegative() const { return false; }
   virtual bool ownerIsSecondaryEnemy() const { return false; }  // MinionPower
   virtual bool removedAfterOwnerDeath() const { return true; }  // ShouldPowerBeRemovedAfterOwnerDeath
+  // ShouldOwnerDeathTriggerFatal: false when the owner can come back (Decimillipede segments),
+  // so "on kill" effects (Feed, ...) don't fire. See Creature::deathIsFatal.
+  virtual bool shouldOwnerDeathTriggerFatal() const { return true; }
   virtual Task<> beforeApplied(Creature*, Dec, Creature*, Card*) { return {}; }
   virtual Task<> afterApplied(Creature*, Card*) { return {}; }
   virtual Task<> afterRemoved(Creature*) { return {}; }
@@ -395,6 +398,11 @@ struct Creature {
   }
   template <class P> P* get() { return static_cast<P*>(power(P::kId)); }
   template <class P> int powerAmount() { auto* p = get<P>(); return p ? p->amount : 0; }
+  // `Powers.All(p => p.ShouldOwnerDeathTriggerFatal())`, checked before the killing blow.
+  bool deathIsFatal() const {
+    for (auto& p : powers) if (!p->shouldOwnerDeathTriggerFatal()) return false;
+    return true;
+  }
   bool isSecondaryEnemy() const {
     if (side != Side::Enemy) return false;
     for (auto& p : powers) if (p->ownerIsSecondaryEnemy()) return true;
