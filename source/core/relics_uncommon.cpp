@@ -117,6 +117,7 @@ struct JossPaper : Relic {
   }
   int cardsExhausted = 0;
   int etherealCount = 0;
+  void persist(Archive& a) override { a.io(cardsExhausted); a.io(etherealCount); }
 
   bool showCounter() const override { return true; }
   int displayAmount() const override { return cardsExhausted; }
@@ -231,6 +232,7 @@ struct Nunchaku : Relic {
     addVar("Energy", 1);
   }
   int attacksPlayed = 0;
+  void persist(Archive& a) override { a.io(attacksPlayed); }
 
   bool showCounter() const override { return true; }
   int displayAmount() const override { return attacksPlayed; }
@@ -334,6 +336,7 @@ struct PenNib : Relic {
   RELIC_HEADER(PenNib, "PEN_NIB", Uncommon)
   }
   int attacksPlayed = 0;
+  void persist(Archive& a) override { a.io(attacksPlayed); }
   Card* attackToDouble = nullptr;
 
   bool showCounter() const override { return true; }
@@ -439,6 +442,7 @@ struct TuningFork : Relic {
     addVar("Block", 7);
   }
   int skillsPlayed = 0;
+  void persist(Archive& a) override { a.io(skillsPlayed); }
 
   bool showCounter() const override { return true; }
   int displayAmount() const override { return skillsPlayed; }

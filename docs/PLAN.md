@@ -83,7 +83,7 @@ file and run it with bash.
 | 10 | Remaining relics (skipped ones + Shop rarity) | content | 8, 9 | done (relics_more.cpp: 42 relics incl. the Shop ones; rest site Lift/Dig/Miniature Tent, card reward/deck/potion hooks, Lizard Tail. Still skipped: DingyRug, FresnelLens, GnarledHammer, Kifuda, MysticLighter, PunchDagger, RoyalStamp, Toolbox, WingCharm (enchantments / colorless pool), UnsettlingLamp; IsAllowed(IsBeforeAct3TreasureChest) not checked) |
 | 11a | Neow: act-1 Ancient start node, heal, relic choice | engine + UI + content | – | done |
 | 11b | Act 2/3 Ancients (Orobas, Pael, Tezcatara, Nonupeipe, Tanx, Vakuu, Darv) | content | 3, 11a | done (ancients_later.cpp: all 7 events with their option rules, 58 of 72 relics, 12 cards, Blur/Confused/next-turn powers, Black Blood; per-ancient room art and map icons. Not offered until their systems exist: enchantment relics, Sea Glass / Prismatic Gem, Driftwood, Pael's Wing / Eye / Legion, Golden Compass, Fur Coat, Toy Box, Whispering Earring) |
-| 12 | Saves | engine | 3 | todo |
+| 12 | Saves | engine | 3 | done (save.cpp: autosave at every map choice, 继续 on the title, deleted on death/victory; RNG raw state, map, bags, deck, relics (+ Relic::persist), potions. `SIM_SAVELOAD=K ./build/sim` checks that save/load at floor K changes nothing) |
 | 13 | Texture compression (romfs is ~70 MB) | tools + 3DS gfx | – | done (`tools/compress_romfs.py` → `romfs_3ds/` ETC1A4/ETC1/RGBA4 + LZ11, 146 → 15 MB; make runs it; needs a real-hardware check, package 19) |
 | 14 | Other characters | big | 3 | later |
 | 15 | RGDSplus page audit (U01-U33) | UI | 3, 8, 9, 11a, 11b | todo |

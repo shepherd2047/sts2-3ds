@@ -36,6 +36,11 @@ void endFrame();
 
 // Reads romfs:/<path> (3DS) or ./romfs/<path> (desktop).
 bool readFile(const std::string& path, std::string& out);
+// Save files (not in romfs): PC saves/<name>, 3DS sdmc:/3ds/sts2-3ds/<name>. Written to a
+// temporary file first, then renamed, so a power cut never leaves half a save.
+bool readSave(const std::string& name, std::string& out);
+bool writeSave(const std::string& name, const std::string& data);
+void deleteSave(const std::string& name);
 Texture* loadTexture(const std::string& path);
 // Only between frames' draws (e.g. from App::update): the GPU is done with the last frame.
 void freeTexture(Texture* t);

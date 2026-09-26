@@ -248,6 +248,7 @@ struct RainbowRing : Relic {
     addVar("DexterityPower", 1);
   }
   int attacks = 0, skills = 0, powers = 0, activations = 0;
+  void persist(Archive& a) override { a.io(attacks); a.io(skills); a.io(powers); a.io(activations); }
   Task<> beforeSideTurnStart(Side, const std::vector<Creature*>&) override {
     attacks = skills = powers = activations = 0;
     co_return;

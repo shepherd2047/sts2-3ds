@@ -530,13 +530,27 @@ Task<bool> Run::fight(const std::string& encounterId) {
   co_return won;
 }
 
+namespace {
+Task<> sideTask(Task<> t, int* pending) {
+  co_await t;
+  --*pending;
+}
+}  // namespace
+
+void Run::spawnSide(Task<> t) {
+  ++pendingSide;
+  Scheduler::get().spawn(sideTask(std::move(t), &pendingSide));
+}
+
 Task<> Run::main() {
   for (;;) {
     if (ancientPending) {
       co_await enterAncient();
       if (died) { screen = Screen::GameOver; co_return; }
     }
+    while (pendingSide > 0) co_await wait(0.05);
     screen = Screen::Map;
+    if (onSavePoint) onSavePoint(*this);
     int choice = co_await mapChoice.next();
     if (devSkipAct) {  // developer menu: 跳到下一幕
       devSkipAct = false;

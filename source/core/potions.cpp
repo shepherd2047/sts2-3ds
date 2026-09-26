@@ -631,7 +631,7 @@ bool Run::procurePotion(std::unique_ptr<Potion> p) {
       p->run = this;
       slot = std::move(p);
       // Hook.AfterPotionProcured (Belt Buckle); fire and forget from this synchronous call.
-      for (Model* m : listeners()) Scheduler::get().spawn(m->afterPotionProcured());
+      for (Model* m : listeners()) spawnSide(m->afterPotionProcured());
       return true;
     }
   return false;  // PotionProcureFailureReason.TooFull
@@ -640,7 +640,7 @@ bool Run::procurePotion(std::unique_ptr<Potion> p) {
 void Run::discardPotion(int slot) {
   if (slot < 0 || slot >= (int)potions.size() || !potions[slot]) return;
   potions[slot].reset();
-  for (Model* m : listeners()) Scheduler::get().spawn(m->afterPotionDiscarded());
+  for (Model* m : listeners()) spawnSide(m->afterPotionDiscarded());
 }
 
 // NPotionPopup: CombatOnly potions only during the player's turn; AnyTime potions also

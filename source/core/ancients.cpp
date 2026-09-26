@@ -114,6 +114,7 @@ struct FishingRod : Relic {
     addVar("Combats", 3);
   }
   int combatsSeen = 0;
+  void persist(Archive& a) override { a.io(combatsSeen); }
   bool showCounter() const override { return true; }
   int displayAmount() const override { return combatsSeen % 3; }
   Task<> afterCombatEnd() override {
@@ -173,6 +174,7 @@ struct LavaRock : Relic {
     addVar("Relics", 2);
   }
   bool triggered = false;
+  void persist(Archive& a) override { a.io(triggered); }
   int bonusRelicRewards(RoomType room) override {
     if (room != RoomType::Boss || run->actIndex != 0 || triggered) return 0;
     doFlash();

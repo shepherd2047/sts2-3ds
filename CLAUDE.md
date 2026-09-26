@@ -173,6 +173,11 @@ scripts drift; delete the debug file afterwards.
   flow; `Run::restSite` offers `restOptions` (heal, smith, Lift, Dig). Debug:
   `STS_RELICS=Girya,Shovel` adds relics at the start; `SIM_ALLRELICS=1` (or a comma list)
   runs the sim with them.
+- Saves: `save.cpp` (`Run::save` / `Run::load`, token stream via `Archive`). Saved only at the
+  map choice (`Run::onSavePoint`, after side tasks from `Run::spawnSide` finish). A relic whose
+  state lasts between rooms overrides `persist(Archive&)`; new ones must too. Files: PC
+  `saves/run.sav`, 3DS `sdmc:/3ds/sts2-3ds/run.sav`. STS_HIDDEN / STS_NO_SAVE turn saves off.
+  `SIM_SAVELOAD=K ./build/sim N` must print the same results as without it.
 - Merchant: `shop.cpp` (`Run::enterShop`, `Run::shop` items, `shopChoice`; prices through the
   `modifyMerchantPrice` hook). Art `gfx/bg_merchant.t3t`. `STS_ROOM=Shop` makes the first room a shop.
 - Debug: `STS_ROOM=Treasure|Rest|Elite|Boss|Event` makes the first room that type,
@@ -199,7 +204,7 @@ Done: Ironclad full card pool, all 22 Act 1 encounters (4 weak, 12 normal,
 with ~70 relics (common/uncommon/rare + Ironclad), elite relic rewards,
 treasure rooms, relic page.
 
-Not done: Shop-rarity relics (package 10),
+Not done:
 StS2's real map generator (unknown/treasure/shop rooms), saves, other
 characters/acts, audio, real-hardware performance test. romfs is ~66 MB
 (Spine pages are uncompressed RGBA8).

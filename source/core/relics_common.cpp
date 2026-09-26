@@ -102,6 +102,7 @@ struct HappyFlower : Relic {
     addVar("Turns", 3);
   }
   int turnsSeen = 0;
+  void persist(Archive& a) override { a.io(turnsSeen); }
   bool showCounter() const override { return true; }
   int displayAmount() const override { return turnsSeen; }
   Task<> afterSideTurnStart(Side side, const std::vector<Creature*>& participants) override {
@@ -150,6 +151,7 @@ struct Pendulum : Relic {
     addVar("Turns", 3);
   }
   int turnsSeen = 0;
+  void persist(Archive& a) override { a.io(turnsSeen); }
   bool showCounter() const override { return true; }
   int displayAmount() const override { return turnsSeen; }
   Task<> beforeHandDraw() override {
@@ -272,6 +274,7 @@ struct VenerableTeaSet : Relic {
     addVar("Energy", 2);
   }
   bool gainEnergyInNextCombat = false;
+  void persist(Archive& a) override { a.io(gainEnergyInNextCombat); }
   Task<> afterRoomEntered(RoomType room) override {
     if (room == RoomType::Rest) gainEnergyInNextCombat = true;
     return {};

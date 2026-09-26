@@ -76,12 +76,13 @@ struct BeltBuckle : Relic {
 struct BookOfFiveRings : Relic {
   RELIC_HEADER(BookOfFiveRings, "BOOK_OF_FIVE_RINGS", Common) addVar("Cards", 5); addVar("Heal", 20); }
   int cardsAdded = 0;
+  void persist(Archive& a) override { a.io(cardsAdded); }
   bool showCounter() const override { return true; }
   int displayAmount() const override { return cardsAdded % 5; }
   void afterCardAddedToDeck(Card*) override {
     if (owner()->dead() || ++cardsAdded % val("Cards").toInt() != 0) return;
     doFlash();
-    Scheduler::get().spawn(healPlayer(this, val("Heal").toInt()));
+    run->spawnSide(healPlayer(this, val("Heal").toInt()));
   }
 };
 
@@ -200,6 +201,7 @@ struct GhostSeed : Relic {
 struct Girya : Relic {
   RELIC_HEADER(Girya, "GIRYA", Rare) }
   int timesLifted = 0;
+  void persist(Archive& a) override { a.io(timesLifted); }
   bool showCounter() const override { return true; }
   int displayAmount() const override { return timesLifted; }
   void restSiteAction(int) override { ++timesLifted; }
@@ -225,6 +227,7 @@ struct JuzuBracelet : Relic {
 struct LastingCandy : Relic {
   RELIC_HEADER(LastingCandy, "LASTING_CANDY", Uncommon) }
   int combatRewardsSeen = 0;
+  void persist(Archive& a) override { a.io(combatRewardsSeen); }
   bool showCounter() const override { return true; }
   int displayAmount() const override { return combatRewardsSeen % 2; }
   Task<> afterCombatVictory() override { ++combatRewardsSeen; return {}; }
@@ -282,7 +285,7 @@ struct LuckyFysh : Relic {
   bool allowedInShops() const override { return false; }
   void afterCardAddedToDeck(Card*) override {
     doFlash();
-    Scheduler::get().spawn(run->gainGold(val("Gold").toInt()));
+    run->spawnSide(run->gainGold(val("Gold").toInt()));
   }
 };
 

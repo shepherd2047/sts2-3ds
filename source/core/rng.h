@@ -37,6 +37,9 @@ class MegaRandom {
     return result;
   }
   double nextDouble() { return (double)(nextULong() >> 11) * 1.1102230246251565E-16; }
+  // Saves: the raw xoshiro state.
+  void getState(uint64_t out[4]) const { out[0] = s0_; out[1] = s1_; out[2] = s2_; out[3] = s3_; }
+  void setState(const uint64_t in[4]) { s0_ = in[0]; s1_ = in[1]; s2_ = in[2]; s3_ = in[3]; }
   int next(int maxValue) { return (int)(nextDouble() * (double)maxValue); }
   int next(int minValue, int maxValue) {
     int64_t range = (int64_t)maxValue - minValue;
@@ -105,6 +108,7 @@ class Rng {
   }
 
   int counter = 0;
+  MegaRandom& raw() { return r_; }
 
  private:
   MegaRandom r_;

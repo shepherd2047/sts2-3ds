@@ -93,6 +93,7 @@ enum : int {
   ID_PGUP,
   ID_PGDN,
   ID_POTIONS,
+  ID_CONTINUE,
   ID_USE,
   ID_DISCARD,
   ID_POTION0 = 900,  // + belt slot
@@ -170,13 +171,36 @@ bool App::init() {
   if (!R().load()) return false;
   run_ = std::make_unique<Run>();
   autoplay_ = getenv("STS_AUTOPLAY") != nullptr;
+  hasSave_ = hasSave();
   return true;
 }
 
-void App::startRun() {
+// Saves: the run is written at every map choice (Run::onSavePoint) and deleted when it
+// ends. Automated previews (STS_HIDDEN) and STS_NO_SAVE neither read nor write it.
+namespace {
+constexpr const char* kSaveName = "run.sav";
+bool savesEnabled() { return !getenv("STS_HIDDEN") && !getenv("STS_NO_SAVE"); }
+}
+
+bool App::hasSave() const {
+  std::string data;
+  return savesEnabled() && gfx::readSave(kSaveName, data) && !data.empty();
+}
+
+void App::startRun(bool resume) {
   run_ = std::make_unique<Run>();
-  const char* seed = getenv("STS_SEED");
-  run_->start(seed ? (uint64_t)atoll(seed) : (uint64_t)time(nullptr));
+  bool loaded = false;
+  if (resume) {
+    std::string data;
+    loaded = gfx::readSave(kSaveName, data) && run_->load(data);
+    if (!loaded) { run_ = std::make_unique<Run>(); toast_ = "存档无法读取，开始新游戏"; toastT_ = 2.f; }
+  }
+  if (!loaded) {
+    if (savesEnabled()) gfx::deleteSave(kSaveName);
+    const char* seed = getenv("STS_SEED");
+    run_->start(seed ? (uint64_t)atoll(seed) : (uint64_t)time(nullptr));
+  }
+  if (savesEnabled()) run_->onSavePoint = [](Run& r) { gfx::writeSave(kSaveName, r.save()); };
   if (getenv("STS_ALLCARDS")) {  // debug: every pool card in the deck
     run_->deck.clear();
     for (auto& id : db::ironcladPool())
@@ -567,6 +591,9 @@ void App::update(const gfx::Input& in, double dt) {
     mapTouch_ = {};
     mapUserScroll_ = false;
     lastScreen_ = scr;
+    // The run is over: its save goes (dying or winning cannot be undone by reloading).
+    if ((scr == Screen::GameOver || scr == Screen::Victory) && savesEnabled()) gfx::deleteSave(kSaveName);
+    if (scr == Screen::Title) hasSave_ = hasSave();
   }
   if (run_->combat.get() != lastCombat_) {
     lastCombat_ = run_->combat.get();
@@ -822,14 +849,21 @@ void App::drawTitle(bool top) {
     return;
   }
   gfx::rectGradient(0, 0, kBot, kH, 0x201810FF, 0x0B0B12FF);
-  button(80, 60, 160, 44, "开始游戏", ID_START, true, true);
+  if (hasSave_) {
+    button(80, 30, 160, 44, "继续", ID_CONTINUE, true, true);
+    button(80, 82, 160, 36, "新游戏", ID_START);
+  } else {
+    button(80, 60, 160, 44, "开始游戏", ID_START, true, true);
+  }
   R().text(kBot / 2, 130, "触摸屏：点选卡牌、目标和按钮", ts(F12, col::gray, CENTER));
   R().text(kBot / 2, 148, "按键：←→选择  A确认  B取消  X结束回合", ts(F12, col::gray, CENTER));
   R().text(kBot / 2, 166, "L/R切换手牌  Y查看牌组", ts(F12, col::gray, CENTER));
 }
 
 void App::updateTitle(const gfx::Input& in) {
-  if ((in.touchDown && hitAt(in.tx, in.ty) == ID_START) || (in.down & (gfx::BTN_A | gfx::BTN_START))) startRun();
+  int id = in.touchDown ? hitAt(in.tx, in.ty) : ID_NONE;
+  if (id == ID_CONTINUE || (hasSave_ && (in.down & gfx::BTN_A))) { startRun(true); return; }
+  if (id == ID_START || (in.down & (gfx::BTN_A | gfx::BTN_START))) startRun(false);
 }
 
 // ================================================================ top bar

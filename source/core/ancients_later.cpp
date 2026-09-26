@@ -356,6 +356,21 @@ struct PaelsBlood : Relic {
 struct PaelsTooth : Relic {
   RELIC_HEADER(PaelsTooth, "PAELS_TOOTH", Ancient) addVar("Cards", 5); }
   std::vector<std::shared_ptr<Card>> stored;  // shared: relics are copied when shown as options
+  void persist(Archive& a) override {  // the stored cards as id + upgrade level
+    std::vector<std::string> ids;
+    std::vector<int> levels;
+    for (auto& c : stored) { ids.push_back(c->id); levels.push_back(c->upgradeLevel); }
+    a.io(ids);
+    a.io(levels);
+    if (!a.reading) return;
+    stored.clear();
+    for (size_t i = 0; i < ids.size(); ++i) {
+      auto c = db::card(ids[i]);
+      if (!c) continue;
+      for (int k = 0; i < levels.size() && k < levels[i]; ++k) c->upgrade();
+      stored.push_back(std::shared_ptr<Card>(c.release()));
+    }
+  }
   bool showCounter() const override { return !stored.empty(); }
   int displayAmount() const override { return (int)stored.size(); }
   Task<> afterObtained() override {
@@ -422,6 +437,7 @@ struct ToastyMittens : Relic {
 struct PumpkinCandle : Relic {
   RELIC_HEADER(PumpkinCandle, "PUMPKIN_CANDLE", Ancient) addVar("CombatCount", 5); addVar("Energy", 1); }
   int kindle = 0;
+  void persist(Archive& a) override { a.io(kindle); }
   bool showCounter() const override { return true; }
   int displayAmount() const override { return kindle; }
   Task<> afterObtained() override { kindle += 5; doFlash(); return {}; }
@@ -539,6 +555,7 @@ struct Crossbow : Relic {
 struct IronClub : Relic {
   RELIC_HEADER(IronClub, "IRON_CLUB", Ancient) addVar("Cards", 4); }
   int played = 0;
+  void persist(Archive& a) override { a.io(played); }
   bool showCounter() const override { return true; }
   int displayAmount() const override { return played % 4; }
   Task<> afterCardPlayed(const CardPlay&) override {
@@ -831,6 +848,7 @@ struct VelvetChoker : Relic {
 struct DustyTome : Relic {
   RELIC_HEADER(DustyTome, "DUSTY_TOME", Ancient) }
   std::string card;
+  void persist(Archive& a) override { a.io(card); }
   void setup(Run& r) {
     auto ids = db::ironcladCards([](const Card& c) { return c.rarity == Rarity::Ancient && c.id != "Break"; });
     if (!ids.empty()) card = r.rng("Rewards").nextItem(ids);

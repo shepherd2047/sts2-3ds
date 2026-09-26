@@ -5,6 +5,8 @@
 // CombatManager -> Combat::run and friends.
 #pragma once
 #include <algorithm>
+#include <cstdlib>
+#include <cstring>
 #include <functional>
 #include <map>
 #include <memory>
@@ -145,6 +147,48 @@ struct Model {
   virtual Task<> afterShuffle() { return {}; }
   virtual bool shouldForcePotionReward(RoomType) { return false; }
   virtual bool shouldProcurePotion() { return true; }  // Sozu
+};
+
+// ---------------------------------------------------------------- saves
+
+// A save file is a stream of whitespace-separated tokens; the same io() calls write it
+// and read it back (reading = true). Empty strings are written as "~".
+struct Archive {
+  bool reading = false;
+  bool ok = true;
+  std::vector<std::string> toks;
+  size_t pos = 0;
+  std::string out;
+  void io(std::string& s) {
+    if (!reading) { out += s.empty() ? std::string("~") : s; out += ' '; return; }
+    if (pos >= toks.size()) { ok = false; s.clear(); return; }
+    s = toks[pos++];
+    if (s == "~") s.clear();
+  }
+  void io(int& v) { std::string t = reading ? "" : std::to_string(v); io(t); if (reading) v = std::atoi(t.c_str()); }
+  void io(bool& v) { int i = v; io(i); v = i != 0; }
+  void io(uint64_t& v) { std::string t = reading ? "" : std::to_string(v); io(t); if (reading) v = std::strtoull(t.c_str(), nullptr, 10); }
+  void io(int64_t& v) { std::string t = reading ? "" : std::to_string(v); io(t); if (reading) v = std::strtoll(t.c_str(), nullptr, 10); }
+  void io(float& v) {  // bit exact
+    uint32_t bits;
+    std::memcpy(&bits, &v, 4);
+    uint64_t b = bits;
+    io(b);
+    bits = (uint32_t)b;
+    std::memcpy(&v, &bits, 4);
+  }
+  void io(Dec& d) { io(d.raw); }
+  template <class T> void io(std::vector<T>& v) {
+    int n = (int)v.size();
+    io(n);
+    if (reading) v.assign((size_t)std::max(0, n), T{});
+    for (auto& x : v) io(x);
+  }
+  void tag(const char* t) {  // a marker that must match when reading
+    std::string s = t;
+    io(s);
+    if (reading && s != t) ok = false;
+  }
 };
 
 // ---------------------------------------------------------------- powers
@@ -439,6 +483,7 @@ struct Relic : Model {
   virtual int displayAmount() const { return 0; }
   virtual bool allowedInShops() const { return true; }
   virtual Task<> afterObtained() { return {}; }  // AfterObtained (pickup effects)
+  virtual void persist(Archive&) {}  // state that lasts between rooms (saves)
   virtual int bonusRelicRewards(RoomType) { return 0; }  // TryModifyRewards: extra RelicRewards
   // TryModifyRewards for the other reward kinds (Amethyst Aubergine, Prayer Wheel, White Star):
   virtual int extraCombatGold(RoomType) { return 0; }
@@ -867,6 +912,14 @@ struct Run {
   std::vector<int> reachableNodes() const;  // pathNodes first, then (freeMap) every other node
   Task<> main();
   Task<bool> fight(const std::string& encounterId);
+  // Saves (save.cpp): taken where the run waits for a map choice, the only save point.
+  std::function<void(Run&)> onSavePoint;
+  // Hook effects started from synchronous code (Lucky Fysh's gold, potion hooks) run as
+  // side tasks; the save point waits for them so none is cut in half.
+  int pendingSide = 0;
+  void spawnSide(Task<> t);
+  std::string save();
+  bool load(const std::string& data);  // on a fresh Run; then spawn main()
 };
 
 // ---------------------------------------------------------------- registry

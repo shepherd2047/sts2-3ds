@@ -66,7 +66,9 @@ class App {
   void animateHand(float dt);
   void drawGhosts();
 
-  void startRun();
+  void startRun(bool resume = false);
+  bool hasSave() const;
+  bool hasSave_ = false;  // the title offers 继续
   Visual* visual(sts::Creature* c);
   void trigger(sts::Creature* c, const std::string& what, int amount);
   std::string idleAnim(const Visual& v) const;

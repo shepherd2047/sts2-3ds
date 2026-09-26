@@ -3,6 +3,10 @@
 //
 // Keys: Z=A  X=B  A=Y  S=X  Q=L  W=R  arrows=D-pad  Enter=START  Backspace=SELECT
 #include <SDL.h>
+#include <sys/stat.h>
+#ifdef _WIN32
+#include <direct.h>
+#endif
 
 #include <cmath>
 #include <cstdio>
@@ -225,6 +229,50 @@ Texture* whiteTexture() {
   return white;
 }
 }  // namespace detail
+
+namespace {
+std::string saveDir() { return "saves/"; }
+void makeDir(const std::string& d) {
+#ifdef _WIN32
+  _mkdir(d.c_str());
+#else
+  mkdir(d.c_str(), 0777);
+#endif
+}
+}  // namespace
+
+// ---------------------------------------------------------------- saves
+
+namespace {
+bool readWhole(const std::string& path, std::string& out) {
+  FILE* f = fopen(path.c_str(), "rb");
+  if (!f) return false;
+  fseek(f, 0, SEEK_END);
+  long n = ftell(f);
+  fseek(f, 0, SEEK_SET);
+  out.resize(n > 0 ? (size_t)n : 0);
+  size_t got = n > 0 ? fread(&out[0], 1, (size_t)n, f) : 0;
+  fclose(f);
+  return got == out.size();
+}
+}  // namespace
+
+bool readSave(const std::string& name, std::string& out) { return readWhole(saveDir() + name, out); }
+
+bool writeSave(const std::string& name, const std::string& data) {
+  std::string dir = saveDir();
+  makeDir(dir);
+  std::string tmp = dir + name + ".tmp";
+  FILE* f = fopen(tmp.c_str(), "wb");
+  if (!f) return false;
+  bool ok = fwrite(data.data(), 1, data.size(), f) == data.size();
+  ok = fclose(f) == 0 && ok;
+  if (!ok) return false;
+  remove((dir + name).c_str());
+  return rename(tmp.c_str(), (dir + name).c_str()) == 0;
+}
+
+void deleteSave(const std::string& name) { remove((saveDir() + name).c_str()); }
 
 bool readFile(const std::string& path, std::string& out) {
   std::ifstream f("romfs/" + path, std::ios::binary);
