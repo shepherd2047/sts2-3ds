@@ -2103,7 +2103,7 @@ void App::drawEvent(bool top) {
     bool locked = !e->finished && e->options[i].locked();
     bool hl = i == sel_;
     panel(x, y, kOptW, kOptH, locked ? 0x2A2A2AE0 : hl ? 0x8A5A20F0 : 0x3A2E24F0, locked ? 0x555555FF : hl ? 0xFFD870FF : 0xB89A60FF);
-    std::string title = e->finished ? "继续" : L("events." + e->options[i].key + ".title");
+    std::string title = e->finished ? "继续" : expandSmart(L("events." + e->options[i].key + ".title"), e->vars, false, &e->strVars);
     std::string desc = e->finished ? "" : expandSmart(L("events." + e->options[i].key + ".description"), e->vars, false, &e->strVars);
     if (!e->finished && !R().hasLoc("events." + e->options[i].key + ".description")) desc.clear();
     if (desc.empty()) {

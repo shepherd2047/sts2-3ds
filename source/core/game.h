@@ -762,6 +762,7 @@ void registerEvent(const std::string& id, EventFactory f);
 std::unique_ptr<Event> event(const std::string& id);
 // Overgrowth.AllEvents in the game's order (registered or not).
 const std::vector<std::string>& act1Events();
+const std::vector<std::string>& sharedEvents();  // ModelDb.AllSharedEvents
 // SharedRelicPool / IroncladRelicPool ids in the game's order (registered or not).
 const std::vector<std::string>& sharedRelicPool();
 const std::vector<std::string>& ironcladRelicPool();

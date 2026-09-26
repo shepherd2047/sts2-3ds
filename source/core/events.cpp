@@ -7,12 +7,13 @@ namespace sts {
 
 void registerAct1Events();  // events_act1.cpp
 void registerAct2Events();  // events_act2.cpp
+void registerSharedEvents();  // events_shared.cpp
 
 namespace {
 std::map<std::string, EventFactory>& eventReg() { static std::map<std::string, EventFactory> m; return m; }
 }  // namespace
 
-void registerEvents() { registerAct1Events(); registerAct2Events(); }
+void registerEvents() { registerAct1Events(); registerSharedEvents(); registerAct2Events(); }
 
 namespace db {
 
@@ -29,6 +30,16 @@ const std::vector<std::string>& act1Events() {
       "AromaOfChaos", "ByrdonisNest", "DenseVegetation", "JungleMazeAdventure", "LuminousChoir",
       "MorphicGrove", "SapphireSeed", "SunkenStatue", "TabletOfTruth", "UnrestSite",
       "Wellspring", "WhisperingHollow", "WoodCarvings"};
+  return ids;
+}
+
+// ModelDb.AllSharedEvents (added to every act's pool by ActModel.GenerateRooms)
+const std::vector<std::string>& sharedEvents() {
+  static const std::vector<std::string> ids = {
+      "BrainLeech", "CrystalSphere", "DollRoom", "FakeMerchant", "PotionCourier", "RanwidTheElder",
+      "RelicTrader", "RoomFullOfCheese", "SelfHelpBook", "SlipperyBridge", "StoneOfAllTime",
+      "Symbiote", "TeaMaster", "TheFutureOfPotions", "TheLegendsWereTrue", "ThisOrThat",
+      "WarHistorianRepy", "WelcomeToWongos"};
   return ids;
 }
 

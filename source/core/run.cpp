@@ -270,6 +270,7 @@ void Run::start(uint64_t s) {
   eventQueue.clear();
   visitedEvents.clear();
   for (auto& id : db::act1Events()) if (db::event(id)) eventQueue.push_back(id);
+  for (auto& id : db::sharedEvents()) if (db::event(id)) eventQueue.push_back(id);
   rng("Events").shuffle(eventQueue);
   died = false;
 
