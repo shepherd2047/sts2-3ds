@@ -22,6 +22,10 @@ The RGDSplus reference repo is cloned next to this one as `../rgds-ref`
   mechanical translation is cheapest in a Sonnet session or a Sonnet subagent
   with a tight brief — but say how many subagents and why, and get a yes,
   before starting any. Keep design, debugging and review in the main session.
+- Install every dev tool globally (apps in /Applications or Program Files,
+  CLIs via Homebrew / winget / dkp-pacman / `dotnet tool install -g`), never
+  in a session scratchpad, temp dir or the project. Work copies that must
+  survive go in stable paths too (Mac 3DS build copy: `~/dev/sts2-3ds-build`).
 - Don't change system settings; commands that need `sudo` or passwords are
   given to the owner to run.
 - Git: `git pull` before starting, commit + `git push` when done, so the other
@@ -67,7 +71,8 @@ assets); devkitPro and Azahar are manual installs it links to.
   current PC — the dkp pacman repos added to a plain MSYS2 at `C:\msys64`,
   toolchain in `/opt/devkitpro`; macOS: pkg + `sudo dkp-pacman -S 3ds-dev`). devkitPro's make breaks on paths with spaces
   (and is unreliable with non-ASCII); on the Mac the repo lives under a Chinese
-  path, so 3DS builds are done from an ASCII-path copy (rsync source over).
+  path, so 3DS builds are done from an ASCII-path copy (rsync source over to
+  `~/dev/sts2-3ds-build`, excluding build/ and .git).
 - Desktop preview: SDL2 + clang/g++. `Makefile.sdl` uses `sdl2-config`
   (macOS: `brew install sdl2`; Windows: MSYS2 UCRT64 with
   `mingw-w64-ucrt-x86_64-{gcc,SDL2,pkgconf}` + `make`, built from the UCRT64
@@ -75,7 +80,7 @@ assets); devkitPro and Azahar are manual installs it links to.
 - Windows gotcha: Python writes text as CRLF unless told otherwise; romfs text
   files must be LF (the Spine atlas parser keeps `\r` in texture paths), so
   pass `newline='\n'` to any new `open(..., 'w')` in `tools/`.
-- Emulator: Azahar. Its SD card: macOS `~/Library/Application Support/Azahar/sdmc`,
+- Emulator: Azahar (Mac: /Applications/Azahar.app). Its SD card: macOS `~/Library/Application Support/Azahar/sdmc`,
   Windows `%APPDATA%\Azahar\sdmc`.
 
 ## Build & test
