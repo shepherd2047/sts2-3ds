@@ -330,6 +330,7 @@ def build(args):
     packer.add('ui/energy_orb', fit(orb, (44, 44)))
     for name in ('monster', 'elite', 'rest', 'unknown', 'chest', 'shop', 'node_background'):
         packer.add('map/' + name, fit(a.sprite(f'images/atlases/ui_atlas.sprites/map/icons/map_{name}.tres'), (22, 22)))
+    packer.add('map/ancient_neow', fit(g.image('images/packed/map/ancients/ancient_node_neow.png'), (40, 40)))
     packer.add('map/marker', fit(a.sprite('images/atlases/ui_atlas.sprites/map/icons/map_marker_ironclad.tres'), (26, 26)))
     # Boss map nodes (map/boss_<EncounterId>). Ceremonial Beast, The Insatiable and the Queen
     # have Spine map nodes instead; the UI falls back (creature sprite or the elite icon).
@@ -393,6 +394,26 @@ def build(args):
             os.makedirs(os.path.join(ROOT, 'build'), exist_ok=True)
             canvas.save(os.path.join(ROOT, 'build', f'preview_bg_{act}.png'))
 
+    # Neow's room (scenes/events/background_scenes/neow.tscn): bg + Spine Neow + vignette,
+    # composited in scene units at half scale, then a centred 5:3 crop for the top screen.
+    S = 0.5
+    X0, Y0 = -330, -49
+    W, H = round(2582 * S), round(1221 * S)
+    scene = Image.new('RGBA', (W, H), (0, 0, 0, 255))
+    scene.alpha_composite(g.image('animations/backgrounds/neow_room/neow_bg.png').convert('RGBA').resize((W, H), Image.LANCZOS))
+    skel, atlas, load = g.spine('animations/backgrounds/neow_room/neow.tres')
+    img, origin = spine_render.render(skel, atlas, load, scale=0.58 * S)
+    scene.alpha_composite(img, (round((-390 - X0) * S - origin[0]), round((-57 - Y0) * S - origin[1])))
+    scene.alpha_composite(g.image('animations/backgrounds/neow_room/neow_vignette.png').convert('RGBA').resize((W, H), Image.LANCZOS))
+    cw = round(H * 400 / 240)
+    cx = round((960 - X0) * S)
+    top = scene.crop((cx - cw // 2, 0, cx - cw // 2 + cw, H)).resize((400, 240), Image.LANCZOS)
+    canvas = Image.new('RGBA', (512, 256), (0, 0, 0, 255))
+    canvas.paste(top, (0, 0))
+    write_t3t(os.path.join(OUT, 'gfx', 'bg_neow.t3t'), canvas)
+    if args.preview:
+        canvas.save(os.path.join(ROOT, 'build', 'preview_bg_neow.png'))
+
     print('text')
     strings = {}
 
@@ -406,6 +427,7 @@ def build(args):
     take('monsters', lambda k: k.split('.')[0] in MONSTERS or k.split('.')[0] == 'HATCHLING')
     take('relics', lambda k: k.split('.')[0] in RELICS)
     take('events', lambda k: k.split('.')[0] in EVENTS or k.startswith('GENERIC'))
+    take('ancients', lambda k: k.split('.')[0] in EVENTS)
     for t in ('card_keywords', 'gameplay_ui', 'rest_site_ui', 'card_reward_ui', 'map', 'combat_messages',
               'card_selection', 'intents', 'game_over_screen', 'characters'):
         take(t, (lambda k: not k.startswith(('DAILY', 'DISCOVERY'))) if t == 'game_over_screen'

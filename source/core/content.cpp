@@ -625,6 +625,7 @@ void registerAct3B();        // content_act3b.cpp
 void registerAct1Bosses();   // content_bosses.cpp: Ceremonial Beast, The Kin, Fogmog
 void registerRelics();       // relics*.cpp
 void registerEvents();       // events.cpp
+void registerAncients();     // ancients.cpp: Neow
 
 namespace db {
 
@@ -739,6 +740,7 @@ void init() {
   registerRelic("Circlet", [] { return std::unique_ptr<Relic>(new Circlet()); });
   registerRelics();
   registerEvents();
+  registerAncients();
 }
 
 std::unique_ptr<Card> card(const std::string& id) {

@@ -12,9 +12,9 @@
 // [0, mapLength) where mapLength = BaseNumberOfRooms + 1 (16 in act 1). Row 0 is never
 // populated (the StartingMapPoint lives there but isn't stored in the grid);
 // real rooms occupy rows 1..15. The boss lives at row mapLength = 16 (out of
-// grid bounds), col 3, and is also not stored in the grid. Our output drops
-// the starting point and renumbers row-1..row-15 as our rows 0..14, with the
-// boss appended as the last MapNode at row 15, col 3.
+// grid bounds), col 3, and is also not stored in the grid. Our output puts
+// the starting point first (row -1, RoomType::Ancient), renumbers row-1..row-15
+// as our rows 0..14 and appends the boss as the last MapNode (row 15, col 3).
 //
 // PORT NOTE: MapPoint.Children / MapPoint.parents are C# HashSet<MapPoint>,
 // whose enumeration order is an implementation detail. We approximate it with
@@ -674,7 +674,7 @@ RoomType toRoomType(MPType t) {
     case MPType::Unknown: return RoomType::Unknown;
     case MPType::Shop: return RoomType::Shop;
     case MPType::Boss: return RoomType::Boss;
-    default: return RoomType::Monster;  // Unassigned/Ancient should never reach output
+    default: return RoomType::Monster;  // Unassigned/Ancient never reach this (the start is added separately)
   }
 }
 
@@ -741,6 +741,17 @@ std::vector<MapNode> generateStandardActMap(Rng& mapRng, int actIndex) {
       outIdx++;
     }
   }
+  // The StartingMapPoint (MapPointType.Ancient) goes first, one row below the rooms; its
+  // children are every room of the first row.
+  MapNode start;
+  start.col = kMapWidth / 2;
+  start.row = -1;
+  start.type = RoomType::Ancient;
+  for (auto& n : nodes)
+    for (int& c : n.next) ++c;
+  for (int i = 0; i < (int)nodes.size(); ++i)
+    if (nodes[i].row == 0) start.next.push_back(i + 1);
+  nodes.insert(nodes.begin(), start);
   return nodes;
 }
 

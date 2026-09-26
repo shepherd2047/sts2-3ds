@@ -32,7 +32,7 @@ enum class TargetType { None, Self, AnyEnemy, AllEnemies, RandomEnemy };
 enum class PowerType { Buff, Debuff };
 enum class StackType { Counter, Single };
 enum class Pile { None, Draw, Hand, Discard, Exhaust, Play };
-enum class RoomType { Monster, Elite, Rest, Treasure, Unknown, Boss, Start, Shop };
+enum class RoomType { Monster, Elite, Rest, Treasure, Unknown, Boss, Start, Shop, Ancient };
 enum class RelicRarity { None, Starter, Common, Uncommon, Rare, Shop, Event, Ancient };
 
 // ValueProp flags.
@@ -414,6 +414,7 @@ struct Relic : Model {
   virtual int displayAmount() const { return 0; }
   virtual bool allowedInShops() const { return true; }
   virtual Task<> afterObtained() { return {}; }  // AfterObtained (pickup effects)
+  virtual int bonusRelicRewards(RoomType) { return 0; }  // TryModifyRewards: extra RelicRewards
 
   Creature* owner() const;  // the player
   void doFlash() { flash = 1.f; }
@@ -600,6 +601,7 @@ enum class Screen { Title, Map, Combat, Reward, Rest, RestUpgrade, GameOver, Vic
 struct EventOption {
   std::string key;
   std::function<Task<>()> action;
+  std::shared_ptr<Relic> relic;  // AncientEventModel.RelicOption: the UI shows this relic
   bool locked() const { return !action; }
 };
 
@@ -614,6 +616,11 @@ struct Event {
   std::string descKey;
   std::vector<EventOption> options;
   bool finished = false;
+  // AncientEventModel: the portrait scene (gfx/bg_<ancient>.t3t) and the dialogue lines
+  // (loc keys in the ancients table) shown one by one before the options.
+  bool ancient = false;
+  std::vector<std::string> dialogue;
+  size_t dialogueLine = 0;
 
   virtual ~Event() = default;
   virtual bool isAllowed(Run&) { return true; }                 // IsAllowed
@@ -708,6 +715,10 @@ struct Run {
   bool died = false;
   // A room that is not ported yet (events, shops): Screen::Placeholder shows this text.
   std::string placeholderText;
+  std::string ancientId;            // this act's Ancient event ("Neow" in act 1), empty if none
+  bool ancientPending = false;      // the act starts with its Ancient (Run::main runs it first)
+  Task<> enterAncient();
+  Task<> chooseCardFor(std::vector<std::unique_ptr<Card>> options);  // CardSelectCmd.FromChooseACardScreen -> deck
   Signal<int> placeholderDone;
   // UnknownMapPointOdds: current odds of the non-event outcomes of a "?" room.
   float unknownMonsterOdds = 0.1f, unknownTreasureOdds = 0.02f, unknownShopOdds = 0.03f;

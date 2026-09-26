@@ -146,6 +146,11 @@ scripts drift; delete the debug file afterwards.
   map (`generateStandardActMap(rng, act)`: 15 / 14 / 13 rooms), queues and events; a boss
   gives 100 gold + a card and leads to the next act (full heal until Ancients exist);
   act 3's boss is Victory. Art per act: `gfx/bg_<act>.t3t`, `gfx/bg_map_<act>.t3t`.
+- Ancients: `ancients.cpp` (Neow, its 19 relics and cards). Each map has a start node
+  (`nodes[0]`, row -1, `RoomType::Ancient`) whose event runs before the first room
+  (`Run::enterAncient`: full heal, then the event). `Event::ancient` switches the UI to the
+  Ancient layout: `gfx/bg_<id>.t3t` scene + `ancients.*` dialogue on top, relic options
+  below. `STS_NO_NEOW=1` (or any STS_ENCOUNTER/ROOM/EVENT) skips Neow.
 - Debug: `STS_ROOM=Treasure|Rest|Elite|Boss|Event` makes the first room that type,
   `STS_ACT=2|3` starts in that act; the dev menu has 跳到下一幕.
 - Development build: `Run::freeMap` (default on; `STS_PATH_ONLY=1` off) lets any

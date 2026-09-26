@@ -86,6 +86,7 @@ class App {
   void drawRelics(bool top);      // owned relics: grid below, the picked one above
   // Events (RGDSplus U21): art and text above, the options stacked in the middle below.
   void drawEvent(bool top);
+  void drawAncient(bool top);
   void updateEvent(const gfx::Input& in);
   // Choosing cards from the deck for an event or relic (CardSelectCmd.FromDeck*).
   void drawDeckChoice(bool top);

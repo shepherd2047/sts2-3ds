@@ -309,12 +309,39 @@ void Run::enterAct(int index) {
   er.shuffle(eliteQueue);
   bossId = er.nextItem(bosses);
   fightsThisAct = 0;
+  // The act's Ancient (ActModel.GenerateRooms: act 1 is always Neow). PORT NOTE: the
+  // Ancients of Hive and Glory are not ported yet (package 11b). Debug starts
+  // (STS_ENCOUNTER / STS_ROOM / STS_EVENT / STS_NO_NEOW) skip it so scripts reach the map.
+  ancientId.clear();
+  bool debugStart = getenv("STS_ENCOUNTER") || getenv("STS_ROOM") || getenv("STS_EVENT") || getenv("STS_NO_NEOW");
+  if (actIndex == 0 && !debugStart && db::event("Neow")) ancientId = "Neow";
   // SetActInternal: UnknownMapPointOdds.ResetToBase.
   unknownMonsterOdds = 0.1f;
   unknownTreasureOdds = 0.02f;
   unknownShopOdds = 0.03f;
   generateMap();
-  currentNode = -1;
+  currentNode = 0;  // the starting point (the Ancient's node)
+  nodes[0].visited = true;
+  ancientPending = !ancientId.empty();
+}
+
+// EnterMapCoord(StartingMapPoint): the Ancient event. AncientEventModel.BeforeEventStarted
+// heals to full first (Neow from 0 HP, which only matters for the animation).
+Task<> Run::enterAncient() {
+  ancientPending = false;
+  auto e = db::event(ancientId);
+  if (!e) co_return;
+  player->hp = player->maxHp;
+  co_await runEvent(std::move(e));
+}
+
+Task<> Run::chooseCardFor(std::vector<std::unique_ptr<Card>> options) {
+  if (options.empty()) co_return;
+  rewardCards = std::move(options);
+  screen = Screen::Reward;
+  int pick = co_await rewardChoice.next();
+  if (pick >= 0 && pick < (int)rewardCards.size()) deck.push_back(std::move(rewardCards[pick]));
+  rewardCards.clear();
 }
 
 void Run::generateMap() {
@@ -329,7 +356,7 @@ void Run::generateMap() {
   for (auto& n : nodes) {
     n.x = (float)n.col;
     n.y = (float)n.row;
-    if (n.type == RoomType::Boss) continue;
+    if (n.type == RoomType::Boss || n.type == RoomType::Ancient) continue;
     n.jx = j.nextFloat(42.f) - 21.f;
     n.jy = j.nextFloat(50.f) - 25.f;
     float u1 = std::max(1e-6f, j.nextFloat()), u2 = j.nextFloat();
@@ -350,7 +377,7 @@ std::vector<int> Run::reachableNodes() const {
   std::vector<int> out = pathNodes();
   if (!freeMap) return out;
   for (int i = 0; i < (int)nodes.size(); ++i)
-    if (std::find(out.begin(), out.end(), i) == out.end()) out.push_back(i);
+    if (nodes[i].type != RoomType::Ancient && std::find(out.begin(), out.end(), i) == out.end()) out.push_back(i);
   return out;
 }
 
@@ -425,6 +452,10 @@ Task<bool> Run::fight(const std::string& encounterId) {
 
 Task<> Run::main() {
   for (;;) {
+    if (ancientPending) {
+      co_await enterAncient();
+      if (died) { screen = Screen::GameOver; co_return; }
+    }
     screen = Screen::Map;
     int choice = co_await mapChoice.next();
     if (devSkipAct) {  // developer menu: 跳到下一幕
@@ -504,11 +535,15 @@ Task<> Run::main() {
       if (pick >= 0 && pick < (int)rewardCards.size()) deck.push_back(std::move(rewardCards[pick]));
       rewardCards.clear();
       if (type == RoomType::Boss) {
+        // Hook.TryModifyRewards (Lava Rock): extra relic rewards after the boss.
+        int extra = 0;
+        for (auto& rel : relics) extra += rel->bonusRelicRewards(RoomType::Boss);
+        for (int i = 0; i < extra; ++i) co_await offerRelic(pullRelicFromFront(relicBag, rollRelicRarity(rr)), false);
         // RunManager.EnterNextAct. PORT NOTE: the next act starts with its Ancient, which
         // heals to full (AncientEventModel.BeforeEventStarted); until Ancients are ported
         // (package 11) the heal happens here.
         enterAct(actIndex + 1);
-        player->hp = player->maxHp;
+        if (ancientId.empty()) player->hp = player->maxHp;  // stands in for the Ancient's heal
       }
     } else if (type == RoomType::Treasure) {
       // TreasureRoom: 42-52 gold, then one relic from the shared bag.

@@ -3,6 +3,7 @@
 #include "ui.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <ctime>
 #include <functional>
@@ -53,6 +54,7 @@ inline float mapDistY(const std::vector<MapNode>& nodes) {
 }
 inline std::pair<float, float> mapNative(const MapNode& n, float distY) {
   if (n.type == RoomType::Boss) return {0.f, -1780.f};
+  if (n.type == RoomType::Ancient) return {0.f, 790.f};  // the game's row 0: the start point
   return {n.col * 150.f - 450.f + n.jx, 790.f - (n.row + 1.f) * distY + n.jy};
 }
 
@@ -127,6 +129,7 @@ std::string roomName(RoomType t) {
     case RoomType::Boss: return "Boss";
     case RoomType::Treasure: return L("map.LEGEND_TREASURE.title");
     case RoomType::Shop: return L("map.LEGEND_MERCHANT.title");
+    case RoomType::Ancient: return L("ancients.NEOW.title");
     default: return L("map.LEGEND_UNKNOWN.title");
   }
 }
@@ -143,6 +146,7 @@ Sprite roomIcon(RoomType t, const std::string& bossId = "VantomBoss") {
     }
     case RoomType::Treasure: return R().sprite("map/chest");
     case RoomType::Shop: return R().sprite("map/shop");
+    case RoomType::Ancient: return R().sprite("map/ancient_neow");
     default: return R().sprite("map/unknown");
   }
 }
@@ -926,7 +930,7 @@ void App::drawMap(bool top) {
     Sprite ic = roomIcon(n.type, r.bossId);
     // Icon height at its native size (ui_atlas map icons) times the map scale.
     float nativeH = n.type == RoomType::Elite ? 70 : n.type == RoomType::Rest ? 90 : n.type == RoomType::Treasure ? 59
-                  : n.type == RoomType::Unknown ? 72 : 68;
+                  : n.type == RoomType::Unknown ? 72 : n.type == RoomType::Ancient ? 150 : 68;
     float sz = n.type == RoomType::Boss ? kBossSize : nativeH * kNodeScale;
     if (reachable && n.type != RoomType::Boss) {
       float pulse = 1.f + 0.15f * std::sin((float)time_ * 6);
@@ -2098,8 +2102,74 @@ namespace {
 constexpr float kOptW = 300, kOptH = 40, kOptGap = 6;  // event option buttons (1.22x native on RGDSplus)
 }
 
+// AncientEventModel (Neow): the Ancient's scene and dialogue on the top screen, the relic
+// choices (icon, name, description) on the bottom. A dialogue line with a ".next" key waits
+// for a tap before the next one; the last line stays up with the options.
+namespace {
+bool ancientTalking(const Event* e) { return !e->finished && e->dialogueLine + 1 < e->dialogue.size(); }
+}
+
+void App::drawAncient(bool top) {
+  Event* e = run_->currentEvent.get();
+  std::string who = e->locKey;
+  if (top) {
+    std::string bg = e->id;  // gfx/bg_<ancient id, lower case>.t3t
+    for (char& c : bg) c = (char)std::tolower((unsigned char)c);
+    gfx::image(R().texture("gfx/bg_" + bg + ".t3t"), 0, 0, kTop, kH, 0, 0, kTop, kH);
+    drawTopBar();
+    R().text(12, 22, L("ancients." + who + ".title"), ts(F16, col::gold, LEFT));
+    R().text(12, 42, L("ancients." + who + ".epithet"), ts(F12, col::white, LEFT, 0, 0.85f));
+    // Selected relic: its description in a box over the lower scene; otherwise the dialogue.
+    const Relic* rel = !e->finished && !ancientTalking(e) && sel_ >= 0 && sel_ < (int)e->options.size()
+                           ? e->options[sel_].relic.get() : nullptr;
+    gfx::rect(0, kH - 62, kTop, 62, 0x000000B0);
+    if (rel) {
+      Sprite ic = R().sprite("relic/" + rel->locKey);
+      if (ic) spr(ic, 10, kH - 56, 40, 40);
+      R().text(58, kH - 58, L("relics." + rel->locKey + ".title"), ts(F16, col::gold, LEFT));
+      R().text(58, kH - 38, describeRelic(const_cast<Relic*>(rel)), ts(F12, col::white, LEFT, kTop - 66, 0.9f));
+    } else if (!e->dialogue.empty()) {
+      size_t line = std::min(e->dialogueLine, e->dialogue.size() - 1);
+      R().text(kTop / 2, kH - 52, L("ancients." + e->dialogue[line]), ts(F16, 0xB8E8FFFF, CENTER, kTop - 24));
+    }
+    return;
+  }
+  drawSceneBg(false, 0.7f);
+  if (e->finished || ancientTalking(e)) {
+    std::string label = "继续";
+    if (!e->finished && R().hasLoc("ancients." + e->dialogue[e->dialogueLine].substr(0, e->dialogue[e->dialogueLine].rfind('.')) + ".next"))
+      label = L("ancients." + e->dialogue[e->dialogueLine].substr(0, e->dialogue[e->dialogueLine].rfind('.')) + ".next");
+    button((kBot - 140) / 2, 180, 140, 36, label, ID_DEVITEM0, true, true);
+    return;
+  }
+  int n = (int)e->options.size();
+  const float h = 52, gap = 8, w = 300;
+  float y0 = (kH - n * h - (n - 1) * gap) / 2, x = (kBot - w) / 2;
+  for (int i = 0; i < n; ++i) {
+    float y = y0 + i * (h + gap);
+    bool hl = i == sel_;
+    panel(x, y, w, h, hl ? 0x1E4A5AF0 : 0x14283AF0, hl ? 0xFFD870FF : 0x6AA8C0FF);
+    Relic* rel = e->options[i].relic.get();
+    if (rel) {
+      Sprite ic = R().sprite("relic/" + rel->locKey);
+      if (ic) spr(ic, x + 6, y + (h - 36) / 2, 36, 36);
+      R().text(x + 48, y + 3, L("relics." + rel->locKey + ".title"), ts(F12, col::gold));
+      TextStyle st = ts(F12, col::white, LEFT, w - 54, 0.8f);
+      std::string desc = describeRelic(rel);
+      float dh;
+      R().measure(desc, st, &dh);
+      if (dh > h - 20) st.scale *= (h - 20) / dh;
+      R().text(x + 48, y + 19, desc, st);
+    } else {
+      R().text(x + w / 2, y + (h - R().lineHeight(F16)) / 2, L("events." + e->options[i].key + ".title"), ts(F16, col::white, CENTER));
+    }
+    hits_.push_back({x, y, w, h, ID_DEVITEM0 + i});
+  }
+}
+
 void App::drawEvent(bool top) {
   Event* e = run_->currentEvent.get();
+  if (e && e->ancient) { drawAncient(top); return; }
   drawSceneBg(top, 0.6f);
   if (!e) return;
   if (top) {
@@ -2149,6 +2219,10 @@ void App::updateEvent(const gfx::Input& in) {
   Run& r = *run_;
   Event* e = r.currentEvent.get();
   if (!e || !r.eventChoice.waiting()) return;
+  if (e->ancient && ancientTalking(e)) {  // dialogue: A / tap advances a line
+    if ((in.down & gfx::BTN_A) || (in.touchDown && hitAt(in.tx, in.ty) == ID_DEVITEM0)) e->dialogueLine++;
+    return;
+  }
   int n = e->finished ? 1 : (int)e->options.size();
   if (in.down & gfx::BTN_DOWN) sel_ = std::min(n - 1, sel_ + 1);
   if (in.down & gfx::BTN_UP) sel_ = std::max(0, sel_ - 1);

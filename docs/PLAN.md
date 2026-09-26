@@ -81,7 +81,7 @@ file and run it with bash.
 | 8 | Potions | engine + UI, *Opus* | – | todo |
 | 9 | Shop (merchant) | engine + UI | 8 | todo |
 | 10 | Remaining relics (skipped ones + Shop rarity) | content | 8, 9 | todo |
-| 11a | Neow: act-1 Ancient start node, heal, relic choice | engine + UI + content | – | todo |
+| 11a | Neow: act-1 Ancient start node, heal, relic choice | engine + UI + content | – | done |
 | 11b | Act 2/3 Ancients (Orobas, Pael, Tezcatara, Nonupeipe, Tanx, Vakuu, Darv) | content | 3, 11a | todo |
 | 12 | Saves | engine | 3 | todo |
 | 13 | Texture compression (romfs is ~70 MB) | tools + 3DS gfx | – | done (`tools/compress_romfs.py` → `romfs_3ds/` ETC1A4/ETC1/RGBA4 + LZ11, 146 → 15 MB; make runs it; needs a real-hardware check, package 19) |
