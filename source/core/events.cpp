@@ -6,12 +6,13 @@
 namespace sts {
 
 void registerAct1Events();  // events_act1.cpp
+void registerAct2Events();  // events_act2.cpp
 
 namespace {
 std::map<std::string, EventFactory>& eventReg() { static std::map<std::string, EventFactory> m; return m; }
 }  // namespace
 
-void registerEvents() { registerAct1Events(); }
+void registerEvents() { registerAct1Events(); registerAct2Events(); }
 
 namespace db {
 
