@@ -261,6 +261,55 @@ def export_spine(g, key, skel_res, skel, atlas, load, scale, hide=(), shift=None
         f.write('\n'.join(lines) + '\n')
 
 
+def bake_ancient(g, anc, args):
+    """gfx/bg_<anc>.t3t: an Ancient's room (scenes/events/background_scenes/<anc>.tscn), its root
+    TextureRects and SpineSprites composited in scene units at half scale, centred 5:3 crop."""
+    t = g.pck.read(f'scenes/events/background_scenes/{anc}.tscn').decode()
+    exts = dict((m.group(2), m.group(1)) for m in re.finditer(r'\[ext_resource[^\n]*path="res://([^"]+)" id="([^"]+)"', t))
+    S = 0.5
+    X0, Y0 = -330, -49
+    W, H = round(2582 * S), round(1221 * S)
+    scene = Image.new('RGBA', (W, H), (0, 0, 0, 255))
+
+    def num(body, key, default):
+        m = re.search(key + r' = ([-\d.]+)', body)
+        return float(m.group(1)) if m else default
+
+    def vec(body, key, default):
+        m = re.search(key + r' = Vector2\(([-\d.]+), ([-\d.]+)\)', body)
+        return (float(m.group(1)), float(m.group(2))) if m else default
+
+    for block in t.split('\n[node ')[1:]:
+        head, _, body = block.partition('\n')
+        if 'parent="."' not in head or 'visible = false' in body:
+            continue
+        if 'type="TextureRect"' in head:
+            tex = re.search(r'texture = ExtResource\("([^"]+)"\)', body)
+            if not tex:
+                continue
+            l, tp = num(body, 'offset_left', 0), num(body, 'offset_top', 0)
+            r_, bt = num(body, 'offset_right', 0), num(body, 'offset_bottom', 0)
+            img = g.image(exts[tex.group(1)]).convert('RGBA').resize((max(1, round((r_ - l) * S)), max(1, round((bt - tp) * S))), Image.LANCZOS)
+            scene.alpha_composite(img, (round((l - X0) * S), round((tp - Y0) * S)))
+        elif 'type="SpineSprite"' in head:
+            res = re.search(r'skeleton_data_res = ExtResource\("([^"]+)"\)', body)
+            if not res:
+                continue
+            px, py = vec(body, 'position', (0, 0))
+            sc = vec(body, 'scale', (1, 1))[0]
+            skel, atlas, load = g.spine(exts[res.group(1)])
+            img, origin = spine_render.render(skel, atlas, load, scale=sc * S)
+            scene.alpha_composite(img, (round((px - X0) * S - origin[0]), round((py - Y0) * S - origin[1])))
+    cw = round(H * 400 / 240)
+    cx = round((960 - X0) * S)
+    top = scene.crop((cx - cw // 2, 0, cx - cw // 2 + cw, H)).resize((400, 240), Image.LANCZOS)
+    canvas = Image.new('RGBA', (512, 256), (0, 0, 0, 255))
+    canvas.paste(top, (0, 0))
+    write_t3t(os.path.join(OUT, 'gfx', f'bg_{anc}.t3t'), canvas)
+    if args.preview:
+        canvas.save(os.path.join(ROOT, 'build', f'preview_bg_{anc}.png'))
+
+
 def build(args):
     global CARDS, POWERS, MONSTERS, RELICS, EVENTS, POTIONS
     CARDS = sorted(set(CARDS_FIXED) | set(keys_from_source('CARD_HEADER')))
@@ -317,7 +366,10 @@ def build(args):
             img = g.image(path)
         packer.add('power/' + key, fit(img, (24, 24)))
     for key in RELICS:
-        packer.add('relic/' + key, fit(g.image(f'images/relics/{key.lower()}.png'), (RELIC_ICON, RELIC_ICON)))
+        path = f'images/relics/{key.lower()}.png'
+        if path + '.import' not in g.pck.files:  # per-character icons (Yummy Cookie)
+            path = f'images/relics/{key.lower()}_ironclad.png'
+        packer.add('relic/' + key, fit(g.image(path), (RELIC_ICON, RELIC_ICON)))
     for key in POTIONS:  # PotionModel.ImagePath (potion_atlas)
         packer.add('potion/' + key, fit(a.sprite(f'images/atlases/potion_atlas.sprites/{key.lower()}.tres'), (48, 48)))
     for key in EVENTS:  # event art for the top screen (RGDSplus U21)
@@ -357,7 +409,8 @@ def build(args):
     packer.add('ui/energy_orb', fit(orb, (44, 44)))
     for name in ('monster', 'elite', 'rest', 'unknown', 'chest', 'shop', 'node_background'):
         packer.add('map/' + name, fit(a.sprite(f'images/atlases/ui_atlas.sprites/map/icons/map_{name}.tres'), (22, 22)))
-    packer.add('map/ancient_neow', fit(g.image('images/packed/map/ancients/ancient_node_neow.png'), (40, 40)))
+    for anc in ('neow', 'orobas', 'pael', 'tezcatara', 'nonupeipe', 'tanx', 'vakuu', 'darv'):
+        packer.add('map/ancient_' + anc, fit(g.image(f'images/packed/map/ancients/ancient_node_{anc}.png'), (40, 40)))
     packer.add('ui/sale_tag', fit(g.image('images/rooms/merchant_room/shop_sales_tag.png'), (28, 28)))
     packer.add('ui/card_removal', fit(g.image('images/rooms/merchant_room/card_removal_00.png'), (40, 40)))
     packer.add('map/marker', fit(a.sprite('images/atlases/ui_atlas.sprites/map/icons/map_marker_ironclad.tres'), (26, 26)))
@@ -443,6 +496,11 @@ def build(args):
     if args.preview:
         canvas.save(os.path.join(ROOT, 'build', 'preview_bg_neow.png'))
 
+    # The other Ancients (scenes/events/background_scenes/<id>.tscn): the root TextureRects and
+    # SpineSprites in scene order, composited like Neow's room, same crop.
+    for anc in ('orobas', 'pael', 'tezcatara', 'nonupeipe', 'tanx', 'vakuu', 'darv'):
+        bake_ancient(g, anc, args)
+
     # Merchant room (scenes/rooms/merchant_room.tscn): the tent (BgContainer, Spine at 0.5,
     # scaled 1.01) and the merchant (MerchantButton's MerchantVisual), centred 5:3 crop.
     S = 0.5
@@ -515,14 +573,15 @@ def default_font():
 
 
 def build_font(chars, font_path):
+    # One page per size (font_<size index>.t3t): both sizes no longer fit one 1024 page.
     sizes = [12, 16]
     page_size = 1024
-    page = Image.new('RGBA', (page_size, page_size), (255, 255, 255, 0))
-    draw = ImageDraw.Draw(page)
-    x = y = 1
-    row_h = 0
     lines = []
     for si, size in enumerate(sizes):
+        page = Image.new('RGBA', (page_size, page_size), (255, 255, 255, 0))
+        draw = ImageDraw.Draw(page)
+        x = y = 1
+        row_h = 0
         font = ImageFont.truetype(font_path, size, index=0)
         ascent, descent = font.getmetrics()
         lines.append(f'size {si} {size} {ascent + descent} {ascent}')
@@ -545,11 +604,10 @@ def build_font(chars, font_path):
             lines.append(f'g {si} {ord(ch)} {x} {y} {w} {h} {bbox[0]} {bbox[1]} {adv}')
             x += w + 1
             row_h = max(row_h, h)
-    page = shrink_page(page)
-    write_t3t(os.path.join(OUT, 'font', 'font_0.t3t'), page)
+        write_t3t(os.path.join(OUT, 'font', f'font_{si}.t3t'), shrink_page(page))
     with open(os.path.join(OUT, 'font', 'font.txt'), 'w', newline='\n') as f:
         f.write('\n'.join(lines) + '\n')
-    print(f'  {len(chars)} glyphs x {len(sizes)} sizes, page {page.size}')
+    print(f'  {len(chars)} glyphs x {len(sizes)} sizes, one page each')
 
 
 if __name__ == '__main__':

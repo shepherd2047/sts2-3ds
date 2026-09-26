@@ -150,7 +150,12 @@ Sprite roomIcon(RoomType t, const std::string& bossId = "VantomBoss") {
     }
     case RoomType::Treasure: return R().sprite("map/chest");
     case RoomType::Shop: return R().sprite("map/shop");
-    case RoomType::Ancient: return R().sprite("map/ancient_neow");
+    case RoomType::Ancient: {  // map/ancient_<id>, lower case (bossId carries the Ancient's id here)
+      std::string k = bossId;
+      for (char& ch : k) ch = (char)std::tolower((unsigned char)ch);
+      Sprite s = R().sprite("map/ancient_" + k);
+      return s ? s : R().sprite("map/ancient_neow");
+    }
     default: return R().sprite("map/unknown");
   }
 }
@@ -948,7 +953,7 @@ void App::drawMap(bool top) {
     if (y < -40 || y > kH + 40) continue;
     bool chosen = !reach.empty() && reach[mapSel_] == i;
     bool reachable = chosen || std::find(path.begin(), path.end(), i) != path.end();
-    Sprite ic = roomIcon(n.type, r.bossId);
+    Sprite ic = roomIcon(n.type, n.type == RoomType::Ancient ? r.ancientId : r.bossId);
     // Icon height at its native size (ui_atlas map icons) times the map scale.
     float nativeH = n.type == RoomType::Elite ? 70 : n.type == RoomType::Rest ? 90 : n.type == RoomType::Treasure ? 59
                   : n.type == RoomType::Unknown ? 72 : n.type == RoomType::Ancient ? 150 : 68;
@@ -1982,14 +1987,15 @@ void App::drawRest(bool top) {
   // Options (RestSiteRoom): heal, smith, and Lift / Dig with Girya / Shovel; up to 2 per row.
   auto& opts = r.restOptions;
   int n = (int)opts.size();
-  const float bw = 138, bh = n > 2 ? 64 : 100, gapY = 8;
+  const float bw = 138, bh = n > 4 ? 36 : n > 2 ? 64 : 100, gapY = n > 4 ? 4 : 8;
   for (int i = 0; i < n; ++i) {
     int o = opts[i];
     float x = i % 2 ? 166 : 16, y = 20 + (i / 2) * (bh + gapY + 16);
     bool used = std::find(r.restUsed.begin(), r.restUsed.end(), o) != r.restUsed.end();
-    static const char* keys[] = {"OPTION_HEAL", "OPTION_SMITH", "OPTION_LIFT", "OPTION_DIG"};
+    static const char* keys[] = {"OPTION_HEAL", "OPTION_SMITH", "OPTION_LIFT", "OPTION_DIG", "OPTION_COOK", "OPTION_KINDLE"};
     button(x, y, bw, bh, L(std::string("rest_site_ui.") + keys[o] + ".name"), ID_GRID0 + o, r.restChoice.waiting() && restValid(o), sel_ == o);
-    std::string sub = o == 0 ? "回复 " + num(heal) + " 点生命" : o == 1 ? std::string("升级一张牌") : o == 2 ? std::string("战斗开始时 +1 力量") : std::string("挖出一件遗物");
+    static const char* subs[] = {"", "升级一张牌", "战斗开始时 +1 力量", "挖出一件遗物", "移除 2 张牌，+5 最大生命", "南瓜灯 +5 场战斗"};
+    std::string sub = o == 0 ? "回复 " + num(heal) + " 点生命" : std::string(subs[o]);
     R().text(x + bw / 2, y + bh + 2, used ? std::string("已使用") : sub, ts(F12, used ? col::gray : o == 0 ? col::green : col::gold, CENTER));
   }
   if (r.restUsed.empty()) R().text(80, 206, "生命 " + num(r.player->hp) + "/" + num(r.player->maxHp), ts(F16, col::red, CENTER));
@@ -2006,6 +2012,7 @@ bool App::restValid(int o) const {
     for (auto& c : r.deck) if (c->upgradable()) return true;
     return false;
   }
+  if (o == 4) return r.deck.size() >= 2;
   return true;
 }
 
@@ -2019,7 +2026,7 @@ void App::updateRest(const gfx::Input& in) {
   if ((in.down & gfx::BTN_A) && restValid(sel_)) { r.restChoice.fire(sel_); return; }
   if (in.touchDown) {
     int id = hitAt(in.tx, in.ty);
-    int pick = id >= ID_GRID0 && id < ID_GRID0 + 4 ? id - ID_GRID0 : -1;
+    int pick = id >= ID_GRID0 && id < ID_GRID0 + 6 ? id - ID_GRID0 : -1;
     if (pick >= 0) {
       if (sel_ == pick && restValid(pick)) { r.restChoice.fire(pick); return; }  // second tap confirms
       sel_ = pick;
@@ -2519,6 +2526,10 @@ bool ancientTalking(const Event* e) { return !e->finished && e->dialogueLine + 1
 void App::drawAncient(bool top) {
   Event* e = run_->currentEvent.get();
   std::string who = e->locKey;
+  // The engine lists every line an Ancient may say; keep the ones with text.
+  e->dialogue.erase(std::remove_if(e->dialogue.begin(), e->dialogue.end(),
+                                   [](const std::string& k) { return !R().hasLoc("ancients." + k); }),
+                    e->dialogue.end());
   if (top) {
     std::string bg = e->id;  // gfx/bg_<ancient id, lower case>.t3t
     for (char& c : bg) c = (char)std::tolower((unsigned char)c);
@@ -2537,7 +2548,9 @@ void App::drawAncient(bool top) {
       R().text(58, kH - 38, describeRelic(const_cast<Relic*>(rel)), ts(F12, col::white, LEFT, kTop - 66, 0.9f));
     } else if (!e->dialogue.empty()) {
       size_t line = std::min(e->dialogueLine, e->dialogue.size() - 1);
-      R().text(kTop / 2, kH - 52, L("ancients." + e->dialogue[line]), ts(F16, 0xB8E8FFFF, CENTER, kTop - 24));
+      const std::string& k = e->dialogue[line];
+      bool player = k.size() > 5 && k.compare(k.size() - 5, 5, ".char") == 0;  // the Ironclad answers
+      R().text(kTop / 2, kH - 52, L("ancients." + k), ts(F16, player ? col::gold : 0xB8E8FFFF, CENTER, kTop - 24));
     }
     return;
   }
@@ -2567,10 +2580,14 @@ void App::drawAncient(bool top) {
       R().measure(desc, st, &dh);
       if (dh > h - 20) st.scale *= (h - 20) / dh;
       R().text(x + 48, y + 19, desc, st);
-    } else {
-      R().text(x + w / 2, y + (h - R().lineHeight(F16)) / 2, L("events." + e->options[i].key + ".title"), ts(F16, col::white, CENTER));
+    } else {  // a locked option (e.g. Orobas without a starter relic): its text, greyed out
+      std::string k = e->options[i].key;
+      std::string table = R().hasLoc("ancients." + k + ".title") ? "ancients." : "events.";
+      R().text(x + 8, y + 3, L(table + k + ".title"), ts(F12, col::gray));
+      if (R().hasLoc(table + k + ".description"))
+        R().text(x + 8, y + 19, L(table + k + ".description"), ts(F12, col::gray, LEFT, w - 16, 0.85f));
     }
-    hits_.push_back({x, y, w, h, ID_DEVITEM0 + i});
+    if (!e->options[i].locked()) hits_.push_back({x, y, w, h, ID_DEVITEM0 + i});
   }
 }
 
@@ -2679,7 +2696,9 @@ void App::drawDeckChoice(bool top) {
   gfx::rect(0, 196, kBot, 44, 0x000000A0);
   if (d.canCancel) button(10, 200, 100, 34, "取消", ID_BACK);
   int need = std::min(d.count, n);
-  bool ready = d.count <= 1 ? (sel_ >= 0 && sel_ < n) : (int)deckPicks_.size() == need;
+  int least = d.minCount >= 0 ? std::min(d.minCount, need) : need;  // "up to N" choices
+  bool multi = d.count > 1 || d.minCount == 0;
+  bool ready = !multi ? (sel_ >= 0 && sel_ < n) : ((int)deckPicks_.size() >= least && (int)deckPicks_.size() <= need);
   button(kBot - 110, 200, 100, 34, "确认", ID_CONFIRM, ready, true);
 }
 
@@ -2694,8 +2713,9 @@ void App::updateDeckChoice(const gfx::Input& in) {
     d.result.fire(std::move(picked));
   };
   auto confirm = [&] {
-    if (d.count <= 1) { if (sel_ >= 0 && sel_ < n) finish({d.options[sel_]}); return; }
-    if ((int)deckPicks_.size() != std::min(d.count, n)) return;
+    int least = d.minCount >= 0 ? std::min(d.minCount, std::min(d.count, n)) : std::min(d.count, n);
+    if (d.count <= 1 && d.minCount != 0) { if (sel_ >= 0 && sel_ < n) finish({d.options[sel_]}); return; }
+    if ((int)deckPicks_.size() < least || (int)deckPicks_.size() > std::min(d.count, n)) return;
     std::vector<Card*> picked;
     for (int i : deckPicks_) picked.push_back(d.options[i]);
     finish(std::move(picked));

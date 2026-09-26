@@ -81,7 +81,7 @@ class Res {
   std::unordered_map<std::string, Sprite> sprites_;
   std::map<std::string, gfx::Texture*> textures_;
   std::map<std::string, std::unique_ptr<spine::SkeletonData>> skeletons_;
-  gfx::Texture* fontTex_ = nullptr;
+  gfx::Texture* fontTex_[2] = {nullptr, nullptr};  // per size
   Font fonts_[2];
   std::unordered_map<std::string, std::string> strings_;
   std::string missing_;

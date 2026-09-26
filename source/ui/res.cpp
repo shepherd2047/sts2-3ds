@@ -38,7 +38,9 @@ bool Res::load() {
     }
   }
 
-  fontTex_ = gfx::loadTexture("font/font_0.t3t");
+  // One glyph page per size (font_<index>.t3t).
+  for (int i = 0; i < 2; ++i) fontTex_[i] = gfx::loadTexture("font/font_" + std::to_string(i) + ".t3t");
+  if (!fontTex_[1]) fontTex_[1] = fontTex_[0];
   if (!gfx::readFile("font/font.txt", data)) return false;
   {
     std::istringstream in(data);
@@ -82,7 +84,7 @@ bool Res::load() {
       strings_[line.substr(0, tab)] = v;
     }
   }
-  return fontTex_ && !atlasPages_.empty();
+  return fontTex_[0] && !atlasPages_.empty();
 }
 
 Sprite Res::sprite(const std::string& name) const {
@@ -236,9 +238,9 @@ float Res::text(float x, float y, const std::string& s, const TextStyle& st) {
       if (g.w > 0) {
         float gx = cx + g.ox * st.scale, gy = cy + g.oy * st.scale;
         if (st.shadow)
-          gfx::image(fontTex_, g.x, g.y, g.w, g.h, gx + st.scale, gy + st.scale, g.w * st.scale, g.h * st.scale,
+          gfx::image(fontTex_[st.size], g.x, g.y, g.w, g.h, gx + st.scale, gy + st.scale, g.w * st.scale, g.h * st.scale,
                      0x000000C0, 1.f);
-        gfx::image(fontTex_, g.x, g.y, g.w, g.h, gx, gy, g.w * st.scale, g.h * st.scale, color, 1.f);
+        gfx::image(fontTex_[st.size], g.x, g.y, g.w, g.h, gx, gy, g.w * st.scale, g.h * st.scale, color, 1.f);
       }
       cx += g.adv * st.scale;
     }

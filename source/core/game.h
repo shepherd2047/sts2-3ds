@@ -144,6 +144,7 @@ struct Model {
   virtual bool shouldResetEnergy() { return true; }  // Hook.ShouldPlayerResetEnergy
   virtual Task<> afterShuffle() { return {}; }
   virtual bool shouldForcePotionReward(RoomType) { return false; }
+  virtual bool shouldProcurePotion() { return true; }  // Sozu
 };
 
 // ---------------------------------------------------------------- powers
@@ -716,6 +717,7 @@ struct DeckChoice {
   std::string prompt;          // loc key of the prompt, or plain text
   std::vector<Card*> options;
   int count = 1;
+  int minCount = -1;           // -1: exactly `count`; else between minCount and count
   bool canCancel = false;
   bool showUpgrade = false;    // preview the upgraded card (upgrade prompts)
   bool active = false;
@@ -781,7 +783,7 @@ struct Run {
   std::unique_ptr<Event> pullNextEvent();  // ActModel.PullNextEvent (null if none ported)
   // Deck commands used by events and relics (CardCmd / CardPileCmd on the deck).
   Task<std::vector<Card*>> selectFromDeck(std::string prompt, std::function<bool(Card*)> filter, int count,
-                                          bool canCancel = false, bool showUpgrade = false);
+                                          bool canCancel = false, bool showUpgrade = false, int minCount = -1);
   Card* addCardToDeck(std::unique_ptr<Card> c);
   void removeCardFromDeck(Card* c);
   Card* transformCard(Card* c, std::unique_ptr<Card> into);   // replaces it in the deck
@@ -796,6 +798,7 @@ struct Run {
   // A room that is not ported yet (events, shops): Screen::Placeholder shows this text.
   std::string placeholderText;
   std::string ancientId;            // this act's Ancient event ("Neow" in act 1), empty if none
+  std::vector<std::string> sharedAncients[3];  // per act: the shared Ancients (Darv) it may roll
   bool ancientPending = false;      // the act starts with its Ancient (Run::main runs it first)
   Task<> enterAncient();
   Task<> chooseCardFor(std::vector<std::unique_ptr<Card>> options);  // CardSelectCmd.FromChooseACardScreen -> deck

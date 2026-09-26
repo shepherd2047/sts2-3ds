@@ -30,7 +30,18 @@ int main(int argc, char** argv) {
     }
     if (getenv("SIM_ALLRELICS")) {
       // Every registered pool relic (pickup effects skipped; Potion Belt applied by hand).
-      for (const auto* pool : {&db::sharedRelicPool(), &db::ironcladRelicPool()})
+      // Ancient relics are in no pool: a comma list can name them too.
+      std::vector<std::string> named;
+      {
+        std::string only = getenv("SIM_ALLRELICS");
+        for (size_t a = 0; a < only.size();) {
+          size_t b = only.find(',', a);
+          if (b == std::string::npos) b = only.size();
+          named.push_back(only.substr(a, b - a));
+          a = b + 1;
+        }
+      }
+      for (const auto* pool : {&db::sharedRelicPool(), &db::ironcladRelicPool(), (const std::vector<std::string>*)&named})
         for (auto& id : *pool) {
           if (!db::relicRegistered(id) || run.hasRelic(id)) continue;
           std::string only = getenv("SIM_ALLRELICS");  // "1" = all, else a comma list
@@ -50,6 +61,13 @@ int main(int argc, char** argv) {
         printf("[frame %d] screen=%d floor=%d combat=%d phase=%d waiting=%d choice=%d idle=%d\n", frames, (int)run.screen, run.floor,
                run.combat ? 1 : 0, run.combat ? run.combat->playerPhase : -1, run.combat ? run.combat->actions.waiting() : -1,
                run.combat ? run.combat->choice.active : -1, Scheduler::get().idle());
+      // Deck choices can come up on any screen (relic pickups): answer them first.
+      if (run.deckChoice.active && run.deckChoice.result.waiting() && run.screen != Screen::Event && run.screen != Screen::Shop) {
+        std::vector<Card*> picked;
+        for (int k = 0; k < run.deckChoice.count && k < (int)run.deckChoice.options.size(); ++k) picked.push_back(run.deckChoice.options[k]);
+        run.deckChoice.result.fire(picked);
+        continue;
+      }
       switch (run.screen) {
         case Screen::Map:
           if (run.mapChoice.waiting()) {
@@ -57,6 +75,7 @@ int main(int argc, char** argv) {
             // Prefer rests when hurt, else fights.
             int pick = r[0];
             for (int i : r) if (run.nodes[i].type == RoomType::Rest && run.player->hp < 45) pick = i;
+            if (getenv("SIM_MAPLOG") && run.floor > 8 && run.floor < 14) printf("  map pick %d type %d act %d cur %d\n", pick, (int)run.nodes[pick].type, run.actIndex, run.currentNode);
             run.mapChoice.fire(pick);
           }
           break;
@@ -141,7 +160,7 @@ int main(int argc, char** argv) {
           if (run.restChoice.waiting()) {
             // Heal when hurt, else smith; Lift/Dig when offered; leave once something was used.
             int want = run.player->hp < 60 ? 0 : 1;
-            for (int o : run.restOptions) if (o >= 2) want = o;
+            if (want == 1) for (int o : run.restOptions) if (o >= 2) want = o;  // extras only when not healing
             bool used = std::find(run.restUsed.begin(), run.restUsed.end(), want) != run.restUsed.end();
             run.restChoice.fire(used || !run.restUsed.empty() ? -1 : want);
           }

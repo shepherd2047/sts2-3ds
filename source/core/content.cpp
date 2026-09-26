@@ -627,6 +627,7 @@ void registerAct1Bosses();   // content_bosses.cpp: Ceremonial Beast, The Kin, F
 void registerRelics();       // relics*.cpp
 void registerEvents();       // events.cpp
 void registerAncients();     // ancients.cpp: Neow
+void registerAncientsLater(); // ancients_later.cpp: acts 2-3 and Darv
 void registerPotions();      // potions.cpp
 
 namespace db {
@@ -744,6 +745,7 @@ void init() {
   registerRelics();
   registerEvents();
   registerAncients();
+  registerAncientsLater();
   registerPotions();
 }
 

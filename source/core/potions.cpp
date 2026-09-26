@@ -624,6 +624,8 @@ bool Run::hasOpenPotionSlot() const {
 
 bool Run::procurePotion(std::unique_ptr<Potion> p) {
   if (!p) return false;
+  for (Model* m : listeners())
+    if (!m->shouldProcurePotion()) return false;  // Hook.ShouldProcurePotion (Sozu)
   for (auto& slot : potions)
     if (!slot) {
       p->run = this;

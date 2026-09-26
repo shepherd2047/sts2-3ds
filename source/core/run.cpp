@@ -147,13 +147,14 @@ Task<> Run::runEvent(std::unique_ptr<Event> e) {
 }
 
 Task<std::vector<Card*>> Run::selectFromDeck(std::string prompt, std::function<bool(Card*)> filter, int count,
-                                             bool canCancel, bool showUpgrade) {
+                                             bool canCancel, bool showUpgrade, int minCount) {
   std::vector<Card*> opts;
   for (auto& c : deck) if (!filter || filter(c.get())) opts.push_back(c.get());
   if (opts.empty()) co_return std::vector<Card*>{};
   deckChoice.prompt = std::move(prompt);
   deckChoice.options = std::move(opts);
   deckChoice.count = count;
+  deckChoice.minCount = minCount;
   deckChoice.canCancel = canCancel;
   deckChoice.showUpgrade = showUpgrade;
   deckChoice.active = true;
@@ -241,7 +242,11 @@ Task<> Run::combatRewards(RoomType type) {
   for (auto& rel : relics) rel->combat = nullptr;
   screen = Screen::Reward;
   if (rollPotionReward(type)) co_await offerPotion(randomPotion(rr, false));  // RollForPotionAndAddTo
-  if (type == RoomType::Elite) co_await offerRelic(pullRelicFromFront(relicBag, rollRelicRarity(rr)), false);
+  if (type == RoomType::Elite) {
+    int relicRewards = 1;
+    for (auto& rel : relics) relicRewards += rel->bonusRelicRewards(RoomType::Elite);  // Black Star
+    for (int i = 0; i < relicRewards; ++i) co_await offerRelic(pullRelicFromFront(relicBag, rollRelicRarity(rr)), false);
+  }
   std::vector<RoomType> rewards{type};
   for (auto& rel : relics)
     for (RoomType odds : rel->extraCardRewards(type)) rewards.push_back(odds);
@@ -367,9 +372,29 @@ void Run::enterAct(int index) {
   // The act's Ancient (ActModel.GenerateRooms: act 1 is always Neow). PORT NOTE: the
   // Ancients of Hive and Glory are not ported yet (package 11b). Debug starts
   // (STS_ENCOUNTER / STS_ROOM / STS_EVENT / STS_NO_NEOW) skip it so scripts reach the map.
+  // Hive / Glory roll one of their three (plus the shared Darv if this act got him,
+  // RunManager.GenerateRooms: Darv goes to act 2, act 3 or neither). Only registered events.
   ancientId.clear();
-  bool debugStart = getenv("STS_ENCOUNTER") || getenv("STS_ROOM") || getenv("STS_EVENT") || getenv("STS_NO_NEOW");
-  if (actIndex == 0 && !debugStart && db::event("Neow")) ancientId = "Neow";
+  bool firstRoom = floor == 0;
+  bool debugStart = firstRoom && (getenv("STS_ENCOUNTER") || getenv("STS_ROOM") || getenv("STS_EVENT") || getenv("STS_NO_NEOW"));
+  Rng& up = rng("UpFront");
+  if (firstRoom) {
+    std::vector<std::string> shared = {"Darv"};
+    up.shuffle(shared);
+    for (auto& s : sharedAncients) s.clear();
+    for (int a = 1; a < kActs; ++a) {
+      int count = up.nextInt((int)shared.size() + 1);
+      sharedAncients[a].assign(shared.begin(), shared.begin() + count);
+      shared.erase(shared.begin(), shared.begin() + count);
+    }
+  }
+  static const std::vector<std::string> actAncients[kActs] = {
+      {"Neow"}, {"Orobas", "Pael", "Tezcatara"}, {"Nonupeipe", "Tanx", "Vakuu"}};
+  std::vector<std::string> candidates;
+  for (auto& id : actAncients[actIndex]) if (db::event(id)) candidates.push_back(id);
+  for (auto& id : sharedAncients[actIndex]) if (db::event(id)) candidates.push_back(id);
+  if (!candidates.empty() && !debugStart) ancientId = up.nextItem(candidates);
+  if (const char* forced = getenv("STS_ANCIENT"); forced && db::event(forced) && !debugStart) ancientId = forced;
   // SetActInternal: UnknownMapPointOdds.ResetToBase.
   unknownMonsterOdds = 0.1f;
   unknownTreasureOdds = 0.02f;
@@ -623,6 +648,8 @@ Task<> Run::restSite() {
     restOptions = {0, 1};
     if (girya && girya->displayAmount() < 3) restOptions.push_back(2);
     if (hasRelic("Shovel")) restOptions.push_back(3);
+    if (hasRelic("MeatCleaver")) restOptions.push_back(4);   // CookRestSiteOption
+    if (hasRelic("PumpkinCandle")) restOptions.push_back(5); // KindleRestSiteOption
     screen = Screen::Rest;
     int opt = co_await restChoice.next();
     if (opt < 0) break;
@@ -654,6 +681,17 @@ Task<> Run::restSite() {
     } else if (opt == 2 && girya) {  // LiftRestSiteOption
       girya->restSiteAction(2);  // TimesLifted++
       girya->doFlash();
+      done = true;
+    } else if (opt == 4) {  // Cook: remove 2 cards (cancelable), +5 max HP
+      if (deck.size() < 2) continue;
+      auto picked = co_await selectFromDeck("card_selection.TO_REMOVE", nullptr, 2, true);
+      screen = Screen::Rest;
+      if (picked.empty()) continue;
+      for (Card* c : picked) removeCardFromDeck(c);
+      co_await gainMaxHp(5);
+      done = true;
+    } else if (opt == 5) {  // Kindle: Pumpkin Candle +5 combats
+      for (auto& r : relics) if (r->id == "PumpkinCandle") { r->restSiteAction(5); r->doFlash(); }
       done = true;
     } else if (opt == 3) {  // DigRestSiteOption: a relic from the front of the bag
       co_await offerRelic(pullRelicFromFront(relicBag, rollRelicRarity(rng("Rewards"))), false);

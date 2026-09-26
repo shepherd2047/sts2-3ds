@@ -155,7 +155,11 @@ scripts drift; delete the debug file afterwards.
   (`nodes[0]`, row -1, `RoomType::Ancient`) whose event runs before the first room
   (`Run::enterAncient`: full heal, then the event). `Event::ancient` switches the UI to the
   Ancient layout: `gfx/bg_<id>.t3t` scene + `ancients.*` dialogue on top, relic options
-  below. `STS_NO_NEOW=1` (or any STS_ENCOUNTER/ROOM/EVENT) skips Neow.
+  below. `STS_NO_NEOW=1` (or any STS_ENCOUNTER/ROOM/EVENT) skips Neow. Acts 2/3 roll their
+  Ancient in `Run::enterAct` (`ancients_later.cpp`: Orobas/Pael/Tezcatara, Nonupeipe/Tanx/Vakuu,
+  shared Darv); `STS_ANCIENT=Tanx` forces one (also in act 1). Room art `gfx/bg_<id>.t3t`
+  (`bake_ancient` in build_assets), map icons `map/ancient_<id>`.
+- Font: one glyph page per size (`font/font_0.t3t` 12 px, `font_1.t3t` 16 px).
 - Potions: `potions.cpp` (POTION_HEADER like relics; registry `db::potion`, pool order
   `db::potionPool()`). Belt = `Run::potions` (3 slots, null = empty); `Run::usePotion`,
   `procurePotion`, `rollPotionReward` (after every fight), `offerPotion` (Screen::PotionOffer).

@@ -145,6 +145,26 @@ Task<> Run::enterShop() {
   shop.push_back(std::move(removal));
 
   for (Model* m : listeners()) co_await m->afterRoomEntered(RoomType::Shop);
+  // LordsParasol.PurchaseEverything: every card, relic and potion for free, then a removal.
+  if (hasRelic("LordsParasol")) {
+    screen = Screen::Shop;
+    co_await wait(0.75);
+    for (auto& it : shop) {
+      if (!it.stocked() || it.kind == ShopItem::Removal) continue;
+      if (it.kind == ShopItem::CardItem) addCardToDeck(std::move(it.card));
+      else if (it.kind == ShopItem::RelicItem) co_await obtainRelic(std::move(it.relic));
+      else if (hasOpenPotionSlot()) procurePotion(std::move(it.potion));
+      co_await wait(0.25);
+    }
+    screen = Screen::Shop;  // a bought relic may have shown its own reward screen
+    auto picked = co_await selectFromDeck("merchant_room.MERCHANT.cardRemovalService.title", nullptr, 1, false);
+    screen = Screen::Shop;
+    if (!picked.empty()) {
+      removeCardFromDeck(picked[0]);
+      ++shopRemovalsUsed;
+      shop.back().used = true;
+    }
+  }
   for (;;) {
     screen = Screen::Shop;
     int i = co_await shopChoice.next();
