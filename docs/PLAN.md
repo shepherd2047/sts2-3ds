@@ -75,7 +75,7 @@ file and run it with bash.
 | 4b | Act 2 monsters B | content | – | done |
 | 4c | Act 2 elites + bosses | content (+engine likely) | – | todo |
 | 5 | Act 2 events (10) | content | 0 | done (9 of 10: ColorfulPhilosophers needs a 2nd character; FieldOfManSizedHoles ENTER_YOUR_HOLE locked = PerfectFit enchantment; act pool list is `db::act2Events()` in events_act2.cpp, to be wired by package 3) |
-| 6a | Act 3 monsters A | content | – | todo |
+| 6a | Act 3 monsters A | content | – | done |
 | 6b | Act 3 elites + bosses | content (+engine likely) | – | todo |
 | 7 | Act 3 events (7) | content | 0 | todo |
 | 8 | Potions | engine + UI, *Opus* | – | todo |

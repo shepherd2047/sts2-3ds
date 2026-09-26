@@ -219,6 +219,9 @@ struct CubexConstruct : Monster {
   }
 };
 
+// Used by the Act 3 Construct Menagerie (content_act3a.cpp).
+std::unique_ptr<Monster> makeCubexConstruct() { return std::make_unique<CubexConstruct>(); }
+
 struct AssassinRubyRaider : Monster {
   MONSTER_HEADER(AssassinRubyRaider, "ASSASSIN_RUBY_RAIDER")
   int minHp() const override { return 18; }
