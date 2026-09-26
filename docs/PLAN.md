@@ -63,7 +63,7 @@ file and run it with bash.
 
 | # | Package | Kind | Depends on | Status |
 |---|---|---|---|---|
-| 0 | Event text string vars | engine, small | – | todo |
+| 0 | Event text string vars | engine, small | – | done |
 | 1 | Act 1 events (12 left) | content | 0 | todo |
 | 2 | Shared events (18) | content | 0 | todo |
 | 3 | Multi-act run structure | engine, *Opus* | – | todo |

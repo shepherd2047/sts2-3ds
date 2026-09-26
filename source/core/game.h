@@ -610,6 +610,7 @@ struct Event {
   Run* run = nullptr;
   std::unique_ptr<Rng> rngPtr;  // EventModel.Rng: seed + hash(id)
   std::vector<DynVar> vars;
+  std::map<std::string, std::string> strVars;  // string placeholders: a loc key, or literal text if none matches
   std::string descKey;
   std::vector<EventOption> options;
   bool finished = false;
@@ -638,6 +639,7 @@ struct Event {
   Dec val(const char* n) { auto* v = var(n); return v ? v->base : Dec(0); }
   void addVar(const char* n, Dec v) { vars.push_back({n, v, v}); }
   void setVar(const char* n, Dec v) { if (auto* d = var(n)) d->base = v; else addVar(n, v); }
+  void setStr(const std::string& n, std::string locKeyOrText) { strVars[n] = std::move(locKeyOrText); }
 };
 using EventFactory = std::unique_ptr<Event> (*)();
 
