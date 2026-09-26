@@ -76,7 +76,7 @@ file and run it with bash.
 | 4c | Act 2 elites + bosses | content (+engine likely) | – | todo |
 | 5 | Act 2 events (10) | content | 0 | done (9 of 10: ColorfulPhilosophers needs a 2nd character; FieldOfManSizedHoles ENTER_YOUR_HOLE locked = PerfectFit enchantment; act pool list is `db::act2Events()` in events_act2.cpp, to be wired by package 3) |
 | 6a | Act 3 monsters A | content | – | done |
-| 6b | Act 3 elites + bosses | content (+engine likely) | – | todo |
+| 6b | Act 3 elites + bosses | content (+engine likely) | – | done (content_act3b.cpp, sim-tested only, no screenshots; Hex/Dampen/Chains of Binding/Wither are per-power approximations of the affliction system, Intangible caps HP loss only; run build_assets once 4c's monsters have scenes) |
 | 7 | Act 3 events (7) | content | 0 | done (sim-tested; not screenshot-checked; MadScience card text needs `choose()` support in App::describe; Grave of the Forgotten enchant = removes Exhaust; BattlewornDummy V1 potion reward skipped; `db::act3Events()` defined in events_act3.cpp) |
 | 8 | Potions | engine + UI, *Opus* | – | todo |
 | 9 | Shop (merchant) | engine + UI | 8 | todo |
