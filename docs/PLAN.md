@@ -77,7 +77,7 @@ file and run it with bash.
 | 5 | Act 2 events (10) | content | 0 | done (9 of 10: ColorfulPhilosophers needs a 2nd character; FieldOfManSizedHoles ENTER_YOUR_HOLE locked = PerfectFit enchantment; act pool list is `db::act2Events()` in events_act2.cpp, to be wired by package 3) |
 | 6a | Act 3 monsters A | content | – | done |
 | 6b | Act 3 elites + bosses | content (+engine likely) | – | todo |
-| 7 | Act 3 events (7) | content | 0 | todo |
+| 7 | Act 3 events (7) | content | 0 | done (sim-tested; not screenshot-checked; MadScience card text needs `choose()` support in App::describe; Grave of the Forgotten enchant = removes Exhaust; BattlewornDummy V1 potion reward skipped; `db::act3Events()` defined in events_act3.cpp) |
 | 8 | Potions | engine + UI, *Opus* | – | todo |
 | 9 | Shop (merchant) | engine + UI | 8 | todo |
 | 10 | Remaining relics (skipped ones + Shop rarity) | content | 8, 9 | todo |
