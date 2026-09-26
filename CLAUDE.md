@@ -7,12 +7,21 @@ code). `.gitignore` is a whitelist; keep it that way.
 
 The owner works on this from a Mac and a Windows PC. Talk to them in Chinese.
 
+## What to work on
+
+`docs/PLAN.md` has the goal (a finished port as complete as the RGDSplus one),
+the session protocol and self-contained work packages with their status. Start
+there: pick the first `todo` package whose dependencies are done. Read only the
+files a package names — don't survey the whole codebase or decompiled tree.
+The RGDSplus reference repo is cloned next to this one as `../rgds-ref`
+(`gh repo clone LPF970915/Slay-the-Spire-for-RGDSplus ../rgds-ref -- --depth 1`).
+
 ## Working agreement
 
-- Delegate simple, mechanical work (bulk card/monster translation from C#,
-  greps, file shuffling, test loops) to subagents on cheaper models
-  (haiku / sonnet); keep design, debugging and verification yourself, and
-  review their output.
+- Usage quota is shared by all the owner's sessions and subagents. Bulk,
+  mechanical translation is cheapest in a Sonnet session or a Sonnet subagent
+  with a tight brief — but say how many subagents and why, and get a yes,
+  before starting any. Keep design, debugging and review in the main session.
 - Don't change system settings; commands that need `sudo` or passwords are
   given to the owner to run.
 - Git: `git pull` before starting, commit + `git push` when done, so the other
