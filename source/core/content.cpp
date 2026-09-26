@@ -618,6 +618,7 @@ void registerIroncladRare();
 // Filled in by content_act1.cpp.
 void registerAct1Monsters();
 void registerPhrog();        // content_phrog.cpp
+void registerAct2A();        // content_act2a.cpp
 void registerAct1Bosses();   // content_bosses.cpp: Ceremonial Beast, The Kin, Fogmog
 void registerAct2B();        // content_act2b.cpp
 void registerRelics();       // relics*.cpp
@@ -728,6 +729,7 @@ void init() {
   registerAct1Monsters();
   registerPhrog();
   registerAct1Bosses();
+  registerAct2A();
   registerAct2B();
   registerRelic("BurningBlood", [] { return std::unique_ptr<Relic>(new BurningBlood()); });
   registerRelic("Circlet", [] { return std::unique_ptr<Relic>(new Circlet()); });
