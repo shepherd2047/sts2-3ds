@@ -24,6 +24,10 @@ dependencies are `done`, do it, then update its status line here in the same com
 
 ## Session protocol (every package)
 
+0. **Local sessions only** (desktop app, folder `sts2-3ds` on the owner's PC or Mac).
+   Cloud sessions only get the git repo: no decompiled C#, no game files, no
+   devkitPro, so they can neither translate nor test. Never commit the decompiled
+   code or game assets to make them work.
 1. `git pull`. Read `CLAUDE.md`, this file, and `docs/PORTING.md`. Do **not** read the
    whole codebase or the whole decompiled tree: open only the files a package names
    and the C# classes it lists. Tokens are shared by all the owner's sessions.
