@@ -582,7 +582,7 @@ struct MapNode {
 // the act's rooms in our indexing (row 0 = the game's row 1, the start point is
 // dropped; the boss is the last node, row 15, col 3). next = child indices.
 // Implemented in mapgen.cpp.
-std::vector<MapNode> generateStandardActMap(Rng& mapRng);
+std::vector<MapNode> generateStandardActMap(Rng& mapRng, int actIndex);
 
 struct Encounter {
   std::string id;
@@ -654,13 +654,19 @@ struct DeckChoice {
   Signal<std::vector<Card*>> result;
 };
 
+namespace db { struct ActDef; }
+
 struct Run {
   uint64_t seed = 1;
   std::unique_ptr<Creature> player;
   std::vector<std::unique_ptr<Card>> deck;
   std::vector<std::unique_ptr<Relic>> relics;
   int gold = 99;
-  int floor = 0;
+  int floor = 0;                   // total floors climbed (RunState.TotalFloor)
+  int actIndex = 0;                // RunState.CurrentActIndex: 0 Overgrowth, 1 Hive, 2 Glory
+  static constexpr int kActs = 3;
+  int fightsThisAct = 0;           // monster rooms so far: the first weakCount use weak fights
+  std::vector<std::string> eliteQueue;
   std::vector<MapNode> nodes;
   int currentNode = -1;
   std::unique_ptr<Combat> combat;
@@ -728,7 +734,10 @@ struct Run {
     return *r;
   }
   void start(uint64_t seed);
+  void enterAct(int index);        // RunManager.EnterAct: new map, encounters and events
+  const db::ActDef& act() const;
   void generateMap();
+  bool devSkipAct = false;         // developer menu: leave for the next act at the next map choice
   // Development build: every node can be entered, not only the next ones on the path.
   // STS_PATH_ONLY=1 restores the normal rule.
   bool freeMap = true;
@@ -751,6 +760,14 @@ const Encounter* encounter(const std::string& id);
 std::unique_ptr<Relic> relic(const std::string& id);
 std::vector<std::string> ironcladRewardPool();
 std::vector<std::string> ironcladStarterDeck();
+// acts.cpp: Overgrowth, Hive, Glory with their encounter and event ids as in the C#.
+struct ActDef {
+  const char* name;  // Overgrowth / Hive / Glory
+  const char* key;   // file path identifier: art is gfx/bg_<key>.t3t, gfx/bg_map_<key>.t3t
+  int weakCount;     // ActModel.NumberOfWeakEncounters
+  std::vector<std::string> weak, normal, elites, bosses, events;
+};
+const std::vector<ActDef>& acts();
 std::vector<std::string> act1Weak();
 std::vector<std::string> act1Normal();
 std::vector<std::string> act1Elites();

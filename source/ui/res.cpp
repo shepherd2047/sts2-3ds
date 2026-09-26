@@ -118,6 +118,13 @@ const spine::SkeletonData* Res::skeleton(const std::string& key) {
   return raw;
 }
 
+void Res::releaseTexture(const std::string& path) {
+  auto t = textures_.find(path);
+  if (t == textures_.end()) return;
+  if (t->second) gfx::freeTexture(t->second);
+  textures_.erase(t);
+}
+
 void Res::releaseSkeletons(const std::vector<std::string>& keep) {
   for (auto it = skeletons_.begin(); it != skeletons_.end();) {
     if (std::find(keep.begin(), keep.end(), it->first) != keep.end()) { ++it; continue; }

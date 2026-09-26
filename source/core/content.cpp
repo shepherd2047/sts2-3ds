@@ -766,15 +766,6 @@ std::vector<std::string> ironcladRewardPool() {
           "PerfectedStrike", "Havoc", "Tremble", "ShrugItOff", "Armaments", "Taunt",
           "BloodWall", "TrueGrit"};
 }
-// Overgrowth: first-run order puts these weak fights first.
-std::vector<std::string> act1Weak() { return {"NibbitsWeak", "SlimesWeak", "ShrinkerBeetleWeak", "FuzzyWurmCrawlerWeak"}; }
-std::vector<std::string> act1Normal() {
-  return {"InkletsNormal", "MawlerNormal", "NibbitsNormal", "SlimesNormal", "OvergrowthCrawlers",
-          "FlyconidNormal", "SnappingJaxfruitNormal", "SlitheringStranglerNormal", "VineShamblerNormal",
-          "CubexConstructNormal", "RubyRaidersNormal", "FogmogNormal"};
-}
-std::vector<std::string> act1Elites() { return {"ByrdonisElite", "BygoneEffigyElite", "PhrogParasiteElite"}; }
-std::vector<std::string> act1Bosses() { return {"VantomBoss", "CeremonialBeastBoss", "TheKinBoss"}; }
 
 }  // namespace db
 }  // namespace sts

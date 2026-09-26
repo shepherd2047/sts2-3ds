@@ -16,8 +16,8 @@ template <class E> void reg() { db::registerEvent(E::kId, [] { return std::uniqu
   static constexpr const char* kId = #Name; \
   Name() { id = #Name; locKey = Key; }
 
-// PORT NOTE: the run has no act index yet (package 3); everything is act 1 (index 0).
-int actIndex(Run&) { return 0; }
+// RunState.CurrentActIndex.
+int actIndex(Run& r) { return r.actIndex; }
 
 // RelicModel.IsTradable. PORT NOTE: approximated by rarity (no HasUponPickupEffect flag).
 bool isTradable(const Relic& r) {

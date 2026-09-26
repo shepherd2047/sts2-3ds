@@ -34,7 +34,6 @@ inline void toLocal(bool top, float& x, float& y) {
 // Everything is scaled by kMapS, which gives the RGDSplus look: paper ~65% of the width,
 // small nodes, the whole act on the two screens with a little scrolling.
 constexpr float kMapS = 0.17f;
-constexpr float kRowH = 155.f * kMapS;   // one map row, in pixels
 // Virtual y of native y = 0 at scroll 0: row 0 just above the HUD, and no row in the
 // 15 px hinge between the screens in the opening view.
 constexpr float kMapY0 = 337.f;
@@ -46,9 +45,31 @@ constexpr float kBossSize = 352.f * kMapS;
 constexpr float kMapTapSlop = 5.f;       // 12 px of 768 on RGDSplus, rounded up for a stylus
 
 // Native map coordinates (NMapScreen): our row r is the game's row r + 1.
-inline std::pair<float, float> mapNative(const MapNode& n) {
+// NMapScreen: rows are 2325 / (rowCount - 1) apart (155 in Overgrowth's 16-row grid,
+// wider in the shorter Hive and Glory maps); the boss sits after the last row.
+inline float mapDistY(const std::vector<MapNode>& nodes) {
+  int rowCount = nodes.empty() ? 16 : nodes.back().row + 1;  // the boss is last, one past the rooms
+  return 2325.f / (float)std::max(2, rowCount - 1);
+}
+inline std::pair<float, float> mapNative(const MapNode& n, float distY) {
   if (n.type == RoomType::Boss) return {0.f, -1780.f};
-  return {n.col * 150.f - 450.f + n.jx, 790.f - (n.row + 1.f) * 155.f + n.jy};
+  return {n.col * 150.f - 450.f + n.jx, 790.f - (n.row + 1.f) * distY + n.jy};
+}
+
+// Per-act art: gfx/bg_<act>.t3t (room) and gfx/bg_map_<act>.t3t (map paper). The previous
+// act's textures are freed when the act changes (3DS linear memory is small).
+Res& R();
+std::string actTexture(const Run& r, const char* kind) {
+  static int loadedAct = -1;
+  if (loadedAct != r.actIndex) {
+    if (loadedAct >= 0) {
+      const char* old = db::acts()[loadedAct].key;
+      R().releaseTexture(std::string("gfx/bg_") + old + ".t3t");
+      R().releaseTexture(std::string("gfx/bg_map_") + old + ".t3t");
+    }
+    loadedAct = r.actIndex;
+  }
+  return std::string("gfx/") + kind + r.act().key + ".t3t";
 }
 
 // Button ids
@@ -115,8 +136,11 @@ Sprite roomIcon(RoomType t, const std::string& bossId = "VantomBoss") {
     case RoomType::Monster: return R().sprite("map/monster");
     case RoomType::Elite: return R().sprite("map/elite");
     case RoomType::Rest: return R().sprite("map/rest");
-    case RoomType::Boss:  // Ceremonial Beast's map node is a Spine animation: use its creature sprite
-      return bossId == "CeremonialBeastBoss" ? R().sprite("creature/CEREMONIAL_BEAST") : R().sprite("map/boss_" + bossId);
+    case RoomType::Boss: {  // Ceremonial Beast's map node is a Spine animation: use its creature sprite
+      if (bossId == "CeremonialBeastBoss") return R().sprite("creature/CEREMONIAL_BEAST");
+      Sprite s = R().sprite("map/boss_" + bossId);
+      return s ? s : R().sprite("map/elite");  // bosses without a ported map icon yet
+    }
     case RoomType::Treasure: return R().sprite("map/chest");
     case RoomType::Shop: return R().sprite("map/shop");
     default: return R().sprite("map/unknown");
@@ -759,7 +783,7 @@ void App::autoplay(double dt) {
 
 void App::drawTitle(bool top) {
   if (top) {
-    gfx::Texture* bg = R().texture("gfx/bg_overgrowth.t3t");
+    gfx::Texture* bg = R().texture(actTexture(*run_, "bg_"));
     gfx::image(bg, 0, 0, kTop, kH, 0, 0, kTop, kH, 0x000000FF, 0.35f);
     Sprite ic = R().sprite("creature/IRONCLAD");
     spr(ic, 40, 205 - ic.ay, -1, -1);
@@ -767,7 +791,7 @@ void App::drawTitle(bool top) {
     t.scale = 2.f;
     R().text(250, 60, "杀戮尖塔 2", t);
     R().text(250, 110, "Nintendo 3DS 非官方移植", ts(F16, col::white, CENTER));
-    R().text(250, 132, "最小可玩版本 · 铁甲战士 · 第一幕", ts(F12, col::gray, CENTER));
+    R().text(250, 132, "开发版 · 铁甲战士 · 三幕", ts(F12, col::gray, CENTER));
     R().text(kTop - 4, kH - 16, "个人自制，不可分发", ts(F12, col::gray, RIGHT));
     return;
   }
@@ -814,21 +838,22 @@ void App::drawRelicIcon(Relic* r, float x, float y, float size) {
 
 // ================================================================ map
 
+
 void App::drawSceneBg(bool top, float dim) {
   const int w = top ? kTop : kBot;
   if (run_->screen == Screen::Map) {
     float bx = 0, by = 0;
     toLocal(top, bx, by);
-    gfx::image(R().texture("gfx/bg_map.t3t"), 0, 0, kMapBgW, kMapBgH, bx + kMapBgX, by + kMapY0 - 1620.f * kMapS + mapScroll_, kMapBgW, kMapBgH);
+    gfx::image(R().texture(actTexture(*run_, "bg_map_")), 0, 0, kMapBgW, kMapBgH, bx + kMapBgX, by + kMapY0 - 1620.f * kMapS + mapScroll_, kMapBgW, kMapBgH);
   } else {
-    gfx::image(R().texture("gfx/bg_overgrowth.t3t"), top ? 0 : kBotOX, 0, w, kH, 0, 0, w, kH, 0x000000FF, 0.15f);
+    gfx::image(R().texture(actTexture(*run_, "bg_")), top ? 0 : kBotOX, 0, w, kH, 0, 0, w, kH, 0x000000FF, 0.15f);
   }
   if (dim > 0) gfx::rect(0, 0, w, kH, (uint32_t)(std::clamp(dim, 0.f, 1.f) * 255));
 }
 
 // Node centre on the two-screen virtual canvas.
 std::pair<float, float> App::mapPos(const MapNode& n) const {
-  auto [nx, ny] = mapNative(n);
+  auto [nx, ny] = mapNative(n, mapDistY(run_->nodes));
   return {kTop / 2.f + nx * kMapS, kMapY0 + ny * kMapS + mapScroll_};
 }
 
@@ -855,7 +880,7 @@ void App::drawMap(bool top) {
   if (top && !mapUserScroll_) {  // once per frame: keep the next row low on the bottom screen
     int curRow = r.currentNode >= 0 ? r.nodes[r.currentNode].row : -1;
     // Keep the next row ~1.5 rows above the HUD (never above the opening view).
-    float nextY = kMapY0 + (790.f - (curRow + 2) * 155.f) * kMapS;
+    float nextY = kMapY0 + (790.f - (curRow + 2) * mapDistY(r.nodes)) * kMapS;
     float target = std::clamp(406.f - nextY, 0.f, kMapScrollMax);
     mapScroll_ += (target - mapScroll_) * 0.15f;
   }
@@ -863,7 +888,7 @@ void App::drawMap(bool top) {
   // One sheet of map paper behind both screens.
   float bx = 0, by = 0;
   toLocal(top, bx, by);
-  gfx::image(R().texture("gfx/bg_map.t3t"), 0, 0, kMapBgW, kMapBgH, bx + kMapBgX, by + kMapY0 - 1620.f * kMapS + mapScroll_, kMapBgW, kMapBgH);
+  gfx::image(R().texture(actTexture(*run_, "bg_map_")), 0, 0, kMapBgW, kMapBgH, bx + kMapBgX, by + kMapY0 - 1620.f * kMapS + mapScroll_, kMapBgW, kMapBgH);
 
   auto pos = [&](const MapNode& n) {
     auto p = mapPos(n);
@@ -1468,7 +1493,7 @@ void App::drawCombat(bool top) {
   else arrow = false;
 
   if (top) {
-    gfx::Texture* bg = R().texture("gfx/bg_overgrowth.t3t");
+    gfx::Texture* bg = R().texture(actTexture(*run_, "bg_"));
     gfx::image(bg, 0, 0, kTop, kH, 0, 0, kTop, kH);
     gfx::rectGradient(0, 150, kTop, 90, 0x00000000, 0x00000060);
     const float feet = 170;  // ~70% down the screen, the room's floor line (RGDSplus/native)
@@ -1511,7 +1536,7 @@ void App::drawCombat(bool top) {
 
   // ---- bottom screen (RGDSplus layout): the same room behind, no status strip, the hand
   // centred, energy and end turn at the sides below it, piles in the bottom corners.
-  gfx::Texture* room = R().texture("gfx/bg_overgrowth.t3t");
+  gfx::Texture* room = R().texture(actTexture(*run_, "bg_"));
   gfx::image(room, kBotOX, 0, kBot, kH, 0, 0, kBot, kH, 0x000000FF, 0.15f);
 
   if (cb->choice.active) {
@@ -1802,7 +1827,7 @@ void App::drawReward(bool top) {
   Run& r = *run_;
   int n = (int)r.rewardCards.size();
   if (top) {
-    gfx::Texture* bg = R().texture("gfx/bg_overgrowth.t3t");
+    gfx::Texture* bg = R().texture(actTexture(*run_, "bg_"));
     gfx::image(bg, 0, 0, kTop, kH, 0, 0, kTop, kH, 0x000000FF, 0.55f);
     drawTopBar();
     if (sel_ >= 0 && sel_ < n) {
@@ -1853,7 +1878,7 @@ void App::drawRest(bool top) {
   Run& r = *run_;
   int heal = (Dec(r.player->maxHp) * Dec::lit(0.3)).toInt();
   if (top) {
-    gfx::Texture* bg = R().texture("gfx/bg_overgrowth.t3t");
+    gfx::Texture* bg = R().texture(actTexture(*run_, "bg_"));
     gfx::image(bg, 0, 0, kTop, kH, 0, 0, kTop, kH, 0x100400FF, 0.6f);
     gfx::circle(200, 200, 40, 0xFF802040);
     gfx::circle(200, 204, 22, 0xFFB04060);
@@ -2226,8 +2251,9 @@ void App::updateDeckChoice(const gfx::Input& in) {
 
 namespace {
 const char* kDevActions[] = {"无敌", "回满血", "金币 +100", "最大生命 +10", "获得遗物…",
-                             "加入卡牌…", "升级全部卡牌", "指定下一场战斗…", "秒杀敌人", "自由地图"};
-constexpr int kDevActionCount = 10;
+                             "加入卡牌…", "升级全部卡牌", "指定下一场战斗…", "秒杀敌人", "自由地图",
+                             "跳到下一幕"};
+constexpr int kDevActionCount = 11;
 constexpr int kDevRows = 9;  // encounter list rows per page
 }  // namespace
 
@@ -2238,8 +2264,9 @@ void App::drawDev(bool top) {
     for (auto& id : db::ironcladRelicPool()) ids.push_back(id);
     for (auto& id : ids) if (auto rel = db::relic(id)) { rel->run = run_.get(); devRelics_.push_back(std::move(rel)); }
     for (auto& id : db::ironcladPool()) if (auto c = db::card(id)) devCards_.push_back(std::move(c));
-    for (auto* list : {&db::act1Weak, &db::act1Normal, &db::act1Elites, &db::act1Bosses})
-      for (auto& id : (*list)()) devEncounters_.push_back(id);
+    for (auto& a : db::acts())
+      for (auto* list : {&a.weak, &a.normal, &a.elites, &a.bosses})
+        for (auto& id : *list) if (db::encounter(id)) devEncounters_.push_back(id);
   }
   for (auto& rel : devRelics_) rel->run = run_.get();
   if (top) {
@@ -2259,6 +2286,7 @@ void App::drawDev(bool top) {
       line(60, "无敌", r.devGod ? "开" : "关", r.devGod ? col::green : col::white);
       line(80, "自由地图", r.freeMap ? "开（任意房间可进）" : "关", r.freeMap ? col::green : col::white);
       line(100, "下一场战斗", r.devNextEncounter.empty() ? "随机" : r.devNextEncounter, col::white);
+      line(140, "当前", "第 " + num(r.actIndex + 1) + " 幕 · " + r.act().name, col::white);
       line(120, "牌组 / 遗物", num((int)r.deck.size()) + " 张 / " + num((int)r.relics.size()) + " 个", col::white);
       R().text(kTop / 2, 160, devPage_ == 0 ? "SELECT 或 B 关闭" : "点一下选中，再点一次确认", ts(F12, col::gray, CENTER));
     }
@@ -2268,10 +2296,12 @@ void App::drawDev(bool top) {
   if (devPage_ == 0) {
     for (int i = 0; i < kDevActionCount; ++i) {
       float x = i % 2 ? 164 : 6, y = 6 + (i / 2) * 38;
+      if (i == 10) { x = 164; y = 200; }  // beside 关闭
       std::string label = kDevActions[i];
       bool on = (i == 0 && r.devGod) || (i == 9 && r.freeMap);
       if (i == 0 || i == 9) label += on ? "：开" : "：关";
-      bool enabled = i != 8 || (r.combat && r.combat->playerPhase && r.combat->actions.waiting());
+      bool enabled = i == 8 ? (r.combat && r.combat->playerPhase && r.combat->actions.waiting())
+                   : i == 10 ? (r.screen == Screen::Map && r.actIndex + 1 < Run::kActs) : true;
       button(x, y, 150, 32, label, ID_DEV0 + i, enabled, on);
     }
     button(10, 200, 100, 34, "关闭", ID_BACK);
@@ -2375,6 +2405,14 @@ void App::updateDev(const gfx::Input& in) {
         }
         break;
       case 9: r.freeMap = !r.freeMap; break;
+      case 10:
+        if (r.screen == Screen::Map && r.actIndex + 1 < Run::kActs) {
+          r.devSkipAct = true;  // Run::main enters the next act at the map choice
+          r.mapChoice.fire(-1);
+          mapScroll_ = 0;
+          close();
+        }
+        break;
     }
     return;
   }
@@ -2390,7 +2428,7 @@ void App::updateDev(const gfx::Input& in) {
 
 void App::drawEnd(bool top, bool won) {
   if (top) {
-    gfx::Texture* bg = R().texture("gfx/bg_overgrowth.t3t");
+    gfx::Texture* bg = R().texture(actTexture(*run_, "bg_"));
     gfx::image(bg, 0, 0, kTop, kH, 0, 0, kTop, kH, won ? 0x302000FF : 0x200000FF, 0.6f);
     TextStyle t = ts(F16, won ? col::gold : col::red, CENTER);
     t.scale = 2.f;

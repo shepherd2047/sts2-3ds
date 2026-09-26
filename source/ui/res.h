@@ -49,6 +49,7 @@ class Res {
   bool load();
   Sprite sprite(const std::string& name) const;
   gfx::Texture* texture(const std::string& path);
+  void releaseTexture(const std::string& path);  // frees a texture loaded by texture()
   // romfs/spine/KEY.*; null if missing or unreadable.
   const spine::SkeletonData* skeleton(const std::string& key);
   // Frees every loaded skeleton (and its texture pages) whose key is not in keep.

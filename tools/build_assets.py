@@ -331,10 +331,14 @@ def build(args):
     for name in ('monster', 'elite', 'rest', 'unknown', 'chest', 'shop', 'node_background'):
         packer.add('map/' + name, fit(a.sprite(f'images/atlases/ui_atlas.sprites/map/icons/map_{name}.tres'), (22, 22)))
     packer.add('map/marker', fit(a.sprite('images/atlases/ui_atlas.sprites/map/icons/map_marker_ironclad.tres'), (26, 26)))
-    # Boss map nodes, one per act 1 boss (map/boss_<EncounterId>).
-    # (Ceremonial Beast's map node is a Spine animation; the UI inks its creature sprite.)
+    # Boss map nodes (map/boss_<EncounterId>). Ceremonial Beast, The Insatiable and the Queen
+    # have Spine map nodes instead; the UI falls back (creature sprite or the elite icon).
     for enc, path in (('VantomBoss', 'images/map/placeholder/vantom_boss_icon.png'),
-                      ('TheKinBoss', 'images/map/placeholder/the_kin_boss_icon.png')):
+                      ('TheKinBoss', 'images/map/placeholder/the_kin_boss_icon.png'),
+                      ('KaiserCrabBoss', 'images/map/placeholder/kaiser_crab_boss_icon.png'),
+                      ('KnowledgeDemonBoss', 'images/map/placeholder/knowledge_demon_boss_icon.png'),
+                      ('AeonglassBoss', 'images/map/placeholder/aeonglass_boss_icon.png'),
+                      ('TestSubjectBoss', 'images/map/placeholder/test_subject_boss_icon.png')):
         packer.add('map/boss_' + enc, fit_height(g.image(path), 64))
     select = g.image('images/packed/character_select/char_select_ironclad.png')
     packer.add('ui/ironclad_select', fit_height(select, 120))
@@ -354,49 +358,40 @@ def build(args):
     print(f'  {len(packer.entries)} sprites in {len(packer.pages)} page(s)')
 
     print('backgrounds')
-    # Combat room: all layers composited (StS2 layers are full-frame images).
-    layers = [g.image(f'images/rooms/overgrowth/overgrowth_{n}.png') for n in ('00', '01_a', '02_a', '03_a', '04_a')]
-    W, H = layers[0].size
-    scene = Image.new('RGBA', (W, H), (0, 0, 0, 255))
-    for im in layers:
-        scene.alpha_composite(im.resize((W, H)))
-    # Top: the camera's view (1920x1080 of the 2764.8x1296 scene), cropped to 5:3.
-    k = W / 2764.8
-    cw = 1920 * k
-    ch = cw * 240 / 400
-    cx, cy = W / 2, H / 2
-    top = scene.crop((round(cx - cw / 2), round(cy - ch / 2), round(cx + cw / 2), round(cy + ch / 2)))
-    top = top.resize((400, 240), Image.LANCZOS)
-    canvas = Image.new('RGBA', (512, 256), (0, 0, 0, 255))
-    canvas.paste(top, (0, 0))
-    write_t3t(os.path.join(OUT, 'gfx', 'bg_overgrowth.t3t'), canvas)
-    # Bottom: the floor of the same room (4:3), dimmed so cards stay readable.
-    fh = H * 0.42
-    fw = fh * 4 / 3
-    floor = scene.crop((round(cx - fw / 2), round(H - fh), round(cx + fw / 2), H)).resize((320, 240), Image.LANCZOS)
-    floor = Image.blend(floor, Image.new('RGBA', floor.size, (8, 10, 8, 255)), 0.35)
-    fcanvas = Image.new('RGBA', (512, 256), (0, 0, 0, 255))
-    fcanvas.paste(floor, (0, 0))
-    write_t3t(os.path.join(OUT, 'gfx', 'bg_overgrowth_floor.t3t'), fcanvas)
-    if args.preview:
-        os.makedirs(os.path.join(ROOT, 'build'), exist_ok=True)
-        canvas.save(os.path.join(ROOT, 'build', 'preview_bg.png'))
-        fcanvas.save(os.path.join(ROOT, 'build', 'preview_floor.png'))
-    # Map paper: the game's own MapBg (map_screen.tscn): top / middle / bottom parchment,
-    # each fitted into a 1920x1080 box (keep-aspect -> 1527x1080) and stacked from y=-1620
-    # to +1620. Baked at MAP_SCALE (ui.cpp kMapS) into one 260x551 strip.
-    MAP_SCALE = 0.17
-    parts = [g.image(f'images/packed/map/map_bgs/overgrowth/map_{p}_overgrowth.png') for p in ('top', 'middle', 'bottom')]
-    pw, ph = round(1527 * MAP_SCALE), round(1080 * MAP_SCALE)
-    sheet = Image.new('RGBA', (pw, ph * 3), (0, 0, 0, 0))
-    for i, part in enumerate(parts):
-        sheet.alpha_composite(part.resize((pw, ph), Image.LANCZOS), (0, i * ph))
-    print('  map paper', sheet.size)
-    mb = Image.new('RGBA', (512, 1024), (0, 0, 0, 0))
-    mb.paste(sheet, (0, 0))
-    write_t3t(os.path.join(OUT, 'gfx', 'bg_map.t3t'), mb)
-    if args.preview:
-        canvas.save(os.path.join(ROOT, 'build', 'preview_bg.png'))
+    # Per act (ActModel.FilePathIdentifier): gfx/bg_<act>.t3t (room) and gfx/bg_map_<act>.t3t.
+    for act in ('overgrowth', 'hive', 'glory'):
+        # Combat room: all layers composited (StS2 layers are full-frame images).
+        layers = [g.image(f'images/rooms/{act}/{act}_{n}.png') for n in ('00', '01_a', '02_a', '03_a', '04_a')]
+        W, H = layers[0].size
+        scene = Image.new('RGBA', (W, H), (0, 0, 0, 255))
+        for im in layers:
+            scene.alpha_composite(im.resize((W, H)))
+        # Top: the camera's view (1920x1080 of the 2764.8x1296 scene), cropped to 5:3.
+        k = W / 2764.8
+        cw = 1920 * k
+        ch = cw * 240 / 400
+        cx, cy = W / 2, H / 2
+        top = scene.crop((round(cx - cw / 2), round(cy - ch / 2), round(cx + cw / 2), round(cy + ch / 2)))
+        top = top.resize((400, 240), Image.LANCZOS)
+        canvas = Image.new('RGBA', (512, 256), (0, 0, 0, 255))
+        canvas.paste(top, (0, 0))
+        write_t3t(os.path.join(OUT, 'gfx', f'bg_{act}.t3t'), canvas)
+        # Map paper: the game's own MapBg (map_screen.tscn): top / middle / bottom parchment,
+        # each fitted into a 1920x1080 box (keep-aspect -> 1527x1080) and stacked from y=-1620
+        # to +1620. Baked at MAP_SCALE (ui.cpp kMapS) into one 260x551 strip.
+        MAP_SCALE = 0.17
+        parts = [g.image(f'images/packed/map/map_bgs/{act}/map_{p}_{act}.png') for p in ('top', 'middle', 'bottom')]
+        pw, ph = round(1527 * MAP_SCALE), round(1080 * MAP_SCALE)
+        sheet = Image.new('RGBA', (pw, ph * 3), (0, 0, 0, 0))
+        for i, part in enumerate(parts):
+            sheet.alpha_composite(part.resize((pw, ph), Image.LANCZOS), (0, i * ph))
+        print('  ', act, 'room + map paper', sheet.size)
+        mb = Image.new('RGBA', (512, 1024), (0, 0, 0, 0))
+        mb.paste(sheet, (0, 0))
+        write_t3t(os.path.join(OUT, 'gfx', f'bg_map_{act}.t3t'), mb)
+        if args.preview:
+            os.makedirs(os.path.join(ROOT, 'build'), exist_ok=True)
+            canvas.save(os.path.join(ROOT, 'build', f'preview_bg_{act}.png'))
 
     print('text')
     strings = {}

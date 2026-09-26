@@ -83,7 +83,8 @@ assets); devkitPro and Azahar are manual installs it links to.
 ```bash
 make -f Makefile.sdl            # build/sts2-preview + build/sim
 ./build/sim 200                 # headless fights; SIM_ALLCARDS=1 plays every card
-make                            # sts2-3ds.3dsx (devkitPro env)
+make                            # sts2-3ds.3dsx (devkitPro env); packs romfs_3ds/
+python tools/compress_romfs.py  # romfs/ -> romfs_3ds/ (GPU texture formats), after build_assets
 make link                       # build + send to the 3DS over Wi-Fi (IP=... if needed)
 ```
 
@@ -139,7 +140,14 @@ scripts drift; delete the debug file afterwards.
   drop a relic, the treasure row (map row 8) gives 42-52 gold + a relic from the
   shared bag. Skipped relics are listed at the end of each file with the missing
   feature (potions, shop, card-reward hooks, death prevention, ...).
-- Debug: `STS_ROOM=Treasure|Rest|Elite|Boss` makes the first room that type.
+- Acts: `acts.cpp` lists Overgrowth / Hive / Glory encounters and events as in the C#
+  (content files only register them; unregistered ids are skipped, and empty elite /
+  boss pools fall back to the act's normal fights). `Run::enterAct` builds each act's
+  map (`generateStandardActMap(rng, act)`: 15 / 14 / 13 rooms), queues and events; a boss
+  gives 100 gold + a card and leads to the next act (full heal until Ancients exist);
+  act 3's boss is Victory. Art per act: `gfx/bg_<act>.t3t`, `gfx/bg_map_<act>.t3t`.
+- Debug: `STS_ROOM=Treasure|Rest|Elite|Boss|Event` makes the first room that type,
+  `STS_ACT=2|3` starts in that act; the dev menu has 跳到下一幕.
 - Development build: `Run::freeMap` (default on; `STS_PATH_ONLY=1` off) lets any
   map node be entered. SELECT (Backspace in the preview) or 开发 on the map opens
   the developer menu: god mode, heal, gold, max HP, obtain any relic, add any

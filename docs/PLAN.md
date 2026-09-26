@@ -70,7 +70,7 @@ file and run it with bash.
 | 0 | Event text string vars | engine, small | – | done |
 | 1 | Act 1 events (12 left) | content | 0 | done (locked options: Wellspring BOTTLE, WhisperingHollow GOLD = potions; SapphireSeed PLANT, WoodCarvings SNAKE = enchantments) |
 | 2 | Shared events (18) | content | 0 | done (8 of 18, see events_shared.cpp header) |
-| 3 | Multi-act run structure | engine, *Opus* | – | todo |
+| 3 | Multi-act run structure | engine, *Opus* | – | done (acts.cpp; TheArchitect ending not ported) |
 | 4a | Act 2 monsters A | content | – | done |
 | 4b | Act 2 monsters B | content | – | done |
 | 4c | Act 2 elites + bosses | content (+engine likely) | – | todo |

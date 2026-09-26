@@ -9,7 +9,12 @@
 namespace sts {
 
 namespace {
-constexpr int kWeakFights = 3;  // Overgrowth.NumberOfWeakEncounters
+// Registered ids of a list, in order.
+std::vector<std::string> registered(const std::vector<std::string>& ids) {
+  std::vector<std::string> out;
+  for (auto& id : ids) if (db::encounter(id)) out.push_back(id);
+  return out;
+}
 }  // namespace
 
 Creature* Relic::owner() const { return run->player.get(); }
@@ -210,7 +215,7 @@ Task<bool> Run::eventFight(const std::string& encounterId) {
   bool won = co_await fight(encounterId);
   if (!won) { died = true; co_return false; }
   Rng& rr = rng("Rewards");
-  co_await gainGold(enc->room == RoomType::Elite ? rr.nextInt(25, 36) : rr.nextInt(10, 21));
+  co_await gainGold(enc->room == RoomType::Elite ? rr.nextInt(35, 46) : rr.nextInt(10, 21));
   combat.reset();
   for (auto& rel : relics) rel->combat = nullptr;
   if (enc->room == RoomType::Elite) co_await offerRelic(pullRelicFromFront(relicBag, rollRelicRarity(rr)), false);
@@ -266,30 +271,61 @@ void Run::start(uint64_t s) {
   bb->run = this;
   relics.push_back(std::move(bb));
   populateRelicBags();
-  // ActModel.GenerateRooms: the act's events, shuffled once (only ported ones).
-  eventQueue.clear();
   visitedEvents.clear();
-  for (auto& id : db::act1Events()) if (db::event(id)) eventQueue.push_back(id);
+  died = false;
+  freeMap = getenv("STS_PATH_ONLY") == nullptr;
+  // Debug: STS_ACT=2|3 starts the run in that act.
+  const char* startAct = getenv("STS_ACT");
+  enterAct(startAct ? std::atoi(startAct) - 1 : 0);
+}
+
+const db::ActDef& Run::act() const { return db::acts()[actIndex]; }
+
+// RunManager.EnterAct + ActModel.GenerateRooms for one act. PORT NOTE: C# generates every
+// act's rooms up front from Rng.UpFront; here each act draws from the Encounters/Events
+// streams when it is entered. Encounter lists fall back when an act's pool isn't ported
+// yet (elites -> normal fights, boss -> elites -> normal fights) so a run can always go on.
+void Run::enterAct(int index) {
+  actIndex = std::clamp(index, 0, kActs - 1);
+  const db::ActDef& a = act();
+  eventQueue.clear();
+  for (auto& id : a.events) if (db::event(id)) eventQueue.push_back(id);
   for (auto& id : db::sharedEvents()) if (db::event(id)) eventQueue.push_back(id);
   rng("Events").shuffle(eventQueue);
-  died = false;
 
-  weakQueue = db::act1Weak();
-  normalQueue = db::act1Normal();
-  rng("Encounters").shuffle(weakQueue);
-  rng("Encounters").shuffle(normalQueue);
-  bossId = rng("Encounters").nextItem(db::act1Bosses());
+  weakQueue = registered(a.weak);
+  normalQueue = registered(a.normal);
+  eliteQueue = registered(a.elites);
+  std::vector<std::string> bosses = registered(a.bosses);
+  if (weakQueue.empty()) weakQueue = normalQueue;
+  if (normalQueue.empty()) normalQueue = weakQueue;
+  if (normalQueue.empty()) weakQueue = normalQueue = registered(db::acts()[0].normal);
+  if (eliteQueue.empty()) eliteQueue = normalQueue;
+  if (bosses.empty()) bosses = registered(a.elites);
+  if (bosses.empty()) bosses = normalQueue;
+  Rng& er = rng("Encounters");
+  er.shuffle(weakQueue);
+  er.shuffle(normalQueue);
+  er.shuffle(eliteQueue);
+  bossId = er.nextItem(bosses);
+  fightsThisAct = 0;
+  // SetActInternal: UnknownMapPointOdds.ResetToBase.
+  unknownMonsterOdds = 0.1f;
+  unknownTreasureOdds = 0.02f;
+  unknownShopOdds = 0.03f;
   generateMap();
   currentNode = -1;
-  freeMap = getenv("STS_PATH_ONLY") == nullptr;
 }
 
 void Run::generateMap() {
   // StandardActMap (mapgen.cpp): the game's own generator, paths, pruning and types.
-  nodes = generateStandardActMap(rng("Map"));
-  // NMapScreen layout: each point jittered by up to ±21 / ±25 units (map_jitter stream)
-  // and tilted by NextGaussianFloat(0, 8) degrees (Rng.Chaotic in C#: cosmetic only).
-  Rng& j = rng("MapJitter");
+  // StandardActMap.CreateFor: Rng(seed, "act_<n>_map").
+  std::string stream = "act_" + std::to_string(actIndex + 1) + "_map";
+  nodes = generateStandardActMap(rng(stream.c_str()), actIndex);
+  // NMapScreen layout: each point jittered by up to ±21 / ±25 units (map_jitter_<act>
+  // stream) and tilted by NextGaussianFloat(0, 8) degrees (Rng.Chaotic in C#: cosmetic only).
+  std::string jitter = "map_jitter_" + std::to_string(actIndex);
+  Rng& j = rng(jitter.c_str());
   for (auto& n : nodes) {
     n.x = (float)n.col;
     n.y = (float)n.row;
@@ -388,10 +424,14 @@ Task<bool> Run::fight(const std::string& encounterId) {
 }
 
 Task<> Run::main() {
-  int fightsDone = 0;
   for (;;) {
     screen = Screen::Map;
     int choice = co_await mapChoice.next();
+    if (devSkipAct) {  // developer menu: 跳到下一幕
+      devSkipAct = false;
+      if (actIndex + 1 < kActs) enterAct(actIndex + 1);
+      continue;
+    }
     auto reach = reachableNodes();
     if (std::find(reach.begin(), reach.end(), choice) == reach.end()) continue;
     currentNode = choice;
@@ -431,21 +471,30 @@ Task<> Run::main() {
     if (type == RoomType::Monster || type == RoomType::Elite || type == RoomType::Boss) {
       std::string id;
       if (type == RoomType::Boss) id = bossId;
-      else if (type == RoomType::Elite) id = rng("Encounters").nextItem(db::act1Elites());
-      else if (fightsDone < kWeakFights) id = weakQueue[fightsDone % weakQueue.size()];
-      else id = normalQueue[(fightsDone - kWeakFights) % normalQueue.size()];
-      if (type == RoomType::Monster) ++fightsDone;
+      else if (type == RoomType::Elite) {
+        // ActModel.GenerateRooms: elites come from a grab bag, refilled when empty.
+        id = eliteQueue.front();
+        std::rotate(eliteQueue.begin(), eliteQueue.begin() + 1, eliteQueue.end());
+      } else if (fightsThisAct < act().weakCount) {
+        id = weakQueue[fightsThisAct % weakQueue.size()];
+      } else {
+        id = normalQueue[(fightsThisAct - act().weakCount) % normalQueue.size()];
+      }
+      if (type == RoomType::Monster) ++fightsThisAct;
       // Debug: STS_ENCOUNTER=<EncounterId> makes the first fight that encounter.
       if (const char* forced = getenv("STS_ENCOUNTER"); forced && floor == 1 && db::encounter(forced)) id = forced;
       if (!devNextEncounter.empty() && db::encounter(devNextEncounter)) { id = devNextEncounter; devNextEncounter.clear(); }
 
       bool won = co_await fight(id);
       if (!won) { screen = Screen::GameOver; co_return; }
-      if (type == RoomType::Boss) { screen = Screen::Victory; co_return; }
+      // RewardsSet.WithRewardsFromRoom: the last act's boss gives nothing; the run is won.
+      // PORT NOTE: C# then enters TheArchitect event (the ending); not ported yet.
+      if (type == RoomType::Boss && actIndex + 1 >= kActs) { screen = Screen::Victory; co_return; }
 
       // Rewards (RewardsSet): gold, then for elites a relic, then a pick of three cards.
+      // EncounterModel gold: monster 10-20, elite 35-45, boss 100.
       Rng& rr = rng("Rewards");
-      co_await gainGold(type == RoomType::Elite ? rr.nextInt(25, 36) : rr.nextInt(10, 21));
+      co_await gainGold(type == RoomType::Boss ? 100 : type == RoomType::Elite ? rr.nextInt(35, 46) : rr.nextInt(10, 21));
       combat.reset();
       for (auto& rel : relics) rel->combat = nullptr;
       if (type == RoomType::Elite) co_await offerRelic(pullRelicFromFront(relicBag, rollRelicRarity(rr)), false);
@@ -454,6 +503,13 @@ Task<> Run::main() {
       int pick = co_await rewardChoice.next();
       if (pick >= 0 && pick < (int)rewardCards.size()) deck.push_back(std::move(rewardCards[pick]));
       rewardCards.clear();
+      if (type == RoomType::Boss) {
+        // RunManager.EnterNextAct. PORT NOTE: the next act starts with its Ancient, which
+        // heals to full (AncientEventModel.BeforeEventStarted); until Ancients are ported
+        // (package 11) the heal happens here.
+        enterAct(actIndex + 1);
+        player->hp = player->maxHp;
+      }
     } else if (type == RoomType::Treasure) {
       // TreasureRoom: 42-52 gold, then one relic from the shared bag.
       for (Model* m : listeners()) co_await m->afterRoomEntered(type);

@@ -3,15 +3,13 @@
 // and MegaCrit.Sts2.Core.Models.Acts.Overgrowth.GetMapPointTypes /
 // MegaCrit.Sts2.Core.Models.ActModel.GetNumberOfRooms.
 //
-// This is specialized to the single act this port currently has (Overgrowth,
-// act 1): single player (isMultiplayer=false), shouldReplaceTreasureWithElites
-// = false, hasSecondBoss = false, no mapPointTypeCountsOverride, no Ancient
-// unlock filtering (irrelevant to map shape) and no AscensionLevel.SwarmingElites
-// (NumOfElites is always 5). If a second act is ever added with different
-// BaseNumberOfRooms, this file needs a parameter for it.
+// Specialized to single player (isMultiplayer=false), shouldReplaceTreasureWithElites
+// = false, hasSecondBoss = false, no mapPointTypeCountsOverride and no
+// AscensionLevel.SwarmingElites (NumOfElites is always 5). The act index picks
+// BaseNumberOfRooms (Overgrowth 15, Hive 14, Glory 13) and GetMapPointTypes.
 //
 // Indexing: the C# grid is Grid[col, row] with col in [0,7) and row in
-// [0, mapLength) where mapLength = BaseNumberOfRooms + 1 = 16. Row 0 is never
+// [0, mapLength) where mapLength = BaseNumberOfRooms + 1 (16 in act 1). Row 0 is never
 // populated (the StartingMapPoint lives there but isn't stored in the grid);
 // real rooms occupy rows 1..15. The boss lives at row mapLength = 16 (out of
 // grid bounds), col 3, and is also not stored in the grid. Our output drops
@@ -89,8 +87,6 @@ struct Node {
 // ---------------------------------------------------------------- constants
 
 constexpr int kMapWidth = 7;               // StandardActMap._mapWidth
-constexpr int kBaseNumberOfRooms = 15;      // Overgrowth.BaseNumberOfRooms
-constexpr int kMapLength = kBaseNumberOfRooms + 1;  // ActModel.GetNumberOfRooms(false) + 1 == 16
 constexpr int kNumOfShops = 3;              // MapPointTypeCounts.NumOfShops
 constexpr int kNumOfElites = 5;             // MapPointTypeCounts.NumOfElites (no SwarmingElites)
 
@@ -143,6 +139,7 @@ bool coordLess(Node* a, Node* b) {
 
 struct MapBuilder {
   Rng& rng;
+  int mapLength;  // ActModel.GetNumberOfRooms(false) + 1 (16 / 15 / 14 for acts 1-3)
   std::vector<std::unique_ptr<Node>> pool;
   std::vector<std::vector<Node*>> grid;  // grid[col][row], col in [0,7), row in [0,16)
   NodeSet startMapPoints;
@@ -151,7 +148,7 @@ struct MapBuilder {
   int numOfRests = 0;
   int numOfUnknowns = 0;
 
-  explicit MapBuilder(Rng& r) : rng(r), grid(kMapWidth, std::vector<Node*>(kMapLength, nullptr)) {}
+  MapBuilder(Rng& r, int len) : rng(r), mapLength(len), grid(kMapWidth, std::vector<Node*>(len, nullptr)) {}
 
   Node* makeNode(int col, int row) {
     pool.push_back(std::make_unique<Node>());
@@ -178,7 +175,7 @@ struct MapBuilder {
   std::vector<Node*> getAllMapPoints() const {
     std::vector<Node*> out;
     for (int c = 0; c < kMapWidth; c++)
-      for (int r = 0; r < kMapLength; r++)
+      for (int r = 0; r < mapLength; r++)
         if (grid[c][r]) out.push_back(grid[c][r]);
     return out;
   }
@@ -222,7 +219,7 @@ struct MapBuilder {
 
   void pathGenerate(Node* startingNode) {
     Node* cur = startingNode;
-    while (cur->row < kMapLength - 1) {
+    while (cur->row < mapLength - 1) {
       int col, row;
       generateNextCoord(cur, col, row);
       Node* next = getOrCreatePoint(col, row);
@@ -242,7 +239,7 @@ struct MapBuilder {
       startMapPoints.insert(p);
       pathGenerate(p);
     }
-    forEachInRow(grid, kMapLength - 1, [&](Node* x) { x->addChild(bossPoint); });
+    forEachInRow(grid, mapLength - 1, [&](Node* x) { x->addChild(bossPoint); });
     forEachInRow(grid, 1, [&](Node* x) { startingPoint->addChild(x); });
   }
 
@@ -253,7 +250,7 @@ struct MapBuilder {
     return true;
   }
   bool isValidForUpper(MPType t, Node* n) {
-    if (n->row >= kMapLength - 3) return !isUpperRestricted(t);
+    if (n->row >= mapLength - 3) return !isUpperRestricted(t);
     return true;
   }
   bool isValidWithParents(MPType t, Node* n) {
@@ -314,9 +311,9 @@ struct MapBuilder {
   }
 
   void assignPointTypes() {
-    forEachInRow(grid, kMapLength - 1, [&](Node* p) { p->type = MPType::RestSite; p->canBeModified = false; });
+    forEachInRow(grid, mapLength - 1, [&](Node* p) { p->type = MPType::RestSite; p->canBeModified = false; });
     // shouldReplaceTreasureWithElites == false for this port.
-    forEachInRow(grid, kMapLength - 7, [&](Node* p) { p->type = MPType::Treasure; p->canBeModified = false; });
+    forEachInRow(grid, mapLength - 7, [&](Node* p) { p->type = MPType::Treasure; p->canBeModified = false; });
     forEachInRow(grid, 1, [&](Node* p) { p->type = MPType::Monster; p->canBeModified = false; });
 
     std::deque<MPType> toAssign;
@@ -540,7 +537,7 @@ struct MapBuilder {
   // ---- MapPostProcessing ----
 
   static bool isColumnEmpty(std::vector<std::vector<Node*>>& grid, int col) {
-    for (int r = 0; r < kMapLength; r++) if (grid[col][r]) return false;
+    for (int r = 0; r < (int)grid[col].size(); r++) if (grid[col][r]) return false;
     return true;
   }
 
@@ -552,7 +549,7 @@ struct MapBuilder {
     else if (!leftEmpty && rightEmpty) shift = 1;
     if (shift == 0) return;
     if (shift > 0) {
-      for (int row = 0; row < kMapLength; row++) {
+      for (int row = 0; row < mapLength; row++) {
         for (int col = kMapWidth - 1; col >= 0; col--) {
           Node* n = grid[col][row];
           grid[col][row] = nullptr;
@@ -564,7 +561,7 @@ struct MapBuilder {
         }
       }
     } else {
-      for (int row = 0; row < kMapLength; row++) {
+      for (int row = 0; row < mapLength; row++) {
         for (int col = 0; col < kMapWidth; col++) {
           Node* n = grid[col][row];
           grid[col][row] = nullptr;
@@ -579,7 +576,7 @@ struct MapBuilder {
   }
 
   void straightenPaths() {
-    for (int row = 0; row < kMapLength; row++) {
+    for (int row = 0; row < mapLength; row++) {
       for (int col = 0; col < kMapWidth; col++) {
         Node* n = grid[col][row];
         if (!n || n->parents.size() != 1 || n->children.size() != 1) continue;
@@ -636,7 +633,7 @@ struct MapBuilder {
   }
 
   void spreadAdjacentMapPoints() {
-    for (int row = 0; row < kMapLength; row++) {
+    for (int row = 0; row < mapLength; row++) {
       std::vector<Node*> rowNodes;
       for (int col = 0; col < kMapWidth; col++) if (grid[col][row]) rowNodes.push_back(grid[col][row]);
       bool changed;
@@ -683,14 +680,20 @@ RoomType toRoomType(MPType t) {
 
 }  // namespace
 
-std::vector<MapNode> generateStandardActMap(Rng& mapRng) {
-  MapBuilder b(mapRng);
+std::vector<MapNode> generateStandardActMap(Rng& mapRng, int actIndex) {
+  // BaseNumberOfRooms: Overgrowth 15, Hive 14, Glory 13.
+  static const int kRooms[] = {15, 14, 13};
+  actIndex = std::clamp(actIndex, 0, 2);
+  MapBuilder b(mapRng, kRooms[actIndex] + 1);
   b.startingPoint = b.makeNode(kMapWidth / 2, 0);
-  b.bossPoint = b.makeNode(kMapWidth / 2, kMapLength);
+  b.bossPoint = b.makeNode(kMapWidth / 2, b.mapLength);
 
-  // Overgrowth.GetMapPointTypes (before GenerateMap, per the C# constructor order).
-  b.numOfRests = nextGaussianInt(mapRng, 7, 1, 6, 7);
-  b.numOfUnknowns = nextGaussianInt(mapRng, 12, 1, 10, 14);  // MapPointTypeCounts.StandardRandomUnknownCount
+  // <Act>.GetMapPointTypes (before GenerateMap, per the C# constructor order);
+  // MapPointTypeCounts.StandardRandomUnknownCount, minus one in Hive and Glory.
+  if (actIndex == 0) b.numOfRests = nextGaussianInt(mapRng, 7, 1, 6, 7);
+  else if (actIndex == 1) b.numOfRests = nextGaussianInt(mapRng, 6, 1, 6, 7);
+  else b.numOfRests = mapRng.nextInt(5, 7);
+  b.numOfUnknowns = nextGaussianInt(mapRng, 12, 1, 10, 14) - (actIndex > 0 ? 1 : 0);
 
   b.generateMap();
   b.assignPointTypes();
@@ -702,8 +705,8 @@ std::vector<MapNode> generateStandardActMap(Rng& mapRng) {
   // Build the output: one MapNode per non-null grid point (rows 1..15 -> our
   // 0..14), boss appended last (row 15, col 3), next = child indices.
   std::vector<MapNode> nodes;
-  std::vector<std::vector<int>> indexOf(kMapWidth, std::vector<int>(kMapLength, -1));
-  for (int row = 1; row < kMapLength; row++) {
+  std::vector<std::vector<int>> indexOf(kMapWidth, std::vector<int>(b.mapLength, -1));
+  for (int row = 1; row < b.mapLength; row++) {
     for (int col = 0; col < kMapWidth; col++) {
       Node* n = b.grid[col][row];
       if (!n) continue;
@@ -718,12 +721,12 @@ std::vector<MapNode> generateStandardActMap(Rng& mapRng) {
   int bossIndex = (int)nodes.size();
   MapNode bossNode;
   bossNode.col = kMapWidth / 2;
-  bossNode.row = kMapLength - 1;  // our row 15
+  bossNode.row = b.mapLength - 1;  // one past the last room row
   bossNode.type = RoomType::Boss;
   nodes.push_back(bossNode);
 
   int outIdx = 0;
-  for (int row = 1; row < kMapLength; row++) {
+  for (int row = 1; row < b.mapLength; row++) {
     for (int col = 0; col < kMapWidth; col++) {
       Node* n = b.grid[col][row];
       if (!n) continue;
