@@ -81,11 +81,12 @@ file and run it with bash.
 | 8 | Potions | engine + UI, *Opus* | – | todo |
 | 9 | Shop (merchant) | engine + UI | 8 | todo |
 | 10 | Remaining relics (skipped ones + Shop rarity) | content | 8, 9 | todo |
-| 11 | Ancients (Neow, act-start events) | content + UI | 3 | todo |
+| 11a | Neow: act-1 Ancient start node, heal, relic choice | engine + UI + content | – | todo |
+| 11b | Act 2/3 Ancients (Orobas, Pael, Tezcatara, Nonupeipe, Tanx, Vakuu, Darv) | content | 3, 11a | todo |
 | 12 | Saves | engine | 3 | todo |
 | 13 | Texture compression (romfs is ~70 MB) | tools + 3DS gfx | – | done (`tools/compress_romfs.py` → `romfs_3ds/` ETC1A4/ETC1/RGBA4 + LZ11, 146 → 15 MB; make runs it; needs a real-hardware check, package 19) |
 | 14 | Other characters | big | 3 | later |
-| 15 | RGDSplus page audit (U01-U33) | UI | 3, 8, 9, 11 | todo |
+| 15 | RGDSplus page audit (U01-U33) | UI | 3, 8, 9, 11a, 11b | todo |
 | 16 | Title / main menu / character select (U01-U04) | UI | – | todo |
 | 17 | Card and relic detail popups (U25), deck/pile views (U13) | UI | – | todo |
 | 18 | Settings + death/victory screens (U26, U28) | UI | 12 | todo |
@@ -255,11 +256,49 @@ Each `relics_*.cpp` ends with the relics that were skipped and why (potions, sho
 card-reward hooks, death prevention, Thorns, ...). After 8 and 9, add the missing
 hooks and port them, plus the Shop-rarity relics (`relics_shop.cpp`).
 
-## 11. Ancients (content + UI)
+## 11. Ancients (content + UI) — a core StS2 feature, not optional
 
-Neow at the start of the run (Overgrowth `AllAncients`), and the act-start ancients
-of Hive (Orobas, Pael, Tezcatara) and Glory (Nonupeipe, Tanx, Vakuu):
-`Models\AncientEventModel.cs`, `Models.Events\<Name>.cs`. They reuse the event UI.
+Every act starts with an Ancient: the first room of each act (map row 0) is an
+Ancient event that fully heals you and offers a choice of 3 Ancient-rarity relics
+(the StS2 replacement for StS1's Neow blessings). Act 1 is always Neow.
+
+Map: `mapgen.cpp` already builds the StandardActMap starting point as
+`MPType::Ancient` but doesn't output it (see the header comment and line ~680).
+It must become a real node below row 1 that the run starts on, drawn with the
+ancient's map icon (`ActModel` map node asset paths / `_rooms.Ancient`).
+
+Sources (`../sts2-decompiled`):
+- `Models\AncientEventModel.cs`: `BeforeEventStarted` heals to full (Neow first
+  sets HP to 0 so the heal animates from empty; the WearyTraveler ascension heals
+  80%, ignore it); `GenerateInitialOptionsWrapper` + `Hook.ShouldAllowAncient`;
+  `RelicOption<T>` = obtain that relic; dialogue (`DefineDialogues`,
+  `Entities.Ancients\AncientDialogueSet.cs`: per-character lines by visit index;
+  keep only the text, no audio).
+- `Models.Events\Neow.cs` `GenerateInitialOptions`: 1 random curse option from
+  `CurseOptions` (filtered by `RelicModel.IsAllowedAtNeow`) + 2 from
+  `PositiveOptions`, with the exclusion pairs (CursedPearl↔GoldenPearl,
+  HeftyTablet↔ArcaneScroll, LeafyPoultice↔NewLeaf, PrecariousShears↔PreciseScissors,
+  NeowsSacrifice↔PhialHolster/LostCoffer) and the coin-flip extras (LavaRock or
+  SmallCapsule unless the curse is LargeCapsule; NutritiousOyster or
+  StoneHumidifier; NeowsTalisman; Pomander). Read the rest of that function for the
+  final pick. ~30 relics, all `RelicRarity.Ancient` in `Models.Relics\`.
+- Acts 2/3: `ActModel.cs:385` rolls `_rooms.Ancient` from `GetUnlockedAncients` +
+  the shared subset. Hive: Orobas (7 relics, cross-character options), Pael (10),
+  Tezcatara (10). Glory: Nonupeipe, Tanx, Vakuu (10 each). Shared: Darv
+  (`ModelDb.AllSharedAncients`; `RunManager.GenerateRooms` hands it to a random
+  later act via `Rng.UpFront`), offers relics from `_validRelicSets` + DustyTome.
+- UI: `Nodes.Events\NAncientEventLayout.cs` (portrait + name banner + dialogue
+  lines, then the relic choice). Follow RGDSplus' Neow page (U06, NEOW_SCREEN) for the layout;
+  ancient art is in the game's `event`/`ancients` resources (extend build_assets).
+
+Split:
+- **11a Neow** (act 1): map start node, heal, dialogue, Neow's option roll, the
+  Neow relics. Relics needing missing systems (potions: PhialHolster,
+  shop: ...) stay out of the pool with a PORT NOTE until 8/9 land. Can be done
+  now; touches `run.cpp` / `mapgen.cpp` / `ui.cpp`, so it runs alone.
+- **11b other Ancients**: Orobas, Pael, Tezcatara, Nonupeipe, Tanx, Vakuu, Darv
+  and their ~70 relics. Needs 3 (acts 2/3 exist). Content only after 11a, so the
+  relic files are parallel-safe (one file per ancient).
 
 ## 12. Saves (engine)
 
