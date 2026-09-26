@@ -5,7 +5,7 @@ game's decompiled C#. **Personal use only**: never commit or distribute anything
 derived from the game (`romfs/`, `icon.png`, `.3dsx`, screenshots, decompiled
 code). `.gitignore` is a whitelist; keep it that way.
 
-The owner works on this from a Mac and a Windows PC. Talk to them in Chinese.
+The owner works on this from a Mac and a Windows PC.
 
 ## What to work on
 
