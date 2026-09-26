@@ -408,7 +408,7 @@ def build(args):
 
     take('cards', lambda k: k.split('.')[0] in CARDS)
     take('powers', lambda k: k.split('.')[0] in POWERS)
-    take('monsters', lambda k: k.split('.')[0] in MONSTERS)
+    take('monsters', lambda k: k.split('.')[0] in MONSTERS or k.split('.')[0] == 'HATCHLING')
     take('relics', lambda k: k.split('.')[0] in RELICS)
     take('events', lambda k: k.split('.')[0] in EVENTS or k.startswith('GENERIC'))
     for t in ('card_keywords', 'gameplay_ui', 'rest_site_ui', 'card_reward_ui', 'map', 'combat_messages',
