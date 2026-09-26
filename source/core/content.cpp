@@ -620,6 +620,7 @@ void registerAct1Monsters();
 void registerPhrog();        // content_phrog.cpp
 void registerAct1Bosses();   // content_bosses.cpp: Ceremonial Beast, The Kin, Fogmog
 void registerRelics();       // relics*.cpp
+void registerEvents();       // events.cpp
 
 namespace db {
 
@@ -729,6 +730,7 @@ void init() {
   registerRelic("BurningBlood", [] { return std::unique_ptr<Relic>(new BurningBlood()); });
   registerRelic("Circlet", [] { return std::unique_ptr<Relic>(new Circlet()); });
   registerRelics();
+  registerEvents();
 }
 
 std::unique_ptr<Card> card(const std::string& id) {

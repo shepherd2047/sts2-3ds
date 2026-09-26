@@ -84,6 +84,13 @@ class App {
   void drawEnd(bool top, bool won);
   void drawRelicOffer(bool top);  // elite relic reward / treasure chest
   void drawRelics(bool top);      // owned relics: grid below, the picked one above
+  // Events (RGDSplus U21): art and text above, the options stacked in the middle below.
+  void drawEvent(bool top);
+  void updateEvent(const gfx::Input& in);
+  // Choosing cards from the deck for an event or relic (CardSelectCmd.FromDeck*).
+  void drawDeckChoice(bool top);
+  void updateDeckChoice(const gfx::Input& in);
+  std::vector<int> deckPicks_;
   // Developer menu (SELECT, or 开发 on the map): cheats and pickers for testing.
   void drawDev(bool top);
   void updateDev(const gfx::Input& in);

@@ -591,7 +591,66 @@ struct Encounter {
   std::function<std::vector<std::unique_ptr<Monster>>(Rng&)> generate;
 };
 
-enum class Screen { Title, Map, Combat, Reward, Rest, RestUpgrade, GameOver, Victory, DeckView, RelicOffer, Placeholder };
+enum class Screen { Title, Map, Combat, Reward, Rest, RestUpgrade, GameOver, Victory, DeckView, RelicOffer, Placeholder, Event };
+
+// ---------------------------------------------------------------- events
+
+// EventOption: `key` is the loc base "<EVENT>.pages.<PAGE>.options.<NAME>" (the UI shows
+// key.title / key.description, formatted with the event's vars). No action = locked.
+struct EventOption {
+  std::string key;
+  std::function<Task<>()> action;
+  bool locked() const { return !action; }
+};
+
+// EventModel: the current page is `descKey` (loc key of its text) plus `options`;
+// SetEventFinished clears the options and the UI offers "proceed".
+struct Event {
+  std::string id, locKey;      // class name / UPPER_SNAKE loc key ("AromaOfChaos", "AROMA_OF_CHAOS")
+  Run* run = nullptr;
+  std::unique_ptr<Rng> rngPtr;  // EventModel.Rng: seed + hash(id)
+  std::vector<DynVar> vars;
+  std::string descKey;
+  std::vector<EventOption> options;
+  bool finished = false;
+
+  virtual ~Event() = default;
+  virtual bool isAllowed(Run&) { return true; }                 // IsAllowed
+  virtual std::vector<EventOption> initialOptions() = 0;        // GenerateInitialOptions
+  virtual void calculateVars() {}                               // CalculateVars (before the first page)
+
+  Rng& rng() { return *rngPtr; }
+  Creature* owner();
+  std::string page(const std::string& p) const { return locKey + ".pages." + p; }
+  EventOption option(const std::string& pageName, const std::string& name, std::function<Task<>()> action) {
+    return {page(pageName) + ".options." + name, std::move(action)};
+  }
+  void setPage(const std::string& pageName, std::vector<EventOption> opts) {
+    descKey = page(pageName) + ".description";
+    options = std::move(opts);
+  }
+  void setFinished(const std::string& pageName) {  // SetEventFinished(L10NLookup(page.description))
+    descKey = page(pageName) + ".description";
+    options.clear();
+    finished = true;
+  }
+  DynVar* var(const char* n) { for (auto& v : vars) if (v.name == n) return &v; return nullptr; }
+  Dec val(const char* n) { auto* v = var(n); return v ? v->base : Dec(0); }
+  void addVar(const char* n, Dec v) { vars.push_back({n, v, v}); }
+  void setVar(const char* n, Dec v) { if (auto* d = var(n)) d->base = v; else addVar(n, v); }
+};
+using EventFactory = std::unique_ptr<Event> (*)();
+
+// Picking cards from the deck outside combat (CardSelectCmd.FromDeck*), answered by the UI.
+struct DeckChoice {
+  std::string prompt;          // loc key of the prompt, or plain text
+  std::vector<Card*> options;
+  int count = 1;
+  bool canCancel = false;
+  bool showUpgrade = false;    // preview the upgraded card (upgrade prompts)
+  bool active = false;
+  Signal<std::vector<Card*>> result;
+};
 
 struct Run {
   uint64_t seed = 1;
@@ -619,6 +678,26 @@ struct Run {
   std::vector<Card*> upgradeOptions;
   Signal<int> upgradeChoice;         // index or -1 back
   int lastHeal = 0;
+  // Events: the act's shuffled event queue, the running event and its UI answers.
+  std::vector<std::string> eventQueue;
+  std::vector<std::string> visitedEvents;
+  std::unique_ptr<Event> currentEvent;
+  Signal<int> eventChoice;         // option index; any value proceeds once finished
+  DeckChoice deckChoice;
+  Task<> runEvent(std::unique_ptr<Event> e);
+  std::unique_ptr<Event> pullNextEvent();  // ActModel.PullNextEvent (null if none ported)
+  // Deck commands used by events and relics (CardCmd / CardPileCmd on the deck).
+  Task<std::vector<Card*>> selectFromDeck(std::string prompt, std::function<bool(Card*)> filter, int count,
+                                          bool canCancel = false, bool showUpgrade = false);
+  Card* addCardToDeck(std::unique_ptr<Card> c);
+  void removeCardFromDeck(Card* c);
+  Card* transformCard(Card* c, std::unique_ptr<Card> into);   // replaces it in the deck
+  std::unique_ptr<Card> randomTransformFor(Card* c, Rng& rng); // CardFactory transform target
+  Task<> loseHp(int amount);   // outside combat; 0 HP ends the run
+  Task<> gainMaxHp(int amount);
+  Task<> loseMaxHp(int amount);
+  Task<bool> eventFight(const std::string& encounterId);  // fight + monster rewards, back to the event
+  bool died = false;
   // A room that is not ported yet (events, shops): Screen::Placeholder shows this text.
   std::string placeholderText;
   Signal<int> placeholderDone;
@@ -677,6 +756,10 @@ std::vector<std::string> act1Bosses();
 void registerCard(const std::string& id, CardFactory f);
 void registerPower(const std::string& id, PowerFactory f);
 void registerRelic(const std::string& id, RelicFactoryFn f);
+void registerEvent(const std::string& id, EventFactory f);
+std::unique_ptr<Event> event(const std::string& id);
+// Overgrowth.AllEvents in the game's order (registered or not).
+const std::vector<std::string>& act1Events();
 // SharedRelicPool / IroncladRelicPool ids in the game's order (registered or not).
 const std::vector<std::string>& sharedRelicPool();
 const std::vector<std::string>& ironcladRelicPool();

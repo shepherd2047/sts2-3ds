@@ -239,11 +239,12 @@ def export_spine(g, key, skel_res, skel, atlas, load, scale):
 
 
 def build(args):
-    global CARDS, POWERS, MONSTERS, RELICS
+    global CARDS, POWERS, MONSTERS, RELICS, EVENTS
     CARDS = sorted(set(CARDS_FIXED) | set(keys_from_source('CARD_HEADER')))
     POWERS = sorted(set(POWERS_FIXED) | set(keys_from_source('POWER_HEADER')))
     MONSTERS = keys_from_source('MONSTER_HEADER')
     RELICS = keys_from_source('RELIC_HEADER')
+    EVENTS = keys_from_source('EVENT_HEADER')
     g = Game(args.pck) if args.pck else Game()
     a = Assets(g)
     os.makedirs(os.path.join(OUT, 'gfx'), exist_ok=True)
@@ -292,6 +293,12 @@ def build(args):
         packer.add('power/' + key, fit(img, (24, 24)))
     for key in RELICS:
         packer.add('relic/' + key, fit(g.image(f'images/relics/{key.lower()}.png'), (RELIC_ICON, RELIC_ICON)))
+    for key in EVENTS:  # event art for the top screen (RGDSplus U21)
+        path = f'images/events/{key.lower()}.png'
+        if path + '.import' in g.pck.files:
+            packer.add('event/' + key, fit(g.image(path), (200, 112)))
+        else:
+            print('  missing event art', key)
     for i in range(1, 6):
         packer.add(f'intent/attack_{i}', fit(g.image(f'images/packed/intents/attack/intent_attack_{i}.png'), (30, 30)))
     for name, path in [('buff', 'buff/intent_buff_00'), ('defend', 'defend/intent_defend_00'),
@@ -403,6 +410,7 @@ def build(args):
     take('powers', lambda k: k.split('.')[0] in POWERS)
     take('monsters', lambda k: k.split('.')[0] in MONSTERS)
     take('relics', lambda k: k.split('.')[0] in RELICS)
+    take('events', lambda k: k.split('.')[0] in EVENTS or k.startswith('GENERIC'))
     for t in ('card_keywords', 'gameplay_ui', 'rest_site_ui', 'card_reward_ui', 'map', 'combat_messages',
               'card_selection', 'intents', 'game_over_screen', 'characters'):
         take(t, (lambda k: not k.startswith(('DAILY', 'DISCOVERY'))) if t == 'game_over_screen'

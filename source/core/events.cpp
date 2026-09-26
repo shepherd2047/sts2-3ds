@@ -1,0 +1,35 @@
+// Event registry. Events themselves live in events_act1.cpp (MegaCrit.Sts2.Core.Models.Events).
+#include <map>
+
+#include "game.h"
+
+namespace sts {
+
+void registerAct1Events();  // events_act1.cpp
+
+namespace {
+std::map<std::string, EventFactory>& eventReg() { static std::map<std::string, EventFactory> m; return m; }
+}  // namespace
+
+void registerEvents() { registerAct1Events(); }
+
+namespace db {
+
+void registerEvent(const std::string& id, EventFactory f) { eventReg()[id] = f; }
+
+std::unique_ptr<Event> event(const std::string& id) {
+  auto it = eventReg().find(id);
+  return it == eventReg().end() ? nullptr : it->second();
+}
+
+// Overgrowth.AllEvents
+const std::vector<std::string>& act1Events() {
+  static const std::vector<std::string> ids = {
+      "AromaOfChaos", "ByrdonisNest", "DenseVegetation", "JungleMazeAdventure", "LuminousChoir",
+      "MorphicGrove", "SapphireSeed", "SunkenStatue", "TabletOfTruth", "UnrestSite",
+      "Wellspring", "WhisperingHollow", "WoodCarvings"};
+  return ids;
+}
+
+}  // namespace db
+}  // namespace sts

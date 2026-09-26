@@ -98,6 +98,130 @@ Task<> Run::offerRelic(std::unique_ptr<Relic> rel, bool fromChest) {
   relicOffer.reset();
 }
 
+// ---------------------------------------------------------------- events
+
+Creature* Event::owner() { return run->player.get(); }
+
+// ActModel.PullNextEvent + RoomSet.EnsureNextEventIsValid: the next allowed event not
+// seen this run; when all are used up, repeats are allowed.
+std::unique_ptr<Event> Run::pullNextEvent() {
+  for (int pass = 0; pass < 2; ++pass) {
+    for (size_t i = 0; i < eventQueue.size(); ++i) {
+      const std::string& id = eventQueue[i];
+      bool seen = std::find(visitedEvents.begin(), visitedEvents.end(), id) != visitedEvents.end();
+      if (pass == 0 && seen) continue;
+      auto e = db::event(id);
+      if (!e || !e->isAllowed(*this)) continue;
+      eventQueue.erase(eventQueue.begin() + (long)i);
+      return e;
+    }
+  }
+  return nullptr;
+}
+
+Task<> Run::runEvent(std::unique_ptr<Event> e) {
+  e->run = this;
+  e->rngPtr = std::make_unique<Rng>(seed, e->id);  // EventModel.Rng: seed + hash(id)
+  e->calculateVars();
+  e->descKey = e->page("INITIAL") + ".description";
+  e->options = e->initialOptions();
+  visitedEvents.push_back(e->id);
+  currentEvent = std::move(e);
+  Event* ev = currentEvent.get();
+  for (Model* m : listeners()) co_await m->afterRoomEntered(RoomType::Unknown);
+  for (;;) {
+    screen = Screen::Event;
+    int pick = co_await eventChoice.next();
+    if (ev->finished || died) break;
+    if (pick < 0 || pick >= (int)ev->options.size() || ev->options[pick].locked()) continue;
+    auto action = ev->options[pick].action;  // the action may replace the options
+    co_await action();
+    if (died) break;
+  }
+  currentEvent.reset();
+}
+
+Task<std::vector<Card*>> Run::selectFromDeck(std::string prompt, std::function<bool(Card*)> filter, int count,
+                                             bool canCancel, bool showUpgrade) {
+  std::vector<Card*> opts;
+  for (auto& c : deck) if (!filter || filter(c.get())) opts.push_back(c.get());
+  if (opts.empty()) co_return std::vector<Card*>{};
+  deckChoice.prompt = std::move(prompt);
+  deckChoice.options = std::move(opts);
+  deckChoice.count = count;
+  deckChoice.canCancel = canCancel;
+  deckChoice.showUpgrade = showUpgrade;
+  deckChoice.active = true;
+  auto picked = co_await deckChoice.result.next();
+  deckChoice.active = false;
+  co_return picked;
+}
+
+Card* Run::addCardToDeck(std::unique_ptr<Card> c) {
+  if (!c) return nullptr;
+  deck.push_back(std::move(c));
+  return deck.back().get();
+}
+
+void Run::removeCardFromDeck(Card* c) {
+  deck.erase(std::remove_if(deck.begin(), deck.end(), [&](const std::unique_ptr<Card>& d) { return d.get() == c; }), deck.end());
+}
+
+Card* Run::transformCard(Card* c, std::unique_ptr<Card> into) {
+  if (!into) return c;
+  for (auto& d : deck)
+    if (d.get() == c) { d = std::move(into); return d.get(); }
+  return addCardToDeck(std::move(into));
+}
+
+// CardFactory transform: a random card of the character's pool (Common/Uncommon/Rare),
+// never the card itself. PORT NOTE: C# also weights by rarity odds; this picks uniformly.
+std::unique_ptr<Card> Run::randomTransformFor(Card* c, Rng& rr) {
+  auto pool = db::ironcladCards([&](const Card& x) {
+    return x.id != c->id && (x.rarity == Rarity::Common || x.rarity == Rarity::Uncommon || x.rarity == Rarity::Rare);
+  });
+  if (pool.empty()) return nullptr;
+  return db::card(rr.nextItem(pool));
+}
+
+Task<> Run::loseHp(int amount) {
+  if (devGod || amount <= 0) co_return;
+  player->hp = std::max(0, player->hp - amount);
+  if (player->hp == 0) died = true;
+  co_await wait(0.3);
+}
+
+Task<> Run::gainMaxHp(int amount) {
+  player->maxHp += amount;
+  player->hp += amount;
+  co_await wait(0.2);
+}
+
+Task<> Run::loseMaxHp(int amount) {
+  player->maxHp = std::max(1, player->maxHp - amount);
+  player->hp = std::min(player->hp, player->maxHp);
+  co_await wait(0.2);
+}
+
+// EventModel.EnterCombatWithoutExitingEvent: fight, take the room's rewards, return.
+Task<bool> Run::eventFight(const std::string& encounterId) {
+  const Encounter* enc = db::encounter(encounterId);
+  if (!enc) co_return true;
+  bool won = co_await fight(encounterId);
+  if (!won) { died = true; co_return false; }
+  Rng& rr = rng("Rewards");
+  co_await gainGold(enc->room == RoomType::Elite ? rr.nextInt(25, 36) : rr.nextInt(10, 21));
+  combat.reset();
+  for (auto& rel : relics) rel->combat = nullptr;
+  if (enc->room == RoomType::Elite) co_await offerRelic(pullRelicFromFront(relicBag, rollRelicRarity(rr)), false);
+  rewardCards = cardReward(enc->room, 3);
+  screen = Screen::Reward;
+  int pick = co_await rewardChoice.next();
+  if (pick >= 0 && pick < (int)rewardCards.size()) deck.push_back(std::move(rewardCards[pick]));
+  rewardCards.clear();
+  co_return true;
+}
+
 // UnknownMapPointOdds.Roll (single player, no blacklist): Monster 10%, Treasure 2%,
 // Shop 3%, else Event; the rolled type resets to its base odds, the others grow by theirs.
 RoomType Run::rollUnknownRoom() {
@@ -142,6 +266,12 @@ void Run::start(uint64_t s) {
   bb->run = this;
   relics.push_back(std::move(bb));
   populateRelicBags();
+  // ActModel.GenerateRooms: the act's events, shuffled once (only ported ones).
+  eventQueue.clear();
+  visitedEvents.clear();
+  for (auto& id : db::act1Events()) if (db::event(id)) eventQueue.push_back(id);
+  rng("Events").shuffle(eventQueue);
+  died = false;
 
   weakQueue = db::act1Weak();
   normalQueue = db::act1Normal();
@@ -273,8 +403,21 @@ Task<> Run::main() {
       type = f == "Treasure" ? RoomType::Treasure : f == "Rest" ? RoomType::Rest : f == "Elite" ? RoomType::Elite
            : f == "Boss" ? RoomType::Boss : type;
     }
+    // Debug: STS_ROOM=Event makes the first room an event; STS_EVENT=<id> picks which.
+    bool forcedEvent = floor == 1 && getenv("STS_ROOM") && std::string(getenv("STS_ROOM")) == "Event";
     // "?" rooms resolve when entered (UnknownMapPointOdds); Unknown afterwards means an event.
-    if (type == RoomType::Unknown) type = rollUnknownRoom();
+    if (forcedEvent) type = RoomType::Unknown;
+    else if (type == RoomType::Unknown) type = rollUnknownRoom();
+    if (type == RoomType::Unknown) {
+      std::unique_ptr<Event> e;
+      if (const char* id = getenv("STS_EVENT"); forcedEvent && id) e = db::event(id);
+      if (!e) e = pullNextEvent();
+      if (e) {
+        co_await runEvent(std::move(e));
+        if (died) { screen = Screen::GameOver; co_return; }
+        continue;
+      }
+    }
     if (type == RoomType::Unknown || type == RoomType::Shop) {
       // PORT NOTE: events and the merchant are not ported yet; say so and move on.
       for (Model* m : listeners()) co_await m->afterRoomEntered(type);

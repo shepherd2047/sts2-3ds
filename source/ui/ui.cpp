@@ -322,11 +322,15 @@ std::string App::describe(Card* c) {
   return d;
 }
 
-// Relic text: the card SmartFormat subset, fed by the relic's own DynamicVars.
-std::string App::describeRelic(Relic* r) {
-  std::string src = L("relics." + r->locKey + ".description");
-  if (!R().hasLoc("relics." + r->locKey + ".description")) return {};
-  auto raw = [&](const std::string& n) -> Dec { DynVar* v = r->var(n.c_str()); return v ? v->base : Dec(0); };
+// Relic and event text: the card SmartFormat subset, fed by the model's own DynamicVars
+// ({Name}, {Name:energyIcons()}, {Name:plural:a|b}, {Name:percentMore/Less()},
+// {InCombat:a|b}, {IfUpgraded:show:a|b}). Unknown names are left visible as "?".
+std::string expandSmart(const std::string& src, const std::vector<DynVar>& vars, bool inCombat) {
+  auto find = [&](const std::string& n) -> const DynVar* {
+    for (auto& v : vars) if (v.name == n) return &v;
+    return nullptr;
+  };
+  auto raw = [&](const std::string& n) -> Dec { auto* v = find(n); return v ? v->base : Dec(0); };
   std::function<std::string(const std::string&)> expand = [&](const std::string& s) -> std::string {
     std::string out;
     for (size_t i = 0; i < s.size();) {
@@ -351,14 +355,14 @@ std::string App::describeRelic(Relic* r) {
         }
         return first ? expand(alts) : std::string();
       };
-      if (name == "InCombat") out += choose(rest, r->combat != nullptr);
+      if (name == "InCombat") out += choose(rest, inCombat);
       else if (name == "IfUpgraded") out += choose(rest.substr(rest.find(':') + 1), false);
       else if (rest.rfind("energyIcons", 0) == 0)
         out += name == "energyPrefix" ? std::string("点能量") : "[gold]" + num(raw(name).toInt()) + "点能量[/gold]";
       else if (rest.rfind("percentMore", 0) == 0) out += num(((raw(name) - Dec(1)) * Dec(100)).toInt());
       else if (rest.rfind("percentLess", 0) == 0) out += num(((Dec(1) - raw(name)) * Dec(100)).toInt());
       else if (rest.rfind("plural:", 0) == 0) out += choose(rest.substr(7), raw(name) == Dec(1));
-      else if (r->var(name.c_str())) out += num(raw(name).toInt());
+      else if (find(name)) out += num(raw(name).toInt());
       else out += "?";
     }
     return out;
@@ -366,6 +370,10 @@ std::string App::describeRelic(Relic* r) {
   return expand(src);
 }
 
+std::string App::describeRelic(Relic* r) {
+  if (!R().hasLoc("relics." + r->locKey + ".description")) return {};
+  return expandSmart(L("relics." + r->locKey + ".description"), r->vars, r->combat != nullptr);
+}
 void App::drawRelicDetail(Relic* r, float cy) {
   const float big = 56;
   gfx::circle(kTop / 2.f, cy, 38, 0xFFE07030);
@@ -550,6 +558,7 @@ void App::update(const gfx::Input& in, double dt) {
     return;
   }
   if (devOpen_) { updateDev(in); return; }
+  if (run_->deckChoice.active) { updateDeckChoice(in); return; }
   // START opens the map for a look from any room (RGDSplus: map entry on the top bar).
   if ((in.down & gfx::BTN_START) && !mapView_ && scr != Screen::Title && scr != Screen::Map &&
       scr != Screen::GameOver && scr != Screen::Victory) {
@@ -571,6 +580,7 @@ void App::update(const gfx::Input& in, double dt) {
     case Screen::GameOver: updateEnd(in); break;
     case Screen::Victory: updateEnd(in); break;
     case Screen::RelicOffer: updateRelicOffer(in); break;
+    case Screen::Event: updateEvent(in); break;
     case Screen::Placeholder:
       if (run_->placeholderDone.waiting() &&
           ((in.down & gfx::BTN_A) || (in.touchDown && hitAt(in.tx, in.ty) == ID_CONFIRM)))
@@ -637,6 +647,7 @@ void App::draw() {
     bool top = pass == 0;
     gfx::screen(top ? gfx::TOP : gfx::BOTTOM, 0x0B0B12FF);
     if (devOpen_) { drawDev(top); continue; }
+    if (run_->deckChoice.active) { drawDeckChoice(top); continue; }
     if (mapView_) { drawMap(top); continue; }
     if (relicsOpen_) { drawRelics(top); continue; }
     if (deckOpen_) { drawDeck(top); continue; }
@@ -650,6 +661,7 @@ void App::draw() {
       case Screen::GameOver: drawEnd(top, false); break;
       case Screen::Victory: drawEnd(top, true); break;
       case Screen::RelicOffer: drawRelicOffer(top); break;
+      case Screen::Event: drawEvent(top); break;
       case Screen::Placeholder:  // a room that is not ported yet (event / shop)
         drawSceneBg(top, 0.6f);
         if (top) {
@@ -717,6 +729,15 @@ void App::autoplay(double dt) {
       break;
     case Screen::Placeholder:
       if (r.placeholderDone.waiting()) r.placeholderDone.fire(0); else acted = false;
+      break;
+    case Screen::Event:
+      if (r.deckChoice.active && r.deckChoice.result.waiting()) r.deckChoice.result.fire({r.deckChoice.options[0]});
+      else if (r.eventChoice.waiting() && r.currentEvent) {
+        int pick = 0;
+        auto& opts = r.currentEvent->options;
+        while (pick < (int)opts.size() && opts[pick].locked()) ++pick;
+        r.eventChoice.fire(pick);
+      } else acted = false;
       break;
     case Screen::RestUpgrade:
       if (r.upgradeChoice.waiting()) {
@@ -2038,6 +2059,161 @@ void App::updateRelics(const gfx::Input& in) {
     if (id >= ID_RELIC0 && id < ID_RELIC0 + n) sel_ = id - ID_RELIC0;
     if (id == ID_BACK) close();
     if (id == ID_DECK) { close(); deckOpen_ = true; }
+  }
+}
+
+// ================================================================ events
+
+namespace {
+constexpr float kOptW = 300, kOptH = 40, kOptGap = 6;  // event option buttons (1.22x native on RGDSplus)
+}
+
+void App::drawEvent(bool top) {
+  Event* e = run_->currentEvent.get();
+  drawSceneBg(top, 0.6f);
+  if (!e) return;
+  if (top) {
+    drawTopBar();
+    R().text(kTop / 2, 22, L("events." + e->locKey + ".title"), ts(F16, col::gold, CENTER));
+    float y = 42;
+    Sprite art = R().sprite("event/" + e->locKey);
+    if (art) {
+      spr(art, (kTop - art.w) / 2, y, art.w, art.h);
+      y += art.h + 4;
+    }
+    // The page text, shrunk until it fits under the art.
+    TextStyle dt = ts(F12, col::white, CENTER, kTop - 24);
+    std::string text = expandSmart(L("events." + e->descKey), e->vars, false);
+    float th;
+    R().measure(text, dt, &th);
+    for (int k = 0; k < 6 && th > kH - y - 4 && dt.scale > 0.6f; ++k) { dt.scale *= 0.9f; R().measure(text, dt, &th); }
+    R().text(kTop / 2, y, text, dt);
+    return;
+  }
+  // Options stacked around the middle of the bottom screen (RGDSplus eventOption layout).
+  int n = e->finished ? 1 : (int)e->options.size();
+  float total = n * kOptH + (n - 1) * kOptGap, y0 = (kH - total) / 2, x = (kBot - kOptW) / 2;
+  for (int i = 0; i < n; ++i) {
+    float y = y0 + i * (kOptH + kOptGap);
+    bool locked = !e->finished && e->options[i].locked();
+    bool hl = i == sel_;
+    panel(x, y, kOptW, kOptH, locked ? 0x2A2A2AE0 : hl ? 0x8A5A20F0 : 0x3A2E24F0, locked ? 0x555555FF : hl ? 0xFFD870FF : 0xB89A60FF);
+    std::string title = e->finished ? "继续" : L("events." + e->options[i].key + ".title");
+    std::string desc = e->finished ? "" : expandSmart(L("events." + e->options[i].key + ".description"), e->vars, false);
+    if (!e->finished && !R().hasLoc("events." + e->options[i].key + ".description")) desc.clear();
+    if (desc.empty()) {
+      R().text(x + kOptW / 2, y + (kOptH - R().lineHeight(F16)) / 2, title, ts(F16, locked ? col::gray : col::white, CENTER));
+    } else {
+      R().text(x + 8, y + 3, title, ts(F12, locked ? col::gray : col::gold));
+      TextStyle st = ts(F12, locked ? col::gray : col::white, LEFT, kOptW - 16, 0.85f);
+      float dh;
+      R().measure(desc, st, &dh);
+      if (dh > kOptH - 18) st.scale *= (kOptH - 18) / dh;
+      R().text(x + 8, y + 19, desc, st);
+    }
+    if (!locked) hits_.push_back({x, y, kOptW, kOptH, ID_DEVITEM0 + i});
+  }
+}
+
+void App::updateEvent(const gfx::Input& in) {
+  Run& r = *run_;
+  Event* e = r.currentEvent.get();
+  if (!e || !r.eventChoice.waiting()) return;
+  int n = e->finished ? 1 : (int)e->options.size();
+  if (in.down & gfx::BTN_DOWN) sel_ = std::min(n - 1, sel_ + 1);
+  if (in.down & gfx::BTN_UP) sel_ = std::max(0, sel_ - 1);
+  int pick = -1;
+  if ((in.down & gfx::BTN_A) && sel_ >= 0) pick = sel_;
+  if (in.touchDown) {
+    int id = hitAt(in.tx, in.ty);
+    if (id >= ID_DEVITEM0 && id < ID_DEVITEM0 + n) pick = id - ID_DEVITEM0;
+  }
+  if (pick >= 0 && (e->finished || !e->options[pick].locked())) {
+    sel_ = -1;
+    r.eventChoice.fire(pick);
+  }
+}
+
+void App::drawDeckChoice(bool top) {
+  DeckChoice& d = run_->deckChoice;
+  int n = (int)d.options.size();
+  if (top) {
+    drawSceneBg(true, 0.7f);
+    drawTopBar();
+    std::string prompt = R().hasLoc(d.prompt) ? L(d.prompt) : d.prompt;
+    for (size_t p; (p = prompt.find("{Amount}")) != std::string::npos;) prompt.replace(p, 8, num(d.count));
+    R().text(kTop / 2, 22, prompt, ts(F16, col::white, CENTER));
+    if (sel_ >= 0 && sel_ < n) {
+      Card* c = d.options[sel_];
+      if (d.showUpgrade && c->upgradable()) {
+        auto up = c->clone();
+        up->upgrade();
+        drawCard(c, 50, 44, 1.05f, false, true);
+        R().text(kTop / 2, 120, "→", ts(F16, col::gold, CENTER, 0, 2.f));
+        drawCard(up.get(), 224, 44, 1.05f, false, true);
+      } else {
+        drawCard(c, (kTop - 132) / 2, 44, 1.1f, false, true);
+      }
+    }
+    return;
+  }
+  drawSceneBg(false, 0.65f);
+  drawCardGrid(d.options, sel_, 0, 196, scroll_);
+  for (int i : deckPicks_) {  // multi-picks: a gold tick on each chosen card
+    int row = i / 5 - scroll_;
+    const float s = 0.46f, cw = 120 * s, ch = 169 * s, gap = (kBot - 5 * cw) / 6;
+    float x = gap + (i % 5) * (cw + gap), y = 6 + row * (ch + 8);
+    if (y >= 0 && y < 196) gfx::circle(x + cw - 6, y + 6, 6, 0xFFD870FF);
+  }
+  gfx::rect(0, 196, kBot, 44, 0x000000A0);
+  if (d.canCancel) button(10, 200, 100, 34, "取消", ID_BACK);
+  int need = std::min(d.count, n);
+  bool ready = d.count <= 1 ? (sel_ >= 0 && sel_ < n) : (int)deckPicks_.size() == need;
+  button(kBot - 110, 200, 100, 34, "确认", ID_CONFIRM, ready, true);
+}
+
+void App::updateDeckChoice(const gfx::Input& in) {
+  DeckChoice& d = run_->deckChoice;
+  if (!d.result.waiting()) return;
+  int n = (int)d.options.size();
+  auto finish = [&](std::vector<Card*> picked) {
+    deckPicks_.clear();
+    sel_ = -1;
+    scroll_ = 0;
+    d.result.fire(std::move(picked));
+  };
+  auto confirm = [&] {
+    if (d.count <= 1) { if (sel_ >= 0 && sel_ < n) finish({d.options[sel_]}); return; }
+    if ((int)deckPicks_.size() != std::min(d.count, n)) return;
+    std::vector<Card*> picked;
+    for (int i : deckPicks_) picked.push_back(d.options[i]);
+    finish(std::move(picked));
+  };
+  auto toggle = [&](int i) {
+    auto it = std::find(deckPicks_.begin(), deckPicks_.end(), i);
+    if (it != deckPicks_.end()) deckPicks_.erase(it);
+    else if ((int)deckPicks_.size() < d.count) deckPicks_.push_back(i);
+  };
+  if (in.down & gfx::BTN_RIGHT) sel_ = std::min(n - 1, sel_ + 1);
+  if (in.down & gfx::BTN_LEFT) sel_ = std::max(0, sel_ - 1);
+  if (in.down & gfx::BTN_DOWN) sel_ = std::min(n - 1, sel_ + 5);
+  if (in.down & gfx::BTN_UP) sel_ = std::max(0, sel_ - 5);
+  if (sel_ >= 0) scroll_ = std::max(0, sel_ / 5 - 1);
+  if ((in.down & gfx::BTN_B) && d.canCancel) { finish({}); return; }
+  if (in.down & gfx::BTN_A) {
+    if (d.count > 1 && sel_ >= 0 && (int)deckPicks_.size() < d.count) toggle(sel_);
+    else confirm();
+    return;
+  }
+  if (!in.touchDown) return;
+  int id = hitAt(in.tx, in.ty);
+  if (id == ID_BACK && d.canCancel) { finish({}); return; }
+  if (id == ID_CONFIRM) { confirm(); return; }
+  if (id >= ID_GRID0 && id - ID_GRID0 < n) {
+    int i = id - ID_GRID0;
+    if (d.count > 1) toggle(i);
+    else if (sel_ == i) { confirm(); return; }
+    sel_ = i;
   }
 }
 

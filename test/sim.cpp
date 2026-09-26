@@ -106,6 +106,24 @@ int main(int argc, char** argv) {
         case Screen::RestUpgrade:
           if (run.upgradeChoice.waiting()) run.upgradeChoice.fire(run.upgradeOptions.empty() ? -1 : 0);
           break;
+        case Screen::Event:
+          if (run.deckChoice.active && run.deckChoice.result.waiting()) {
+            std::vector<Card*> picked;
+            for (int k = 0; k < run.deckChoice.count && k < (int)run.deckChoice.options.size(); ++k)
+              picked.push_back(run.deckChoice.options[k]);
+            run.deckChoice.result.fire(picked);
+          } else if (run.eventChoice.waiting() && run.currentEvent) {
+            // Rotate through the options so every one gets exercised over many runs.
+            auto& opts = run.currentEvent->options;
+            int pick = 0;
+            if (!opts.empty()) {
+              pick = (s + run.floor) % (int)opts.size();
+              for (int k = 0; k < (int)opts.size() && opts[pick].locked(); ++k) pick = (pick + 1) % (int)opts.size();
+            }
+            if (getenv("SIM_FIGHTS")) printf("  event %s -> %d\n", run.currentEvent->id.c_str(), pick);
+            run.eventChoice.fire(pick);
+          }
+          break;
         case Screen::Placeholder:
           if (run.placeholderDone.waiting()) run.placeholderDone.fire(0);
           break;
