@@ -316,7 +316,22 @@ struct Whetstone : Relic {
   }
 };
 
+// MealTicket.cs: heal 15 on entering a merchant. PORT NOTE: IsAllowed
+// (IsBeforeAct3TreasureChest) is not checked.
+struct MealTicket : Relic {
+  RELIC_HEADER(MealTicket, "MEAL_TICKET", Common)
+    addVar("Heal", 15);
+  }
+  Task<> afterRoomEntered(RoomType room) override {
+    Creature* p = owner();
+    if (room != RoomType::Shop || p->dead()) co_return;
+    doFlash();
+    p->hp = std::min(p->maxHp, p->hp + val("Heal").toInt());
+  }
+};
+
 void registerRelicsCommon() {
+  reg<MealTicket>();
   reg<Anchor>();
   reg<BagOfMarbles>();
   reg<BagOfPreparation>();

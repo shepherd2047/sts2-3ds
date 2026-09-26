@@ -89,6 +89,7 @@ class Rng {
   int nextInt(int maxExclusive) { ++counter; return r_.next(maxExclusive); }
   int nextInt(int minInclusive, int maxExclusive) { ++counter; return r_.next(minInclusive, maxExclusive); }
   float nextFloat(float max = 1.f) { ++counter; return (float)(r_.nextDouble() * (double)max); }
+  float nextFloat(float min, float max) { ++counter; return (float)(r_.nextDouble() * (double)(max - min) + (double)min); }
   double nextDouble() { ++counter; return r_.nextDouble(); }
 
   template <class T> T nextItem(const std::vector<T>& v) {

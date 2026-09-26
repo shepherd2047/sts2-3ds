@@ -150,6 +150,22 @@ int main(int argc, char** argv) {
         case Screen::Placeholder:
           if (run.placeholderDone.waiting()) run.placeholderDone.fire(0);
           break;
+        case Screen::Shop:
+          // Remove a Strike/Defend if the service is bought, else buy the first thing we can.
+          if (run.deckChoice.active && run.deckChoice.result.waiting()) {
+            Card* pick = run.deckChoice.options[0];
+            for (Card* k : run.deckChoice.options) if (k->rarity == Rarity::Basic) { pick = k; break; }
+            run.deckChoice.result.fire({pick});
+          } else if (run.shopChoice.waiting()) {
+            int pick = -1;
+            for (int k = 0; k < (int)run.shop.size() && pick < 0; ++k) {
+              auto& it = run.shop[k];
+              if (it.stocked() && run.shopPrice(it) <= run.gold && (it.kind != ShopItem::PotionItem || run.hasOpenPotionSlot())) pick = k;
+            }
+            if (getenv("SIM_FIGHTS") && pick >= 0) printf("  shop buy %d (%d gold)\n", pick, run.gold);
+            run.shopChoice.fire(pick);
+          }
+          break;
         case Screen::PotionOffer:
           if (run.potionOfferChoice.waiting()) {
             if (!run.hasOpenPotionSlot()) run.discardPotion(0);

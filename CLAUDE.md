@@ -163,6 +163,8 @@ scripts drift; delete the debug file afterwards.
   the map HUD. Debug: `STS_POTIONS=FirePotion,BlockPotion` fills the belt,
   `STS_POTION_REWARD=1` makes every fight drop one; `SIM_ALLPOTIONS=1 ./build/sim` cycles
   every potion through the fights.
+- Merchant: `shop.cpp` (`Run::enterShop`, `Run::shop` items, `shopChoice`; prices through the
+  `modifyMerchantPrice` hook). Art `gfx/bg_merchant.t3t`. `STS_ROOM=Shop` makes the first room a shop.
 - Debug: `STS_ROOM=Treasure|Rest|Elite|Boss|Event` makes the first room that type,
   `STS_ACT=2|3` starts in that act; the dev menu has 跳到下一幕.
 - Development build: `Run::freeMap` (default on; `STS_PATH_ONLY=1` off) lets any
@@ -187,7 +189,7 @@ Done: Ironclad full card pool, all 22 Act 1 encounters (4 weak, 12 normal,
 with ~70 relics (common/uncommon/rare + Ironclad), elite relic rewards,
 treasure rooms, relic page.
 
-Not done: events, shop (and Shop-rarity relics), potions,
+Not done: Shop-rarity relics (package 10),
 StS2's real map generator (unknown/treasure/shop rooms), saves, other
 characters/acts, audio, real-hardware performance test. romfs is ~66 MB
 (Spine pages are uncompressed RGBA8).

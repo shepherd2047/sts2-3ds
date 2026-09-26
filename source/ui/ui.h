@@ -113,6 +113,8 @@ class App {
   void drawPotions(bool top);
   void updatePotions(const gfx::Input& in);
   void drawPotionOffer(bool top);
+  void drawShop(bool top);    // merchant (RGDSplus U20)
+  void updateShop(const gfx::Input& in);
   void updatePotionOffer(const gfx::Input& in);
   void drawPotionIcon(sts::Potion* p, float x, float y, float size);
   std::string describePotion(sts::Potion* p);

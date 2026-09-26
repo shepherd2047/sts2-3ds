@@ -132,6 +132,10 @@ struct Model {
   virtual Task<> afterRestSiteHeal() { return {}; }
   virtual Dec modifyGoldGained(Dec amount) { return amount; }
   virtual Task<> afterGoldGained(int) { return {}; }
+  // Merchant (Hook.ModifyMerchantPrice / ShouldRefillMerchantEntry / AfterItemPurchased).
+  virtual Dec modifyMerchantPrice(Dec price) { return price; }
+  virtual bool shouldRefillMerchantEntry() { return false; }
+  virtual Task<> afterItemPurchased(int /*goldSpent*/) { return {}; }
 };
 
 // ---------------------------------------------------------------- powers
@@ -631,7 +635,7 @@ struct Encounter {
   std::function<std::vector<std::unique_ptr<Monster>>(Rng&)> generate;
 };
 
-enum class Screen { Title, Map, Combat, Reward, Rest, RestUpgrade, GameOver, Victory, DeckView, RelicOffer, Placeholder, Event, PotionOffer };
+enum class Screen { Title, Map, Combat, Reward, Rest, RestUpgrade, GameOver, Victory, DeckView, RelicOffer, Placeholder, Event, PotionOffer, Shop };
 
 // ---------------------------------------------------------------- events
 
@@ -701,6 +705,20 @@ struct DeckChoice {
 };
 
 namespace db { struct ActDef; }
+
+// MerchantInventory entries: five character cards (one on sale), three relics, three
+// potions and the card removal service. `cost` is before Hook.ModifyMerchantPrice.
+struct ShopItem {
+  enum Kind { CardItem, RelicItem, PotionItem, Removal } kind = CardItem;
+  CardType cardType = CardType::Attack;  // the character card slot's type
+  std::unique_ptr<Card> card;
+  std::unique_ptr<Relic> relic;
+  std::unique_ptr<Potion> potion;
+  int cost = 0;
+  bool onSale = false;
+  bool used = false;  // the removal service, once per shop
+  bool stocked() const { return kind == Removal ? !used : (card || relic || potion); }
+};
 
 struct Run {
   uint64_t seed = 1;
@@ -791,6 +809,16 @@ struct Run {
   bool rollPotionReward(RoomType room);           // PotionRewardOdds.Roll
   Task<> offerPotion(std::unique_ptr<Potion> p);
   bool preventDeath();  // FairyInABottle: returns true if the player was saved
+  std::vector<std::unique_ptr<Potion>> randomPotions(int count, Rng& rng);  // distinct
+
+  // Merchant (MerchantRoom / MerchantInventory).
+  std::vector<ShopItem> shop;
+  int shopRemovalsUsed = 0;       // ExtraFields.CardShopRemovalsUsed
+  Signal<int> shopChoice;         // item index to buy, -1 leaves
+  std::string shopMessage;        // merchant line after a failed purchase (loc key)
+  Task<> enterShop();
+  int shopPrice(const ShopItem& it);
+  std::unique_ptr<Relic> pullRelicFromBack(RelicRarity k);  // RelicFactory.PullNextRelicFromBack (shops)
   std::vector<Model*> listeners();                 // run-level hook listeners (relics)
 
   Rng& rng(const char* stream) {

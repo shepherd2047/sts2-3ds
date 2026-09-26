@@ -647,18 +647,37 @@ Task<> Run::usePotion(int slot, Creature* target) {
   if (p->combat) co_await p->combat->checkWinCondition();
 }
 
-// PotionFactory.CreateRandomPotions: rarity 10% Rare / 25% Uncommon / 65% Common, then a
-// random registered potion of that rarity from the Ironclad + shared pools.
+// PotionFactory.CreateRandomPotions: per potion, rarity 10% Rare / 25% Uncommon / 65% Common,
+// then a random registered potion of that rarity (Ironclad + shared pools) not yet picked.
+std::vector<std::unique_ptr<Potion>> Run::randomPotions(int count, Rng& r) {
+  std::vector<std::string> options;
+  for (auto& id : db::potionPool()) if (db::potion(id)) options.push_back(id);
+  std::vector<std::unique_ptr<Potion>> out;
+  for (int i = 0; i < count; ++i) {
+    float roll = r.nextFloat();
+    PotionRarity rarity = roll <= 0.1f ? PotionRarity::Rare : roll <= 0.35f ? PotionRarity::Uncommon : PotionRarity::Common;
+    std::vector<std::string> ids;
+    for (auto& id : options) if (db::potion(id)->rarity == rarity) ids.push_back(id);
+    std::string id = ids.empty() ? std::string("BlockPotion") : r.nextItem(ids);
+    options.erase(std::remove(options.begin(), options.end(), id), options.end());
+    auto p = db::potion(id);
+    p->run = this;
+    out.push_back(std::move(p));
+  }
+  return out;
+}
+
 std::unique_ptr<Potion> Run::randomPotion(Rng& r, bool forCombat) {
+  if (!forCombat) return std::move(randomPotions(1, r)[0]);
+  // CreateRandomPotionInCombat: only potions that may be generated in combat.
   float roll = r.nextFloat();
   PotionRarity rarity = roll <= 0.1f ? PotionRarity::Rare : roll <= 0.35f ? PotionRarity::Uncommon : PotionRarity::Common;
   std::vector<std::string> ids;
   for (auto& id : db::potionPool()) {
     auto p = db::potion(id);
-    if (p && p->rarity == rarity && (!forCombat || p->canBeGeneratedInCombat())) ids.push_back(id);
+    if (p && p->rarity == rarity && p->canBeGeneratedInCombat()) ids.push_back(id);
   }
-  if (ids.empty()) return db::potion("BlockPotion");
-  auto p = db::potion(r.nextItem(ids));
+  auto p = db::potion(ids.empty() ? std::string("BlockPotion") : r.nextItem(ids));
   p->run = this;
   return p;
 }

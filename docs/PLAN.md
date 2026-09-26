@@ -79,7 +79,7 @@ file and run it with bash.
 | 6b | Act 3 elites + bosses | content (+engine likely) | – | done (content_act3b.cpp, sim-tested only, no screenshots; Hex/Dampen/Chains of Binding/Wither are per-power approximations of the affliction system, Intangible caps HP loss only; run build_assets once 4c's monsters have scenes) |
 | 7 | Act 3 events (7) | content | 0 | done (sim-tested; not screenshot-checked; MadScience card text needs `choose()` support in App::describe; Grave of the Forgotten enchant = removes Exhaust; BattlewornDummy V1 potion reward skipped; `db::act3Events()` defined in events_act3.cpp) |
 | 8 | Potions | engine + UI, *Opus* | – | done (potions.cpp: Ironclad + shared pools, 47 of 48 — ColorlessPotion needs a colorless pool; belt of 3, rewards with PotionRewardOdds, Fairy death prevention; UI: 药水 button in combat and on the map, list below / detail above, ◀ ▶ targeting; relics/events that need potions are still locked) |
-| 9 | Shop (merchant) | engine + UI | 8 | todo |
+| 9 | Shop (merchant) | engine + UI | 8 | done (shop.cpp: 5 character cards with a sale, 3 relics incl. a Shop-rarity slot, 3 potions, card removal 75+25n; prices and rng as in the C#; The Courier, Membership Card, Meal Ticket; colorless slots and the Foul Potion throw not ported) |
 | 10 | Remaining relics (skipped ones + Shop rarity) | content | 8, 9 | todo |
 | 11a | Neow: act-1 Ancient start node, heal, relic choice | engine + UI + content | – | done |
 | 11b | Act 2/3 Ancients (Orobas, Pael, Tezcatara, Nonupeipe, Tanx, Vakuu, Darv) | content | 3, 11a | todo |

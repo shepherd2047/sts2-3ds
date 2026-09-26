@@ -344,7 +344,19 @@ struct SturdyClamp : Relic {
   }
 };
 
-// ---- TheCourier: SKIPPED. Needs the merchant/shop system (not implemented).
+// ---- TheCourier: the merchant restocks what you buy, and everything costs 20% less. ----
+struct TheCourier : Relic {
+  RELIC_HEADER(TheCourier, "THE_COURIER", Rare) addVar("Discount", 20); }
+  bool allowedInShops() const override { return false; }
+  Dec modifyMerchantPrice(Dec price) override { return price * (Dec(1) - val("Discount") / Dec(100)); }
+  bool shouldRefillMerchantEntry() override { return true; }
+};
+
+// ---- MembershipCard (Shop): the merchant's prices are halved. ----
+struct MembershipCard : Relic {
+  RELIC_HEADER(MembershipCard, "MEMBERSHIP_CARD", Shop) addVar("Discount", 50); }
+  Dec modifyMerchantPrice(Dec price) override { return price * (val("Discount") / Dec(100)); }
+};
 
 // ---- ToxicEgg: SKIPPED. Needs card-reward/merchant-reward and deck-add upgrade hooks.
 
@@ -472,6 +484,8 @@ void registerRelicsRare() {
   reg<MeatOnTheBone>();
   reg<MummifiedHand>();
   reg<OldCoin>();
+  reg<TheCourier>();
+  reg<MembershipCard>();
   reg<Pocketwatch>();
   reg<RainbowRing>();
   reg<RazorTooth>();

@@ -358,6 +358,8 @@ def build(args):
     for name in ('monster', 'elite', 'rest', 'unknown', 'chest', 'shop', 'node_background'):
         packer.add('map/' + name, fit(a.sprite(f'images/atlases/ui_atlas.sprites/map/icons/map_{name}.tres'), (22, 22)))
     packer.add('map/ancient_neow', fit(g.image('images/packed/map/ancients/ancient_node_neow.png'), (40, 40)))
+    packer.add('ui/sale_tag', fit(g.image('images/rooms/merchant_room/shop_sales_tag.png'), (28, 28)))
+    packer.add('ui/card_removal', fit(g.image('images/rooms/merchant_room/card_removal_00.png'), (40, 40)))
     packer.add('map/marker', fit(a.sprite('images/atlases/ui_atlas.sprites/map/icons/map_marker_ironclad.tres'), (26, 26)))
     # Boss map nodes (map/boss_<EncounterId>). Ceremonial Beast, The Insatiable and the Queen
     # have Spine map nodes instead; the UI falls back (creature sprite or the elite icon).
@@ -441,6 +443,25 @@ def build(args):
     if args.preview:
         canvas.save(os.path.join(ROOT, 'build', 'preview_bg_neow.png'))
 
+    # Merchant room (scenes/rooms/merchant_room.tscn): the tent (BgContainer, Spine at 0.5,
+    # scaled 1.01) and the merchant (MerchantButton's MerchantVisual), centred 5:3 crop.
+    S = 0.5
+    scene = Image.new('RGBA', (round(1920 * S), round(1080 * S)), (0, 0, 0, 255))
+
+    def put(tres, x, y, scale):
+        skel, atlas, load = g.spine(tres)
+        img, origin = spine_render.render(skel, atlas, load, scale=scale * S)
+        scene.alpha_composite(img, (round(x * S - origin[0]), round(y * S - origin[1])))
+    put('animations/backgrounds/merchant_room/bottom/shop_merchant_bottom.tres', -10, 20, 0.5 * 1.01)
+    put('animations/backgrounds/merchant_room/top/shop_merchant_top.tres', 960 + 246 - 1122.7, 540 - 72 - 396.68, 0.470095)
+    cw = round(scene.height * 400 / 240)
+    top = scene.crop(((scene.width - cw) // 2, 0, (scene.width - cw) // 2 + cw, scene.height)).resize((400, 240), Image.LANCZOS)
+    canvas = Image.new('RGBA', (512, 256), (0, 0, 0, 255))
+    canvas.paste(top, (0, 0))
+    write_t3t(os.path.join(OUT, 'gfx', 'bg_merchant.t3t'), canvas)
+    if args.preview:
+        canvas.save(os.path.join(ROOT, 'build', 'preview_bg_merchant.png'))
+
     print('text')
     strings = {}
 
@@ -456,6 +477,7 @@ def build(args):
     take('events', lambda k: k.split('.')[0] in EVENTS or k.startswith('GENERIC'))
     take('ancients', lambda k: k.split('.')[0] in EVENTS)
     take('potions', lambda k: k.split('.')[0] in POTIONS)
+    take('merchant_room')
     for t in ('card_keywords', 'gameplay_ui', 'rest_site_ui', 'card_reward_ui', 'map', 'combat_messages',
               'card_selection', 'intents', 'game_over_screen', 'characters'):
         take(t, (lambda k: not k.startswith(('DAILY', 'DISCOVERY'))) if t == 'game_over_screen'

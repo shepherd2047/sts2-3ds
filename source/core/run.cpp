@@ -278,6 +278,7 @@ void Run::start(uint64_t s) {
   potions.clear();
   potions.resize(3);  // Player: 3 potion slots
   potionRewardOdds = 0.4f;
+  shopRemovalsUsed = 0;
   // Debug: STS_POTIONS=FirePotion,BlockPotion,... fills the belt.
   if (const char* list = getenv("STS_POTIONS")) {
     std::string s = list;
@@ -488,6 +489,7 @@ Task<> Run::main() {
     if (const char* forced = getenv("STS_ROOM"); forced && floor == 1) {
       std::string f = forced;
       type = f == "Treasure" ? RoomType::Treasure : f == "Rest" ? RoomType::Rest : f == "Elite" ? RoomType::Elite
+           : f == "Shop" ? RoomType::Shop
            : f == "Boss" ? RoomType::Boss : type;
     }
     // Debug: STS_ROOM=Event makes the first room an event; STS_EVENT=<id> picks which.
@@ -505,10 +507,14 @@ Task<> Run::main() {
         continue;
       }
     }
-    if (type == RoomType::Unknown || type == RoomType::Shop) {
-      // PORT NOTE: events and the merchant are not ported yet; say so and move on.
+    if (type == RoomType::Shop) {
+      co_await enterShop();
+      continue;
+    }
+    if (type == RoomType::Unknown) {
+      // PORT NOTE: no registered event is left; say so and move on.
       for (Model* m : listeners()) co_await m->afterRoomEntered(type);
-      placeholderText = type == RoomType::Shop ? "商店（尚未实现）" : "事件（尚未实现）";
+      placeholderText = "事件（尚未实现）";
       screen = Screen::Placeholder;
       co_await placeholderDone.next();
       continue;
