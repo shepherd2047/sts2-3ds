@@ -217,7 +217,9 @@ Task<bool> Run::eventFight(const std::string& encounterId) {
   Rng& rr = rng("Rewards");
   co_await gainGold(enc->room == RoomType::Elite ? rr.nextInt(35, 46) : rr.nextInt(10, 21));
   combat.reset();
+  player->combat = nullptr;
   for (auto& rel : relics) rel->combat = nullptr;
+  if (rollPotionReward(enc->room)) co_await offerPotion(randomPotion(rr, false));
   if (enc->room == RoomType::Elite) co_await offerRelic(pullRelicFromFront(relicBag, rollRelicRarity(rr)), false);
   rewardCards = cardReward(enc->room, 3);
   screen = Screen::Reward;
@@ -273,6 +275,19 @@ void Run::start(uint64_t s) {
   populateRelicBags();
   visitedEvents.clear();
   died = false;
+  potions.clear();
+  potions.resize(3);  // Player: 3 potion slots
+  potionRewardOdds = 0.4f;
+  // Debug: STS_POTIONS=FirePotion,BlockPotion,... fills the belt.
+  if (const char* list = getenv("STS_POTIONS")) {
+    std::string s = list;
+    for (size_t a = 0; a <= s.size();) {
+      size_t b = s.find(',', a);
+      if (b == std::string::npos) b = s.size();
+      procurePotion(db::potion(s.substr(a, b - a)));
+      a = b + 1;
+    }
+  }
   freeMap = getenv("STS_PATH_ONLY") == nullptr;
   // Debug: STS_ACT=2|3 starts the run in that act.
   const char* startAct = getenv("STS_ACT");
@@ -527,7 +542,9 @@ Task<> Run::main() {
       Rng& rr = rng("Rewards");
       co_await gainGold(type == RoomType::Boss ? 100 : type == RoomType::Elite ? rr.nextInt(35, 46) : rr.nextInt(10, 21));
       combat.reset();
+      player->combat = nullptr;
       for (auto& rel : relics) rel->combat = nullptr;
+      if (rollPotionReward(type)) co_await offerPotion(randomPotion(rr, false));  // RollForPotionAndAddTo
       if (type == RoomType::Elite) co_await offerRelic(pullRelicFromFront(relicBag, rollRelicRarity(rr)), false);
       rewardCards = cardReward(type, 3);
       screen = Screen::Reward;

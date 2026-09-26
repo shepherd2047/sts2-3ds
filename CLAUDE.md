@@ -156,6 +156,13 @@ scripts drift; delete the debug file afterwards.
   (`Run::enterAncient`: full heal, then the event). `Event::ancient` switches the UI to the
   Ancient layout: `gfx/bg_<id>.t3t` scene + `ancients.*` dialogue on top, relic options
   below. `STS_NO_NEOW=1` (or any STS_ENCOUNTER/ROOM/EVENT) skips Neow.
+- Potions: `potions.cpp` (POTION_HEADER like relics; registry `db::potion`, pool order
+  `db::potionPool()`). Belt = `Run::potions` (3 slots, null = empty); `Run::usePotion`,
+  `procurePotion`, `rollPotionReward` (after every fight), `offerPotion` (Screen::PotionOffer).
+  In combat a potion is a `PlayerAction::UsePotion`. UI: 药水 on the combat bottom screen and
+  the map HUD. Debug: `STS_POTIONS=FirePotion,BlockPotion` fills the belt,
+  `STS_POTION_REWARD=1` makes every fight drop one; `SIM_ALLPOTIONS=1 ./build/sim` cycles
+  every potion through the fights.
 - Debug: `STS_ROOM=Treasure|Rest|Elite|Boss|Event` makes the first room that type,
   `STS_ACT=2|3` starts in that act; the dev menu has 跳到下一幕.
 - Development build: `Run::freeMap` (default on; `STS_PATH_ONLY=1` off) lets any

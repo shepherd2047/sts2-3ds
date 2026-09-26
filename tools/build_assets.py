@@ -239,12 +239,13 @@ def export_spine(g, key, skel_res, skel, atlas, load, scale):
 
 
 def build(args):
-    global CARDS, POWERS, MONSTERS, RELICS, EVENTS
+    global CARDS, POWERS, MONSTERS, RELICS, EVENTS, POTIONS
     CARDS = sorted(set(CARDS_FIXED) | set(keys_from_source('CARD_HEADER')))
     POWERS = sorted(set(POWERS_FIXED) | set(keys_from_source('POWER_HEADER')))
     MONSTERS = keys_from_source('MONSTER_HEADER')
     RELICS = keys_from_source('RELIC_HEADER')
     EVENTS = keys_from_source('EVENT_HEADER')
+    POTIONS = keys_from_source('POTION_HEADER')
     g = Game(args.pck) if args.pck else Game()
     a = Assets(g)
     os.makedirs(os.path.join(OUT, 'gfx'), exist_ok=True)
@@ -293,6 +294,8 @@ def build(args):
         packer.add('power/' + key, fit(img, (24, 24)))
     for key in RELICS:
         packer.add('relic/' + key, fit(g.image(f'images/relics/{key.lower()}.png'), (RELIC_ICON, RELIC_ICON)))
+    for key in POTIONS:  # PotionModel.ImagePath (potion_atlas)
+        packer.add('potion/' + key, fit(a.sprite(f'images/atlases/potion_atlas.sprites/{key.lower()}.tres'), (48, 48)))
     for key in EVENTS:  # event art for the top screen (RGDSplus U21)
         path = f'images/events/{key.lower()}.png'
         if path + '.import' in g.pck.files:
@@ -428,6 +431,7 @@ def build(args):
     take('relics', lambda k: k.split('.')[0] in RELICS)
     take('events', lambda k: k.split('.')[0] in EVENTS or k.startswith('GENERIC'))
     take('ancients', lambda k: k.split('.')[0] in EVENTS)
+    take('potions', lambda k: k.split('.')[0] in POTIONS)
     for t in ('card_keywords', 'gameplay_ui', 'rest_site_ui', 'card_reward_ui', 'map', 'combat_messages',
               'card_selection', 'intents', 'game_over_screen', 'characters'):
         take(t, (lambda k: not k.startswith(('DAILY', 'DISCOVERY'))) if t == 'game_over_screen'

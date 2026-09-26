@@ -92,6 +92,10 @@ enum : int {
   ID_DEVMENU,
   ID_PGUP,
   ID_PGDN,
+  ID_POTIONS,
+  ID_USE,
+  ID_DISCARD,
+  ID_POTION0 = 900,  // + belt slot
   ID_TARGET0 = 100,   // + enemy index
   ID_HAND0 = 200,     // + hand index
   ID_NODE0 = 300,     // + reachable index
@@ -603,6 +607,7 @@ void App::update(const gfx::Input& in, double dt) {
   if (mapView_) { updateMap(in); return; }
   if (relicsOpen_) { updateRelics(in); return; }
   if (deckOpen_) { updateDeck(in); return; }
+  if (potionsOpen_) { updatePotions(in); return; }
   switch (scr) {
     case Screen::Title: updateTitle(in); break;
     case Screen::Map: updateMap(in); break;
@@ -613,6 +618,7 @@ void App::update(const gfx::Input& in, double dt) {
     case Screen::GameOver: updateEnd(in); break;
     case Screen::Victory: updateEnd(in); break;
     case Screen::RelicOffer: updateRelicOffer(in); break;
+    case Screen::PotionOffer: updatePotionOffer(in); break;
     case Screen::Event: updateEvent(in); break;
     case Screen::Placeholder:
       if (run_->placeholderDone.waiting() &&
@@ -684,6 +690,7 @@ void App::draw() {
     if (mapView_) { drawMap(top); continue; }
     if (relicsOpen_) { drawRelics(top); continue; }
     if (deckOpen_) { drawDeck(top); continue; }
+    if (potionsOpen_) { drawPotions(top); continue; }
     switch (scr) {
       case Screen::Title: drawTitle(top); break;
       case Screen::Map: drawMap(top); break;
@@ -694,6 +701,7 @@ void App::draw() {
       case Screen::GameOver: drawEnd(top, false); break;
       case Screen::Victory: drawEnd(top, true); break;
       case Screen::RelicOffer: drawRelicOffer(top); break;
+      case Screen::PotionOffer: drawPotionOffer(top); break;
       case Screen::Event: drawEvent(top); break;
       case Screen::Placeholder:  // a room that is not ported yet (event / shop)
         drawSceneBg(top, 0.6f);
@@ -760,6 +768,9 @@ void App::autoplay(double dt) {
     case Screen::RelicOffer:
       if (r.relicChoice.waiting()) r.relicChoice.fire(1); else acted = false;
       break;
+    case Screen::PotionOffer:
+      if (r.potionOfferChoice.waiting()) r.potionOfferChoice.fire(r.hasOpenPotionSlot() ? 1 : 0); else acted = false;
+      break;
     case Screen::Placeholder:
       if (r.placeholderDone.waiting()) r.placeholderDone.fire(0); else acted = false;
       break;
@@ -816,9 +827,11 @@ void App::drawTopBar() {
   gfx::rect(0, 0, kTop, 18, 0x000000A0);
   Creature* p = run_->player.get();
   R().text(4, 2, "生命 " + num(p->hp) + "/" + num(p->maxHp), ts(F12, col::red));
-  R().text(96, 2, "金币 " + num(run_->gold), ts(F12, col::gold));
-  R().text(170, 2, "第 " + num(run_->floor) + " 层", ts(F12, col::white));
-  R().text(230, 2, "牌组 " + num((int)run_->deck.size()), ts(F12, col::white));
+  R().text(84, 2, "金币 " + num(run_->gold), ts(F12, col::gold));
+  R().text(148, 2, "第 " + num(run_->floor) + " 层", ts(F12, col::white));
+  R().text(198, 2, "牌组 " + num((int)run_->deck.size()), ts(F12, col::white));
+  // Potion belt (TopBar.PotionContainer), after the deck count.
+  for (int i = 0; i < (int)run_->potions.size(); ++i) drawPotionIcon(run_->potions[i].get(), 250 + i * 17, 1, 16);
   // Relics from the right edge; the rest are counted as "+N" (all of them are in the
   // relic page).
   const int n = (int)run_->relics.size();
@@ -962,6 +975,7 @@ void App::drawMap(bool top) {
     button(4, 210, 64, 26, "牌组", ID_DECK);
     button(72, 210, 64, 26, "遗物", ID_RELICS);
     button(140, 210, 56, 26, "开发", ID_DEVMENU);
+    button(200, 210, 56, 26, "药水", ID_POTIONS);
   }
   // Legend panel on the right, as on RGDSplus (the map's own legend, lower screen).
   {
@@ -1012,6 +1026,7 @@ void App::updateMap(const gfx::Input& in) {
     if (hud == ID_DECK) { deckOpen_ = true; sel_ = -1; scroll_ = 0; mapTouch_ = {}; return; }
     if (hud == ID_RELICS) { relicsOpen_ = true; sel_ = run_->relics.empty() ? -1 : 0; scroll_ = 0; mapTouch_ = {}; return; }
     if (hud == ID_DEVMENU) { devOpen_ = true; devPage_ = 0; sel_ = -1; scroll_ = 0; mapTouch_ = {}; return; }
+    if (hud == ID_POTIONS) { potionsOpen_ = true; potionAim_ = false; potionSel_ = -1; mapTouch_ = {}; return; }
     mapTouch_ = {};
     mapTouch_.down = true;
     mapTouch_.startX = in.tx;
@@ -1485,6 +1500,9 @@ void App::drawCombat(bool top) {
     afy = drag_.y - kCardH * kDragS / 2 + kBotOY;
     if (drag_.card->target == TargetType::AnyEnemy && drag_.target) { tgt = drag_.target; arrow = true; }
     else if (drag_.card->target == TargetType::Self) { tgt = cb->player; arrow = arrowAlly = true; }
+  } else if (potionsOpen_ && potionAim_ && !alive.empty()) {
+    if (target_ >= (int)alive.size()) target_ = 0;
+    tgt = alive[target_];
   } else if (aiming_ && selCard && !alive.empty()) {
     float cx = std::clamp(handSlot(n, sel_).x, 70.f, kBot - 70.f);
     afx = cx + kBotOX;
@@ -1545,10 +1563,25 @@ void App::drawCombat(bool top) {
 
   if (cb->choice.active) {
     gfx::rect(0, 0, kBot, kH, 0x000000A0);
-    R().text(kBot / 2, 4, L("cards." + cb->choice.prompt + ".title") + "：选择一张牌", ts(F16, col::gold, CENTER));
-    drawCardGrid(cb->choice.options, sel_, 26, 196, scroll_);
-    button(kBot - 110, 200, 100, 34, "确认", ID_CONFIRM, sel_ >= 0 && sel_ < (int)cb->choice.options.size());
-    if (sel_ >= 0 && sel_ < (int)cb->choice.options.size()) R().text(10, 206, cardTitle(cb->choice.options[sel_]), ts(F16, col::white));
+    const CardChoice& ch = cb->choice;
+    std::string prompt = R().hasLoc(ch.prompt) ? L(ch.prompt)
+                         : R().hasLoc("cards." + ch.prompt + ".title") ? L("cards." + ch.prompt + ".title") + "：选择一张牌" : ch.prompt;
+    R().text(kBot / 2, 4, prompt, ts(F16, col::gold, CENTER, kBot - 8, 0.9f));
+    drawCardGrid(ch.options, sel_, 26, 196, scroll_);
+    bool multi = ch.maxCount > 1;
+    if (multi) {  // picked cards get a gold tick (as in the deck choice)
+      for (int i : deckPicks_) {
+        int row = i / 5 - scroll_;
+        const float gs = 0.46f, cw = 120 * gs, gch = 169 * gs, gap = (kBot - 5 * cw) / 6;
+        float x = gap + (i % 5) * (cw + gap), y = 26 + row * (gch + 8);
+        if (y >= 26 && y < 196) gfx::circle(x + cw - 6, y + 6, 6, 0xFFD870FF);
+      }
+    }
+    bool ready = multi ? (int)deckPicks_.size() >= ch.minCount : sel_ >= 0 && sel_ < (int)ch.options.size();
+    if (ch.minCount == 0) button(kBot / 2 - 50, 200, 100, 34, "跳过", ID_SKIP);
+    button(kBot - 110, 200, 100, 34, "确认", ID_CONFIRM, ready);
+    if (!multi && sel_ >= 0 && sel_ < (int)ch.options.size()) R().text(10, 206, cardTitle(ch.options[sel_]), ts(F12, col::white));
+    if (multi) R().text(10, 208, "已选 " + num((int)deckPicks_.size()), ts(F12, col::white));
     return;
   }
 
@@ -1573,6 +1606,15 @@ void App::drawCombat(bool top) {
     R().text(ex + ew / 2, ey + eh / 2 - lh * lt.scale * inkMid, "结束", lt);
   }
   if (canAct) hits_.push_back({ex, ey - 4, ew, eh + 8, ID_END_TURN});
+  // Potions: a small button bottom centre, between the piles (opens the belt list).
+  {
+    const float pw = 58, ph = 22, px = (kBot - pw) / 2, py = 214;
+    panel(px, py, pw, ph, canAct ? 0x3A2E24E8 : 0x2A2A2AC0, canAct ? 0xB89A60FF : 0x555555FF);
+    int filled = 0;
+    for (auto& pt : run_->potions) filled += pt != nullptr;
+    R().text(px + pw / 2, py + (ph - R().lineHeight(F12)) / 2, "药水 " + num(filled), ts(F12, canAct ? col::white : col::gray, CENTER));
+    if (canAct) hits_.push_back({px, py - 2, pw, ph + 4, ID_POTIONS});
+  }
   // Piles: small icons in the corners with a red count badge.
   auto pile = [&](const char* sprite, float cx, float cy, int count) {
     spr(R().sprite(sprite), cx - 12, cy - 12, 24, 24);
@@ -1668,20 +1710,44 @@ void App::updateCombat(const gfx::Input& in) {
     if (in.down & gfx::BTN_DOWN) sel_ = std::min(m - 1, sel_ + 5);
     if (in.down & gfx::BTN_UP) sel_ = std::max(0, sel_ - 5);
     if (sel_ >= 0) scroll_ = std::max(0, sel_ / 5 - 1);
-    bool confirm = (in.down & gfx::BTN_A) && sel_ >= 0 && sel_ < m;
+    const bool multi = cb->choice.maxCount > 1;
+    auto finish = [&](std::vector<Card*> picked) {
+      deckPicks_.clear();
+      sel_ = -1;
+      scroll_ = 0;
+      cb->choice.result.fire(std::move(picked));
+    };
+    auto toggle = [&](int i) {
+      auto it = std::find(deckPicks_.begin(), deckPicks_.end(), i);
+      if (it != deckPicks_.end()) deckPicks_.erase(it);
+      else if ((int)deckPicks_.size() < cb->choice.maxCount) deckPicks_.push_back(i);
+    };
+    auto confirmMulti = [&] {
+      if ((int)deckPicks_.size() < cb->choice.minCount) return;
+      std::vector<Card*> picked;
+      for (int i : deckPicks_) picked.push_back(cb->choice.options[i]);
+      finish(std::move(picked));
+    };
+    if (multi) {
+      if ((in.down & gfx::BTN_A) && sel_ >= 0 && sel_ < m) toggle(sel_);
+      if (in.down & gfx::BTN_X) { confirmMulti(); return; }
+    }
+    bool confirm = !multi && (in.down & gfx::BTN_A) && sel_ >= 0 && sel_ < m;
+    if ((in.down & gfx::BTN_B) && cb->choice.minCount == 0) { finish({}); return; }
     if (in.touchDown) {
       int id = hitAt(in.tx, in.ty);
       if (id >= ID_GRID0 && id - ID_GRID0 < m) {
-        if (sel_ == id - ID_GRID0) confirm = true;
+        if (multi) toggle(id - ID_GRID0);
+        else if (sel_ == id - ID_GRID0) confirm = true;
         sel_ = id - ID_GRID0;
       }
-      if (id == ID_CONFIRM && sel_ >= 0) confirm = true;
+      if (id == ID_SKIP && cb->choice.minCount == 0) { finish({}); return; }
+      if (id == ID_CONFIRM) {
+        if (multi) { confirmMulti(); return; }
+        if (sel_ >= 0) confirm = true;
+      }
     }
-    if (confirm) {
-      cb->choice.result.fire({cb->choice.options[sel_]});
-      sel_ = -1;
-      scroll_ = 0;
-    }
+    if (confirm) finish({cb->choice.options[sel_]});
     return;
   }
 
@@ -1709,6 +1775,15 @@ void App::updateCombat(const gfx::Input& in) {
   };
 
   // ---- touch: drag to play (RGDSplus R4 drag-lock rules)
+  if (in.touchDown && hitAt(in.tx, in.ty) == ID_POTIONS) {
+    potionsOpen_ = true;
+    potionAim_ = false;
+    potionSel_ = -1;
+    drag_ = {};
+    aiming_ = false;
+    sel_ = -1;
+    return;
+  }
   if (in.touchDown) {
     int i = hitHandCard(in.tx, in.ty);
     if (i >= 0) {
@@ -2050,6 +2125,187 @@ void App::updateRelicOffer(const gfx::Input& in) {
     if (id == ID_TAKE) r.relicChoice.fire(1);
     else if (id == ID_SKIP) r.relicChoice.fire(0);
   }
+}
+
+// ================================================================ potions
+
+std::string App::describePotion(Potion* p) {
+  if (!R().hasLoc("potions." + p->locKey + ".description")) return {};
+  return expandSmart(L("potions." + p->locKey + ".description"), p->vars, run_->combat != nullptr);
+}
+
+void App::drawPotionIcon(Potion* p, float x, float y, float size) {
+  if (!p) {  // empty slot: a faint outline
+    gfx::circle(x + size / 2, y + size / 2, size * 0.36f, 0xFFFFFF28);
+    return;
+  }
+  Sprite s = R().sprite("potion/" + p->locKey);
+  if (!s) { gfx::circle(x + size / 2, y + size / 2, size * 0.4f, 0xC04040FF); return; }
+  float k = std::min(size / s.w, size / s.h);
+  spr(s, x + (size - s.w * k) / 2, y + (size - s.h * k) / 2, s.w * k, s.h * k);
+}
+
+void App::drawPotions(bool top) {
+  Run& r = *run_;
+  bool fight = r.screen == Screen::Combat && r.combat;
+  int n = (int)r.potions.size();
+  if (potionSel_ >= n) potionSel_ = -1;
+  Potion* p = potionSel_ >= 0 ? r.potions[potionSel_].get() : nullptr;
+  if (top) {
+    if (fight) drawCombat(true);
+    else { drawSceneBg(true, 0.65f); drawTopBar(); }
+    if (!p) {
+      if (!fight) R().text(kTop / 2, 100, "药水", ts(F16, col::gold, CENTER, 0, 1.3f));
+      return;
+    }
+    // The picked potion along the bottom of the top screen (below the creatures' feet).
+    gfx::rect(0, kH - 54, kTop, 54, 0x000000C8);
+    drawPotionIcon(p, 8, kH - 48, 40);
+    R().text(56, kH - 52, L("potions." + p->locKey + ".title"), ts(F16, col::gold));
+    R().text(56, kH - 32, describePotion(p), ts(F12, col::white, LEFT, kTop - 64, 0.9f));
+    if (potionAim_) R().text(kTop / 2, 24, "选择目标", ts(F16, col::gold, CENTER));
+    return;
+  }
+  drawSceneBg(false, 0.75f);
+  if (potionAim_ && fight) {
+    auto alive = r.combat->aliveEnemies();
+    if (target_ >= (int)alive.size()) target_ = 0;
+    R().text(kBot / 2, 40, "选择目标", ts(F16, col::gold, CENTER));
+    if (!alive.empty()) {
+      Creature* t = alive[target_];
+      std::string name = R().hasLoc("monsters." + t->name + ".name") ? L("monsters." + t->name + ".name") : t->name;
+      R().text(kBot / 2, 90, name + "  " + num(t->hp) + "/" + num(t->maxHp), ts(F16, col::white, CENTER));
+    }
+    button(20, 80, 50, 40, "<", ID_PGUP, alive.size() > 1);
+    button(kBot - 70, 80, 50, 40, ">", ID_PGDN, alive.size() > 1);
+    button(10, 196, 110, 36, "取消", ID_BACK);
+    button(kBot - 120, 196, 110, 36, "使用", ID_CONFIRM, !alive.empty(), true);
+    return;
+  }
+  R().text(kBot / 2, 4, "药水", ts(F16, col::gold, CENTER));
+  const float rx = 10, rw = kBot - 20, rh = 46, gap = 6, y0 = 26;
+  for (int i = 0; i < n; ++i) {
+    float y = y0 + i * (rh + gap);
+    Potion* q = r.potions[i].get();
+    bool hl = i == potionSel_;
+    panel(rx, y, rw, rh, hl ? 0x5A3A20F0 : 0x2A2218E8, hl ? 0xFFD870FF : 0x8A7A5AFF);
+    drawPotionIcon(q, rx + 5, y + 5, 36);
+    if (q) {
+      R().text(rx + 48, y + 3, L("potions." + q->locKey + ".title"), ts(F12, col::gold));
+      TextStyle st = ts(F12, col::white, LEFT, rw - 54, 0.8f);
+      std::string d = describePotion(q);
+      float dh;
+      R().measure(d, st, &dh);
+      if (dh > rh - 20) st.scale *= (rh - 20) / dh;
+      R().text(rx + 48, y + 19, d, st);
+    } else {
+      R().text(rx + 48, y + (rh - R().lineHeight(F12)) / 2, "空", ts(F12, col::gray));
+    }
+    hits_.push_back({rx, y, rw, rh, ID_POTION0 + i});
+  }
+  bool canUse = potionSel_ >= 0 && r.canUsePotion(potionSel_);
+  button(10, 196, 96, 36, "返回", ID_BACK);
+  button(112, 196, 96, 36, "丢弃", ID_DISCARD, p != nullptr);
+  button(214, 196, 96, 36, "使用", ID_USE, canUse, true);
+}
+
+void App::updatePotions(const gfx::Input& in) {
+  Run& r = *run_;
+  bool fight = r.screen == Screen::Combat && r.combat;
+  int n = (int)r.potions.size();
+  auto close = [&] { potionsOpen_ = false; potionAim_ = false; potionSel_ = -1; };
+  // In combat the list only makes sense while the player may act.
+  if (fight && !(r.combat->playerPhase && r.combat->actions.waiting())) { close(); return; }
+  auto fire = [&](Creature* target) {
+    int slot = potionSel_;
+    close();
+    if (fight) {
+      PlayerAction a;
+      a.kind = PlayerAction::UsePotion;
+      a.potionSlot = slot;
+      a.target = target;
+      r.combat->actions.fire(a);
+    } else {
+      Scheduler::get().spawn(r.usePotion(slot, nullptr));
+    }
+  };
+  auto use = [&] {
+    if (potionSel_ < 0 || !r.canUsePotion(potionSel_)) return;
+    if (fight && r.potions[potionSel_]->target == TargetType::AnyEnemy) {
+      potionAim_ = true;
+      target_ = 0;
+      return;
+    }
+    fire(nullptr);
+  };
+  int id = in.touchDown ? hitAt(in.tx, in.ty) : ID_NONE;
+  if (potionAim_) {
+    auto alive = fight ? r.combat->aliveEnemies() : std::vector<Creature*>{};
+    int m = (int)alive.size();
+    if (m == 0 || (in.down & gfx::BTN_B) || id == ID_BACK) { potionAim_ = false; return; }
+    if ((in.down & gfx::BTN_LEFT) || id == ID_PGUP) target_ = (target_ + m - 1) % m;
+    if ((in.down & gfx::BTN_RIGHT) || id == ID_PGDN) target_ = (target_ + 1) % m;
+    if ((in.down & gfx::BTN_A) || id == ID_CONFIRM) fire(alive[std::min(target_, m - 1)]);
+    return;
+  }
+  if ((in.down & gfx::BTN_B) || id == ID_BACK) { close(); return; }
+  if (in.down & gfx::BTN_DOWN) potionSel_ = std::min(n - 1, potionSel_ + 1);
+  if (in.down & gfx::BTN_UP) potionSel_ = std::max(0, potionSel_ - 1);
+  if (in.down & gfx::BTN_A) use();
+  if ((in.down & gfx::BTN_X) && potionSel_ >= 0) r.discardPotion(potionSel_);
+  if (id >= ID_POTION0 && id < ID_POTION0 + n) potionSel_ = id - ID_POTION0;
+  if (id == ID_USE) use();
+  if (id == ID_DISCARD && potionSel_ >= 0) r.discardPotion(potionSel_);
+}
+
+// PotionReward: the potion on top; take or skip below. With a full belt the belt is
+// listed so one can be discarded first (the game refuses the reward while it is full).
+void App::drawPotionOffer(bool top) {
+  Run& r = *run_;
+  Potion* p = r.potionOffer.get();
+  if (top) {
+    drawSceneBg(true, 0.6f);
+    drawTopBar();
+    R().text(kTop / 2, 24, "药水", ts(F16, col::gold, CENTER));
+    if (p) {
+      gfx::circle(kTop / 2.f, 84, 38, 0xFFE07030);
+      drawPotionIcon(p, kTop / 2.f - 28, 56, 56);
+      TextStyle nt = ts(F16, col::gold, CENTER);
+      nt.scale = 1.2f;
+      R().text(kTop / 2.f, 124, L("potions." + p->locKey + ".title"), nt);
+      R().text(kTop / 2.f, 152, describePotion(p), ts(F12, col::white, CENTER, kTop - 60));
+    }
+    return;
+  }
+  drawSceneBg(false, 0.55f);
+  bool room = r.hasOpenPotionSlot();
+  if (p) {
+    float s = 40, x = kBot / 2 - s / 2, y = room ? 60 : 8;
+    drawPotionIcon(p, x, y, s);
+    R().text(kBot / 2, y + s + 4, L("potions." + p->locKey + ".title"), ts(F16, col::white, CENTER));
+  }
+  if (!room) {
+    R().text(kBot / 2, 74, "药水栏已满：点一瓶丢弃，或跳过", ts(F12, col::gold, CENTER));
+    for (int i = 0; i < (int)r.potions.size(); ++i) {
+      float x = 40 + i * 84, y = 96;
+      panel(x, y, 72, 80, 0x2A2218E8, 0x8A7A5AFF);
+      drawPotionIcon(r.potions[i].get(), x + 16, y + 6, 40);
+      if (r.potions[i]) R().text(x + 36, y + 50, L("potions." + r.potions[i]->locKey + ".title"), ts(F12, col::white, CENTER, 70, 0.7f));
+      R().text(x + 36, y + 64, "丢弃", ts(F12, col::red, CENTER, 0, 0.8f));
+      hits_.push_back({x, y, 72, 80, ID_POTION0 + i});
+    }
+  }
+  button(10, 196, 110, 36, "跳过", ID_SKIP);
+  button(kBot - 120, 196, 110, 36, "拿取", ID_TAKE, p != nullptr && room, true);
+}
+
+void App::updatePotionOffer(const gfx::Input& in) {
+  Run& r = *run_;
+  if (!r.potionOfferChoice.waiting()) return;
+  int id = in.touchDown ? hitAt(in.tx, in.ty) : ID_NONE;
+  if (id >= ID_POTION0 && id < ID_POTION0 + (int)r.potions.size()) { r.discardPotion(id - ID_POTION0); return; }
+  if (((in.down & gfx::BTN_A) || id == ID_TAKE) && r.hasOpenPotionSlot()) { r.potionOfferChoice.fire(1); return; }
+  if ((in.down & gfx::BTN_B) || id == ID_SKIP) r.potionOfferChoice.fire(0);
 }
 
 // Owned relics: a grid below, the selected one described above (RGDSplus U24/U25).

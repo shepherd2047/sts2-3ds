@@ -330,6 +330,7 @@ struct BattlewornDummy : Event {
     bool won = co_await run->fight("BattlewornDummyEventV" + std::to_string(level) + "Encounter");
     if (!won) { run->died = true; co_return; }
     run->combat.reset();
+    run->player->combat = nullptr;
     for (auto& rel : run->relics) rel->combat = nullptr;
     if (g_dummyRanOutOfTime) { setFinished("DEFEAT"); co_return; }
     setFinished("VICTORY");

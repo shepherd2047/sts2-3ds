@@ -194,6 +194,7 @@ struct DenseVegetation : Event {
     bool won = co_await run->fight("DenseVegetationEventEncounter");
     if (!won) { run->died = true; co_return; }
     run->combat.reset();
+    run->player->combat = nullptr;
     for (auto& rel : run->relics) rel->combat = nullptr;
     finished = true;
     options.clear();

@@ -34,6 +34,8 @@ enum class StackType { Counter, Single };
 enum class Pile { None, Draw, Hand, Discard, Exhaust, Play };
 enum class RoomType { Monster, Elite, Rest, Treasure, Unknown, Boss, Start, Shop, Ancient };
 enum class RelicRarity { None, Starter, Common, Uncommon, Rare, Shop, Event, Ancient };
+enum class PotionRarity { None, Common, Uncommon, Rare, Event, Token };
+enum class PotionUsage { CombatOnly, AnyTime, Automatic };
 
 // ValueProp flags.
 enum : int { kUnblockable = 2, kUnpowered = 4, kMove = 8, kSkipHurtAnim = 16 };
@@ -98,6 +100,7 @@ struct Model {
   virtual Task<> afterModifyingCardPlayCount(Card*) { return {}; }
   virtual Task<> afterEnergySpent(Card*, int) { return {}; }
   virtual bool shouldDraw(bool /*fromHandDraw*/) { return true; }
+  virtual bool shouldFlush() { return true; }  // Hook.ShouldFlush (RetainHandPower)
   virtual bool shouldClearBlock(Creature*) { return true; }
   virtual Dec modifyMaxEnergy(Dec amount) { return amount; }
   virtual int modifyCardPlayCount(Card*, Creature*, int count) { return count; }
@@ -185,6 +188,7 @@ struct Card : Model {
   int keywords = 0;
   int tags = 0;
   int upgradeLevel = 0;
+  int baseReplayCount = 0;  // BaseReplayCount (Soldier's Stew): extra plays
   int maxUpgradeLevel = 1;
   bool isDupe = false;
   bool costsX = false;   // HasEnergyCostX
@@ -429,6 +433,32 @@ struct Relic : Model {
   Name() { id = #Name; locKey = Key; icon = Key; rarity = RelicRarity::Rar;
 using RelicFactoryFn = std::unique_ptr<Relic> (*)();
 
+// ---------------------------------------------------------------- potions
+
+// PotionModel. `target` uses the card TargetType: Self for the game's AnyPlayer/Self
+// (single player), AnyEnemy, AllEnemies or None (TargetedNoCreature).
+struct Potion : Model {
+  std::string id, locKey;
+  PotionRarity rarity = PotionRarity::Common;
+  PotionUsage usage = PotionUsage::CombatOnly;
+  TargetType target = TargetType::Self;
+  Run* run = nullptr;
+  Combat* combat = nullptr;  // set while it is being used in combat
+  std::vector<DynVar> vars;
+
+  virtual bool canBeGeneratedInCombat() const { return true; }
+  virtual Task<> onUse(Creature* target) = 0;  // OnUse
+
+  Creature* owner() const;
+  DynVar* var(const char* n) { for (auto& v : vars) if (v.name == n) return &v; return nullptr; }
+  Dec val(const char* n) { auto* v = var(n); return v ? v->base : Dec(0); }
+  void addVar(const char* n, Dec v) { vars.push_back({n, v, v}); }
+};
+
+// POTION_HEADER(FirePotion, "FIRE_POTION", Common, CombatOnly, AnyEnemy) { ...vars... }
+#define POTION_HEADER(Name, Key, Rar, Use, Tgt)   static constexpr const char* kId = #Name;      Name() { id = #Name; locKey = Key; rarity = PotionRarity::Rar; usage = PotionUsage::Use; target = TargetType::Tgt;
+using PotionFactoryFn = std::unique_ptr<Potion> (*)();
+
 // ---------------------------------------------------------------- UI plumbing
 
 // Things the renderer should animate; commands push them, the UI drains them.
@@ -440,8 +470,9 @@ struct VisualEvent {
 };
 
 struct PlayerAction {
-  enum Kind { PlayCard, EndTurn, DevKillAll } kind = EndTurn;  // DevKillAll: developer menu
+  enum Kind { PlayCard, EndTurn, DevKillAll, UsePotion } kind = EndTurn;  // DevKillAll: developer menu
   Card* card = nullptr;
+  int potionSlot = -1;  // UsePotion
   Creature* target = nullptr;
 };
 
@@ -592,7 +623,7 @@ struct Encounter {
   std::function<std::vector<std::unique_ptr<Monster>>(Rng&)> generate;
 };
 
-enum class Screen { Title, Map, Combat, Reward, Rest, RestUpgrade, GameOver, Victory, DeckView, RelicOffer, Placeholder, Event };
+enum class Screen { Title, Map, Combat, Reward, Rest, RestUpgrade, GameOver, Victory, DeckView, RelicOffer, Placeholder, Event, PotionOffer };
 
 // ---------------------------------------------------------------- events
 
@@ -737,6 +768,21 @@ struct Run {
   Task<> offerRelic(std::unique_ptr<Relic> r, bool fromChest);
   Task<> gainGold(int amount);                     // PlayerCmd.GainGold
   bool hasRelic(const std::string& id) const;
+
+  // Potions (Player.PotionSlots): a fixed belt, null = empty slot.
+  std::vector<std::unique_ptr<Potion>> potions = std::vector<std::unique_ptr<Potion>>(3);
+  float potionRewardOdds = 0.4f;  // PotionRewardOdds.CurrentValue
+  std::unique_ptr<Potion> potionOffer;  // PotionReward on Screen::PotionOffer
+  Signal<int> potionOfferChoice;         // 1 take, 0 skip (the UI discards to make room)
+  bool hasOpenPotionSlot() const;
+  bool procurePotion(std::unique_ptr<Potion> p);  // PotionCmd.TryToProcure: false when full
+  void discardPotion(int slot);                   // PotionCmd.Discard
+  bool canUsePotion(int slot) const;              // usage allowed right now
+  Task<> usePotion(int slot, Creature* target);   // PotionModel.OnUseWrapper
+  std::unique_ptr<Potion> randomPotion(Rng& rng, bool inCombat);  // PotionFactory
+  bool rollPotionReward(RoomType room);           // PotionRewardOdds.Roll
+  Task<> offerPotion(std::unique_ptr<Potion> p);
+  bool preventDeath();  // FairyInABottle: returns true if the player was saved
   std::vector<Model*> listeners();                 // run-level hook listeners (relics)
 
   Rng& rng(const char* stream) {
@@ -769,6 +815,10 @@ std::unique_ptr<Card> card(const std::string& id);
 std::unique_ptr<Power> power(const std::string& id);
 const Encounter* encounter(const std::string& id);
 std::unique_ptr<Relic> relic(const std::string& id);
+std::unique_ptr<Potion> potion(const std::string& id);
+void registerPotion(const std::string& id, PotionFactoryFn f);
+// IroncladPotionPool + SharedPotionPool ids in the game's order (registered or not).
+const std::vector<std::string>& potionPool();
 std::vector<std::string> ironcladRewardPool();
 std::vector<std::string> ironcladStarterDeck();
 // acts.cpp: Overgrowth, Hive, Glory with their encounter and event ids as in the C#.

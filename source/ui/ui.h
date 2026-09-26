@@ -107,6 +107,18 @@ class App {
   void updateEnd(const gfx::Input& in);
   void updateRelicOffer(const gfx::Input& in);
   void updateRelics(const gfx::Input& in);
+  // Potions (package 8): the belt as a list on the bottom screen (opened with 药水 in
+  // combat or on the map), the picked potion described on top; enemy-targeted potions
+  // then pick a target with ◀ ▶ (the reticle shows on the top screen).
+  void drawPotions(bool top);
+  void updatePotions(const gfx::Input& in);
+  void drawPotionOffer(bool top);
+  void updatePotionOffer(const gfx::Input& in);
+  void drawPotionIcon(sts::Potion* p, float x, float y, float size);
+  std::string describePotion(sts::Potion* p);
+  bool potionsOpen_ = false;
+  bool potionAim_ = false;
+  int potionSel_ = -1;
 
   // pieces
   // RGDSplus B02-B06: pages show the current scene's own background (room, or the map

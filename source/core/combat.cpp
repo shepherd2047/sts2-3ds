@@ -306,7 +306,10 @@ Task<std::vector<DamageResult>> damage(std::vector<Creature*> targets, Dec amoun
     bool killed = target->hp > 0 && unblocked >= Dec(target->hp);
     int n = std::clamp(unblocked.toInt(), 0, 999999999);
     target->hp = std::max(target->hp - n, 0);
-    r.unblocked = before - target->hp;
+    // Hook.ShouldDie (Fairy in a Bottle): the player survives and heals.
+    bool saved = killed && target->isPlayer && c.run->preventDeath();
+    if (saved) killed = false;
+    r.unblocked = saved ? before : before - target->hp;
     r.killed = killed;
     r.overkill = killed ? std::max(n - before, 0) : 0;
     r.blocked = blocked.toInt();
@@ -671,11 +674,19 @@ Task<> Combat::runCombat() {
         PlayerAction a = co_await actions.next();
         if (over) break;
         if (a.kind == PlayerAction::EndTurn) break;
+        if (a.kind == PlayerAction::UsePotion) {
+          playerPhase = false;
+          co_await run->usePotion(a.potionSlot, a.target);
+          playerPhase = !over;
+          if (over) break;
+          continue;
+        }
         if (a.kind == PlayerAction::DevKillAll) {
           playerPhase = false;
           co_await cmd::kill(aliveEnemies());
           co_await checkWinCondition();
           playerPhase = !over;
+          if (over) break;
           continue;
         }
         if (a.card && canPlay(a.card) && (a.card->target != TargetType::AnyEnemy || isValidTarget(a.card, a.target))) {
@@ -817,7 +828,10 @@ Task<> Combat::endPlayerTurnPhaseOne() {
 Task<> Combat::endPlayerTurnPhaseTwo() {
   // FlushPlayerHand
   std::vector<Card*> flush;
-  for (Card* c : hand) if (!c->has(kwRetain)) flush.push_back(c);
+  bool flushHand = true;
+  for (Model* m : listeners()) flushHand = flushHand && m->shouldFlush();
+  if (flushHand)
+    for (Card* c : hand) if (!c->has(kwRetain)) flush.push_back(c);
   for (Card* c : flush) { removeFromPiles(c); discard.push_back(c); }
   if (!flush.empty()) co_await wait(0.25);
   for (Card* c : allCards()) c->clearCostMods(Card::kEndOfTurn);  // PlayerCombatState.EndOfTurnCleanup
@@ -871,7 +885,7 @@ Task<> Combat::playCard(Card* card, Creature* target, bool autoPlay, bool forceE
   for (Model* m : listeners()) result = m->modifyCardPlayResultLocation(card, autoPlay, result);
 
   // Hook.ModifyCardPlayCount
-  int playCount = 1;
+  int playCount = 1 + card->baseReplayCount;
   std::vector<Model*> countModifiers;
   for (Model* m : listeners()) {
     int n = m->modifyCardPlayCount(card, target, playCount);

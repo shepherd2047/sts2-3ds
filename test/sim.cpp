@@ -9,6 +9,8 @@
 using namespace sts;
 #include <map>
 static std::map<std::string, int> played;
+static std::map<std::string, int> potionsUsed;
+static size_t potionCursor = 0;
 
 int main(int argc, char** argv) {
   setvbuf(stdout, nullptr, _IONBF, 0);
@@ -53,6 +55,15 @@ int main(int argc, char** argv) {
           if (&c != lastC) {
             if (lastC && getenv("SIM_FIGHTS")) printf("  fight %-22s hp %d -> ...\n", encId.c_str(), hpBefore);
             lastC = &c; hpBefore = run.player->hp; encId = c.encounterId;
+            // SIM_ALLPOTIONS=1: every fight starts with the next three pool potions.
+            if (getenv("SIM_ALLPOTIONS"))
+              for (auto& slot : run.potions) {
+                auto& pool = db::potionPool();
+                for (size_t k = 0; k < pool.size() && !slot; ++k) {
+                  slot = db::potion(pool[potionCursor++ % pool.size()]);
+                  if (slot) slot->run = &run;
+                }
+              }
           }
           if (getenv("SIM_FIGHTS") && c.over && c.turnNumber > 0) {
             static Combat* reported = nullptr;
@@ -63,6 +74,18 @@ int main(int argc, char** argv) {
           } else if (c.playerPhase && c.actions.waiting()) {
             PlayerAction a;
             a.kind = PlayerAction::EndTurn;
+            // Drink the first usable potion straight away.
+            for (int k = 0; k < (int)run.potions.size(); ++k)
+              if (run.canUsePotion(k) && !c.aliveEnemies().empty()) {
+                a.kind = PlayerAction::UsePotion;
+                a.potionSlot = k;
+                if (run.potions[k]->target == TargetType::AnyEnemy) a.target = c.aliveEnemies()[0];
+                potionsUsed[run.potions[k]->id]++;
+                if (verbose) printf("  potion %s\n", run.potions[k]->id.c_str());
+                c.actions.fire(a);
+                break;
+              }
+            if (a.kind == PlayerAction::UsePotion) break;
             // Slightly sensible policy: block if the incoming hit exceeds block,
             // otherwise attack the weakest enemy; Bash first.
             int incoming = 0;
@@ -127,6 +150,12 @@ int main(int argc, char** argv) {
         case Screen::Placeholder:
           if (run.placeholderDone.waiting()) run.placeholderDone.fire(0);
           break;
+        case Screen::PotionOffer:
+          if (run.potionOfferChoice.waiting()) {
+            if (!run.hasOpenPotionSlot()) run.discardPotion(0);
+            run.potionOfferChoice.fire(1);
+          }
+          break;
         case Screen::RelicOffer:
           if (run.relicChoice.waiting()) {
             if (getenv("SIM_FIGHTS") && run.relicOffer) printf("  relic %s\n", run.relicOffer->id.c_str());
@@ -156,6 +185,11 @@ int main(int argc, char** argv) {
     Scheduler::get().update(0.05);
   }
   printf("wins %d/%d, avg floor %.1f\n", wins, runs, (double)floorsTotal / runs);
+  if (!potionsUsed.empty()) {
+    printf("potions used (%zu kinds):", potionsUsed.size());
+    for (auto& [id, n] : potionsUsed) printf(" %s:%d", id.c_str(), n);
+    printf("\n");
+  }
   if (getenv("SIM_ALLCARDS")) {
     int never = 0;
     for (auto& id : db::ironcladPool())

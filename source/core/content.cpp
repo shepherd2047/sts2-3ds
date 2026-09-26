@@ -626,6 +626,7 @@ void registerAct1Bosses();   // content_bosses.cpp: Ceremonial Beast, The Kin, F
 void registerRelics();       // relics*.cpp
 void registerEvents();       // events.cpp
 void registerAncients();     // ancients.cpp: Neow
+void registerPotions();      // potions.cpp
 
 namespace db {
 
@@ -741,6 +742,7 @@ void init() {
   registerRelics();
   registerEvents();
   registerAncients();
+  registerPotions();
 }
 
 std::unique_ptr<Card> card(const std::string& id) {
