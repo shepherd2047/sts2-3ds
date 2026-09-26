@@ -71,7 +71,7 @@ file and run it with bash.
 | 1 | Act 1 events (12 left) | content | 0 | done (locked options: Wellspring BOTTLE, WhisperingHollow GOLD = potions; SapphireSeed PLANT, WoodCarvings SNAKE = enchantments) |
 | 2 | Shared events (18) | content | 0 | todo |
 | 3 | Multi-act run structure | engine, *Opus* | – | todo |
-| 4a | Act 2 monsters A | content | – | todo |
+| 4a | Act 2 monsters A | content | – | done |
 | 4b | Act 2 monsters B | content | – | done |
 | 4c | Act 2 elites + bosses | content (+engine likely) | – | todo |
 | 5 | Act 2 events (10) | content | 0 | todo |
