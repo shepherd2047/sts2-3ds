@@ -103,6 +103,16 @@ void registerPhrog() {
     v.push_back(std::make_unique<PhrogParasite>());
     return v;
   });
+  // DenseVegetationEventEncounter: four awake Wrigglers (event fight, no rewards).
+  db::registerEncounter("DenseVegetationEventEncounter", RoomType::Monster, false, [](Rng&) {
+    std::vector<std::unique_ptr<Monster>> v;
+    for (int i = 1; i <= 4; ++i) {
+      auto w = std::make_unique<Wriggler>();
+      w->slot = i;
+      v.push_back(std::move(w));
+    }
+    return v;
+  });
 }
 
 }  // namespace sts

@@ -68,7 +68,7 @@ file and run it with bash.
 | # | Package | Kind | Depends on | Status |
 |---|---|---|---|---|
 | 0 | Event text string vars | engine, small | – | done |
-| 1 | Act 1 events (12 left) | content | 0 | todo |
+| 1 | Act 1 events (12 left) | content | 0 | done (locked options: Wellspring BOTTLE, WhisperingHollow GOLD = potions; SapphireSeed PLANT, WoodCarvings SNAKE = enchantments) |
 | 2 | Shared events (18) | content | 0 | todo |
 | 3 | Multi-act run structure | engine, *Opus* | – | todo |
 | 4a | Act 2 monsters A | content | – | todo |
