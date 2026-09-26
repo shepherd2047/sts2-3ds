@@ -500,6 +500,7 @@ Task<> shuffle(Combat& c) {
   c.draw = list;
   c.push({VisualEvent::Shuffle, nullptr, (int)list.size()});
   co_await wait(0.3);
+  for (Model* m : c.listeners()) co_await m->afterShuffle();
 }
 
 Task<std::vector<Card*>> drawCards(Combat& c, Dec count, bool fromHandDraw) {
@@ -758,8 +759,10 @@ Task<> Combat::startTurn() {
 }
 
 Task<> Combat::setupPlayerTurn() {
-  // Hook.ShouldPlayerResetEnergy -> ResetEnergy
-  energy = maxEnergyNow();
+  // Hook.ShouldPlayerResetEnergy -> ResetEnergy, else AddMaxEnergyToCurrent (Ice Cream)
+  bool resetEnergy = true;
+  for (Model* m : listeners()) resetEnergy = resetEnergy && m->shouldResetEnergy();
+  energy = resetEnergy ? maxEnergyNow() : energy + maxEnergyNow();
   cardsPlayedThisTurn = 0;
   for (Model* m : listeners()) co_await m->afterEnergyReset();
   for (Model* m : listeners()) co_await m->beforeHandDraw();
@@ -873,7 +876,10 @@ Task<> Combat::playCard(Card* card, Creature* target, bool autoPlay, bool forceE
     spent = card->costsX ? energy : energyCost(card);
     energy -= std::max(spent, 0);
   }
-  if (card->costsX) card->xValue = spent;
+  if (card->costsX) {
+    card->xValue = spent;
+    for (Model* m : listeners()) card->xValue = m->modifyXValue(card, card->xValue);  // Hook.ModifyXValue
+  }
   ++cardsPlayedThisTurn;
   removeFromPiles(card);
   play.push_back(card);

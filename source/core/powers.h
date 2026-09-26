@@ -46,6 +46,8 @@ struct VulnerablePower : Power {
     if (dealer && target != dealer) {
       if (Power* cruelty = dealer->power("CrueltyPower")) mult += Dec(cruelty->amount) / Dec(100);
     }
+    // PaperPhrog.ModifyVulnerableMultiplier: +0.25 against anyone but its owner.
+    if (!target->isPlayer && target->combat && target->combat->run->hasRelic("PaperPhrog")) mult += Dec::lit(0.25);
     return mult;
   }
   Task<> afterSideTurnEnd(Side side, const std::vector<Creature*>&) override {

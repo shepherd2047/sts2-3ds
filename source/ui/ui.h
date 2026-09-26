@@ -102,6 +102,7 @@ class App {
   void updateCombat(const gfx::Input& in);
   void updateReward(const gfx::Input& in);
   void updateRest(const gfx::Input& in);
+  bool restValid(int option) const;
   void updateUpgrade(const gfx::Input& in);
   void updateDeck(const gfx::Input& in);
   void updateEnd(const gfx::Input& in);

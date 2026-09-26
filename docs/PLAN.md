@@ -80,7 +80,7 @@ file and run it with bash.
 | 7 | Act 3 events (7) | content | 0 | done (sim-tested; not screenshot-checked; MadScience card text needs `choose()` support in App::describe; Grave of the Forgotten enchant = removes Exhaust; BattlewornDummy V1 potion reward skipped; `db::act3Events()` defined in events_act3.cpp) |
 | 8 | Potions | engine + UI, *Opus* | – | done (potions.cpp: Ironclad + shared pools, 47 of 48 — ColorlessPotion needs a colorless pool; belt of 3, rewards with PotionRewardOdds, Fairy death prevention; UI: 药水 button in combat and on the map, list below / detail above, ◀ ▶ targeting; relics/events that need potions are still locked) |
 | 9 | Shop (merchant) | engine + UI | 8 | done (shop.cpp: 5 character cards with a sale, 3 relics incl. a Shop-rarity slot, 3 potions, card removal 75+25n; prices and rng as in the C#; The Courier, Membership Card, Meal Ticket; colorless slots and the Foul Potion throw not ported) |
-| 10 | Remaining relics (skipped ones + Shop rarity) | content | 8, 9 | todo |
+| 10 | Remaining relics (skipped ones + Shop rarity) | content | 8, 9 | done (relics_more.cpp: 42 relics incl. the Shop ones; rest site Lift/Dig/Miniature Tent, card reward/deck/potion hooks, Lizard Tail. Still skipped: DingyRug, FresnelLens, GnarledHammer, Kifuda, MysticLighter, PunchDagger, RoyalStamp, Toolbox, WingCharm (enchantments / colorless pool), UnsettlingLamp; IsAllowed(IsBeforeAct3TreasureChest) not checked) |
 | 11a | Neow: act-1 Ancient start node, heal, relic choice | engine + UI + content | – | done |
 | 11b | Act 2/3 Ancients (Orobas, Pael, Tezcatara, Nonupeipe, Tanx, Vakuu, Darv) | content | 3, 11a | todo |
 | 12 | Saves | engine | 3 | todo |

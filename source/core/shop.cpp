@@ -85,6 +85,8 @@ void fillCard(Run& r, ShopItem& it) {
     want = want == Rarity::Common ? Rarity::Uncommon : want == Rarity::Uncommon ? Rarity::Rare : Rarity::Common;
   if (ids.empty()) { it.card.reset(); return; }
   it.card = db::card(r.rng("Shops").nextItem(ids));
+  for (auto& rel : r.relics)  // ModifyMerchantCardCreationResults (the eggs)
+    if (rel->upgradesNewCard(*it.card)) it.card->upgrade();
   it.cost = roundEven(cardBaseCost(*it.card) * r.rng("Shops").nextFloat(0.95f, 1.05f));
 }
 

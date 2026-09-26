@@ -143,6 +143,11 @@ struct BlockNextTurnPower : Power {
   }
 };
 
+// ReptileTrinketPower: TemporaryStrengthPower with the relic as OriginModel.
+struct ReptileTrinketPower : TemporaryStatPower<StrengthPower, 1> {
+  POWER_HEADER(ReptileTrinketPower, "TEMPORARY_STRENGTH_POWER")
+};
+
 struct RetainHandPower : Power {
   POWER_HEADER(RetainHandPower, "RETAIN_HAND_POWER")
   bool shouldFlush() override { return false; }
@@ -502,6 +507,12 @@ struct VulnerablePotion : PotionBase {
   Task<> onUse(Creature* t) override { co_await apply<VulnerablePower>(t, val("VulnerablePower")); }
 };
 
+// Token potion from Petrified Toad (not in any pool).
+struct PotionShapedRock : PotionBase {
+  POTION_HEADER(PotionShapedRock, "POTION_SHAPED_ROCK", Token, CombatOnly, AnyEnemy) addVar("Damage", 15); }
+  Task<> onUse(Creature* t) override { co_await cmd::damage(t, val("Damage"), kUnpowered, me(), nullptr); }
+};
+
 struct WeakPotion : PotionBase {
   POTION_HEADER(WeakPotion, "WEAK_POTION", Common, CombatOnly, AnyEnemy) addVar("WeakPower", 3); }
   Task<> onUse(Creature* t) override { co_await apply<WeakPower>(t, val("WeakPower")); }
@@ -552,6 +563,7 @@ void registerPotions() {
   registerPowerType<RegenPower>();
   registerPowerType<BlockNextTurnPower>();
   registerPowerType<RetainHandPower>();
+  registerPowerType<ReptileTrinketPower>();
 
   registerPotionType<Ashwater>();
   registerPotionType<AttackPotion>();
@@ -600,6 +612,7 @@ void registerPotions() {
   registerPotionType<TouchOfInsanity>();
   registerPotionType<VulnerablePotion>();
   registerPotionType<WeakPotion>();
+  registerPotionType<PotionShapedRock>();
 }
 
 // ================================================================ belt, PotionCmd, rewards
@@ -615,13 +628,17 @@ bool Run::procurePotion(std::unique_ptr<Potion> p) {
     if (!slot) {
       p->run = this;
       slot = std::move(p);
+      // Hook.AfterPotionProcured (Belt Buckle); fire and forget from this synchronous call.
+      for (Model* m : listeners()) Scheduler::get().spawn(m->afterPotionProcured());
       return true;
     }
   return false;  // PotionProcureFailureReason.TooFull
 }
 
 void Run::discardPotion(int slot) {
-  if (slot >= 0 && slot < (int)potions.size()) potions[slot].reset();
+  if (slot < 0 || slot >= (int)potions.size() || !potions[slot]) return;
+  potions[slot].reset();
+  for (Model* m : listeners()) Scheduler::get().spawn(m->afterPotionDiscarded());
 }
 
 // NPotionPopup: CombatOnly potions only during the player's turn; AnyTime potions also
@@ -644,6 +661,7 @@ Task<> Run::usePotion(int slot, Creature* target) {
   if (p->combat) p->combat->push({VisualEvent::Anim, player.get(), 0, "Cast"});
   co_await wait(0.2);
   co_await p->onUse(target);
+  for (Model* m : listeners()) co_await m->afterPotionUsed();  // Hook.AfterPotionUsed
   if (p->combat) co_await p->combat->checkWinCondition();
 }
 
@@ -686,6 +704,8 @@ std::unique_ptr<Potion> Run::randomPotion(Rng& r, bool forCombat) {
 // half of their 25% bonus.
 bool Run::rollPotionReward(RoomType room) {
   if (getenv("STS_POTION_REWARD")) return true;  // debug: every fight drops a potion
+  for (Model* m : listeners())
+    if (m->shouldForcePotionReward(room)) return true;  // White Beast Statue (odds unchanged)
   float bonus = room == RoomType::Elite ? 0.25f : 0.f;
   float chance = potionRewardOdds + bonus * 0.5f;
   if (rng("Rewards").nextFloat() < chance) {
@@ -718,6 +738,15 @@ bool Run::preventDeath() {
     if (slot && slot->id == "FairyInABottle") {
       slot.reset();
       player->hp = std::max(1, (int)(Dec(player->maxHp) * Dec::lit(0.3)).toInt());
+      if (combat) combat->push({VisualEvent::Heal, player.get(), player->hp});
+      return true;
+    }
+  // LizardTail.ShouldDieLate / AfterPreventingDeath: once per run, heal 50% of max HP.
+  for (auto& rel : relics)
+    if (rel->id == "LizardTail" && !rel->usedUp) {
+      rel->usedUp = true;
+      rel->doFlash();
+      player->hp = std::max(1, (int)(Dec(player->maxHp) * Dec::lit(0.5)).toInt());
       if (combat) combat->push({VisualEvent::Heal, player.get(), player->hp});
       return true;
     }

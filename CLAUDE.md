@@ -163,6 +163,12 @@ scripts drift; delete the debug file afterwards.
   the map HUD. Debug: `STS_POTIONS=FirePotion,BlockPotion` fills the belt,
   `STS_POTION_REWARD=1` makes every fight drop one; `SIM_ALLPOTIONS=1 ./build/sim` cycles
   every potion through the fights.
+- More relics: `relics_more.cpp` (package 10). Relic hooks for rewards: `extraCombatGold`,
+  `extraCardRewards`, `modifyCardReward`, `upgradesNewCard`, `afterCardAddedToDeck` (all deck
+  additions go through `Run::addCardToDeck`); `Run::combatRewards` is the whole post-fight
+  flow; `Run::restSite` offers `restOptions` (heal, smith, Lift, Dig). Debug:
+  `STS_RELICS=Girya,Shovel` adds relics at the start; `SIM_ALLRELICS=1` (or a comma list)
+  runs the sim with them.
 - Merchant: `shop.cpp` (`Run::enterShop`, `Run::shop` items, `shopChoice`; prices through the
   `modifyMerchantPrice` hook). Art `gfx/bg_merchant.t3t`. `STS_ROOM=Shop` makes the first room a shop.
 - Debug: `STS_ROOM=Treasure|Rest|Elite|Boss|Event` makes the first room that type,

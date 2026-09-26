@@ -8,11 +8,13 @@ namespace sts {
 void registerRelicsCommon();    // relics_common.cpp
 void registerRelicsUncommon();  // relics_uncommon.cpp
 void registerRelicsRare();      // relics_rare.cpp (rare, shop and Ironclad pool)
+void registerRelicsMore();      // relics_more.cpp (package 10)
 
 void registerRelics() {
   registerRelicsCommon();
   registerRelicsUncommon();
   registerRelicsRare();
+  registerRelicsMore();
 }
 
 }  // namespace sts

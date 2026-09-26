@@ -765,7 +765,7 @@ void App::autoplay(double dt) {
       } else acted = false;
       break;
     case Screen::Rest:
-      if (r.restChoice.waiting()) r.restChoice.fire(1); else acted = false;
+      if (r.restChoice.waiting()) r.restChoice.fire(r.restUsed.empty() ? 1 : -1); else acted = false;
       break;
     case Screen::RelicOffer:
       if (r.relicChoice.waiting()) r.relicChoice.fire(1); else acted = false;
@@ -837,11 +837,13 @@ void App::drawTopBar() {
   R().text(148, 2, "第 " + num(run_->floor) + " 层", ts(F12, col::white));
   R().text(198, 2, "牌组 " + num((int)run_->deck.size()), ts(F12, col::white));
   // Potion belt (TopBar.PotionContainer), after the deck count.
-  for (int i = 0; i < (int)run_->potions.size(); ++i) drawPotionIcon(run_->potions[i].get(), 250 + i * 17, 1, 16);
-  // Relics from the right edge; the rest are counted as "+N" (all of them are in the
-  // relic page).
+  const int belt = (int)run_->potions.size();
+  for (int i = 0; i < belt; ++i) drawPotionIcon(run_->potions[i].get(), 250 + i * 17, 1, 16);
+  // Relics from the right edge, as many as fit after the belt; the rest are counted as
+  // "+N" (all of them are in the relic page).
   const int n = (int)run_->relics.size();
-  const int fit = n > 5 ? 4 : n;
+  const int room = std::max(1, (int)((kTop - 2 - (250 + belt * 17)) / 20));
+  const int fit = n > room ? room - 1 : n;
   float x = kTop - 20;
   for (int i = 0; i < fit; ++i, x -= 20) drawRelicIcon(run_->relics[i].get(), x, 0, 18);
   if (n > fit) R().text(x + 18, 3, "+" + num(n - fit), ts(F12, col::gold, RIGHT));
@@ -1977,34 +1979,53 @@ void App::drawRest(bool top) {
     return;
   }
   drawSceneBg(false, 0.5f);
-  bool canSmith = false;
-  for (auto& c : r.deck) if (c->upgradable()) canSmith = true;
-  button(16, 30, 138, 100, L("rest_site_ui.OPTION_HEAL.name"), ID_HEAL, r.restChoice.waiting(), sel_ == 0);
-  button(166, 30, 138, 100, L("rest_site_ui.OPTION_SMITH.name"), ID_SMITH, r.restChoice.waiting() && canSmith, sel_ == 1);
-  R().text(85, 140, "回复 " + num(heal) + " 点生命", ts(F12, col::green, CENTER));
-  R().text(235, 140, "升级一张牌", ts(F12, col::gold, CENTER));
-  R().text(80, 206, "生命 " + num(r.player->hp) + "/" + num(r.player->maxHp), ts(F16, col::red, CENTER));
-  // RGDSplus U22: pick an option, then confirm.
-  button(kBot - 120, 196, 110, 36, "确认", ID_CONFIRM, r.restChoice.waiting() && (sel_ == 0 || (sel_ == 1 && canSmith)), true);
+  // Options (RestSiteRoom): heal, smith, and Lift / Dig with Girya / Shovel; up to 2 per row.
+  auto& opts = r.restOptions;
+  int n = (int)opts.size();
+  const float bw = 138, bh = n > 2 ? 64 : 100, gapY = 8;
+  for (int i = 0; i < n; ++i) {
+    int o = opts[i];
+    float x = i % 2 ? 166 : 16, y = 20 + (i / 2) * (bh + gapY + 16);
+    bool used = std::find(r.restUsed.begin(), r.restUsed.end(), o) != r.restUsed.end();
+    static const char* keys[] = {"OPTION_HEAL", "OPTION_SMITH", "OPTION_LIFT", "OPTION_DIG"};
+    button(x, y, bw, bh, L(std::string("rest_site_ui.") + keys[o] + ".name"), ID_GRID0 + o, r.restChoice.waiting() && restValid(o), sel_ == o);
+    std::string sub = o == 0 ? "回复 " + num(heal) + " 点生命" : o == 1 ? std::string("升级一张牌") : o == 2 ? std::string("战斗开始时 +1 力量") : std::string("挖出一件遗物");
+    R().text(x + bw / 2, y + bh + 2, used ? std::string("已使用") : sub, ts(F12, used ? col::gray : o == 0 ? col::green : col::gold, CENTER));
+  }
+  if (r.restUsed.empty()) R().text(80, 206, "生命 " + num(r.player->hp) + "/" + num(r.player->maxHp), ts(F16, col::red, CENTER));
+  // RGDSplus U22: pick an option, then confirm. With Miniature Tent, 离开 ends the visit.
+  if (!r.restUsed.empty()) button(kBot - 240, 196, 110, 36, "离开", ID_BACK, r.restChoice.waiting());
+  button(kBot - 120, 196, 110, 36, "确认", ID_CONFIRM, r.restChoice.waiting() && sel_ >= 0 && restValid(sel_), true);
+}
+
+bool App::restValid(int o) const {
+  const Run& r = *run_;
+  if (std::find(r.restOptions.begin(), r.restOptions.end(), o) == r.restOptions.end()) return false;
+  if (std::find(r.restUsed.begin(), r.restUsed.end(), o) != r.restUsed.end()) return false;
+  if (o == 1) {
+    for (auto& c : r.deck) if (c->upgradable()) return true;
+    return false;
+  }
+  return true;
 }
 
 void App::updateRest(const gfx::Input& in) {
   Run& r = *run_;
   if (!r.restChoice.waiting()) return;
-  bool canSmith = false;
-  for (auto& c : r.deck) if (c->upgradable()) canSmith = true;
-  auto valid = [&](int s) { return s == 0 || (s == 1 && canSmith); };
-  if (in.down & gfx::BTN_LEFT) sel_ = 0;
-  if (in.down & gfx::BTN_RIGHT) sel_ = 1;
-  if ((in.down & gfx::BTN_A) && valid(sel_)) { r.restChoice.fire(sel_); return; }
+  auto& opts = r.restOptions;
+  int cur = (int)(std::find(opts.begin(), opts.end(), sel_) - opts.begin());
+  if ((in.down & gfx::BTN_RIGHT) && !opts.empty()) sel_ = opts[std::min((int)opts.size() - 1, cur >= (int)opts.size() ? 0 : cur + 1)];
+  if ((in.down & gfx::BTN_LEFT) && !opts.empty()) sel_ = opts[std::max(0, cur >= (int)opts.size() ? 0 : cur - 1)];
+  if ((in.down & gfx::BTN_A) && restValid(sel_)) { r.restChoice.fire(sel_); return; }
   if (in.touchDown) {
     int id = hitAt(in.tx, in.ty);
-    int pick = id == ID_HEAL ? 0 : id == ID_SMITH ? 1 : -1;
+    int pick = id >= ID_GRID0 && id < ID_GRID0 + 4 ? id - ID_GRID0 : -1;
     if (pick >= 0) {
-      if (sel_ == pick) { r.restChoice.fire(pick); return; }  // second tap confirms
+      if (sel_ == pick && restValid(pick)) { r.restChoice.fire(pick); return; }  // second tap confirms
       sel_ = pick;
     }
-    if (id == ID_CONFIRM && valid(sel_)) r.restChoice.fire(sel_);
+    if (id == ID_CONFIRM && restValid(sel_)) r.restChoice.fire(sel_);
+    if (id == ID_BACK && !r.restUsed.empty()) { sel_ = -1; r.restChoice.fire(-1); }
   }
 }
 
@@ -2189,21 +2210,24 @@ void App::drawPotions(bool top) {
     return;
   }
   R().text(kBot / 2, 4, "药水", ts(F16, col::gold, CENTER));
-  const float rx = 10, rw = kBot - 20, rh = 46, gap = 6, y0 = 26;
+  const float rx = 10, rw = kBot - 20, gap = n > 3 ? 4 : 6, y0 = 26;
+  const float rh = std::min(46.f, (190.f - y0 - gap * (n - 1)) / n);
   for (int i = 0; i < n; ++i) {
     float y = y0 + i * (rh + gap);
     Potion* q = r.potions[i].get();
     bool hl = i == potionSel_;
     panel(rx, y, rw, rh, hl ? 0x5A3A20F0 : 0x2A2218E8, hl ? 0xFFD870FF : 0x8A7A5AFF);
-    drawPotionIcon(q, rx + 5, y + 5, 36);
+    drawPotionIcon(q, rx + 5, y + (rh - std::min(36.f, rh - 4)) / 2, std::min(36.f, rh - 4));
     if (q) {
       R().text(rx + 48, y + 3, L("potions." + q->locKey + ".title"), ts(F12, col::gold));
       TextStyle st = ts(F12, col::white, LEFT, rw - 54, 0.8f);
       std::string d = describePotion(q);
       float dh;
       R().measure(d, st, &dh);
-      if (dh > rh - 20) st.scale *= (rh - 20) / dh;
-      R().text(rx + 48, y + 19, d, st);
+      float room = rh - 20;
+      if (room < 10) { st.maxWidth = 0; d = d.substr(0, 0); }  // too small: title only
+      else if (dh > room) st.scale *= room / dh;
+      if (!d.empty()) R().text(rx + 48, y + 19, d, st);
     } else {
       R().text(rx + 48, y + (rh - R().lineHeight(F12)) / 2, "空", ts(F12, col::gray));
     }
@@ -2293,12 +2317,14 @@ void App::drawPotionOffer(bool top) {
   if (!room) {
     R().text(kBot / 2, 74, "药水栏已满：点一瓶丢弃，或跳过", ts(F12, col::gold, CENTER));
     for (int i = 0; i < (int)r.potions.size(); ++i) {
-      float x = 40 + i * 84, y = 96;
-      panel(x, y, 72, 80, 0x2A2218E8, 0x8A7A5AFF);
-      drawPotionIcon(r.potions[i].get(), x + 16, y + 6, 40);
-      if (r.potions[i]) R().text(x + 36, y + 50, L("potions." + r.potions[i]->locKey + ".title"), ts(F12, col::white, CENTER, 70, 0.7f));
-      R().text(x + 36, y + 64, "丢弃", ts(F12, col::red, CENTER, 0, 0.8f));
-      hits_.push_back({x, y, 72, 80, ID_POTION0 + i});
+      const int belt = (int)r.potions.size();
+      const float pw = std::min(72.f, (kBot - 20.f) / belt - 6), step = (kBot - 20.f) / belt;
+      float x = 10 + i * step + (step - pw) / 2, y = 96;
+      panel(x, y, pw, 80, 0x2A2218E8, 0x8A7A5AFF);
+      drawPotionIcon(r.potions[i].get(), x + pw / 2 - 20, y + 6, 40);
+      if (r.potions[i]) R().text(x + pw / 2, y + 50, L("potions." + r.potions[i]->locKey + ".title"), ts(F12, col::white, CENTER, pw - 2, 0.7f));
+      R().text(x + pw / 2, y + 64, "丢弃", ts(F12, col::red, CENTER, 0, 0.8f));
+      hits_.push_back({x, y, pw, 80, ID_POTION0 + i});
     }
   }
   button(10, 196, 110, 36, "跳过", ID_SKIP);

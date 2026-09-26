@@ -162,10 +162,16 @@ Task<std::vector<Card*>> Run::selectFromDeck(std::string prompt, std::function<b
   co_return picked;
 }
 
+// CardPileCmd.Add(Deck): Hook.TryModifyCardBeingAddedToDeck (the eggs upgrade it), then
+// AfterCardChangedPiles (Book of Five Rings, Lucky Fysh).
 Card* Run::addCardToDeck(std::unique_ptr<Card> c) {
   if (!c) return nullptr;
+  for (auto& rel : relics)
+    if (rel->upgradesNewCard(*c)) c->upgrade();
   deck.push_back(std::move(c));
-  return deck.back().get();
+  Card* added = deck.back().get();
+  for (auto& rel : relics) rel->afterCardAddedToDeck(added);
+  return added;
 }
 
 void Run::removeCardFromDeck(Card* c) {
@@ -214,19 +220,40 @@ Task<bool> Run::eventFight(const std::string& encounterId) {
   if (!enc) co_return true;
   bool won = co_await fight(encounterId);
   if (!won) { died = true; co_return false; }
+  co_await combatRewards(enc->room);
+  co_return true;
+}
+
+// RewardsSet for a won fight (the combat is still alive for the gold hooks; it is freed
+// here): gold (+ Amethyst Aubergine), a potion roll, the elite relic, then a pick of three
+// cards (through the card reward hooks) and any extra card rewards (Prayer Wheel, White Star).
+Task<> Run::combatRewards(RoomType type) {
   Rng& rr = rng("Rewards");
-  co_await gainGold(enc->room == RoomType::Elite ? rr.nextInt(35, 46) : rr.nextInt(10, 21));
+  co_await gainGold(type == RoomType::Boss ? 100 : type == RoomType::Elite ? rr.nextInt(35, 46) : rr.nextInt(10, 21));
+  bool finalBoss = type == RoomType::Boss && actIndex + 1 >= kActs;
+  int extraGold = 0;
+  if (!finalBoss) for (auto& rel : relics) extraGold += rel->extraCombatGold(type);
+  if (extraGold > 0) co_await gainGold(extraGold);
+  // The fight is freed and the screen leaves it in the same step (nothing may wait in
+  // between: the UI still shows Screen::Combat until then).
   combat.reset();
   player->combat = nullptr;
   for (auto& rel : relics) rel->combat = nullptr;
-  if (rollPotionReward(enc->room)) co_await offerPotion(randomPotion(rr, false));
-  if (enc->room == RoomType::Elite) co_await offerRelic(pullRelicFromFront(relicBag, rollRelicRarity(rr)), false);
-  rewardCards = cardReward(enc->room, 3);
   screen = Screen::Reward;
-  int pick = co_await rewardChoice.next();
-  if (pick >= 0 && pick < (int)rewardCards.size()) deck.push_back(std::move(rewardCards[pick]));
-  rewardCards.clear();
-  co_return true;
+  if (rollPotionReward(type)) co_await offerPotion(randomPotion(rr, false));  // RollForPotionAndAddTo
+  if (type == RoomType::Elite) co_await offerRelic(pullRelicFromFront(relicBag, rollRelicRarity(rr)), false);
+  std::vector<RoomType> rewards{type};
+  for (auto& rel : relics)
+    for (RoomType odds : rel->extraCardRewards(type)) rewards.push_back(odds);
+  for (RoomType odds : rewards) {
+    rewardCards = cardReward(odds, 3);
+    for (bool late : {false, true})
+      for (auto& rel : relics) rel->modifyCardReward(rewardCards, type, late);
+    screen = Screen::Reward;
+    int pick = co_await rewardChoice.next();
+    if (pick >= 0 && pick < (int)rewardCards.size()) addCardToDeck(std::move(rewardCards[pick]));
+    rewardCards.clear();
+  }
 }
 
 // UnknownMapPointOdds.Roll (single player, no blacklist): Monster 10%, Treasure 2%,
@@ -238,7 +265,9 @@ RoomType Run::rollUnknownRoom() {
   const std::pair<RoomType, float*> odds[] = {{RoomType::Monster, &unknownMonsterOdds},
                                               {RoomType::Treasure, &unknownTreasureOdds},
                                               {RoomType::Shop, &unknownShopOdds}};
+  bool juzu = hasRelic("JuzuBracelet");  // ModifyUnknownMapPointRoomTypes: no Monster
   for (auto& [t, p] : odds) {
+    if (juzu && t == RoomType::Monster) continue;
     sum += *p;
     if (roll <= sum) { result = t; break; }
   }
@@ -279,6 +308,16 @@ void Run::start(uint64_t s) {
   potions.resize(3);  // Player: 3 potion slots
   potionRewardOdds = 0.4f;
   shopRemovalsUsed = 0;
+  // Debug: STS_RELICS=Girya,Shovel,... adds relics (pickup effects skipped).
+  if (const char* list = getenv("STS_RELICS")) {
+    std::string s = list;
+    for (size_t a = 0; a <= s.size();) {
+      size_t b = s.find(',', a);
+      if (b == std::string::npos) b = s.size();
+      if (auto rel = db::relic(s.substr(a, b - a))) { rel->run = this; relics.push_back(std::move(rel)); }
+      a = b + 1;
+    }
+  }
   // Debug: STS_POTIONS=FirePotion,BlockPotion,... fills the belt.
   if (const char* list = getenv("STS_POTIONS")) {
     std::string s = list;
@@ -356,7 +395,7 @@ Task<> Run::chooseCardFor(std::vector<std::unique_ptr<Card>> options) {
   rewardCards = std::move(options);
   screen = Screen::Reward;
   int pick = co_await rewardChoice.next();
-  if (pick >= 0 && pick < (int)rewardCards.size()) deck.push_back(std::move(rewardCards[pick]));
+  if (pick >= 0 && pick < (int)rewardCards.size()) addCardToDeck(std::move(rewardCards[pick]));
   rewardCards.clear();
 }
 
@@ -496,7 +535,10 @@ Task<> Run::main() {
     bool forcedEvent = floor == 1 && getenv("STS_ROOM") && std::string(getenv("STS_ROOM")) == "Event";
     // "?" rooms resolve when entered (UnknownMapPointOdds); Unknown afterwards means an event.
     if (forcedEvent) type = RoomType::Unknown;
-    else if (type == RoomType::Unknown) type = rollUnknownRoom();
+    else if (type == RoomType::Unknown) {
+      type = rollUnknownRoom();
+      for (auto& rel : relics) co_await rel->afterUnknownRoomEntered();  // Planisphere
+    }
     if (type == RoomType::Unknown) {
       std::unique_ptr<Event> e;
       if (const char* id = getenv("STS_EVENT"); forcedEvent && id) e = db::event(id);
@@ -545,18 +587,8 @@ Task<> Run::main() {
 
       // Rewards (RewardsSet): gold, then for elites a relic, then a pick of three cards.
       // EncounterModel gold: monster 10-20, elite 35-45, boss 100.
+      co_await combatRewards(type);
       Rng& rr = rng("Rewards");
-      co_await gainGold(type == RoomType::Boss ? 100 : type == RoomType::Elite ? rr.nextInt(35, 46) : rr.nextInt(10, 21));
-      combat.reset();
-      player->combat = nullptr;
-      for (auto& rel : relics) rel->combat = nullptr;
-      if (rollPotionReward(type)) co_await offerPotion(randomPotion(rr, false));  // RollForPotionAndAddTo
-      if (type == RoomType::Elite) co_await offerRelic(pullRelicFromFront(relicBag, rollRelicRarity(rr)), false);
-      rewardCards = cardReward(type, 3);
-      screen = Screen::Reward;
-      int pick = co_await rewardChoice.next();
-      if (pick >= 0 && pick < (int)rewardCards.size()) deck.push_back(std::move(rewardCards[pick]));
-      rewardCards.clear();
       if (type == RoomType::Boss) {
         // Hook.TryModifyRewards (Lava Rock): extra relic rewards after the boss.
         int extra = 0;
@@ -575,32 +607,64 @@ Task<> Run::main() {
       co_await offerRelic(pullRelicFromFront(sharedRelicBag, rollRelicRarity(rng("TreasureRoomRelics"))), true);
     } else if (type == RoomType::Rest) {
       for (Model* m : listeners()) co_await m->afterRoomEntered(type);
-      for (;;) {
-        screen = Screen::Rest;
-        int opt = co_await restChoice.next();
-        if (opt == 0) {
-          // HealRestSiteOption: 30% of max HP, through Hook.ModifyRestSiteHealAmount.
-          Dec amount = Dec(player->maxHp) * Dec::lit(0.3);
-          for (Model* m : listeners()) amount = m->modifyRestSiteHealAmount(player.get(), amount);
-          int before = player->hp;
-          player->hp = std::min(player->maxHp, player->hp + amount.toInt());
-          lastHeal = player->hp - before;
-          for (Model* m : listeners()) co_await m->afterRestSiteHeal();
-          co_await wait(0.6);
-          break;
-        }
-        upgradeOptions.clear();
-        for (auto& card : deck) if (card->upgradable()) upgradeOptions.push_back(card.get());
-        screen = Screen::RestUpgrade;
-        int idx = co_await upgradeChoice.next();
-        if (idx >= 0 && idx < (int)upgradeOptions.size()) {
-          upgradeOptions[idx]->upgrade();
-          co_await wait(0.4);
-          break;
-        }
-      }
+      co_await restSite();
     }
   }
+}
+
+// RestSiteRoom: Heal and Smith, plus Lift (Girya, 3 times per run) and Dig (Shovel).
+// Using one option ends the visit, unless Miniature Tent keeps the others open (then
+// the player leaves with -1).
+Task<> Run::restSite() {
+  restUsed.clear();
+  Relic* girya = nullptr;
+  for (auto& r : relics) if (r->id == "Girya") girya = r.get();
+  for (;;) {
+    restOptions = {0, 1};
+    if (girya && girya->displayAmount() < 3) restOptions.push_back(2);
+    if (hasRelic("Shovel")) restOptions.push_back(3);
+    screen = Screen::Rest;
+    int opt = co_await restChoice.next();
+    if (opt < 0) break;
+    if (std::find(restUsed.begin(), restUsed.end(), opt) != restUsed.end()) continue;
+    bool done = false;
+    if (opt == 0) {
+      // HealRestSiteOption: 30% of max HP, through Hook.ModifyRestSiteHealAmount.
+      Dec amount = Dec(player->maxHp) * Dec::lit(0.3);
+      for (Model* m : listeners()) amount = m->modifyRestSiteHealAmount(player.get(), amount);
+      int before = player->hp;
+      player->hp = std::min(player->maxHp, player->hp + amount.toInt());
+      lastHeal = player->hp - before;
+      for (Model* m : listeners()) co_await m->afterRestSiteHeal();
+      co_await wait(0.6);
+      // TinyMailbox.TryModifyRestSiteHealRewards: two potion rewards.
+      if (hasRelic("TinyMailbox"))
+        for (int i = 0; i < 2; ++i) co_await offerPotion(randomPotion(rng("Rewards"), false));
+      done = true;
+    } else if (opt == 1) {
+      upgradeOptions.clear();
+      for (auto& card : deck) if (card->upgradable()) upgradeOptions.push_back(card.get());
+      screen = Screen::RestUpgrade;
+      int idx = co_await upgradeChoice.next();
+      if (idx >= 0 && idx < (int)upgradeOptions.size()) {
+        upgradeOptions[idx]->upgrade();
+        co_await wait(0.4);
+        done = true;
+      }
+    } else if (opt == 2 && girya) {  // LiftRestSiteOption
+      girya->restSiteAction(2);  // TimesLifted++
+      girya->doFlash();
+      done = true;
+    } else if (opt == 3) {  // DigRestSiteOption: a relic from the front of the bag
+      co_await offerRelic(pullRelicFromFront(relicBag, rollRelicRarity(rng("Rewards"))), false);
+      done = true;
+    }
+    if (!done) continue;
+    restUsed.push_back(opt);
+    bool tent = hasRelic("MiniatureTent");
+    if (!tent) break;
+  }
+  restOptions.clear();
 }
 
 }  // namespace sts

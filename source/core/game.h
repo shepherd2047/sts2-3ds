@@ -136,6 +136,14 @@ struct Model {
   virtual Dec modifyMerchantPrice(Dec price) { return price; }
   virtual bool shouldRefillMerchantEntry() { return false; }
   virtual Task<> afterItemPurchased(int /*goldSpent*/) { return {}; }
+  // Added for package 10 relics.
+  virtual Task<> afterPotionUsed() { return {}; }
+  virtual Task<> afterPotionProcured() { return {}; }
+  virtual Task<> afterPotionDiscarded() { return {}; }
+  virtual int modifyXValue(Card*, int x) { return x; }
+  virtual bool shouldResetEnergy() { return true; }  // Hook.ShouldPlayerResetEnergy
+  virtual Task<> afterShuffle() { return {}; }
+  virtual bool shouldForcePotionReward(RoomType) { return false; }
 };
 
 // ---------------------------------------------------------------- powers
@@ -431,6 +439,16 @@ struct Relic : Model {
   virtual bool allowedInShops() const { return true; }
   virtual Task<> afterObtained() { return {}; }  // AfterObtained (pickup effects)
   virtual int bonusRelicRewards(RoomType) { return 0; }  // TryModifyRewards: extra RelicRewards
+  // TryModifyRewards for the other reward kinds (Amethyst Aubergine, Prayer Wheel, White Star):
+  virtual int extraCombatGold(RoomType) { return 0; }
+  virtual std::vector<RoomType> extraCardRewards(RoomType) { return {}; }  // odds of each extra reward
+  // TryModifyCardRewardOptions (late = ...Late): Lasting Candy, Lava Lamp, the eggs.
+  virtual void modifyCardReward(std::vector<std::unique_ptr<Card>>&, RoomType, bool /*late*/) {}
+  // TryModifyCardBeingAddedToDeck / ModifyMerchantCardCreationResults (the eggs).
+  virtual bool upgradesNewCard(const Card&) { return false; }
+  virtual void afterCardAddedToDeck(Card*) {}  // AfterCardChangedPiles(Deck) for new cards
+  virtual Task<> afterUnknownRoomEntered() { return {}; }  // Planisphere
+  virtual void restSiteAction(int /*option*/) {}  // Girya's Lift
 
   Creature* owner() const;  // the player
   void doFlash() { flash = 1.f; }
@@ -746,7 +764,10 @@ struct Run {
   Signal<int> mapChoice;             // node index
   std::vector<std::unique_ptr<Card>> rewardCards;
   Signal<int> rewardChoice;          // index or -1 skip
-  Signal<int> restChoice;            // 0 heal, 1 smith
+  Signal<int> restChoice;            // an id from restOptions, or -1 to leave (after one, Miniature Tent)
+  // RestSiteOption ids offered now: 0 heal, 1 smith, 2 lift (Girya), 3 dig (Shovel).
+  std::vector<int> restOptions;
+  std::vector<int> restUsed;
   std::vector<Card*> upgradeOptions;
   Signal<int> upgradeChoice;         // index or -1 back
   int lastHeal = 0;
@@ -769,6 +790,8 @@ struct Run {
   Task<> gainMaxHp(int amount);
   Task<> loseMaxHp(int amount);
   Task<bool> eventFight(const std::string& encounterId);  // fight + monster rewards, back to the event
+  Task<> combatRewards(RoomType type);  // RewardsSet after a won fight
+  Task<> restSite();
   bool died = false;
   // A room that is not ported yet (events, shops): Screen::Placeholder shows this text.
   std::string placeholderText;
@@ -808,7 +831,7 @@ struct Run {
   std::unique_ptr<Potion> randomPotion(Rng& rng, bool inCombat);  // PotionFactory
   bool rollPotionReward(RoomType room);           // PotionRewardOdds.Roll
   Task<> offerPotion(std::unique_ptr<Potion> p);
-  bool preventDeath();  // FairyInABottle: returns true if the player was saved
+  bool preventDeath();  // FairyInABottle / LizardTail: returns true if the player was saved
   std::vector<std::unique_ptr<Potion>> randomPotions(int count, Rng& rng);  // distinct
 
   // Merchant (MerchantRoom / MerchantInventory).

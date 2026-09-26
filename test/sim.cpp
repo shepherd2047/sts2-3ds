@@ -28,6 +28,19 @@ int main(int argc, char** argv) {
       }
       run.player->hp = run.player->maxHp = 999;
     }
+    if (getenv("SIM_ALLRELICS")) {
+      // Every registered pool relic (pickup effects skipped; Potion Belt applied by hand).
+      for (const auto* pool : {&db::sharedRelicPool(), &db::ironcladRelicPool()})
+        for (auto& id : *pool) {
+          if (!db::relicRegistered(id) || run.hasRelic(id)) continue;
+          std::string only = getenv("SIM_ALLRELICS");  // "1" = all, else a comma list
+          if (only != "1" && ("," + only + ",").find("," + id + ",") == std::string::npos) continue;
+          auto rel = db::relic(id);
+          rel->run = &run;
+          run.relics.push_back(std::move(rel));
+        }
+      run.potions.resize(5);
+    }
     Scheduler::get().spawn(run.main());
     int frames = 0;
     while (run.screen != Screen::GameOver && run.screen != Screen::Victory && frames < 2000000) {
@@ -48,6 +61,7 @@ int main(int argc, char** argv) {
           }
           break;
         case Screen::Combat: {
+          if (!run.combat) break;
           Combat& c = *run.combat;
           static Combat* lastC = nullptr;
           static int hpBefore = 0;
@@ -124,7 +138,13 @@ int main(int argc, char** argv) {
           if (run.rewardChoice.waiting()) run.rewardChoice.fire(0);
           break;
         case Screen::Rest:
-          if (run.restChoice.waiting()) run.restChoice.fire(run.player->hp < 60 ? 0 : 1);
+          if (run.restChoice.waiting()) {
+            // Heal when hurt, else smith; Lift/Dig when offered; leave once something was used.
+            int want = run.player->hp < 60 ? 0 : 1;
+            for (int o : run.restOptions) if (o >= 2) want = o;
+            bool used = std::find(run.restUsed.begin(), run.restUsed.end(), want) != run.restUsed.end();
+            run.restChoice.fire(used || !run.restUsed.empty() ? -1 : want);
+          }
           break;
         case Screen::RestUpgrade:
           if (run.upgradeChoice.waiting()) run.upgradeChoice.fire(run.upgradeOptions.empty() ? -1 : 0);
