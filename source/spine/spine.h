@@ -137,6 +137,8 @@ struct SkeletonData {
   std::vector<std::string> pages;  // texture paths
   std::map<std::pair<std::string, std::string>, float> mixes;
   float defaultMix = 0.1f;
+  float shiftX = 0, shiftY = 0;        // screen-pixel offset of the skeleton origin (art not centred on its root)
+  std::vector<std::string> hideSlots;  // slot-name prefixes never drawn (one skeleton shared by several creatures)
   float scale = 1;  // skeleton units -> screen pixels
 
   const Animation* animation(const std::string& name) const;

@@ -715,7 +715,8 @@ Task<> Combat::startTurn() {
   if (currentSide == Side::Player) {
     if (turnNumber > 1) { banner = "玩家回合"; bannerTime = 1.0f; }
     for (auto* e : enemies)
-      if (!e->removed && e->alive()) e->monster->rollMove(rng("MonsterAi"));
+      // Dead creatures still in the room (Decimillipede segments) roll too: they reattach.
+      if (!e->removed) e->monster->rollMove(rng("MonsterAi"));
   } else {
     banner = "敌人回合";
     bannerTime = 1.0f;

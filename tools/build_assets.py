@@ -30,6 +30,22 @@ def skeleton_res(scene_text):
     return m.group(1)
 
 
+def creature_skeleton(g, key):
+    """(skeleton resource, Visuals scale, hidden slot prefixes) of a monster's creature scene."""
+    hide = HIDE_SLOTS.get(key, ())
+    if key in KAISER_CRAB_KEEP:
+        skel = g.spine(KAISER_CRAB_RES)[0]
+        hide = tuple(sl['name'] for sl in spine_render.parse_skeleton(skel)['slots']
+                     if not sl['name'].startswith(KAISER_CRAB_KEEP[key]))
+        return KAISER_CRAB_RES, 0.5, hide
+    t = g.pck.read(f'scenes/creature_visuals/{key.lower()}.tscn').decode()
+    # Scale of the SpineSprite "Visuals" node.
+    vis = t[t.find('[node name="Visuals"'):]
+    m = re.search(r'\nscale = Vector2\(([-\d.]+), ([-\d.]+)\)', vis.split('\n[node', 1)[0])
+    return skeleton_res(t), (abs(float(m.group(1))) if m else 1.0), hide
+
+
+
 def keys_from_source(macro):
     """Loc keys declared in C++ via CARD_HEADER / POWER_HEADER."""
     keys = []
@@ -55,6 +71,16 @@ CREATURE_SCALE = 0.21
 CREATURE_BOX = (170, 150)  # largest sprite that still fits beside the others
 # Slots whose pose depends on constraints the offline renderer does not solve.
 HIDE_SLOTS = {'VANTOM': ('mega', 'whip', 'tail')}
+# Kaiser Crab: the two claws are separate creatures whose scenes have no skeleton (the C#
+# animates one shared background skeleton). Each claw draws only its own arm's slots.
+KAISER_CRAB_RES = 'animations/monsters/kaiser_crab/kaiser_crab_skeleton_data.tres'
+# Monsters whose art is not centred on the skeleton root: drawn centred, standing on the ground.
+RECENTER = ('CRUSHER', 'ROCKET', 'DECIMILLIPEDE_SEGMENT_FRONT', 'DECIMILLIPEDE_SEGMENT_MIDDLE',
+            'DECIMILLIPEDE_SEGMENT_BACK')
+KAISER_CRAB_KEEP = {
+    'CRUSHER': ('arm_l_', 'claw_l_', 'claw_shine', 'claw_glow', 'stolen_shadow_l'),
+    'ROCKET': ('arm_r_', 'claw_r_', 'claw_slime', 'claw_hole', 'thruster_attach', 'stolen_shadow'),
+}
 PORTRAIT_SIZE = (112, 85)
 
 
@@ -165,19 +191,13 @@ class Assets:
 
     def creature(self, key):
         snake = key.lower()
-        scene = f'scenes/creature_visuals/{snake}.tscn'
-        t = self.g.pck.read(scene).decode()
-        skel_res = skeleton_res(t)
-        # Scale of the SpineSprite "Visuals" node.
-        vis = t[t.find('[node name="Visuals"'):]
-        m = re.search(r'\nscale = Vector2\(([-\d.]+), ([-\d.]+)\)', vis.split('\n[node', 1)[0])
-        vscale = float(m.group(1)) if m else 1.0
+        skel_res, vscale, hide = creature_skeleton(self.g, key)
         skel, atlas, load = self.g.spine(skel_res)
-        img, origin = spine_render.render(skel, atlas, load, scale=vscale * CREATURE_SCALE, hide=HIDE_SLOTS.get(key, ()))
+        img, origin = spine_render.render(skel, atlas, load, scale=vscale * CREATURE_SCALE, hide=hide)
         return img, origin
 
 
-def export_spine(g, key, skel_res, skel, atlas, load, scale):
+def export_spine(g, key, skel_res, skel, atlas, load, scale, hide=(), shift=None):
     """Skeleton + atlas for the runtime: romfs/spine/KEY.skel, KEY.txt, KEY_N.t3t.
 
     KEY.txt lines:
@@ -234,6 +254,9 @@ def export_spine(g, key, skel_res, skel, atlas, load, scale):
         lines.append(f'mix {m.group(1)} {m.group(2)} {m.group(3)}')
     dm = re.search(r'default_mix = ([\d.]+)', tres)
     lines.append(f'defaultmix {dm.group(1) if dm else "0.1"}')
+    lines += [f'hide {h}' for h in hide]
+    if shift:
+        lines.append(f'shift {shift[0]:.2f} {shift[1]:.2f}')
     with open(os.path.join(out, key + '.txt'), 'w', newline='\n') as f:
         f.write('\n'.join(lines) + '\n')
 
@@ -264,22 +287,23 @@ def build(args):
     print('creatures')
     os.makedirs(os.path.join(OUT, 'spine'), exist_ok=True)
     for key in MONSTERS + ['IRONCLAD']:
-        t = g.pck.read(f'scenes/creature_visuals/{key.lower()}.tscn').decode()
-        skel_res = skeleton_res(t)
-        vis = t[t.find('[node name="Visuals"'):]
-        m = re.search(r'\nscale = Vector2\(([-\d.]+), ([-\d.]+)\)', vis.split('\n[node', 1)[0])
-        vscale = float(m.group(1)) if m else 1.0
+        skel_res, vscale, hide = creature_skeleton(g, key)
         skel, atlas, load = g.spine(skel_res)
         scale = vscale * CREATURE_SCALE
-        img, origin = spine_render.render(skel, atlas, load, scale=scale, hide=HIDE_SLOTS.get(key, ()))
+        img, origin = spine_render.render(skel, atlas, load, scale=scale, hide=hide)
         # Keep everything inside the top screen.
-        f = min(1.0, CREATURE_BOX[0] / img.width, CREATURE_BOX[1] / img.height)
+        box_w = 110 if key in KAISER_CRAB_KEEP else CREATURE_BOX[0]  # three creatures share the 400 px screen
+        f = min(1.0, box_w / img.width, CREATURE_BOX[1] / img.height)
         if f < 1.0:
             img = img.resize((max(1, round(img.width * f)), max(1, round(img.height * f))), Image.LANCZOS)
             origin = (origin[0] * f, origin[1] * f)
         print(f'  {key}: {img.size}')
+        shift = None
+        if key in RECENTER:
+            shift = (origin[0] - img.width / 2, origin[1] - img.height)
+            origin = (img.width / 2, img.height)
         packer.add('creature/' + key, img, (round(origin[0]), round(origin[1])))
-        export_spine(g, key, skel_res, skel, atlas, load, scale * f)
+        export_spine(g, key, skel_res, skel, atlas, load, scale * f, hide if key in KAISER_CRAB_KEEP else (), shift)
 
     print('icons')
     for key in POWERS:

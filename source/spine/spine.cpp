@@ -768,6 +768,12 @@ std::unique_ptr<SkeletonData> loadSkeleton(const std::string& bytes, const std::
       sd->mixes[{from, to}] = d;
     } else if (tag == "defaultmix") {
       ls >> sd->defaultMix;
+    } else if (tag == "shift") {
+      ls >> sd->shiftX >> sd->shiftY;
+    } else if (tag == "hide") {
+      std::string prefix;
+      ls >> prefix;
+      sd->hideSlots.push_back(prefix);
     }
   }
   for (auto& skin : sd->skins)
@@ -785,6 +791,12 @@ Skeleton::Skeleton(const SkeletonData* d) : data(d) {
   }
   slots.resize(d->slots.size());
   for (size_t i = 0; i < slots.size(); ++i) slots[i].data = &d->slots[i];
+  if (!d->hideSlots.empty()) {
+    hidden.assign(slots.size(), 0);
+    for (size_t i = 0; i < slots.size(); ++i)
+      for (auto& h : d->hideSlots)
+        if (d->slots[i].name.rfind(h, 0) == 0) hidden[i] = 1;
+  }
   setToSetupPose();
 }
 
@@ -1654,6 +1666,8 @@ static inline uint32_t packColor(const float c[4]) {
 void Skeleton::render(std::vector<Batch>& out, float ox, float oy, float extraScale, bool flipX, const float tint[4]) const {
   float s = data->scale * extraScale;
   float sx = flipX ? -s : s;
+  ox += (flipX ? -data->shiftX : data->shiftX) * extraScale;
+  oy += data->shiftY * extraScale;
   std::vector<float> world;
   for (int si : drawOrder) {
     if (si < (int)hidden.size() && hidden[si]) continue;
