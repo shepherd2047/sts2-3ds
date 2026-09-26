@@ -324,8 +324,10 @@ std::string App::describe(Card* c) {
 
 // Relic and event text: the card SmartFormat subset, fed by the model's own DynamicVars
 // ({Name}, {Name:energyIcons()}, {Name:plural:a|b}, {Name:percentMore/Less()},
-// {InCombat:a|b}, {IfUpgraded:show:a|b}). Unknown names are left visible as "?".
-std::string expandSmart(const std::string& src, const std::vector<DynVar>& vars, bool inCombat) {
+// {InCombat:a|b}, {IfUpgraded:show:a|b}), plus an event's string vars (a loc key looked up
+// here, falling back to the literal text). Unknown names are left visible as "?".
+std::string expandSmart(const std::string& src, const std::vector<DynVar>& vars, bool inCombat,
+                         const std::map<std::string, std::string>* strVars = nullptr) {
   auto find = [&](const std::string& n) -> const DynVar* {
     for (auto& v : vars) if (v.name == n) return &v;
     return nullptr;
@@ -363,7 +365,10 @@ std::string expandSmart(const std::string& src, const std::vector<DynVar>& vars,
       else if (rest.rfind("percentLess", 0) == 0) out += num(((Dec(1) - raw(name)) * Dec(100)).toInt());
       else if (rest.rfind("plural:", 0) == 0) out += choose(rest.substr(7), raw(name) == Dec(1));
       else if (find(name)) out += num(raw(name).toInt());
-      else out += "?";
+      else if (strVars && strVars->count(name)) {
+        const std::string& v = strVars->at(name);
+        out += R().hasLoc(v) ? L(v) : v;
+      } else out += "?";
     }
     return out;
   };
@@ -2083,7 +2088,7 @@ void App::drawEvent(bool top) {
     }
     // The page text, shrunk until it fits under the art.
     TextStyle dt = ts(F12, col::white, CENTER, kTop - 24);
-    std::string text = expandSmart(L("events." + e->descKey), e->vars, false);
+    std::string text = expandSmart(L("events." + e->descKey), e->vars, false, &e->strVars);
     float th;
     R().measure(text, dt, &th);
     for (int k = 0; k < 6 && th > kH - y - 4 && dt.scale > 0.6f; ++k) { dt.scale *= 0.9f; R().measure(text, dt, &th); }
@@ -2099,7 +2104,7 @@ void App::drawEvent(bool top) {
     bool hl = i == sel_;
     panel(x, y, kOptW, kOptH, locked ? 0x2A2A2AE0 : hl ? 0x8A5A20F0 : 0x3A2E24F0, locked ? 0x555555FF : hl ? 0xFFD870FF : 0xB89A60FF);
     std::string title = e->finished ? "继续" : L("events." + e->options[i].key + ".title");
-    std::string desc = e->finished ? "" : expandSmart(L("events." + e->options[i].key + ".description"), e->vars, false);
+    std::string desc = e->finished ? "" : expandSmart(L("events." + e->options[i].key + ".description"), e->vars, false, &e->strVars);
     if (!e->finished && !R().hasLoc("events." + e->options[i].key + ".description")) desc.clear();
     if (desc.empty()) {
       R().text(x + kOptW / 2, y + (kOptH - R().lineHeight(F16)) / 2, title, ts(F16, locked ? col::gray : col::white, CENTER));
