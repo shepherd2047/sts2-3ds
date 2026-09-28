@@ -14,6 +14,7 @@ import re
 import struct
 import sys
 
+import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -83,8 +84,63 @@ KAISER_CRAB_KEEP = {
 }
 PORTRAIT_SIZE = (112, 85)
 
+# Playable characters other than the Ironclad (X1.5-X4.5): scene / atlas key fragments used
+# throughout this file, keyed like Character::key but lower-case, and each one's
+# materials/cards/frames/card_frame_<color>_mat.tres HSV shader params (shaders/hsv.gdshader),
+# used to retint the baked (already Ironclad-red) card frame art (CardPoolModel.CardFrameMaterialPath).
+OTHER_CHARS = ('silent', 'defect', 'regent', 'necrobinder')
+CARD_FRAME_HSV = {  # h, s, v per materials/cards/frames/card_frame_<color>_mat.tres
+    'ironclad': (0.025, 0.85, 1.0),      # card_frame_red (the baked ui_atlas art's own tint)
+    'silent': (0.32, 0.45, 1.2),         # card_frame_green
+    'defect': (0.55, 0.9, 1.0),          # card_frame_blue
+    'regent': (0.12, 1.5, 1.2),          # card_frame_orange
+    'necrobinder': (0.965, 0.55, 1.2),   # card_frame_pink
+}
 
 # ---------------------------------------------------------------- texture files
+
+# NTSC RGB<->YIQ matrix, exactly as shaders/hsv.gdshader's RGB_to_YIQ (mat3 columns).
+_YIQ = np.array([[0.2989, 0.5870, 0.1140],
+                  [0.5959, -0.2774, -0.3216],
+                  [0.2115, -0.5229, 0.3114]])
+_YIQ_INV = np.linalg.inv(_YIQ)
+
+
+def _hue_rot(hue):
+    c, s = np.cos(hue), np.sin(hue)
+    return np.array([[1, 0, 0], [0, c, -s], [0, s, c]])
+
+
+def hsv_shader(img, h, s, v, inverse=False):
+    """Apply (or undo) the game's hsv.gdshader ShaderMaterial to an RGBA image, matching its
+    per-pixel math exactly (used to retint the baked card frame art per character, F5/X*.5)."""
+    arr = np.asarray(img.convert('RGBA'), dtype=np.float64) / 255.0
+    rgb, a = arr[..., :3], arr[..., 3:4]
+    hue = (1 - h) * 2 * np.pi
+    if not inverse:
+        yiq = rgb @ _YIQ.T
+        yiq = yiq @ _hue_rot(hue).T
+        yiq = yiq * np.array([1.0, s, s])
+        yiq = yiq * v
+        rgb2 = yiq @ _YIQ_INV.T
+    else:
+        yiq = rgb @ _YIQ.T
+        yiq = yiq / v
+        yiq = yiq * np.array([1.0, 1.0 / s, 1.0 / s])
+        yiq = yiq @ _hue_rot(-hue).T
+        rgb2 = yiq @ _YIQ_INV.T
+    out = np.concatenate([np.clip(rgb2, 0, 1), a], axis=-1)
+    return Image.fromarray((out * 255).round().astype(np.uint8), 'RGBA')
+
+
+def retint_card_frame(img, char_lower):
+    """Recolour a card_frame_*/card_portrait_border_* sprite (baked already tinted red for the
+    Ironclad) to another character's colour, by inverting the red HSV shader then reapplying the
+    target character's params (both from CARD_FRAME_HSV)."""
+    if char_lower == 'ironclad':
+        return img
+    neutral = hsv_shader(img, *CARD_FRAME_HSV['ironclad'], inverse=True)
+    return hsv_shader(neutral, *CARD_FRAME_HSV[char_lower])
 
 def write_t3t(path, img):
     """T3T1 container: u16 w, u16 h, u8 fmt (0 = RGBA8), 3 pad, RGBA bytes."""
@@ -185,6 +241,26 @@ def bake_title_art(g, args):
     if args.preview:
         menu.save(os.path.join(ROOT, 'build', 'preview_bg_menu.png'))
         character.save(os.path.join(ROOT, 'build', 'preview_bg_character_ironclad.png'))
+
+
+def bake_other_character_art(g, packer, args):
+    """X1.5-X4.5: the other three characters' select art (S04, not wired to a screen yet) —
+    gfx/bg_character_<key>.t3t exactly like the Ironclad's above, plus the 120px-tall
+    ui/<key>_select strip used for the character-select roster art."""
+    for c in OTHER_CHARS:
+        skel, atlas, load = g.spine(f'animations/character_select/{c}/characterselect_{c}_skel_data.tres')
+        character, _ = spine_render.render(skel, atlas, load, scale=0.11, animation='animation')
+        crop_w = round(character.height * 400 / 240)
+        character = character.crop(((character.width - crop_w) // 2, 0,
+                                    (character.width + crop_w) // 2, character.height))
+        character = character.resize((400, 240), Image.LANCZOS)
+        canvas = Image.new('RGBA', (512, 256), (0, 0, 0, 255))
+        canvas.paste(character, (0, 0))
+        write_t3t(os.path.join(OUT, 'gfx', f'bg_character_{c}.t3t'), canvas)
+        select = g.image(f'images/packed/character_select/char_select_{c}.png')
+        packer.add(f'ui/{c}_select', fit_height(select, 120))
+        if args.preview:
+            canvas.save(os.path.join(ROOT, 'build', f'preview_bg_character_{c}.png'))
 
 
 # ---------------------------------------------------------------- sources
@@ -499,8 +575,16 @@ def build(args):
     for key in CARDS:
         packer.add('portrait/' + key, fit(a.card_portrait(key), PORTRAIT_SIZE))
     for kind in ('attack', 'skill', 'power'):
-        packer.add(f'card/frame_{kind}', fit(a.sprite(f'images/atlases/ui_atlas.sprites/card/card_frame_{kind}_s.tres'), (120, 169)))
-        packer.add(f'card/border_{kind}', fit_height(a.sprite(f'images/atlases/ui_atlas.sprites/card/card_portrait_border_{kind}_s.tres'), 96))
+        frame = fit(a.sprite(f'images/atlases/ui_atlas.sprites/card/card_frame_{kind}_s.tres'), (120, 169))
+        border = fit_height(a.sprite(f'images/atlases/ui_atlas.sprites/card/card_portrait_border_{kind}_s.tres'), 96)
+        packer.add(f'card/frame_{kind}', frame)
+        packer.add(f'card/border_{kind}', border)
+        # X1.5-X4.5: card_frame_<colour>_mat.tres (CardPoolModel.CardFrameMaterialPath) is an
+        # HSV shader over this same neutral shape; retint per character (Colorless/Status/Curse
+        # cards, i.e. Rarity::Token/Status/Curse in game.h, keep the plain frame above).
+        for c in OTHER_CHARS:
+            packer.add(f'card/frame_{kind}_{c}', retint_card_frame(frame, c))
+            packer.add(f'card/border_{kind}_{c}', retint_card_frame(border, c))
     packer.add('card/frame_ancient', fit(a.sprite('images/atlases/ui_atlas.sprites/card/card_frame_ancient_s.tres'), (120, 169)))
     packer.add('card/banner', fit_height(a.sprite('images/atlases/ui_atlas.sprites/card/card_banner.tres'), 28))
     packer.add('card/ancient_banner', fit_height(a.sprite('images/atlases/ui_atlas.sprites/card/ancient_banner.tres'), 28))
@@ -519,7 +603,11 @@ def build(args):
 
     print('creatures')
     os.makedirs(os.path.join(OUT, 'spine'), exist_ok=True)
-    for key in MONSTERS + ['IRONCLAD']:
+    # X1.5-X4.5: the other three playable characters' combat Spine, baked exactly like the
+    # Ironclad's (creature_skeleton reads scenes/creature_visuals/<key>.tscn for any key). Osty
+    # (Combat::osty, char_necrobinder.cpp) is a summoned creature with its own Spine and is baked
+    # the same way, keyed "Osty" to match Creature::name set by summonOsty().
+    for key in MONSTERS + ['IRONCLAD'] + [c.upper() for c in OTHER_CHARS] + ['Osty']:
         skel_res, vscale, hide = creature_skeleton(g, key)
         skel, atlas, load = g.spine(skel_res)
         scale = vscale * CREATURE_SCALE
@@ -609,6 +697,7 @@ def build(args):
     add_ui_art(g, a, packer, {e[0] for e in packer.entries})
     select = g.image('images/packed/character_select/char_select_ironclad.png')
     packer.add('ui/ironclad_select', fit_height(select, 120))
+    bake_other_character_art(g, packer, args)  # X1.5-X4.5: ui/<key>_select for the other four
     icon = Image.new('RGBA', (48, 48), (40, 10, 10, 255))
     head = select.crop((0, 0, select.width, select.width)).resize((48, 48), Image.LANCZOS)
     icon.alpha_composite(head)

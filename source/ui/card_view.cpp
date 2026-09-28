@@ -23,9 +23,15 @@ void App::drawCard(Card* c, float x, float y, float s, bool dim, bool desc, bool
   float blend = dim ? 0.45f : 0.f;
   if (selected) gfx::rect(x - 3 * s - 1, y - 3 * s - 1, 126 * s + 2, 175 * s + 2, 0xFFE070C0);
   spr(R().sprite("portrait/" + c->locKey), x + 8 * s, y + 16 * s, 104 * s, 78 * s, tint, blend);
-  Sprite frame = R().sprite(ancient ? "card/frame_ancient" : std::string("card/frame_") + kind);
+  // F5/X1.5-X4.5: CardPoolModel.CardFrameMaterialPath. Colourless pools (Status/Curse/Token,
+  // and the special Ancient frame) keep the plain frame; a character's own cards get their
+  // Character::energyColor-tinted frame/border, baked as card/frame_<kind>_<color> in build_assets.
+  std::string color = run_ ? run_->character().energyColor : std::string("ironclad");
+  bool tinted = !ancient && !status && c->rarity != Rarity::Token && color != "ironclad";
+  std::string suffix = tinted ? std::string("_") + color : std::string();
+  Sprite frame = R().sprite(ancient ? "card/frame_ancient" : std::string("card/frame_") + kind + suffix);
   spr(frame, x, y, 120 * s, 169 * s, status ? 0x606060FF : tint, status ? 0.5f : blend);
-  spr(R().sprite(std::string("card/border_") + kind), x - 3 * s, y + 4 * s, 126 * s, 96 * s, tint, blend);
+  spr(R().sprite(std::string("card/border_") + kind + suffix), x - 3 * s, y + 4 * s, 126 * s, 96 * s, tint, blend);
   Sprite banner = R().sprite(ancient ? "card/ancient_banner" : "card/banner");
   spr(banner, x - 3 * s, y + 3 * s, 126 * s, 28 * s, tint, blend);
 
@@ -52,7 +58,7 @@ void App::drawCard(Card* c, float x, float y, float s, bool dim, bool desc, bool
     spr(R().sprite("card/unplayable"), x - 5 * s, y - 5 * s, os, os, tint, blend);
   } else if (c->cost >= 0 || c->costsX) {
     float os = 30 * std::max(s, 0.6f);
-    spr(R().sprite("card/energy"), x - 7 * s, y - 7 * s, os, os, tint, blend);
+    spr(R().sprite(cardEnergySprite(run_.get())), x - 7 * s, y - 7 * s, os, os, tint, blend);
     bool live = c->combat && c->combat->inProgress;
     int shownCost = live ? c->combat->energyCost(c) : c->cost;
     uint32_t cc = shownCost < c->canonicalCost ? col::green : shownCost > c->canonicalCost ? col::red : col::white;
