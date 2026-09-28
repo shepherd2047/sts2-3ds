@@ -339,6 +339,115 @@ int main() {
     for (size_t i = before; i < f.c->hand.size(); ++i) if (f.c->hand[i]->id == "Shiv" && f.c->hand[i]->upgraded()) ++upgradedShivs;
     CHECK(upgradedShivs == 3);
   }
+  {  // X1.2 Anticipate: Dexterity for the rest of the turn only, reversed at end of turn
+    Fight f("Silent");
+    Card* k = f.c->addCard(db::card("Anticipate"));
+    f.toHand(k);
+    f.play(k, nullptr);
+    CHECK(f.c->player->powerAmount<DexterityPower>() == 2);
+    f.endTurn();
+    CHECK(f.c->player->powerAmount<DexterityPower>() == 0);
+  }
+  {  // X1.2 PiercingWail: every enemy loses Strength for the rest of the turn, restored after
+    Fight f("Silent");
+    Card* k = f.c->addCard(db::card("PiercingWail"));
+    f.toHand(k);
+    f.play(k, nullptr);
+    CHECK(f.enemy(0)->powerAmount<StrengthPower>() == -6);
+    CHECK(f.enemy(1)->powerAmount<StrengthPower>() == -6);
+    CHECK(f.c->pileOf(k) == Pile::Exhaust);
+    f.endTurn();
+    // enemy(0) (isFront, SLICE_MOVE) doesn't touch its own Strength, so the debuff cleanly
+    // reverses to 0; enemy(1) (HISS_MOVE) gives itself +2 Strength on this same turn, so it
+    // nets -6 (ours) + 2 (its own) + 6 (our reversal) = 2 -- the reversal still fired correctly.
+    CHECK(f.enemy(0)->powerAmount<StrengthPower>() == 0);
+    CHECK(f.enemy(1)->powerAmount<StrengthPower>() == 2);
+    CHECK(f.enemy(0)->power("PiercingWailPower") == nullptr);
+    CHECK(f.enemy(1)->power("PiercingWailPower") == nullptr);
+  }
+  {  // X1.2 DodgeAndRoll: block, then the same amount again the next time block clears (turn 2+)
+    Fight f("Silent");
+    Card* k = f.c->addCard(db::card("DodgeAndRoll"));
+    f.toHand(k);
+    f.play(k, nullptr);
+    CHECK(f.c->player->block == 4);
+    f.endTurn();  // player's turn 1 -> 2: block clears (not turn 1 anymore) and BlockNextTurnPower fires
+    CHECK(f.c->player->block == 4);
+  }
+  {  // X1.2 Predator: draw 2 extra cards next turn only
+    Fight f("Silent");
+    Card* k = f.c->addCard(db::card("Predator"));
+    f.toHand(k);
+    f.play(k, f.enemy(0));
+    f.endTurn();
+    CHECK(f.c->hand.size() == 7);  // normal draw of 5 + 2 from Predator
+    f.endTurn();
+    CHECK(f.c->hand.size() == 5);  // no bonus on turn 3
+  }
+  {  // X1.2 Ricochet: 4 hits of 3 damage at a random enemy (Sly)
+    Fight f("Silent");
+    Card* k = f.c->addCard(db::card("Ricochet"));
+    f.toHand(k);
+    CHECK(k->has(kwSly));
+    int before = f.enemy(0)->hp + f.enemy(1)->hp;
+    f.play(k, nullptr);
+    CHECK(before - (f.enemy(0)->hp + f.enemy(1)->hp) == 12);
+  }
+  {  // X1.2 DaggerSpray: hits every enemy twice
+    Fight f("Silent");
+    Card* k = f.c->addCard(db::card("DaggerSpray"));
+    f.toHand(k);
+    int a = f.enemy(0)->hp, b = f.enemy(1)->hp;
+    f.play(k, nullptr);
+    CHECK(a - f.enemy(0)->hp == 8 && b - f.enemy(1)->hp == 8);
+  }
+  {  // X1.2 DaggerThrow: attack, draw 1, discard a chosen card
+    Fight f("Silent");
+    Card* k = f.c->addCard(db::card("DaggerThrow"));
+    f.toHand(k);
+    Card* victim = f.c->hand[0] == k ? f.c->hand[1] : f.c->hand[0];
+    Creature* e = f.enemy(0);
+    int hp = e->hp;
+    PlayerAction a;
+    a.kind = PlayerAction::PlayCard;
+    a.card = k;
+    a.target = e;
+    f.c->energy = 10;
+    f.c->actions.fire(a);
+    pump([&] { return f.c->choice.active && f.c->choice.result.waiting(); });
+    CHECK(f.c->choice.active && f.c->choice.minCount == 1 && f.c->choice.maxCount == 1);
+    f.c->choice.result.fire({victim});
+    pump([&] { return f.c->playerPhase && f.c->actions.waiting(); });
+    CHECK(hp - e->hp == 9);
+    CHECK(f.c->pileOf(victim) == Pile::Discard);
+  }
+  {  // X1.2 Prepared: draw N then discard N chosen cards (upgrade raises N)
+    Fight f("Silent");
+    Card* k = f.c->addCard(db::card("Prepared"));
+    f.toHand(k);
+    size_t before = f.c->hand.size();
+    PlayerAction a;
+    a.kind = PlayerAction::PlayCard;
+    a.card = k;
+    f.c->energy = 10;
+    f.c->actions.fire(a);
+    pump([&] { return f.c->choice.active && f.c->choice.result.waiting(); });
+    CHECK(f.c->choice.minCount == 1 && f.c->choice.maxCount == 1);
+    Card* pick = f.c->hand[0];
+    f.c->choice.result.fire({pick});
+    pump([&] { return f.c->playerPhase && f.c->actions.waiting(); });
+    CHECK(f.c->hand.size() == before - 1);  // -1 (played) +1 (drew) -1 (discarded)
+    CHECK(f.c->pileOf(pick) == Pile::Discard);
+  }
+  {  // X1.2 Snakebite: Retain keyword, big Poison
+    Fight f("Silent");
+    Card* k = f.c->addCard(db::card("Snakebite"));
+    CHECK(k->has(kwRetain));
+    f.toHand(k);
+    Creature* e = f.enemy(0);
+    f.play(k, e);
+    CHECK(e->powerAmount<PoisonPower>() == 7);
+  }
   printf("%d checks, %d failed\n", checks, failures);
   return failures ? 1 : 0;
 }
