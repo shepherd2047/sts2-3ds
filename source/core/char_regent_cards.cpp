@@ -34,47 +34,6 @@ struct CrushUnderPower : Power {
   }
 };
 
-// BlockNextTurnPower: at the start of next turn's block-clear (AfterBlockCleared), gain Amount
-// block (unpowered: it was already run through Hook.ModifyBlock when captured), then remove
-// itself. Used by Glitterstream.
-struct BlockNextTurnPower : Power {
-  POWER_HEADER(BlockNextTurnPower, "BLOCK_NEXT_TURN_POWER")
-  Task<> afterBlockCleared(Creature* c) override {
-    if (c != owner) co_return;
-    flash = 1.f;
-    co_await cmd::gainBlock(owner, Dec(amount), kUnpowered, nullptr);
-    co_await cmd::removePower(this);
-  }
-};
-
-// EnergyNextTurnPower: mirrors the private copy already in ancients_later.cpp (an Ancient card
-// uses the same power); used here by RefineBlade.
-struct EnergyNextTurnPower : Power {
-  POWER_HEADER(EnergyNextTurnPower, "ENERGY_NEXT_TURN_POWER")
-  Task<> afterEnergyReset() override {
-    co_await cmd::gainEnergy(*owner->combat, amount);
-    co_await cmd::removePower(this);
-  }
-};
-
-// VigorPower: adds Amount damage to the owner's next Attack (every hit of it), then removes
-// itself once that attack finishes. PORT NOTE: the C# captures the Amount at BeforeAttack and
-// only subtracts that captured amount in AfterAttack (so a mid-attack change to Vigor isn't
-// double-counted); this engine's Hook.AfterAttack already fires exactly once per card
-// (combat.cpp: "once per Execute"), so removing the whole power after the owner's first attack
-// is equivalent for every card in this pool (none of them change Vigor's amount mid-attack).
-struct VigorPower : Power {
-  POWER_HEADER(VigorPower, "VIGOR_POWER")
-  Dec modifyDamageAdditive(Creature*, Dec, int props, Creature* dealer, Card*) override {
-    if (dealer != owner || !isPoweredAttack(props)) return 0;
-    return amount;
-  }
-  Task<> afterAttack(Creature* attacker) override {
-    if (attacker != owner) co_return;
-    co_await cmd::removePower(this);
-  }
-};
-
 // ================================================================ token cards
 
 // MinionStrike.cs: created by Begone (transform target). 0 cost, Attack, Token, Exhaust,

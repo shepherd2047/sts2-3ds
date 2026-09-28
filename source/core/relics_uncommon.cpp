@@ -6,28 +6,6 @@ namespace sts {
 namespace {
 template <class R> void reg() { db::registerRelic(R::kId, [] { return std::unique_ptr<Relic>(new R()); }); }
 
-// VigorPower (MegaCrit.Sts2.Core.Models.Powers.VigorPower): the next Attack
-// card deals extra damage; consumed once that card finishes resolving (all
-// hits of it, since it's tracked by card identity rather than per-hit).
-struct VigorPower : Power {
-  POWER_HEADER(VigorPower, "VIGOR_POWER")
-  Card* consuming = nullptr;
-  Dec modifyDamageAdditive(Creature*, Dec, int props, Creature* dealer, Card* src) override {
-    if (owner != dealer || !isPoweredAttack(props)) return 0;
-    if (consuming && src != consuming) return 0;
-    return amount;
-  }
-  Task<> beforeCardPlayed(const CardPlay& p) override {
-    if (p.card->type != CardType::Attack || ownerOf(p.card) != owner) return {};
-    if (!consuming) consuming = p.card;
-    return {};
-  }
-  Task<> afterCardPlayed(const CardPlay& p) override {
-    if (consuming && p.card == consuming) { consuming = nullptr; return cmd::removePower(this); }
-    return {};
-  }
-};
-
 // SelfFormingClayPower: next time block is cleared from the owner, gain the
 // stacked amount of block, then the power is consumed.
 struct SelfFormingClayPower : Power {

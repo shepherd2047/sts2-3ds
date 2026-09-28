@@ -137,16 +137,6 @@ struct RegenPower : Power {
   }
 };
 
-struct BlockNextTurnPower : Power {
-  POWER_HEADER(BlockNextTurnPower, "BLOCK_NEXT_TURN_POWER")
-  Task<> afterBlockCleared(Creature* c) override {
-    if (c != owner) co_return;
-    flash = 1.f;
-    co_await cmd::gainBlock(owner, Dec(amount), kUnpowered, nullptr);
-    co_await cmd::removePower(this);
-  }
-};
-
 // ReptileTrinketPower: TemporaryStrengthPower with the relic as OriginModel.
 struct ReptileTrinketPower : TemporaryStatPower<StrengthPower, 1> {
   POWER_HEADER(ReptileTrinketPower, "TEMPORARY_STRENGTH_POWER")

@@ -146,4 +146,62 @@ struct SetupStrikePower : Power {
 };
 
 
+// ---------------------------------------------------------------- shared "next turn" / Vigor powers
+// One class per power id: Creature::get<P>() finds powers by id and static_casts, so two classes
+// with the same id would be undefined behaviour. Define shared powers here, not per file.
+
+// VigorPower.cs: Amount extra damage on the owner's next powered, card-sourced attack; afterwards
+// only the amount it had when that attack started is taken off. PORT NOTE: the C# keys on the
+// AttackCommand (BeforeAttack/AfterAttack); here the attack is the card being played.
+struct VigorPower : Power {
+  POWER_HEADER(VigorPower, "VIGOR_POWER")
+  Card* consuming = nullptr;
+  int amountWhenStarted = 0;
+  Dec modifyDamageAdditive(Creature*, Dec, int props, Creature* dealer, Card* src) override {
+    if (owner != dealer || !isPoweredAttack(props)) return 0;
+    if (consuming && src && src != consuming) return 0;
+    return amount;
+  }
+  Task<> beforeCardPlayed(const CardPlay& p) override {
+    if (p.card->type != CardType::Attack || ownerOf(p.card) != owner || consuming) return {};
+    consuming = p.card;
+    amountWhenStarted = amount;
+    return {};
+  }
+  Task<> afterCardPlayed(const CardPlay& p) override {
+    if (!consuming || p.card != consuming) co_return;
+    consuming = nullptr;
+    co_await cmd::modifyPowerAmount(this, Dec(-amountWhenStarted), nullptr, nullptr);
+  }
+};
+
+// DrawCardsNextTurnPower.cs: draw Amount more cards at the start of the next turn.
+struct DrawCardsNextTurnPower : Power {
+  POWER_HEADER(DrawCardsNextTurnPower, "DRAW_CARDS_NEXT_TURN_POWER")
+  Dec modifyHandDraw(Dec count) override { return amountOnTurnStart == 0 ? count : count + Dec(amount); }
+  Task<> afterSideTurnStart(Side, const std::vector<Creature*>& participants) override {
+    if (contains(participants, owner) && amountOnTurnStart != 0) co_await cmd::removePower(this);
+  }
+};
+
+// EnergyNextTurnPower.cs: gain Amount energy after the next energy reset.
+struct EnergyNextTurnPower : Power {
+  POWER_HEADER(EnergyNextTurnPower, "ENERGY_NEXT_TURN_POWER")
+  Task<> afterEnergyReset() override {
+    co_await cmd::gainEnergy(*owner->combat, amount);
+    co_await cmd::removePower(this);
+  }
+};
+
+// BlockNextTurnPower.cs: gain Amount block when the owner's block is next cleared.
+struct BlockNextTurnPower : Power {
+  POWER_HEADER(BlockNextTurnPower, "BLOCK_NEXT_TURN_POWER")
+  Task<> afterBlockCleared(Creature* c) override {
+    if (c != owner) co_return;
+    flash = 1.f;
+    co_await cmd::gainBlock(owner, Dec(amount), kUnpowered, nullptr);
+    co_await cmd::removePower(this);
+  }
+};
+
 }  // namespace sts

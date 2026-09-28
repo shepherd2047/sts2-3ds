@@ -71,22 +71,6 @@ struct ConfusedPower : Power {
   }
 };
 
-struct DrawCardsNextTurnPower : Power {
-  POWER_HEADER(DrawCardsNextTurnPower, "DRAW_CARDS_NEXT_TURN_POWER")
-  Dec modifyHandDraw(Dec count) override { return amountOnTurnStart == 0 ? count : count + Dec(amount); }
-  Task<> afterSideTurnStart(Side, const std::vector<Creature*>& participants) override {
-    if (contains(participants, owner) && amountOnTurnStart != 0) co_await cmd::removePower(this);
-  }
-};
-
-struct EnergyNextTurnPower : Power {
-  POWER_HEADER(EnergyNextTurnPower, "ENERGY_NEXT_TURN_POWER")
-  Task<> afterEnergyReset() override {
-    co_await cmd::gainEnergy(*owner->combat, amount);
-    co_await cmd::removePower(this);
-  }
-};
-
 // ================================================================ cards
 
 struct Luminesce : IroncladT<Luminesce> {
