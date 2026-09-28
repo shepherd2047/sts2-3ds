@@ -284,7 +284,7 @@ and `Models.Powers\`.
 
 | id | Character | Step 0 systems | Status |
 |---|---|---|---|
-| X0 | All | Character plumbing (see Engine lane order #1) | todo |
+| X0 | All | Character plumbing (see Engine lane order #1) | in progress (engine) |
 | X1.0-X1.5 | Silent | Shiv tokens, Poison, discard triggers (Sly), Retain, Accuracy-style powers | todo |
 | X2.0-X2.5 | Defect | Orbs (Lightning, Frost, Dark, Plasma, Glass), channel/evoke, Focus, orb slots and their rendering on the top screen | todo |
 | X3.0-X3.5 | Regent | Stars (second resource with a HUD counter), Forge and Sovereign Blade, summons | todo |
