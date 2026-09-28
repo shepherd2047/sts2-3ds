@@ -171,7 +171,10 @@ struct DenseVegetation : Event {
   EVENT_HEADER(DenseVegetation, "DENSE_VEGETATION")
   void calculateVars() override {
     addVar("Gold", rng().nextInt(61, 100));
-    addVar("Heal", std::min(owner()->maxHp - owner()->hp, owner()->maxHp * 3 / 10));
+    // HealRestSiteOption.GetHealAmount: 30% of max HP through the rest-site heal hooks.
+    Dec heal = Dec(owner()->maxHp) * Dec::lit(0.3);
+    for (Model* m : run->listeners()) heal = m->modifyRestSiteHealAmount(owner(), heal);
+    addVar("Heal", heal.toInt());
     addVar("HpLoss", 8);
   }
   std::vector<EventOption> initialOptions() override {

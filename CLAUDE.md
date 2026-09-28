@@ -10,8 +10,10 @@ The owner works on this from a Mac and a Windows PC.
 ## What to work on
 
 `docs/PLAN.md` has the goal (a finished port as complete as the RGDSplus one),
-the session protocol and self-contained work packages with their status. Start
-there: pick the first `todo` package whose dependencies are done. Read only the
+the session protocol, an inventory of what is still missing versus the C#, and
+~117 small packages in tracks (A content, C rules, F UI kit, S screens, X
+characters, M meta, Y system, U audio, H release). Start there: take the first
+`todo` package in its **Order** section whose dependencies are done. Read only the
 files a package names — don't survey the whole codebase or decompiled tree.
 The RGDSplus reference repo is cloned next to this one as `../rgds-ref`
 (`gh repo clone LPF970915/Slay-the-Spire-for-RGDSplus ../rgds-ref -- --depth 1`).
@@ -205,13 +207,4 @@ scripts drift; delete the debug file afterwards.
 
 ## Status / TODO
 
-Done: Ironclad full card pool, all 22 Act 1 encounters (4 weak, 12 normal,
-3 elites, 3 bosses), continuous two-screen map with drag/tap, card rewards
-(rarity odds), rest sites, Spine creature animation, touch UI, relic system
-with ~70 relics (common/uncommon/rare + Ironclad), elite relic rewards,
-treasure rooms, relic page.
-
-Not done:
-StS2's real map generator (unknown/treasure/shop rooms), saves, other
-characters/acts, audio, real-hardware performance test. romfs is ~66 MB
-(Spine pages are uncompressed RGBA8).
+See `docs/PLAN.md` (Done table, inventory, tracks and order).

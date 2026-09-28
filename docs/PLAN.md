@@ -2,50 +2,60 @@
 
 ## Goal
 
-A finished, fully playable Slay the Spire 2 on the New 3DS, as complete and
-polished as the RGDSplus dual-screen port of StS1
+A **finished product**: the complete Slay the Spire 2 on the New 3DS. That means
+all 5 characters, all 4 acts, every card, relic, potion, event, enchantment, Ancient
+and ascension level from the game, all menus (main menu, profiles, settings, pause,
+compendium, stats, run history, achievements, timeline, custom and daily runs,
+credits), music and sound, and a polished UI drawn with StS2's own art. The layout
+follows the RGDSplus dual-screen port of StS1
 (github.com/LPF970915/Slay-the-Spire-for-RGDSplus, cloned next to this repo as
-`../rgds-ref`): every screen follows its top/bottom split and touch rules. Their
-page inventory `../rgds-ref/docs/R4_ALL_PAGES.zh-CN.md` (U01-U33, with the owner's
-revisions in `R4_LAYOUT_REVISION.zh-CN.md`) is the checklist for "done"; the numbers
-behind their layout are in `prototype/r3/java/rgds/r3/` (`DualRender.java`,
-`UiTransform.java`, `ScreenRoutes.java`, `MapTouch.java`). Their code only re-routes
-StS1's own UI, so we copy the **layout rules and proportions**, drawn with StS2's
-own art. The owner's measured rules that already apply are in CLAUDE.md.
+`../rgds-ref`), whose page inventory `../rgds-ref/docs/R4_ALL_PAGES.zh-CN.md`
+(U01-U33) and the owner's revisions in `R4_LAYOUT_REVISION.zh-CN.md` are the
+checklist for the screens. Their code only re-routes StS1's own UI, so we copy the
+**layout rules and proportions** and draw them with StS2's art. The owner's measured
+rules that already apply are in CLAUDE.md.
 
-Done means: three acts with all encounters, events, relics, potions and the shop;
-Neow; saves; all RGDSplus pages (U01-U33) that exist in StS2 laid out; runs smoothly
-on real hardware.
+**Out of scope (n/a):** online multiplayer and multiplayer-only cards, leaderboards,
+mods, the feedback screen, patch notes, the Steam profile screen, and the deprecated
+or test models (`Deprecated*`, `Mock*`, the `Deprived` character).
 
-Work is split into **packages**. Each one is sized for a single session (Sonnet is
-fine unless marked *Opus*) and says what to read, what to write, how to test and
-when it is done. Pick the first package whose status is `todo` and whose
-dependencies are `done`, do it, then update its status line here in the same commit.
+When every package below is `done`, the game is complete. The last package (H6)
+is a release checklist that proves it.
 
-## Session protocol (every package)
+## How to work
+
+Work is split into **packages**. Each one fits in a single session. Pick the first
+`todo` package in the **order** section whose dependencies are `done`, do it, then
+set its status in the tables in the same commit. Legend:
+
+- *Opus* = design-heavy, do it in an Opus session.
+- *engine* = edits `game.h` / `combat.cpp` / `run.cpp` and must run alone.
+- *parallel-safe* = only adds files plus one registration line.
+
+The owner has decided that one Opus session working the packages in order is the
+cheapest way to run this. Do not spawn subagents or other sessions unless the owner asks.
+
+### Session protocol (every package)
 
 0. **Local sessions only** (desktop app, folder `sts2-3ds` on the owner's PC or Mac).
-   Cloud sessions only get the git repo: no decompiled C#, no game files, no
+   Cloud sessions only get the git repo: no decompiled C#, no game files and no
    devkitPro, so they can neither translate nor test. Never commit the decompiled
    code or game assets to make them work.
 1. `git pull`. Read `CLAUDE.md`, this file, and `docs/PORTING.md`. Do **not** read the
-   whole codebase or the whole decompiled tree: open only the files a package names
-   and the C# classes it lists. Tokens are shared by all the owner's sessions.
-2. Source of truth is `../sts2-decompiled/` (C#). Translate faithfully: same numbers
-   (non-ascension value = last argument of `GetValueIfAscension`), same move order,
-   same RNG call order. Drop VFX/SFX/animation code.
+   whole codebase or the whole decompiled tree. Open only the files a package names
+   and the C# classes it lists.
+2. The source of truth is `../sts2-decompiled/` (C#). Translate faithfully:
+   - use the same numbers (the non-ascension value is the last argument of
+     `GetValueIfAscension`; ascension values arrive with package C10);
+   - keep the same move order and the same RNG call order;
+   - drop VFX, SFX and animation code unless a package asks for it.
 3. Mark anything you cannot express with `// PORT NOTE: <what is missing>`.
-4. Test (commands below). Build **both** targets before committing:
-   `make -f Makefile.sdl` (UCRT64 shell) and `make` (devkitPro MSYS shell). The 3DS
-   build has **no RTTI and no exceptions**.
-5. For UI changes: screenshot the preview (`STS_SHOTS`), check both screens, and show
-   the owner before sending anything to the 3DS. Never `make link` unless asked.
-6. Commit with a clear message, `git push`, and set the package's status here.
-   Talk to the owner in Chinese.
-7. Do not start subagents without telling the owner how many and why (shared quota).
-8. Parallel sessions: only run two packages at the same time if both are marked
-   *parallel-safe*. Packages marked *engine* edit `game.h` / `combat.cpp` / `run.cpp`
-   and must run alone. Keep engine edits small and in the style of the existing hooks.
+4. Build **both** targets before committing: `make -f Makefile.sdl` (UCRT64) and
+   `make` (devkitPro). The 3DS build has **no RTTI and no exceptions**.
+5. For UI changes, take preview screenshots (`STS_SHOTS`) of both screens and show
+   the owner before and after. Send a build to the 3DS only when the owner says so
+   ("发").
+6. Commit, `git push`, and update the status here. Talk to the owner in Chinese.
 
 ### Test commands (UCRT64 shell, repo root)
 
@@ -53,375 +63,376 @@ dependencies are `done`, do it, then update its status line here in the same com
 make -f Makefile.sdl                                   # preview + sim
 STS_ENCOUNTER=<EncounterId> SIM_FIGHTS=1 ./build/sim 4   # a fight, headless
 STS_ENCOUNTER=<EncounterId> SIM_ALLCARDS=1 ./build/sim 1 v   # verbose event log, 999 HP
-SIM_ALLCARDS=1 ./build/sim 20                          # full-run smoke test; record outcomes and investigate hangs or changes
+SIM_ALLCARDS=1 ./build/sim 20                          # full-run smoke test; compare outcomes per seed, investigate hangs or changes
 STS_ROOM=Event STS_EVENT=<EventId> SIM_FIGHTS=1 ./build/sim 3   # an event, headless
+SIM_ALLRELICS=1 ./build/sim 10 ; SIM_ALLPOTIONS=1 ./build/sim 10 ; SIM_SAVELOAD=17 ./build/sim 10
 # preview screenshots (see CLAUDE.md for STS_SCRIPT syntax):
 STS_ENCOUNTER=<Id> STS_HIDDEN=1 STS_FIXED_STEP=1 STS_SEED=42 STS_SCRIPT="40:A,100:A" STS_SHOTS="400:build/x.bmp" ./build/sts2-preview.exe
 ```
-New monsters/relics/events need `python tools/build_assets.py` (art and text are
-collected from `MONSTER_HEADER` / `RELIC_HEADER` / `EVENT_HEADER` / `CARD_HEADER`).
-PowerShell mangles quotes and pipes in `bash -lc '...'`: put commands in a `.sh`
-file and run it with bash.
 
-## Status
+New monsters, relics, events, potions and cards need `python tools/build_assets.py`
+(their art and text are collected from the `*_HEADER` macros). PowerShell mangles
+quotes and pipes inside `bash -lc '...'`, so put commands in a `.sh` file and run
+that file with bash.
 
-### Project checkpoint (2026-09-27)
+To see what is still missing compared with the C#, compare our `*_HEADER` ids
+against the pool files. For example, for cards:
 
-- Local `main` and `origin/main` match. Three pre-existing local edits are in progress: `Makefile.sdl`, `source/core/content_act2c.cpp`, and `test/sim.cpp`; keep them separate from the UI work.
-- A forced SDL build succeeds on macOS. A 3DS build also succeeds in the existing ASCII-path copy at `~/dev/sts2-3ds-build` with `/opt/devkitpro`; the `.3dsx` has not been run on hardware. `../sts2-decompiled/` is absent here; further faithful C# content translation needs that local source.
-- Preview screenshots checked: title, Neow, map, and combat (`build/pm-*.png`, ignored local artifacts). This is an entry-point smoke check, not U01-U33 acceptance.
-- `SIM_ALLCARDS=1 ./build/sim 20` completed without a hang but won 7/20. Win count alone is not a reliable regression gate; compare deterministic outcomes per seed and investigate unexpected changes or crashes.
-- Next: finish the U01-U33 page audit below. U02/U04 have a first preview implementation from the owner's game art. U13 combat piles and U25 card/relic detail have first preview implementations; the shop card detail was checked in SDL. U26 settings and U28 end summaries have first implementations. Finish remaining contexts and owner visual review. Package 19 requires a real New 3DS run. Package 14 remains later.
-
-| # | Package | Kind | Depends on | Status |
-|---|---|---|---|---|
-| 0 | Event text string vars | engine, small | – | done |
-| 1 | Act 1 events (12 left) | content | 0 | done (locked options: Wellspring BOTTLE, WhisperingHollow GOLD = potions; SapphireSeed PLANT, WoodCarvings SNAKE = enchantments) |
-| 2 | Shared events (18) | content | 0 | done (8 of 18, see events_shared.cpp header) |
-| 3 | Multi-act run structure | engine, *Opus* | – | done (acts.cpp; TheArchitect ending not ported) |
-| 4a | Act 2 monsters A | content | – | done |
-| 4b | Act 2 monsters B | content | – | done |
-| 4c | Act 2 elites + bosses | content (+engine likely) | – | done (content_act2c.cpp, sim-tested + screenshots of Kaiser Crab / Decimillipede; Tainted/VitalSpark are per-power approximations of the affliction system; Kaiser Crab claws are two plain creatures sharing the crab skeleton (`hide`/`shift` lines in the spine txt), no arm animations/background, no body flip; Knowledge Demon curses use the combat card-choice screen; sim bot plays Frantic Escape first, but with `SIM_ALLCARDS=1`'s ~200-card deck it rarely draws them, so The Insatiable often wins there (real decks are fine); dead Decimillipede segments now roll their next move in `startTurn`) |
-| 5 | Act 2 events (10) | content | 0 | done (9 of 10: ColorfulPhilosophers needs a 2nd character; FieldOfManSizedHoles ENTER_YOUR_HOLE locked = PerfectFit enchantment; act pool list is `db::act2Events()` in events_act2.cpp, to be wired by package 3) |
-| 6a | Act 3 monsters A | content | – | done |
-| 6b | Act 3 elites + bosses | content (+engine likely) | – | done (content_act3b.cpp, sim-tested only, no screenshots; Hex/Dampen/Chains of Binding/Wither are per-power approximations of the affliction system, Intangible caps HP loss only; run build_assets once 4c's monsters have scenes) |
-| 7 | Act 3 events (7) | content | 0 | done (sim-tested; not screenshot-checked; MadScience card text needs `choose()` support in App::describe; Grave of the Forgotten enchant = removes Exhaust; BattlewornDummy V1 potion reward skipped; `db::act3Events()` defined in events_act3.cpp) |
-| 8 | Potions | engine + UI, *Opus* | – | done (potions.cpp: Ironclad + shared pools, 47 of 48 — ColorlessPotion needs a colorless pool; belt of 3, rewards with PotionRewardOdds, Fairy death prevention; UI: 药水 button in combat and on the map, list below / detail above, ◀ ▶ targeting; relics/events that need potions are still locked) |
-| 9 | Shop (merchant) | engine + UI | 8 | done (shop.cpp: 5 character cards with a sale, 3 relics incl. a Shop-rarity slot, 3 potions, card removal 75+25n; prices and rng as in the C#; The Courier, Membership Card, Meal Ticket; colorless slots and the Foul Potion throw not ported) |
-| 10 | Remaining relics (skipped ones + Shop rarity) | content | 8, 9 | done (relics_more.cpp: 42 relics incl. the Shop ones; rest site Lift/Dig/Miniature Tent, card reward/deck/potion hooks, Lizard Tail. Still skipped: DingyRug, FresnelLens, GnarledHammer, Kifuda, MysticLighter, PunchDagger, RoyalStamp, Toolbox, WingCharm (enchantments / colorless pool), UnsettlingLamp; IsAllowed(IsBeforeAct3TreasureChest) not checked) |
-| 11a | Neow: act-1 Ancient start node, heal, relic choice | engine + UI + content | – | done |
-| 11b | Act 2/3 Ancients (Orobas, Pael, Tezcatara, Nonupeipe, Tanx, Vakuu, Darv) | content | 3, 11a | done (ancients_later.cpp: all 7 events with their option rules, 58 of 72 relics, 12 cards, Blur/Confused/next-turn powers, Black Blood; per-ancient room art and map icons. Not offered until their systems exist: enchantment relics, Sea Glass / Prismatic Gem, Driftwood, Pael's Wing / Eye / Legion, Golden Compass, Fur Coat, Toy Box, Whispering Earring) |
-| 12 | Saves | engine | 3 | done (save.cpp: autosave at every map choice, 继续 on the title, deleted on death/victory; RNG raw state, map, bags, deck, relics (+ Relic::persist), potions. `SIM_SAVELOAD=K ./build/sim` checks that save/load at floor K changes nothing) |
-| 13 | Texture compression (romfs is ~70 MB) | tools + 3DS gfx | – | done (`tools/compress_romfs.py` → `romfs_3ds/` ETC1A4/ETC1/RGBA4 + LZ11, 146 → 15 MB; make runs it; needs a real-hardware check, package 19) |
-| 14 | Other characters | big | 3 | later |
-| 15 | RGDSplus page audit (U01-U33) | UI | 3, 8, 9, 11a, 11b | todo |
-| 16 | Title / main menu / character select (U01-U04) | UI | – | in progress (native menu art and Ironclad selection previewed; profile, seed, ascension and hardware review remain) |
-| 17 | Card and relic detail popups (U25), deck/pile views (U13) | UI | – | in progress (combat pile tabs, card/relic modal, upgrade preview and card keyword pages; shop card detail checked; owner and hardware review remain) |
-| 18 | Settings + death/victory screens (U26, U28) | UI | 12 | in progress (map START settings, fast mode, shake switch, confirmed abandon, end stats and two return paths; victory and hardware review remain) |
-| 19 | Real-hardware performance pass | 3DS | 13 | todo |
-
-*parallel-safe* pairs: any two of 1, 2, 4a, 4b, 5, 6a, 7 (they only add files and
-one registration line each). 0, 3, 4c, 6b, 8, 9, 12 run alone.
+```bash
+grep -rhoE 'CARD_HEADER\(\w+' source/core | sed 's/CARD_HEADER(//' | sort -u > /tmp/ours
+grep -oE 'ModelDb.Card<\w+' ../sts2-decompiled/MegaCrit.Sts2.Core.Models.CardPools/ColorlessCardPool.cs | sed 's/.*<//' | sort -u | comm -23 - /tmp/ours
+```
 
 ---
 
-## 0. Event text string vars (small, engine)
+## Done (packages 0-13)
 
-Event/relic text can contain string placeholders filled from other loc tables, e.g.
-AromaOfChaos' MAINTAIN_CONTROL page adds `{AromaPrinciple}` =
-`characters.IRONCLAD.aromaPrinciple`, and WoodCarvings uses StringVar card titles.
-Today `expandSmart` (source/ui/ui.cpp) prints `?` for them.
+| # | Package | Notes that still matter |
+|---|---|---|
+| 0 | Event string vars | – |
+| 1 | Act 1 events | Locked options: Wellspring BOTTLE and WhisperingHollow GOLD (need potions, now available, so unlock them in A8); SapphireSeed PLANT and WoodCarvings SNAKE (need enchantments, A3). |
+| 2 | Shared events, 8 of 18 | The remaining 10 are in A7. |
+| 3 | Three acts | `acts.cpp`. TheArchitect ending is in A10. |
+| 4a/4b/4c | Act 2 monsters, elites, bosses | Tainted and VitalSpark approximate afflictions (A4). |
+| 5 | Act 2 events, 9 of 10 | ColorfulPhilosophers is in X6. FieldOfManSizedHoles ENTER_YOUR_HOLE needs PerfectFit (A3). |
+| 6a/6b | Act 3 monsters, elites, bosses | Hex, Dampen, Chains of Binding and Wither are approximations (A4). |
+| 7 | Act 3 events | MadScience text needs `choose()` in App::describe (B4). BattlewornDummy V1 skips its potion reward (A8). |
+| 8 | Potions, 47 | ColorlessPotion needs the colorless pool (A1). |
+| 9 | Shop | Colorless slots and the Foul Potion throw are missing (A9). |
+| 10 | Relics, 42 more | 10 shared relics still skipped (A5). |
+| 11a/11b | Neow and the act 2/3 Ancients | 14 Ancient relics are locked until their systems exist (A6). |
+| 12 | Saves | Every new stateful relic or system must go through `persist` / `ioRun` and pass `SIM_SAVELOAD`. |
+| 13 | romfs compression | Checked on real hardware in H1. |
 
-- Add string vars to `Event` (e.g. `std::map<std::string, std::string> strVars` +
-  `setStr(name, locKeyOrText)`), resolve them in `expandSmart` (look up the loc key,
-  fall back to the literal). Set AromaOfChaos' `AromaPrinciple` to
-  `characters.IRONCLAD.aromaPrinciple`.
-- `tools/build_assets.py`: make sure the `characters` table keys used are exported.
-- Done when: `STS_ROOM=Event STS_EVENT=AromaOfChaos` preview, choose 维持理智, pick a
-  card: the result page shows no `?`.
+Package 15 (the RGDSplus page audit) is folded into track S. Its findings:
+- U06, U07, U08, U09, U12, U15, U16, U18, U20, U21, U22 and U23 match RGDSplus in function.
+- U17 lacks the native reward list; it is in S14.
+- U11 has no power inspection; it is in S10.
+- The DenseVegetation heal value was fixed during the audit.
 
-## 1. Act 1 events (content)
+Packages 16-18 got a first SDL pass on the Mac (2026-09-27, commit e2c9023):
+- title with native menu art and Ironclad selection (U02/U04);
+- combat pile tabs, a card/relic detail modal with upgrade preview and keyword pages (U13/U25);
+- a settings page on START with fast mode, shake and a confirmed abandon, saved to a settings file (U26);
+- end-of-run summaries (U28).
+The S/Y packages below start from that code and restyle it with the F kit. They do not
+rewrite it from scratch.
 
-Files: `source/core/events_act1.cpp` only (+ new cards/relics they give, defined in
-the same file and registered with `db::registerCard` / `db::registerRelic`).
-Read: the `AromaOfChaos` example there; the events section of `game.h` (Event,
-EventOption, DeckChoice, Run event helpers); `run.cpp` functions `runEvent`,
-`selectFromDeck`, `transformCard`, `randomTransformFor`, `eventFight`, `loseHp`.
-C#: `MegaCrit.Sts2.Core.Models.Events\<Name>.cs`, base `Models\EventModel.cs`.
+Packages 14 and 16-19 are replaced by the tracks below.
 
-Events: ByrdonisNest, DenseVegetation, JungleMazeAdventure, LuminousChoir,
-MorphicGrove, SapphireSeed, SunkenStatue, TabletOfTruth, UnrestSite, Wellspring,
-WhisperingHollow, WoodCarvings.
+---
 
-Mapping (C# -> C++):
-- `new EventOption(this, Fn, "K.pages.P.options.O")` -> `option("P", "O", [this]{ return fn(); })`;
-  null action / `_LOCKED` -> `EventOption{page("P") + ".options.O_LOCKED", nullptr}`.
-- `SetEventFinished(L10NLookup("K.pages.X.description"))` -> `setFinished("X")`;
-  a new page -> `setPage("X", {...})`. `IsAllowed` -> `isAllowed(Run&)`.
-  `CanonicalVars`/`CalculateVars` -> `calculateVars()` with `addVar/setVar` using the
-  C# var names (the UI fills `{Name}` from them).
-- `CardSelectCmd.FromDeck*` -> `co_await run->selectFromDeck("card_selection.TO_X", filter, n [, canCancel, showUpgrade])`.
-- `CardCmd.TransformToRandom` -> `run->transformCard(c, run->randomTransformFor(c, rng()))`;
-  `TransformTo<X>` -> `run->transformCard(c, db::card("X"))`; remove -> `run->removeCardFromDeck(c)`;
-  add -> `run->addCardToDeck(db::card("X"))`; upgrade -> `c->upgrade()`.
-- Gold: `co_await run->gainGold(n)` / `run->gold -= n`. HP outside combat:
-  `co_await run->loseHp(n)`, heal = `owner()->hp = min(maxHp, hp + n)`,
-  `run->gainMaxHp/loseMaxHp`. Relic: `co_await run->obtainRelic(db::relic("X"))` or a
-  random one via `run->offerRelic(run->pullRelicFromFront(run->relicBag, run->rollRelicRarity(run->rng("Rewards"))), false)`.
-- Combat: `bool won = co_await run->eventFight("EncounterId"); if (!won) co_return;`.
-- Needs enchantments / potions / custom card grids / shops: lock that option with a
-  PORT NOTE. If an event is unusable without them, don't register it; list it here.
+## Inventory: what the C# has and what is missing (2026-09)
 
-Test: `STS_ROOM=Event STS_EVENT=<Id> SIM_FIGHTS=1 ./build/sim 6` for each event (the
-sim rotates through options), then screenshot two or three events in the preview.
-Done when every registered event reaches its finished page in the sim without a hang.
+| Content | C# (excluding deprecated/mock) | Ported | Missing, and the package that adds it |
+|---|---|---|---|
+| Characters | Ironclad, Silent, Defect, Regent, Necrobinder (+ Random) | Ironclad | 4 characters → X1-X4 |
+| Acts | Overgrowth, Underdocks (alternative act 1), Hive, Glory | 3 | Underdocks → A11 |
+| Encounters | 90 | 64 | 20 Underdocks → A11; 4 event fights → A7/A10/A11 |
+| Character cards | 5 × ~91 | Ironclad 90 | 4 × 91 → X*; Silent/Defect/Regent/Necrobinder tokens |
+| Colorless cards | 65 | 0 | A1 |
+| Curse / status / event / quest / token cards | 18 / 12 / 28 / 4 / 14 | most | AscendersBane, Debt, Writhe, Beckon, Debris, Void, 13 event cards, Dowsing, SpoilsMap → A2; character tokens → X* |
+| Relics | shared 118, character 5 × 8, event pool 142 | 203 | 10 shared → A5; about 55 event / Ancient relics → A6 / A7 / A11; 32 character relics → X* |
+| Potions | shared 45 + 3 event + 3 per character | 49 | ColorlessPotion → A1; Ambergris, Glowwater, Foul → A9; 12 character potions → X* |
+| Events | 66 | 46 | 10 shared → A7; 9 Underdocks → A11; TheArchitect → A10; ColorfulPhilosophers → X6 |
+| Enchantments | 22 | 0 | A3 |
+| Afflictions | 7 | approximated as powers | A4 |
+| Ascension | 10 levels | 0 | C10 |
+| Modifiers (custom runs) | 16 | 0 | M11 |
+| Achievements | 22 | 0 | M5 |
+| Badges (end of run) | 28 | 0 | M7 |
+| Timeline epochs (unlocks) | 60 | 0 | M3, M4 |
+| Audio | 12 FMOD banks + 50 mp3 | none | track U |
 
-## 2. Shared events (content)
+---
 
-Same as package 1, new file `source/core/events_shared.cpp` with
-`registerSharedEvents()` (add the call next to `registerAct1Events()` in
-`events.cpp`), and add the ids to the event pool: `ActModel.GenerateRooms` uses
-`AllEvents.Concat(ModelDb.AllSharedEvents)`, so extend `db::act1Events()` usage in
-`Run::start` to also include a `db::sharedEvents()` list (define it in events.cpp).
+## Tracks and packages
 
-Events: BrainLeech, CrystalSphere, DollRoom, FakeMerchant, PotionCourier,
-RanwidTheElder, RelicTrader, RoomFullOfCheese, SelfHelpBook, SlipperyBridge,
-StoneOfAllTime, Symbiote, TeaMaster, TheFutureOfPotions, TheLegendsWereTrue,
-ThisOrThat, WarHistorianRepy, WelcomeToWongos. (Several need potions/shops: lock
-those options; CrystalSphere has its own minigame UI in C# — skip it and note it.)
+The tracks are content completion (A), UI foundation (F), screens (S), characters (X),
+meta and progression (M), system (Y), audio (U) and hardware/release (H).
 
-## 3. Multi-act run structure (engine, Opus)
+### Track A: content for a complete Ironclad game
 
-Today the run is act 1 only: beating the boss is Victory. Make it three acts.
-C#: `Models\ActModel.cs` (GetNumberOfRooms, GenerateRooms, weak/normal/elite/boss
-pools, PullNextEvent), `Models.Acts\Overgrowth.cs`, `Hive.cs`, `Glory.cs`,
-`Runs\RunManager.cs` (act transitions), rewards after bosses (`Rewards\RewardsSet.cs`:
-boss gold + card, and whatever happens between acts: heal, ancient event).
+| id | Package | Kind | Needs | Status |
+|---|---|---|---|---|
+| A1a | Colorless cards 1/3: Alchemize … GoldAxe (22) + the colorless pool, and ColorlessPotion | content | – | todo |
+| A1b | Colorless cards 2/3: HandOfGreed … Purity (22) | content, parallel-safe | A1a | todo |
+| A1c | Colorless cards 3/3: Rally … Volley (19); skip cards the C# marks multiplayer-only | content, parallel-safe | A1a | todo |
+| A2 | Missing curses/status (AscendersBane, Debt, Writhe, Beckon, Debris, Void), 13 event cards, quest cards Dowsing and SpoilsMap | content | – | todo |
+| A3a | Enchantment engine: enchantment slot on Card, hooks (`Models\EnchantmentModel.cs`), save, card badge + text in the UI, `enchant` event helpers | engine, *Opus* | – | todo |
+| A3b | Enchantments 1/2 (11) + unlock SapphireSeed PLANT, WoodCarvings SNAKE, FieldOfManSizedHoles, Grave of the Forgotten | content | A3a | todo |
+| A3c | Enchantments 2/2 (11) + relics that enchant (DingyRug, GnarledHammer, Kifuda, RoyalStamp …) | content | A3b | todo |
+| A4 | Affliction engine + all 7 (Bound, Entangled, Galvanized, Hexed, Ringing, Smog, Tainted); replace the per-power approximations in acts 2/3 | engine | – | todo |
+| A5 | 10 skipped shared relics (DingyRug, FresnelLens, GnarledHammer, Kifuda, MysticLighter, PunchDagger, RoyalStamp, Toolbox, UnsettlingLamp, WingCharm) + `IsBeforeAct3TreasureChest` | content | A1a, A3c | todo |
+| A6 | Locked Ancient relics (Sea Glass, Prismatic Gem, Driftwood, Pael's Wing/Eye/Legion, Golden Compass, Fur Coat, Toy Box, Whispering Earring …) and remaining Neow options (PhialHolster, LostCoffer, NeowsSacrifice …) | content | A3c | todo |
+| A7a | Shared events 1/3: DollRoom, PotionCourier, SelfHelpBook, StoneOfAllTime, TheFutureOfPotions + their relics | content, parallel-safe | – | todo |
+| A7b | Shared events 2/3: TheLegendsWereTrue, WarHistorianRepy, WelcomeToWongos (+ Wongo relics/badge) | content, parallel-safe | – | todo |
+| A7c | Shared events 3/3: FakeMerchant (+ FakeMerchantEventEncounter, 10 Fake* relics, fake shop UI reuse) | content | – | todo |
+| A7d | CrystalSphere: its minigame (`Events.Custom.CrystalSphereEvent`) + custom bottom-screen UI | content + UI, *Opus* | – | todo |
+| A8 | Remaining event-pool relics whose source already exists (run the pool diff), unlock Wellspring BOTTLE / WhisperingHollow GOLD, BattlewornDummy potion | content | A7a-c | todo |
+| A9 | Shop leftovers: 2 colorless slots, Foul Potion throw at the merchant, event potions Ambergris / Glowwater / Foul | content | A1a | todo |
+| A10 | TheArchitect: the true ending after the act 3 boss (event + TheArchitectEventEncounter), victory flow | content + engine | – | todo |
+| A11a | Underdocks monsters 1/2: CorpseSlugs N/W, Cultists, FossilStalker, GremlinMerc, HauntedShip, LivingFog, PunchConstruct | content, parallel-safe | – | todo |
+| A11b | Underdocks monsters 2/2: Seapunk N/W, SewerClam, SludgeSpinner, Toadpoles, TwoTailedRats | content, parallel-safe | – | todo |
+| A11c | Underdocks elites: PhantasmalGardeners, SkulkingColony, TerrorEel | content | – | todo |
+| A11d | Underdocks bosses: WaterfallGiant, SoulFysh, LagavulinMatriarch | content (+engine) | – | todo |
+| A11e | Underdocks events (AbyssalBaths, DrowningBeacon, EndlessConveyor, PunchOff + encounter, SpiralingWhirlpool, SunkenTreasury, DoorsOfLightAndDark, TrashHeap, WaterloggedScriptorium) | content | – | todo |
+| A11f | Underdocks as act 1: act choice as in `ActModel` / `RunManager` discovery order, map bg, room art, boss icons, per-act music hook | engine | A11a-e | todo |
 
-- `Run`: `actIndex`, per-act encounter queues/boss/event queue, `generateMap()` per
-  act (mapgen already takes the room count from Overgrowth: make it an argument;
-  Hive = 14 rooms, Glory = 13; their `GetMapPointTypes` for rest/unknown counts).
-- Central act lists in a new `source/core/acts.cpp`: for each act the weak/normal/
-  elite/boss encounter ids and event ids **as in the C#** (content packages only
-  register encounters/events; unregistered ids are skipped at runtime, like events).
-- Map art per act (`map_bgs/hive`, `map_bgs/glory`), room backgrounds per act
-  (`images/rooms/<act>/...`), boss map icons; `build_assets.py` gains these.
-- After the act 3 boss: Victory. Dev menu: "跳到下一幕".
-- Done when: `SIM_ALLCARDS=1 ./build/sim 10` plays through three acts (acts 2/3 may
-  only have a few encounters registered; the pools must tolerate that).
+### Track C: rules that span the game
 
-## 4. Act 2 (Hive) monsters (content)
+| id | Package | Kind | Needs | Status |
+|---|---|---|---|---|
+| C10 | Ascension 1-10 (SwarmingElites … DoubleBoss): `AscensionManager`, every `GetValueIfAscension` in ported content (script to list them), AscendersBane at A5, double boss at A10 | engine + content sweep, *Opus* | – | todo |
+| C11 | Map extras: boss preview, the act's second boss at ascension 10, map legend | engine + UI | C10 | todo |
 
-For each encounter below, translate its `Models.Encounters\<Id>.cs` and every monster
-it uses (`Models.Monsters\<Name>.cs`) plus new powers (`Models.Powers\`). New file per
-package: `source/core/content_act2a.cpp` / `act2b` / `act2c` with
-`registerAct2A()` etc., called from `db::init()` in content.cpp (one line).
-Style: copy `content_act1.cpp` (plain monsters), `content_phrog.cpp` (spawning,
-stun), `content_bosses.cpp` (minions, illusions, custom powers). Monster loc key =
-UPPER_SNAKE of the class name. Register with `db::registerEncounter`.
+### Track F: UI foundation (do this before redoing any screen)
 
-- 4a: BowlbugsNormal, BowlbugsWeak, ChompersNormal, ExoskeletonsNormal,
-  ExoskeletonsWeak, MytesNormal, SpinyToadNormal, TunnelerWeak.
-- 4b: HunterKillerNormal, LouseProgenitorNormal, OvicopterNormal,
-  SlumberingBeetleNormal, TheObscuraNormal, ThievingHopperWeak.
-- 4c (elites/bosses, engine work likely): DecimillipedeElite, EntomancerElite,
-  InfestedPrismsElite, TheInsatiableBoss, KnowledgeDemonBoss, KaiserCrabBoss.
+The current UI is placeholder rectangles. Track F builds a small UI kit with StS2's
+own art, and every screen in track S is then rebuilt with it.
 
-Engine features that exist: `cmd::addMonster` (spawn), `Monster::stun`,
-`MinionPower`-style secondary enemies, illusions (die without leaving),
-`shouldStopCombatFromEnding`, `shouldPlay`, `tryModifyPowerAmountReceived`,
-turn-end-in-hand cards, intents incl. Summon/Heal/Sleep/Stun/Escape.
-Test per encounter: `STS_ENCOUNTER=<Id> SIM_FIGHTS=1 ./build/sim 4` and
-`SIM_ALLCARDS=1 ... ./build/sim 1 v` to see the mechanics fire; screenshot with the
-preview (creature art comes from `scenes/creature_visuals/<snake>.tscn`; if a monster
-has no scene or its skeleton resource differs, fix `build_assets.py`). Check HP and
-damage against C# (see the hpcheck idea in git history). If an animation name is
-unusual, extend the fallback in `App::trigger` (ui.cpp).
-Done when all listed encounters run in the sim without STUCK, render in the preview,
-and numbers match C#.
+| id | Package | Kind | Needs | Status |
+|---|---|---|---|---|
+| F0 | UI style guide `docs/UI_STYLE.md`: palette, font sizes per screen, margins, minimum touch target 32 px, button families, focus ring, animation timings, which sound each control makes. Mock three screens in the preview and get the owner's approval. | design, *Opus* | – | todo |
+| F1 | UI art extraction (`images/ui/**`, 255 files): buttons (proceed, confirm, cancel, back, end turn), panels, banners, tooltip frame, top bar, checkboxes, sliders, tabs, scrollbar, reward rows, shop tags, map legend, all intent and power icons, rarity gems, character energy orbs → a UI atlas | tools | F0 | todo |
+| F2 | Renderer features: 9-slice, tint and alpha, scale and rotation, scissor clipping for scroll lists, text outline and shadow, gradients and fades (SDL and 3DS) | gfx | – | todo |
+| F3 | Widget kit `source/ui/widgets.*`: Button (normal/focus/pressed/disabled, press animation), IconButton, Panel, ScrollList (drag, inertia, scrollbar), Grid, Tabs, Toggle, Slider, Paginator, Tooltip, Modal (confirm), Toast, Banner. One input model for touch and for D-pad/A/B/L/R with a focus ring. | UI, *Opus* | F1, F2 | todo |
+| F4 | Rich text: inline icons (energy per character, gold, star, HP), keyword colours, keyword glossary tooltips from `HoverTips`, `choose()` / plural formatters for all loc strings (fixes MadScience) | UI | F3 | todo |
+| F5 | Card renderer v2: faithful frames per type/rarity/character, portrait crop, cost gem (X, unplayable), type banner, green upgrade text, enchantment badge, affliction overlay. Three sizes: hand, large, grid mini. | UI, *Opus* | F1, F4 | todo |
+| F6 | Motion: screen transitions (fade/slide), card draw/discard/exhaust flights, damage/block numbers, power icon pop, relic flash, gold/HP counters that tick, screen shake (setting), button feedback | UI | F3 | todo |
+| F7 | Light VFX: hit sparks, slash, block shield, poison/burn ticks, heal, buff/debuff arrows, orb evoke (X3), stars (X4), Osty (X5). Cheap sprite effects only. | UI | F6 | todo |
 
-## 5. Act 2 events (content)
+### Track S: every screen rebuilt with the kit (RGDSplus U01-U33)
 
-Like package 1, file `source/core/events_act2.cpp`: Amalgamator, Bugslayer,
-ColorfulPhilosophers, ColossalFlower, FieldOfManSizedHoles, InfestedAutomaton,
-LostWisp, SpiritGrafter, TheLanternKey, ZenWeaver. (Until package 3 lands, test them
-with `STS_ROOM=Event STS_EVENT=<Id>`.)
+Each package: read the U row in `R4_ALL_PAGES` + `R4_LAYOUT_REVISION`, the matching
+StS2 node (`Nodes.Screens.*`), rebuild the screen with the F kit, take before/after
+screenshots of both screens, and tick the U table at the end of this file.
 
-## 6. Act 3 (Glory) monsters (content)
+| id | U | Screen | Needs | Status |
+|---|---|---|---|---|
+| S01 | U01 | Boot splash, loading, act transition title card ("第二幕 蜂巢") | F3 | todo |
+| S02 | U02 | Main menu: tall background across both screens, logo on top, buttons at 1.65× on the bottom (继续 / 单人 / 图鉴 / 统计 / 设置 / 退出), submenus | F3 | partial (native art, e2c9023) |
+| S03 | U03 | Profiles: 3 slots, rename (3DS software keyboard), delete + warning | Y4 | todo |
+| S04 | U04 | Character select: art and description on top; the 5 characters + Random, ascension, seed and start/back on the bottom; locked characters | F3, C10 | partial (Ironclad only) |
+| S05 | U05 | Custom run: modifier list, character, seed, confirm | M11 | todo |
+| S06 | U06 | Neow / Ancient dialogue and relic choice (polish only) | F4 | todo |
+| S07 | U07 | Map: legend, boss icon, path highlight, scroll bounds, top-screen preview, node pulse | F3 | todo |
+| S08 | U08/U10 | Combat HUD: hand fan, energy orb, piles with counts, end turn, HP/block bars, power icons, intents with numbers, turn banner | F5, F6 | todo |
+| S09 | U09/U12 | Targeting arrow and potion aim; enemy highlight | S08 | todo |
+| S10 | U11 | Combat inspect: a 信息 button, cycle through creatures, power list with descriptions on top | S08 | todo |
+| S11 | U13 | Draw, discard and exhaust piles and deck view: grid on the bottom, focused card on top, sort | F5 | partial (combat pile tabs) |
+| S12 | U14 | Hand select (discard/exhaust/retain N): counter, confirm/cancel | F5 | todo |
+| S13 | U15/U16 | Deck grid select (upgrade/remove/transform with preview) and choose-one | F5 | todo |
+| S14 | U17/U18 | **Reward list** (gold, potion, relic, card rows: claim or skip, then proceed) + card reward with skip / Singing Bowl | F5 | todo |
+| S15 | U19/U23 | Relic choice and treasure chest (chest opening, relic on top) | F3 | todo |
+| S16 | U20 | Shop: goods grid, price tags, sale, removal service, focused item on top | F5 | todo |
+| S17 | U21 | Events: art and text on top, large option buttons on the bottom, locked options shown with the reason | F4 | todo |
+| S18 | U22 | Rest site: campfire and character on top, option buttons with descriptions | F3 | todo |
+| S19 | U24 | Top bar: HP, gold, potion belt, relic strip with scroll, floor/act, run timer, deck/map buttons | F3 | todo |
+| S20 | U25 | Detail popups for card/relic/potion: large on top with keywords, controls (upgrade preview, close) on the bottom | F5 | partial (modal + keyword pages) |
+| S21 | U26 | Settings and pause menus (screens only; logic in Y1/Y2) | Y1 | partial (START page) |
+| S22 | U27 | Tutorials, confirmations, errors | M13 | todo |
+| S23 | U28 | Death / victory / unlock / timeline reveal: score, badges, continue | M7 | partial (summary, menu/restart) |
+| S24 | U29 | Compendium: cards, relics, potions, bestiary | M8-M10 | todo |
+| S25 | U30 | Stats and run history | M6 | todo |
+| S26 | U31 | Credits (scroll across both screens) | F3 | todo |
+| – | U32 | Daily run: offline only (M12); leaderboards n/a | – | n/a |
+| – | U33 | Unknown or mod pages | – | n/a |
 
-As package 4, files `content_act3a.cpp` / `content_act3b.cpp`.
-- 6a: AxebotsNormal, ConstructMenagerieNormal, DevotedSculptorWeak, FabricatorNormal,
-  FrogKnightNormal, GlobeHeadNormal, OwlMagistrateNormal, ScrollsOfBitingNormal,
-  ScrollsOfBitingWeak, SlimedBerserkerNormal, TheLostAndForgottenNormal,
-  TurretOperatorWeak.
-- 6b (engine likely): KnightsElite, MechaKnightElite, SoulNexusElite, QueenBoss,
-  TestSubjectBoss (423 lines of C#), AeonglassBoss.
+### Track X: the other four characters
 
-## 7. Act 3 events (content)
+Each character follows the same seven packages. The C# sources are
+`Models.Characters\<C>.cs`, `CardPools\<C>CardPool.cs`, `RelicPools\<C>RelicPool.cs`,
+the epoch that lists their potions (`Timeline.Epochs\<C>4Epoch.cs`), `Models.Cards\`
+and `Models.Powers\`.
 
-File `source/core/events_act3.cpp`: BattlewornDummy, GraveOfTheForgotten,
-HungryForMushrooms, Reflections, RoundTeaParty, Trial, TinkerTime.
+| Step | What it covers |
+|---|---|
+| 0 | Systems (*engine, Opus*) |
+| 1 | Starter deck and starting relic, the 8 character relics, the 3 potions, energy orb |
+| 2 | Common cards |
+| 3a | Uncommon cards, first half |
+| 3b | Uncommon cards, second half |
+| 4 | Rare cards, then tokens |
+| 5 | Visuals: Spine in combat, rest and shop; character select art; card frame colour; win/lose poses; `SIM_ALLCARDS` whole runs |
 
-## 8. Potions (engine + UI, Opus)
+| id | Character | Step 0 systems | Status |
+|---|---|---|---|
+| X1.0-X1.5 | Silent | Shiv tokens, Poison, discard triggers (Sly), Retain, Accuracy-style powers | todo |
+| X2.0-X2.5 | Defect | Orbs (Lightning, Frost, Dark, Plasma, Glass), channel/evoke, Focus, orb slots and their rendering on the top screen | todo |
+| X3.0-X3.5 | Regent | Stars (second resource with a HUD counter), Forge and Sovereign Blade, summons | todo |
+| X4.0-X4.5 | Necrobinder | Osty (companion creature with its own HP, targeting, death), Doom, Souls | todo |
+| X6 | All characters | ColorfulPhilosophers, cross-character Orobas options, per-character Ancient dialogue lines, Random character, per-character act-transition quotes | todo |
 
-C#: `Models\PotionModel.cs`, `Models.Potions\`, pools, `PotionCmd`, potion rewards
-(`RewardsSet.RollForPotionAndAddTo`, `PlayerOdds.PotionReward`), belt size.
-UI decision to confirm with the owner first: RGDSplus keeps potions in the top bar,
-used with the controller (U12); on the 3DS the top screen is not touchable, so
-propose e.g. a potion button on the combat bottom screen opening a potion list
-(detail on top). Includes potion rewards after fights and discarding.
+That is 7 packages per character (X*.0, .1, .2, .3a, .3b, .4, .5), X1-X4 in order. X6
+needs X1-X4. Every character needs track F done first, so their cards are drawn
+with the new renderer.
 
-## 9. Shop (merchant) (engine + UI)
+### Track M: meta and progression
 
-C#: `Rooms\MerchantRoom.cs`, `Entities.Merchant\` (inventory, prices, card removal
-service), `MerchantCost` of relics. Layout per RGDSplus U20: goods and prices on the
-bottom screen, the focused item and its text on top, buy = select then confirm.
-Replace the "商店（尚未实现）" placeholder in `Run::main`.
+| id | Package | Kind | Needs | Status |
+|---|---|---|---|---|
+| M1 | Profile save `progress.sav` (versioned, atomic write): per-character wins, losses, best streak, max ascension; seen/unlocked cards, relics, potions and monsters; counters for stats and achievements | engine, *Opus* | – | todo |
+| M2 | Run history store: the last 50 runs (seed, character, ascension, path, deck, relics, floor reached, killed by, time, score) | engine | M1 | todo |
+| M3 | Timeline / epochs engine: the 60 epochs (`Timeline.Epochs`, `UnlockState`), which cards, relics, potions, acts and characters each unlocks, and a 全部解锁 option in settings | engine, *Opus* | M1 | todo |
+| M4 | Timeline screen (`Nodes.Screens.Timeline`) + unlock reveal screens after a run | UI | M3, F3 | todo |
+| M5 | Achievements (22, `Achievements\`): checks, toast, achievement list page | content + UI | M1 | todo |
+| M6 | Stats screen: general and per-character stats (`Nodes.Screens.StatsScreen`) + run history viewer | UI | M2, F3 | todo |
+| M7 | Score and badges at the end of a run (28 badges, `Models.Badges`), used by S23 | content | M2 | todo |
+| M8 | Card library: filters by character, type and rarity; upgrade toggle; seen/locked | UI | M1, F5 | todo |
+| M9 | Relic collection + potion lab | UI | M1 | todo |
+| M10 | Bestiary: monster list, Spine viewer, moves | UI | M1 | todo |
+| M11 | Custom run: 16 modifiers (`Models.Modifiers`), seed entry with the 3DS keyboard, seeded runs | engine + UI | M1 | todo |
+| M12 | Daily run, offline: seed and modifiers from the date as in `Daily\`, local best score only | engine | M11 | todo |
+| M13 | Tutorials (`Nodes.Ftue`): first-run tips, reset from settings | UI | F3 | todo |
 
-## 10. Remaining relics (content)
+### Track Y: system
 
-Each `relics_*.cpp` ends with the relics that were skipped and why (potions, shop,
-card-reward hooks, death prevention, Thorns, ...). After 8 and 9, add the missing
-hooks and port them, plus the Shop-rarity relics (`relics_shop.cpp`).
+| id | Package | Kind | Needs | Status |
+|---|---|---|---|---|
+| Y1 | Settings store `settings.sav` + logic: fast mode, screen shake, BGM/SFX/ambience volume, language, run timer, text effects, long-press confirm, common tooltips, hand card count, reset tutorials, 全部解锁, delete data | engine | – | partial (fast mode, shake, abandon saved) |
+| Y2 | Pause menu (START during a run): resume, settings, deck, compendium, save & quit, abandon run (with confirm) | UI | Y1, F3 | todo |
+| Y3 | Languages: bake English + 简体中文 loc and fonts, switch at runtime | tools + UI | Y1 | todo |
+| Y4 | Profiles: 3 slots on SD, rename and delete; the run save and progress files are per profile | engine | M1 | todo |
+| Y5 | 3DS system behaviour: sleep when the lid is closed, HOME menu, safe saves on power loss, SD errors shown in a dialog | 3DS | – | todo |
 
-## 11. Ancients (content + UI) — a core StS2 feature, not optional
+### Track U: audio
 
-Every act starts with an Ancient: the first room of each act (map row 0) is an
-Ancient event that fully heals you and offers a choice of 3 Ancient-rarity relics
-(the StS2 replacement for StS1's Neow blessings). Act 1 is always Neow.
+| id | Package | Kind | Needs | Status |
+|---|---|---|---|---|
+| U1 | Extraction: FMOD `banks/desktop/*.bank` (FSB5) and `*.mp3` → OGG (Vorbis) in romfs, with a list of events and names; keep the size in budget | tools, *Opus* | – | todo |
+| U2 | Audio engine: 3DS ndsp streaming for music (tremor), mixer for SFX voices; SDL backend | platform | U1 | todo |
+| U3 | Music routing: title, each act's map and fights, elite, boss, shop, rest, Ancient, victory, death; crossfades | UI | U2 | todo |
+| U4 | SFX: cards, hits, block, buffs, gold, relics, potions and UI controls, mapped from the C# `SfxCmd` names | content | U2 | todo |
+| U5 | Ambience per room, and wiring the volume sliders | UI | U3, Y1 | todo |
 
-Map: `mapgen.cpp` already builds the StandardActMap starting point as
-`MPType::Ancient` but doesn't output it (see the header comment and line ~680).
-It must become a real node below row 1 that the run starts on, drawn with the
-ancient's map icon (`ActModel` map node asset paths / `_rooms.Ancient`).
+### Track H: hardware and release
 
-Sources (`../sts2-decompiled`):
-- `Models\AncientEventModel.cs`: `BeforeEventStarted` heals to full (Neow first
-  sets HP to 0 so the heal animates from empty; the WearyTraveler ascension heals
-  80%, ignore it); `GenerateInitialOptionsWrapper` + `Hook.ShouldAllowAncient`;
-  `RelicOption<T>` = obtain that relic; dialogue (`DefineDialogues`,
-  `Entities.Ancients\AncientDialogueSet.cs`: per-character lines by visit index;
-  keep only the text, no audio).
-- `Models.Events\Neow.cs` `GenerateInitialOptions`: 1 random curse option from
-  `CurseOptions` (filtered by `RelicModel.IsAllowedAtNeow`) + 2 from
-  `PositiveOptions`, with the exclusion pairs (CursedPearl↔GoldenPearl,
-  HeftyTablet↔ArcaneScroll, LeafyPoultice↔NewLeaf, PrecariousShears↔PreciseScissors,
-  NeowsSacrifice↔PhialHolster/LostCoffer) and the coin-flip extras (LavaRock or
-  SmallCapsule unless the curse is LargeCapsule; NutritiousOyster or
-  StoneHumidifier; NeowsTalisman; Pomander). Read the rest of that function for the
-  final pick. ~30 relics, all `RelicRarity.Ancient` in `Models.Relics\`.
-- Acts 2/3: `ActModel.cs:385` rolls `_rooms.Ancient` from `GetUnlockedAncients` +
-  the shared subset. Hive: Orobas (7 relics, cross-character options), Pael (10),
-  Tezcatara (10). Glory: Nonupeipe, Tanx, Vakuu (10 each). Shared: Darv
-  (`ModelDb.AllSharedAncients`; `RunManager.GenerateRooms` hands it to a random
-  later act via `Rng.UpFront`), offers relics from `_validRelicSets` + DustyTome.
-- UI: `Nodes.Events\NAncientEventLayout.cs` (portrait + name banner + dialogue
-  lines, then the relic choice). Follow RGDSplus' Neow page (U06, NEOW_SCREEN) for the layout;
-  ancient art is in the game's `event`/`ancients` resources (extend build_assets).
+| id | Package | Kind | Needs | Status |
+|---|---|---|---|---|
+| H1 | Performance on the New 3DS: frame time (Spine skinning, text layout, atlas binds), load times, hot spots | 3DS | – | todo |
+| H2 | Memory: a full run with each character on hardware and a sim soak (1000 runs per character), no leaks, linear memory within limits | 3DS | X* | todo |
+| H3 | Romfs budget with all characters and audio; texture and audio quality checks on the device | tools | U1, X* | todo |
+| H4 | Packaging: icon, banner (with its sound), title id, `.3dsx` + `.cia` builds | tools | – | todo |
+| H5 | Balance and bugs: compare numbers with the C# for every character (script), fix known PORT NOTEs | content | X* | todo |
+| H6 | Release checklist: every character wins a run on the device, every U page ticked, every package done, no PORT NOTE left without an n/a reason | QA | all | todo |
 
-Split:
-- **11a Neow** (act 1): map start node, heal, dialogue, Neow's option roll, the
-  Neow relics. Relics needing missing systems (potions: PhialHolster,
-  shop: ...) stay out of the pool with a PORT NOTE until 8/9 land. Can be done
-  now; touches `run.cpp` / `mapgen.cpp` / `ui.cpp`, so it runs alone.
-- **11b other Ancients**: Orobas, Pael, Tezcatara, Nonupeipe, Tanx, Vakuu, Darv
-  and their ~70 relics. Needs 3 (acts 2/3 exist). Content only after 11a, so the
-  relic files are parallel-safe (one file per ancient).
+---
 
-## 12. Saves (engine)
+## Order
 
-Save at the map screen (after each room): deck (ids + upgrades), relics (+ their
-counters), gold, HP, map + visited nodes, act, queues and every RNG's state. The
-simplest robust option is a seed + action log replay; decide with the owner.
-SD path `sdmc:/3ds/sts2-3ds/save.dat`.
+Each phase can start when the one before it is done. Within a phase the packages are
+listed in order.
 
-## 13. Texture compression (tools + 3DS gfx)
+1. **UI foundation:** F0 → F1 → F2 → F3 → F4 → F5 → F6.
+   Everything visible after this uses the kit, so no screen gets built twice.
+2. **The screens that exist today:** S14 (reward list), S08, S09, S10, S11, S12, S13,
+   S16, S17, S18, S19, S20, S06, S07, S15, then S01, S02, F7.
+3. **Ironclad content complete:** A1a-c, A2, A3a-c, A4, A5, A6, A7a-d, A8, A9, A10,
+   C10, C11, then A11a-f.
+4. **System:** Y1, Y2 + S21, Y5, Y3, M1, Y4 + S03.
+5. **Characters:** X1 (Silent), X2 (Defect), X3 (Regent), X4 (Necrobinder), then X6 + S04.
+6. **Meta:** M2, M3, M4, M5, M6, M7 + S23, M8, M9, M10 + S24, S25, M11 + S05, M12,
+   M13 + S22, S26.
+7. **Audio:** U1 → U5.
+8. **Release:** H1, H3, H2, H4, H5, H6.
 
-romfs is ~70 MB because every Spine page and the atlases are RGBA8. Add ETC1(A4)
-(`tex3ds`, devkitPro) or RGBA4444 for creature pages in `build_assets.py` and load
-them in `gfx_3ds.cpp` (the SDL preview can keep RGBA8 or decode). Check quality on
-the 3DS; target < 30 MB.
+Rough size: 23 content, 2 rules, 8 UI foundation, 26 screens, 29 character,
+13 meta, 5 system, 5 audio and 6 release packages, about **117 packages** in all.
 
-## 15. RGDSplus page audit (UI)
+## Decisions for the owner (defaults in bold)
 
-Go through `../rgds-ref/docs/R4_ALL_PAGES.zh-CN.md` row by row. For each U-page
-that exists in our game: note which screen shows what in RGDSplus, compare with
-ours (preview screenshot), fix the layout, and record the result in a table at the
-end of this file (U-id, our screen, status). Pages that do not exist in StS2 or are
-online-only (U32) are marked n/a. Show the owner before/after screenshots.
+- Unlocks: **port the timeline faithfully, with 全部解锁 in settings**, or everything
+  unlocked from the start.
+- Languages: **简体中文 + English**, or Chinese only.
+- Audio format: **OGG Vorbis** (small), or ADPCM (less CPU).
+- Old 3DS: **not supported** (New 3DS only).
 
-## 16. Title / main menu / character select (U01-U04)
+---
 
-U02: RGDSplus spans one tall background across both screens with the logo on top
-and the menu buttons enlarged (1.65x) on the bottom. Use StS2's main-menu art
-(`images/ui/main_menu/...`, search the pck). U04: character art and details on top,
-selection/start/back on the bottom (only the Ironclad is playable for now).
-Replaces the current placeholder title screen.
+## Porting cheat sheets
 
-## 17. Detail popups and pile views (U25, U13)
+### Events (C# → C++)
 
-U25: tapping a card anywhere (reward, deck, shop) opens it large on the top screen
-with its keywords explained; controls (upgrade preview toggle, close) on the bottom.
-Same for relics. U13: in combat, tapping the draw/discard piles lists them on the
-bottom with the focused card on top. First SDL pass: draw/discard/exhaust tabs,
-focused card, card/relic detail modal, upgrade preview and five card-keyword
-explanations from the localized text. Combat hand opens details on a second tap;
-the first tap previews it. Draw pile is sorted
-for display so its actual order is not revealed. Checked pile selection,
-upgrade toggle and return in SDL; relic detail, hand-card detail and reward-card
-detail previews also checked. A single screenshot of the keyword page is complete; repeated
-SDL readbacks in the same process intermittently omit layers, so use a fresh
-process for each reference capture until that preview-path issue is resolved.
-The incremental devkitARM build passes in the ASCII-path copy. Shop card detail
-opened without a purchase in SDL. Remaining source contexts, owner visual review
-and hardware remain.
+C#: `Models.Events\<Name>.cs`, base `Models\EventModel.cs`. Read the `AromaOfChaos`
+example in `events_act1.cpp` and the events section of `game.h`.
 
-## 18. Settings and end screens (U26, U28)
+| C# | C++ |
+|---|---|
+| `new EventOption(this, Fn, "K.pages.P.options.O")` | `option("P", "O", [this]{ return fn(); })` |
+| null action / `_LOCKED` | `EventOption{page("P") + ".options.O_LOCKED", nullptr}` |
+| `SetEventFinished(L10NLookup("K.pages.X.description"))` | `setFinished("X")` |
+| a new page | `setPage("X", {...})` |
+| `IsAllowed` | `isAllowed(Run&)` |
+| `CanonicalVars` / `CalculateVars` | `calculateVars()` with `addVar` / `setVar`, using the C# names |
+| `CardSelectCmd.FromDeck*` | `co_await run->selectFromDeck("card_selection.TO_X", filter, n [, canCancel, showUpgrade])` |
+| transform to random | `run->transformCard(c, run->randomTransformFor(c, rng()))` |
+| add / remove / upgrade a card | `run->addCardToDeck`, `removeCardFromDeck`, `c->upgrade()` |
+| gold | `co_await run->gainGold(n)` |
+| HP | `co_await run->loseHp(n)`, `gainMaxHp` / `loseMaxHp` |
+| obtain a relic | `co_await run->obtainRelic(db::relic("X"))` |
+| an event fight | `bool won = co_await run->eventFight("EncounterId");` |
 
-Settings page (fast mode, screen shake, volume when audio exists, abandon run),
-opened with START on the map; death/victory screens with run stats, per U28.
-First SDL pass: fast mode scales scheduler and visual animation time, shake
-controls hit displacement, volume is disabled until audio exists, and abandon
-requires confirmation then cancels suspended coroutines before returning to the
-title. The settings page and abandon → title → new-run path were previewed.
-In an isolated SDL save directory, toggling speed and shake wrote `v1 1 0`;
-after relaunch the settings page displayed both saved values. The final
-incremental devkitARM build passed in the ASCII-path copy.
-The end summary shows act/floor, HP, gold, deck and relic counts with menu/restart
-buttons. A natural first-floor defeat reached and previewed the death page.
-The headless sim won a full three-act run with `SIM_ALLCARDS=1 SIM_SEED=1`.
-In an isolated SDL run, `STS_ACT=3 STS_ROOM=Boss` with a forced weak encounter
-reached Victory and rendered its summary; B returned to the title, after which
-autoplay began a fresh run. The restart button also began a fresh fight. The
-actual final-boss UI flow and hardware remain
-unverified. The latest 3DSX was opened in Azahar at 60 FPS on the map screen.
+### Monsters
 
-## 19. Real-hardware performance pass
+For each encounter:
+- translate `Models.Encounters\<Id>.cs`, its monsters (`Models.Monsters\`) and any new
+  powers, in a new `content_*.cpp` registered from `db::init()`;
+- follow the style of `content_act1.cpp` (plain monsters), `content_phrog.cpp` (spawns and
+  stun) and `content_bosses.cpp` (minions and illusions);
+- the monster loc key is the UPPER_SNAKE form of the class name.
 
-Measure frame time on the New 3DS (Spine skinning, text layout, atlas binds),
-fix hot spots, check memory over a full three-act run.
+Test with `STS_ENCOUNTER=<Id> SIM_FIGHTS=1 ./build/sim 4` and take a preview
+screenshot. The art comes from `scenes/creature_visuals/<snake>.tscn`. If an
+animation name is unusual, extend the fallback in `App::trigger`.
 
-## 14. Other characters (later)
+### Characters (track X)
 
-Silent, Defect, Regent, Necrobinder: card pools, starter decks/relics, character
-select, energy orbs, orbs/Osty systems. Plan separately when acts 1-3 are complete.
+- The character's loc key is `characters.<UPPER>`.
+- Cards go in `content_<char>_*.cpp` with `CARD_HEADER`; the pool order must be the
+  order of the C# `CardPool` file, because the reward RNG depends on it.
+- The starting HP, gold, deck and relic come from `Models.Characters\<C>.cs`.
+- Character selection makes `Run::start` take a character id. Every place that
+  assumes the Ironclad (`IRONCLAD` Spine, the red card frame, the `_ironclad` icon
+  fallback, `Res` keeping only the IRONCLAD pages) must read it from the character
+  instead. X1.0 finds and fixes all of them.
 
-## U01-U33 page audit baseline (2026-09-27)
+---
 
-This is a route/code inventory against `../rgds-ref/docs/R4_ALL_PAGES.zh-CN.md`, not visual or hardware acceptance. `partial` means the route exists but its RGDSplus page requirements have not all been verified. `missing` means no dedicated page exists. Preview smoke screenshots exist for title, Ironclad selection, Neow, map, and combat; the U02/U04 after images are `build/title-new.png` and `build/character-new.png` (ignored local artifacts). Keep package 15 `todo` until each applicable page has before/after screenshots, interaction checks, and the owner's review.
+## RGDSplus page table (U01-U33)
 
-| ID | Our route | Status | Next check or gap |
-| --- | --- | --- | --- |
-| U01 | Title | partial | Startup/logo and act transition presentation |
-| U02 | Title | partial | Native tower/logo art and continuous preview checked; new-game selection and continue/load checked in an isolated save directory; hardware review remains |
-| U03 | None | missing | Profile slots, naming, delete flow |
-| U04 | Title/Character | partial | Ironclad selection and back/start preview checked; seed, ascension and other characters remain |
-| U05 | None | missing | Custom run setup |
-| U06 | Event/Ancient | partial | All dialogue and choice phases; screenshot captured for Neow |
-| U07 | Map | partial | Vertical gesture threshold now matches vertical-only scrolling; physical drag/tap, legal-path selection, scroll limits, two-screen continuity and owner review remain |
-| U08 | Combat | partial | Full hand and late-act layouts |
-| U09 | Combat | partial | Targeting/cancel flows and physical touch feel |
-| U10 | Combat | partial | Animation and effect layers |
-| U11 | None | missing | Dedicated combat inspection view |
-| U12 | Potion overlay | partial | Use, discard, replace and targeting |
-| U13 | Deck/pile overlay | partial | Draw/discard/exhaust tabs and focused preview implemented in SDL; interaction/layout and hardware review remain |
-| U14 | DeckChoice overlay | partial | Multi-pick and forced choice input |
-| U15 | RestUpgrade/DeckChoice | partial | Upgrade, removal and transform preview flows |
-| U16 | DeckChoice overlay | partial | Choose-one card flow |
-| U17 | Reward | partial | Full reward list and continue flow |
-| U18 | Reward | partial | Select, skip and variable reward counts |
-| U19 | RelicOffer | partial | Relic detail, take/skip and chest variants |
-| U20 | Shop | partial | Card/relic/potion focus and purchase result |
-| U21 | Event | partial | Multi-option and special-event layout |
-| U22 | Rest | partial | Extra relic actions and confirm/leave |
-| U23 | RelicOffer | partial | Chest opening and variant flows |
-| U24 | Top bar/overlays | partial | Focus, opening and returning to source page |
-| U25 | Card/relic detail overlay | partial | Modal, upgrade preview and five card-keyword pages in SDL; shop card detail checked, remaining contexts and hardware review remain |
-| U26 | Settings overlay | partial | Map START page, speed/shake and confirmed abandon previewed; isolated SDL save/reload verified, hardware review remains |
-| U27 | None | missing | Tutorials, confirmation and error pages |
-| U28 | GameOver/Victory | partial | Stats and menu/restart added; natural defeat and debug-forced victory previewed; actual final-boss and hardware review remain |
-| U29 | None | missing | Compendium pages |
-| U30 | None | missing | Stats and run history |
-| U31 | None | missing | Credits and update notes |
-| U32 | None | n/a for offline milestone | Online/daily/leaderboard features require separate scope |
-| U33 | Placeholder | partial | Unknown room and error fallback |
+| U | Our screen | Package | Status |
+|---|---|---|---|
+| U01 | Boot, act transition | S01 | todo |
+| U02 | Main menu | S02 | partial |
+| U03 | Profiles | S03 | todo |
+| U04 | Character select | S04 | partial (Ironclad) |
+| U05 | Custom run | S05 | todo |
+| U06 | Neow / Ancients | S06 | works, polish in S06 |
+| U07 | Map | S07 | works, polish in S07 |
+| U08 | Combat layout | S08 | works, polish in S08 |
+| U09 | Drag targeting | S09 | works |
+| U10 | Creatures on top | S08 | works |
+| U11 | Combat inspect | S10 | missing |
+| U12 | Potions | S09 | works |
+| U13 | Pile / deck views | S11 | partial (combat tabs in SDL) |
+| U14 | Hand select | S12 | works, polish |
+| U15 | Deck grid select | S13 | works |
+| U16 | Choose one | S13 | works |
+| U17 | Reward list | S14 | missing (sequential popups today) |
+| U18 | Card reward | S14 | works |
+| U19 | Relic choice | S15 | works |
+| U20 | Shop | S16 | works |
+| U21 | Events | S17 | works |
+| U22 | Rest site | S18 | works |
+| U23 | Treasure | S15 | works |
+| U24 | Top bar | S19 | partial |
+| U25 | Detail popups | S20 | partial (modal, keywords) |
+| U26 | Settings | S21 | partial (START page) |
+| U27 | Tutorials / dialogs | S22 | missing |
+| U28 | Death / victory | S23 | partial (summary) |
+| U29 | Compendium | S24 | missing |
+| U30 | Stats / history | S25 | missing |
+| U31 | Credits | S26 | missing |
+| U32 | Daily / leaderboards | M12 | offline daily only; leaderboards n/a |
+| U33 | Unknown pages | – | n/a |
