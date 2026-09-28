@@ -4,11 +4,14 @@
 // Commands/PotionCmd.cs, Factories/PotionFactory.cs, Odds/PotionRewardOdds.cs.
 //
 // Not registered (so never rolled): ColorlessPotion (no colorless card pool yet).
-// Other characters' pools (Silent, Defect, Necrobinder, Regent) are not ported.
+// Other characters' pools (Silent, Defect, Regent) are not ported. The Necrobinder's 3
+// (PotionOfDoom, PotOfGhouls, BoneBrew; X4.1) are below, using char_necrobinder.h's DoomPower /
+// createSoulsInHand / summonOsty.
 #include <algorithm>
 #include <cstdlib>
 
 #include "cards.h"
+#include "char_necrobinder.h"
 
 namespace sts {
 
@@ -517,6 +520,26 @@ struct WeakPotion : PotionBase {
   Task<> onUse(Creature* t) override { co_await apply<WeakPower>(t, val("WeakPower")); }
 };
 
+// ---- Necrobinder's potions (X4.1), NecrobinderPotionPool / Necrobinder4Epoch.Potions. ----
+
+// PotionOfDoom.cs: apply 33 Doom to a target enemy.
+struct PotionOfDoom : PotionBase {
+  POTION_HEADER(PotionOfDoom, "POTION_OF_DOOM", Common, CombatOnly, AnyEnemy) addVar("DoomPower", 33); }
+  Task<> onUse(Creature* t) override { co_await apply<DoomPower>(t, val("DoomPower")); }
+};
+
+// PotOfGhouls.cs: add 2 Soul cards to hand.
+struct PotOfGhouls : PotionBase {
+  POTION_HEADER(PotOfGhouls, "POT_OF_GHOULS", Rare, CombatOnly, Self) addVar("Cards", 2); }
+  Task<> onUse(Creature*) override { co_await createSoulsInHand(c(), val("Cards").toInt()); }
+};
+
+// BoneBrew.cs: summon Osty with 15 HP (or raise his max HP by that if already alive).
+struct BoneBrew : PotionBase {
+  POTION_HEADER(BoneBrew, "BONE_BREW", Uncommon, CombatOnly, Self) addVar("Summon", 15); }
+  Task<> onUse(Creature*) override { co_await summonOsty(c(), val("Summon").toInt()); }
+};
+
 std::map<std::string, PotionFactoryFn>& potionReg() {
   static std::map<std::string, PotionFactoryFn> m;
   return m;
@@ -617,6 +640,9 @@ void registerPotions() {
   registerPotionType<VulnerablePotion>();
   registerPotionType<WeakPotion>();
   registerPotionType<PotionShapedRock>();
+  registerPotionType<PotionOfDoom>();
+  registerPotionType<PotOfGhouls>();
+  registerPotionType<BoneBrew>();
 }
 
 // ================================================================ belt, PotionCmd, rewards
