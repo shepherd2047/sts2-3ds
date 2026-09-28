@@ -175,6 +175,7 @@ struct PollinousCore : Relic {
     addVar("Turns", 4);
   }
   int turnsSeen = 0;
+  void persist(Archive& a) override { a.io(turnsSeen); }  // [SavedProperty]
   bool showCounter() const override { return true; }
   int displayAmount() const override { return turnsSeen; }
   Task<> beforeHandDraw() override {

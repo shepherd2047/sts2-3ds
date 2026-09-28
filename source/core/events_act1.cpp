@@ -104,6 +104,7 @@ struct SwordOfStone : Relic {
     addVar("Elites", 5);
   }
   int elitesDefeated = 0;
+  void persist(Archive& a) override { a.io(elitesDefeated); }  // [SavedProperty]
   bool showCounter() const override { return true; }
   int displayAmount() const override { return elitesDefeated; }
   Task<> afterCombatVictory() override {

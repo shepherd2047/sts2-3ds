@@ -88,6 +88,7 @@ struct BoneTea : Relic {
     addVar("Combats", 1);
   }
   int combatsLeft = 1;
+  void persist(Archive& a) override { a.io(combatsLeft); }  // [SavedProperty]
   bool showCounter() const override { return false; }
   int displayAmount() const override { return std::max(0, combatsLeft); }
   Task<> afterPlayerTurnStart() override {
@@ -106,6 +107,7 @@ struct EmberTea : Relic {
     addVar("StrengthPower", 2);
   }
   int combatsLeft = 5;
+  void persist(Archive& a) override { a.io(combatsLeft); }  // [SavedProperty]
   bool showCounter() const override { return true; }
   int displayAmount() const override { return std::max(0, combatsLeft); }
   Task<> afterRoomEntered(RoomType room) override {
@@ -125,6 +127,7 @@ struct TeaOfDiscourtesy : Relic {
     addVar("DazedCount", 2);
   }
   int combatsLeft = 1;
+  void persist(Archive& a) override { a.io(combatsLeft); }  // [SavedProperty]
   bool showCounter() const override { return false; }
   Task<> beforeCombatStart() override {
     if (usedUp || !combat) co_return;

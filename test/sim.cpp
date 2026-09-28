@@ -89,6 +89,7 @@ int main(int argc, char** argv) {
         keep.push_back(std::make_unique<Run>());
         Run* next = keep.back().get();
         if (!next->load(pendingSave)) { printf("LOAD FAILED\n"); return 1; }
+        next->freeMap = cur->freeMap;  // Run::start (called by load) resets the debug toggle
         next->onSavePoint = hook;
         cur = next;
         if (getenv("SIM_FIGHTS")) printf("  -- loaded at floor %d\n", cur->floor);
