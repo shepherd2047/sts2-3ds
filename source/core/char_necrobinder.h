@@ -68,10 +68,19 @@ struct NecroMasteryPower : Power {
   Task<> afterCurrentHpChanged(Creature* creature, Dec delta) override;
 };
 
+// SummonNextTurnPower (SummonNextTurnPower.cs): at the start of next turn, summons Osty for
+// `Amount` HP (or raises his max HP, summonOsty handles both), then removes itself. Invoke
+// (X4.2) is its only user. Counter stack, Buff type (Power defaults), matching the C#.
+struct SummonNextTurnPower : Power {
+  POWER_HEADER(SummonNextTurnPower, "SUMMON_NEXT_TURN_POWER")
+  Task<> afterPlayerTurnStart() override;
+};
+
 // Soul.CreateInHand: new Soul cards (Exhaust, draws `Cards`) joining the hand.
 Task<std::vector<Card*>> createSoulsInHand(Combat& c, int count);
 // Soul.Create + CardPilePosition.Random: a single Soul card inserted at a random spot in the
-// draw pile (used by SoulboundPower).
-Task<Card*> addSoulToDrawPileRandom(Combat& c);
+// draw pile (used by SoulboundPower). `upgraded` pre-upgrades the card before it enters combat
+// (Reave, X4.2: CardCmd.Upgrade happens before AddGeneratedCardsToCombat in the C#).
+Task<Card*> addSoulToDrawPileRandom(Combat& c, bool upgraded = false);
 
 }  // namespace sts

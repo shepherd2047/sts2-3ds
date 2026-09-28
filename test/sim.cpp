@@ -296,7 +296,10 @@ int main(int argc, char** argv) {
   }
   if (getenv("SIM_ALLCARDS")) {
     int never = 0;
-    for (auto& id : db::ironcladPool())
+    // PORT NOTE (X4.2): this used to hardcode db::ironcladPool(), so SIM_CHAR=<other> runs never
+    // reported anything here even though their cards were in the deck and did get played. Use the
+    // same character id the deck was built from (line ~26).
+    for (auto& id : db::character(getenv("SIM_CHAR") ? getenv("SIM_CHAR") : "Ironclad").cardPool)
       for (const char* sfx : {"", "+"})
         if (!played.count(id + sfx)) { printf("never played: %s%s\n", id.c_str(), sfx); ++never; }
     printf("distinct cards played: %zu, never played: %d\n", played.size(), never);

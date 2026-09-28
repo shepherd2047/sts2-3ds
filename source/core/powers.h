@@ -125,6 +125,17 @@ struct TerritorialPower : Power {
   }
 };
 
+// EnergyNextTurnPower.cs: grants Amount energy at the start of next turn (AfterEnergyReset), then
+// removes itself. Shared by an Ancients effect (ancients_later.cpp) and Necrobinder's Invoke
+// (char_necrobinder_cards.cpp: X4.2) -- moved here so both register the same id once.
+struct EnergyNextTurnPower : Power {
+  POWER_HEADER(EnergyNextTurnPower, "ENERGY_NEXT_TURN_POWER")
+  Task<> afterEnergyReset() override {
+    co_await cmd::gainEnergy(*owner->combat, amount);
+    co_await cmd::removePower(this);
+  }
+};
+
 // TemporaryStrengthPower (via SetupStrikePower).
 struct SetupStrikePower : Power {
   POWER_HEADER(SetupStrikePower, "TEMPORARY_STRENGTH_POWER")

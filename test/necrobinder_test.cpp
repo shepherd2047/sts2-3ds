@@ -81,6 +81,23 @@ struct Fight {
   template <class P> void apply(Creature* t, int amount) {
     runTask([](Creature* t, int amount, Creature* by) -> Task<> { co_await applyPower<P>(t, amount, by, nullptr); }(t, amount, c->player));
   }
+  // Like play(), but answers a cmd::selectCards prompt raised mid-play (Graveblast, SculptingStrike,
+  // Snap: X4.2) by picking c->choice.options[pickIndex], or cancelling (empty pick) if out of range.
+  void playPick(Card* k, Creature* t, int pickIndex) {
+    PlayerAction a;
+    a.kind = PlayerAction::PlayCard;
+    a.card = k;
+    a.target = t;
+    c->energy = 10;
+    c->actions.fire(a);
+    pump([&] { return (c->playerPhase && c->actions.waiting()) || (c->choice.active && c->choice.result.waiting()); });
+    if (c->choice.active && c->choice.result.waiting()) {
+      std::vector<Card*> pick;
+      if (pickIndex >= 0 && pickIndex < (int)c->choice.options.size()) pick = {c->choice.options[pickIndex]};
+      c->choice.result.fire(pick);
+      pump([&] { return c->playerPhase && c->actions.waiting(); });
+    }
+  }
 };
 
 int main() {
@@ -356,6 +373,227 @@ int main() {
     brew->combat = f.c;
     runTask([](Potion* p) -> Task<> { co_await p->onUse(nullptr); }(brew.get()));
     CHECK(f.c->osty->hp == ostyHpBefore + 15);
+  }
+
+  // ---------------------------------------------------------------- X4.2: the Common card pool
+  // (char_necrobinder_cards.cpp). Every Necrobinder fight already has Osty alive at 1 HP
+  // (BoundPhylactery), so tests that don't care about him leave it as-is.
+
+  {  // BlightStrike: Strike, deals Damage, then applies Doom equal to the damage actually dealt.
+    Fight f("Necrobinder");
+    Card* card = f.c->addCard(db::card("BlightStrike"));
+    f.c->hand.push_back(card);
+    CHECK((card->tags & tagStrike) && card->val("Damage").toInt() == 8);
+    Creature* e = f.enemy(0);
+    int hp0 = e->hp;
+    f.play(card, e);
+    CHECK(hp0 - e->hp == 8);
+    CHECK(e->get<DoomPower>() && e->powerAmount<DoomPower>() == 8);
+    card->upgrade();
+    CHECK(card->val("Damage").toInt() == 10);
+  }
+  {  // Defy: Ethereal, Block + Weak on the target.
+    Fight f("Necrobinder");
+    Card* card = f.c->addCard(db::card("Defy"));
+    f.c->hand.push_back(card);
+    CHECK(card->has(kwEthereal));
+    f.c->player->block = 0;
+    f.play(card, f.enemy(0));
+    CHECK(f.c->player->block == 6);
+    CHECK(f.enemy(0)->get<WeakPower>() && f.enemy(0)->powerAmount<WeakPower>() == 1);
+  }
+  {  // DrainPower: damage, then upgrades Cards (2) random upgradable cards from the discard pile.
+    Fight f("Necrobinder");
+    Card* d1 = f.c->addCard(db::card("Defile"));
+    Card* d2 = f.c->addCard(db::card("Reap"));
+    f.c->discard.push_back(d1);
+    f.c->discard.push_back(d2);
+    Card* card = f.c->addCard(db::card("DrainPower"));
+    f.c->hand.push_back(card);
+    int hp0 = f.enemy(0)->hp;
+    f.play(card, f.enemy(0));
+    CHECK(hp0 - f.enemy(0)->hp == 10);
+    CHECK(d1->upgraded() && d2->upgraded());  // only 2 candidates, Cards == 2: both taken
+  }
+  {  // Fear: Ethereal, damage + Vulnerable.
+    Fight f("Necrobinder");
+    Card* card = f.c->addCard(db::card("Fear"));
+    f.c->hand.push_back(card);
+    int hp0 = f.enemy(0)->hp;
+    f.play(card, f.enemy(0));
+    CHECK(hp0 - f.enemy(0)->hp == 7);
+    CHECK(f.enemy(0)->get<VulnerablePower>() && f.enemy(0)->powerAmount<VulnerablePower>() == 1);
+  }
+  {  // Flatten: OstyAttack; costs 0 for the rest of the turn once Osty has landed an attack this
+     // turn (from any source, not just Flatten itself), reset at the next turn.
+    Fight f("Necrobinder");
+    Card* card = f.c->addCard(db::card("Flatten"));
+    f.c->hand.push_back(card);
+    CHECK(card->costWithLocalMods() == 2);
+    runTask(doAttack(f.c, f.c->osty, f.enemy(0), Dec(3)));
+    CHECK(card->costWithLocalMods() == 0);
+    f.endTurn();
+    CHECK(card->costWithLocalMods() == 2);
+  }
+  {  // GraveWarden: Block + a Soul into a random spot in the draw pile.
+    Fight f("Necrobinder");
+    Card* card = f.c->addCard(db::card("GraveWarden"));
+    f.c->hand.push_back(card);
+    f.c->player->block = 0;
+    size_t drawBefore = f.c->draw.size();
+    f.play(card, nullptr);
+    CHECK(f.c->player->block == 8);
+    int souls = 0;
+    for (Card* k : f.c->draw) if (k->id == "Soul") ++souls;
+    CHECK(f.c->draw.size() == drawBefore + 1 && souls == 1);
+  }
+  {  // Graveblast: Exhaust, damage, then look at the discard pile and add a card to hand.
+    Fight f("Necrobinder");
+    Card* other = f.c->addCard(db::card("Reap"));
+    f.c->discard.push_back(other);
+    Card* card = f.c->addCard(db::card("Graveblast"));
+    f.c->hand.push_back(card);
+    CHECK(card->has(kwExhaust));
+    int hp0 = f.enemy(0)->hp;
+    f.playPick(card, f.enemy(0), 0);
+    CHECK(hp0 - f.enemy(0)->hp == 4);
+    CHECK(f.c->pileOf(card) == Pile::Exhaust);
+    CHECK(f.c->pileOf(other) == Pile::Hand);
+  }
+  {  // Invoke: next turn, grows Osty's max HP by Summon and grants Energy energy.
+    Fight f("Necrobinder");
+    f.c->player->block = 999;  // keep the Nibbits off Osty so only Invoke/Phylactery growth shows
+    Card* card = f.c->addCard(db::card("Invoke"));
+    f.c->hand.push_back(card);
+    int ostyHp0 = f.c->osty->hp;
+    f.play(card, nullptr);
+    CHECK(f.c->osty->hp == ostyHp0);  // not yet -- next turn
+    f.endTurn();
+    // BoundPhylactery also grows Osty by 1 every turn after the first: +1 (Phylactery) + 2 (Invoke).
+    CHECK(f.c->osty->hp == ostyHp0 + 3);
+    CHECK(f.c->energy == f.c->maxEnergyNow() + 2);
+  }
+  {  // NegativePulse: Block + Doom on every hittable enemy.
+    Fight f("Necrobinder");
+    Card* card = f.c->addCard(db::card("NegativePulse"));
+    f.c->hand.push_back(card);
+    f.c->player->block = 0;
+    f.play(card, nullptr);
+    CHECK(f.c->player->block == 5);
+    CHECK(f.enemy(0)->get<DoomPower>() && f.enemy(0)->powerAmount<DoomPower>() == 7);
+    CHECK(f.enemy(1)->get<DoomPower>() && f.enemy(1)->powerAmount<DoomPower>() == 7);
+  }
+  {  // Poke: 0 cost OstyAttack; a dead Osty makes it a no-op (like Unleash).
+    Fight f("Necrobinder");
+    Card* card = f.c->addCard(db::card("Poke"));
+    f.c->hand.push_back(card);
+    CHECK(card->cost == 0 && (card->tags & tagOstyAttack));
+    int hp0 = f.enemy(0)->hp;
+    f.play(card, f.enemy(0));
+    CHECK(hp0 - f.enemy(0)->hp == 6);
+    runTask(dealDamage(f.c->osty, Dec(999), kUnblockable | kUnpowered, nullptr));
+    CHECK(f.c->osty->dead());
+    Card* card2 = f.c->addCard(db::card("Poke"));
+    f.c->hand.push_back(card2);
+    int hp1 = f.enemy(0)->hp;
+    f.play(card2, f.enemy(0));
+    CHECK(hp1 == f.enemy(0)->hp);
+  }
+  {  // PullAggro: grows Osty's max HP by Summon, gains Block.
+    Fight f("Necrobinder");
+    Card* card = f.c->addCard(db::card("PullAggro"));
+    f.c->hand.push_back(card);
+    f.c->player->block = 0;
+    int ostyHp0 = f.c->osty->hp;
+    f.play(card, nullptr);
+    CHECK(f.c->osty->hp == ostyHp0 + 4);
+    CHECK(f.c->player->block == 7);
+  }
+  {  // Reap: Retain, plain high damage.
+    Fight f("Necrobinder");
+    Card* card = f.c->addCard(db::card("Reap"));
+    f.c->hand.push_back(card);
+    CHECK(card->has(kwRetain));
+    int hp0 = f.enemy(0)->hp;
+    f.play(card, f.enemy(0));
+    CHECK(hp0 - f.enemy(0)->hp == 27);
+  }
+  {  // Reave: damage, then a Soul into the draw pile -- pre-upgraded if Reave itself is upgraded.
+    Fight f("Necrobinder");
+    Card* card = f.c->addCard(db::card("Reave"));
+    card->upgrade();
+    f.c->hand.push_back(card);
+    int hp0 = f.enemy(0)->hp;
+    f.play(card, f.enemy(0));
+    CHECK(hp0 - f.enemy(0)->hp == 13);  // 10 + 3 upgraded
+    Card* soul = nullptr;
+    for (Card* k : f.c->draw) if (k->id == "Soul") soul = k;
+    CHECK(soul && soul->upgraded());
+  }
+  {  // Scourge: Doom on the target, draw Cards cards.
+    Fight f("Necrobinder");
+    Card* card = f.c->addCard(db::card("Scourge"));
+    f.c->hand.push_back(card);
+    size_t handBefore = f.c->hand.size();
+    f.play(card, f.enemy(0));
+    CHECK(f.enemy(0)->get<DoomPower>() && f.enemy(0)->powerAmount<DoomPower>() == 13);
+    CHECK(f.c->hand.size() == handBefore - 1 /*played*/ + 1 /*drawn*/);
+  }
+  {  // SculptingStrike: Strike, damage, then Ethereal on a card in hand that lacked it.
+    Fight f("Necrobinder");
+    Card* card = f.c->addCard(db::card("SculptingStrike"));
+    f.c->hand.push_back(card);
+    CHECK(card->tags & tagStrike);
+    int etherealBefore = 0;
+    for (Card* k : f.c->hand) if (k->has(kwEthereal)) ++etherealBefore;
+    int hp0 = f.enemy(0)->hp;
+    f.playPick(card, f.enemy(0), 0);
+    CHECK(hp0 - f.enemy(0)->hp == 9);
+    int etherealAfter = 0;
+    for (Card* k : f.c->hand) if (k->has(kwEthereal)) ++etherealAfter;
+    CHECK(etherealAfter == etherealBefore + 1);
+  }
+  {  // Snap: OstyAttack, damage, then Retain on a card in hand that lacked it.
+    Fight f("Necrobinder");
+    Card* card = f.c->addCard(db::card("Snap"));
+    f.c->hand.push_back(card);
+    CHECK(card->tags & tagOstyAttack);
+    int retainBefore = 0;
+    for (Card* k : f.c->hand) if (k->has(kwRetain)) ++retainBefore;
+    int hp0 = f.enemy(0)->hp;
+    f.playPick(card, f.enemy(0), 0);
+    CHECK(hp0 - f.enemy(0)->hp == 7);
+    int retainAfter = 0;
+    for (Card* k : f.c->hand) if (k->has(kwRetain)) ++retainAfter;
+    CHECK(retainAfter == retainBefore + 1);
+  }
+  {  // Sow: Retain, damage to all enemies.
+    Fight f("Necrobinder");
+    Card* card = f.c->addCard(db::card("Sow"));
+    f.c->hand.push_back(card);
+    CHECK(card->has(kwRetain));
+    int hp0 = f.enemy(0)->hp, hp1 = f.enemy(1)->hp;
+    f.play(card, nullptr);
+    CHECK(hp0 - f.enemy(0)->hp == 8 && hp1 - f.enemy(1)->hp == 8);
+  }
+  {  // Wisp: 0 cost Exhaust, gain Energy; upgrading adds Retain instead of changing the numbers.
+    Fight f("Necrobinder");
+    Card* card = f.c->addCard(db::card("Wisp"));
+    f.c->hand.push_back(card);
+    CHECK(card->cost == 0 && card->has(kwExhaust));
+    f.play(card, nullptr);  // Fight::play sets energy to 10 before playing (see IvoryTile's test)
+    CHECK(f.c->energy == 10 - 0 + 1);
+    card->upgrade();
+    CHECK(card->has(kwRetain));
+  }
+  {  // Afterlife: Exhaust, grows Osty's max HP by Summon (or raises it further, as summonOsty does).
+    Fight f("Necrobinder");
+    Card* card = f.c->addCard(db::card("Afterlife"));
+    f.c->hand.push_back(card);
+    CHECK(card->has(kwExhaust));
+    int ostyHp0 = f.c->osty->hp;
+    f.play(card, nullptr);
+    CHECK(f.c->osty->hp == ostyHp0 + 6);
   }
 
   printf("%d checks, %d failed\n", checks, failures);

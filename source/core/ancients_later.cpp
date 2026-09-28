@@ -79,13 +79,7 @@ struct DrawCardsNextTurnPower : Power {
   }
 };
 
-struct EnergyNextTurnPower : Power {
-  POWER_HEADER(EnergyNextTurnPower, "ENERGY_NEXT_TURN_POWER")
-  Task<> afterEnergyReset() override {
-    co_await cmd::gainEnergy(*owner->combat, amount);
-    co_await cmd::removePower(this);
-  }
-};
+// EnergyNextTurnPower moved to powers.h (shared with Necrobinder's Invoke, X4.2).
 
 // ================================================================ cards
 
