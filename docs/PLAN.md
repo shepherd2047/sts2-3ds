@@ -355,12 +355,12 @@ listed in order.
    Everything visible after this uses the kit, so no screen gets built twice.
 2. **The screens that exist today:** S14 (reward list), S08, S09, S10, S11, S12, S13,
    S16, S17, S18, S19, S20, S06, S07, S15, then S01, S02, F7.
-3. **Ironclad content complete:** A1a-c, A2, A3a-c, A4, A5, A6, A7a-d, A8, A9, A10,
-   C10, C11, then A11a-f.
+3. **Ironclad content complete:** A1a-c, A2, A3a-c, A5, A6, A7a-d, A8, A9, A10,
+   C10, C11, then A11a-f. (A4 afflictions moves to the end of phase 6.)
 4. **System:** Y1, Y2 + S21, Y5, Y3, M1, Y4 + S03.
 5. **Characters:** X1 (Silent), X2 (Defect), X3 (Regent), X4 (Necrobinder), then X6 + S04.
 6. **Meta:** M2, M5, M6, M7 + S23, M8, M9, M10 + S24, S25, M11 + S05, M12,
-   M13 + S22, S26.
+   M13 + S22, S26, then A4.
 7. **Audio:** U1 → U5.
 8. **Release:** H1, H3, H2, H4, H5, H6.
 
@@ -377,9 +377,32 @@ same PC (`git worktree add ../sts2-3ds-<lane> main`), with its own `build/`. Cop
 | Lane | Model | Packages | Owns |
 |---|---|---|---|
 | **UI** | Opus | F0-F7, then S01-S26, X*.5 (character visuals), M6/M8-M10 screens, Y2 | `source/ui/**`, `source/gfx/**`, `source/platform_*/gfx*`, UI parts of `build_assets.py` |
-| **Engine** | Opus | A3a, A4, C10, X1.0, X2.0, X3.0, X4.0 first (they unblock the other lanes), then A10, A11f, C11, M1, M2, Y1, Y4, Y5, M11, M12, X6, H* | `game.h`, `combat.cpp`, `run.cpp`, `save.cpp`, `mapgen.cpp`, `acts.cpp` |
+| **Engine** | Opus | see *Engine lane order* below | `game.h`, `combat.cpp`, `run.cpp`, `save.cpp`, `mapgen.cpp`, `acts.cpp` |
 | **Content** | Sonnet | A1a-c, A2, A3b-c, A5-A9, A11a-e, M5, M7, then X*.1-X*.4 for each character after its X*.0 | new `content_*.cpp` / `relics_*.cpp` / `events_*.cpp` files, one registration line each |
 | **Audio** | Sonnet (U1: Opus) | U1-U5, then H4 | `source/audio/**`, `source/platform_*/audio*`, `tools/audio*.py` |
+
+**Engine lane order** (owner, 2026-09-28: afflictions last):
+
+| # | Package | Why this position |
+|---|---|---|
+| 1 | X1.0 Silent systems + character plumbing | Unblocks the content lane's biggest job (character cards); removes the Ironclad-only assumptions for everyone. |
+| 2 | Y5 3DS system behaviour | Small; makes real-hardware play safe (lid, HOME, power loss). |
+| 3 | C10 Ascension | Before the content lane ports the Underdocks monsters, so they are written with their ascension values and need no second sweep. |
+| 4 | X2.0 Defect systems (orbs) | The hardest character system; the content lane moves on to Defect cards. |
+| 5 | M1 Profile / progress save | Unblocks achievements (M5) and the UI lane's compendium and stats screens. |
+| 6 | Y1 Settings store | Builds on the existing START page; unblocks S21 and Y3. |
+| 7 | X3.0 Regent systems | Unblocks the Regent cards. |
+| 8 | X4.0 Necrobinder systems | Unblocks the Necrobinder cards. |
+| 9 | A10 TheArchitect ending | Completes the run structure. |
+| 10 | A11f Underdocks as act 1 | Once A11a-e are done; skip it until then. |
+| 11 | C11 Map extras | Needs C10. |
+| 12 | Y4 Profiles | Needs M1. |
+| 13 | M2 Run history | Needs M1. |
+| 14 | M11 Custom run | – |
+| 15 | M12 Daily run | Needs M11. |
+| 16 | X6 Cross-character content | Needs all X*.1-X*.4. |
+| 17 | A4 Afflictions | Last, by the owner's decision. The act 2/3 approximations stay until then. |
+| 18 | H* | Release packages. |
 
 Waiting points: content A3b needs A3a, and X*.1 needs X*.0. The engine lane does those
 first, so content never waits. The UI lane stubs anything that does not exist yet (the
