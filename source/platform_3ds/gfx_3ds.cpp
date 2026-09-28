@@ -226,6 +226,7 @@ void beginFrame() {
 
 void screen(Screen s, uint32_t clear) {
   flushMesh();
+  detail::resetState();
   current = s;
   C2D_TargetClear(targets[s], c2d(clear | 0xFF));
   C2D_SceneBegin(targets[s]);
@@ -408,7 +409,7 @@ static uint32_t tintColor(uint32_t tint, float blend) {
   return (mix(24) << 24) | (mix(16) << 16) | (mix(8) << 8) | (tint & 255);
 }
 
-void image(Texture* t, float sx, float sy, float sw, float sh, float dx, float dy, float dw, float dh, uint32_t tint,
+void detail::rawImage(Texture* t, float sx, float sy, float sw, float sh, float dx, float dy, float dw, float dh, uint32_t tint,
            float blend) {
   if (!t) return;
   if (detail::transformed()) { detail::texQuad(t, sx, sy, sw, sh, dx, dy, dw, dh, tintColor(tint, blend)); return; }
@@ -426,23 +427,18 @@ void image(Texture* t, float sx, float sy, float sw, float sh, float dx, float d
   C2D_DrawImageAt(img, dx, dy, 0.5f, &it, dw / sw, dh / sh);
 }
 
-void rect(float x, float y, float w, float h, uint32_t rgba) {
+void detail::rawRect(float x, float y, float w, float h, uint32_t rgba) {
   if (detail::transformed()) { detail::texQuad(detail::whiteTexture(), 0, 0, 1, 1, x, y, w, h, rgba); return; }
   flushMesh();
   C2D_DrawRectSolid(x, y, 0.5f, w, h, c2d(rgba));
 }
 
-void rectGradient(float x, float y, float w, float h, uint32_t top, uint32_t bottom) {
-  flushMesh();
-  C2D_DrawRectangle(x, y, 0.5f, w, h, c2d(top), c2d(top), c2d(bottom), c2d(bottom));
-}
-
-void line(float x0, float y0, float x1, float y1, float th, uint32_t rgba) {
+void detail::rawLine(float x0, float y0, float x1, float y1, float th, uint32_t rgba) {
   flushMesh();
   C2D_DrawLine(x0, y0, c2d(rgba), x1, y1, c2d(rgba), th, 0.5f);
 }
 
-void circle(float x, float y, float r, uint32_t rgba) {
+void detail::rawCircle(float x, float y, float r, uint32_t rgba) {
   flushMesh();
   C2D_DrawCircleSolid(x, y, 0.5f, r, c2d(rgba));
 }
@@ -499,7 +495,7 @@ void flushMesh() {
   batch.iCount = 0;
 }
 
-void triangles(Texture* t, const Vert* verts, int count, const uint16_t* indices, int indexCount, bool additive) {
+void detail::rawTriangles(Texture* t, const Vert* verts, int count, const uint16_t* indices, int indexCount, bool additive) {
   if (!t || count == 0 || indexCount == 0) return;
   if (batch.tex && (batch.tex != t || batch.additive != additive || meshVertUsed - batch.vStart + count > 65000)) flushMesh();
   if (meshVertUsed + count > kMeshVerts || meshIndexUsed + indexCount > kMeshIndices) return;

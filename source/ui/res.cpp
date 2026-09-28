@@ -254,9 +254,16 @@ float Res::text(float x, float y, const std::string& s, const TextStyle& st) {
       const Glyph& g = it->second;
       if (g.w > 0) {
         float gx = cx + g.ox * st.scale, gy = cy + g.oy * st.scale;
+        if (st.outline) {
+          const float o = st.scale;
+          const float offs[4][2] = {{-o, 0}, {o, 0}, {0, -o}, {0, o}};
+          for (auto& d : offs)
+            gfx::image(fontTex_[st.size], g.x, g.y, g.w, g.h, gx + d[0], gy + d[1], g.w * st.scale, g.h * st.scale,
+                       st.outline, 1.f);
+        }
         if (st.shadow)
-          gfx::image(fontTex_[st.size], g.x, g.y, g.w, g.h, gx + st.scale, gy + st.scale, g.w * st.scale, g.h * st.scale,
-                     0x000000C0, 1.f);
+          gfx::image(fontTex_[st.size], g.x, g.y, g.w, g.h, gx + st.shadowDx * st.scale, gy + st.shadowDy * st.scale,
+                     g.w * st.scale, g.h * st.scale, st.shadowColor, 1.f);
         gfx::image(fontTex_[st.size], g.x, g.y, g.w, g.h, gx, gy, g.w * st.scale, g.h * st.scale, color, 1.f);
       }
       cx += g.adv * st.scale;

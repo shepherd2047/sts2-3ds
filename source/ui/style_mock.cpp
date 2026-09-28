@@ -225,7 +225,7 @@ void mockGallery(bool top) {
   gfx::rect(0, 0, W, kH, 0x3C4650FF);
   // Lay out the whole list, page by page (top screen then bottom = one page).
   float x = 4, y = 4, rowH = 0;
-  int scr = 0, idx = 0;
+  int scr = 0;
   int target = page * 2 + (top ? 0 : 1);
   for (auto& n : names) {
     Sprite s = R().sprite(n);
@@ -239,12 +239,71 @@ void mockGallery(bool top) {
     }
     x += w;
     rowH = std::max(rowH, h);
-    ++idx;
   }
+}
+
+// ---------------------------------------------------------------- 5: renderer features (F2)
+void mockRenderer(bool top) {
+  gfx::rect(0, 0, top ? kTop : kBot, kH, 0x28323CFF);
+  static float t = 0;
+  t += 1.f / 60;
+  Sprite row = R().sprite("ui/btn_row"), evt = R().sprite("ui/btn_event"), pan = R().sprite("ui/panel_reward"),
+         tip = R().sprite("ui/hover_tip"), proceed = R().sprite("ui/btn_proceed"), skip = R().sprite("ui/btn_skip");
+  auto nine = [&](const Sprite& s, float x, float y, float w, float h, uint32_t tint = 0xFFFFFFFF) {
+    if (s) gfx::nineSlice(s.tex, s.x, s.y, s.w, s.h, s.nl, s.nt, s.nr, s.nb, x, y, w, h, tint);
+  };
+  if (top) {
+    R().text(8, 4, "9-slice: same art, three sizes", ts(F12, col::gold));
+    nine(row, 8, 22, 100, 36);
+    nine(row, 116, 22, 176, 36);
+    nine(row, 300, 22, 92, 36);
+    nine(evt, 8, 66, 120, 44);
+    nine(evt, 136, 66, 256, 44);
+    nine(tip, 8, 118, 150, 44);
+    nine(pan, 166, 118, 80, 110);
+    nine(pan, 254, 118, 138, 54);
+    R().text(8, 170, "tint / alpha", ts(F12, col::gold));
+    nine(row, 8, 186, 100, 36, 0xFF9090FF);
+    nine(row, 116, 186, 100, 36, 0x90FF90A0);
+    if (proceed) gfx::image(proceed.tex, proceed.x, proceed.y, proceed.w, proceed.h, 224, 184, proceed.w, proceed.h, 0xFFFFFF60);
+    if (skip) gfx::image(skip.tex, skip.x, skip.y, skip.w, skip.h, 224, 208, skip.w, skip.h, 0x6060FFFF, 0.5f);
+    return;
+  }
+  R().text(8, 2, "rotate / scale", ts(F12, col::gold));
+  Sprite orb = R().sprite("ui/energy_orb");
+  if (orb) {
+    gfx::imageRotated(orb.tex, orb.x, orb.y, orb.w, orb.h, 40, 40, orb.w, orb.h, t);
+    gfx::imageRotated(orb.tex, orb.x, orb.y, orb.w, orb.h, 100, 40, orb.w * 0.6f, orb.h * 0.6f, -t * 2);
+    gfx::imageRotated(orb.tex, orb.x, orb.y, orb.w, orb.h, 170, 40, orb.w * 1.5f, orb.h * 1.5f, 0.4f);
+  }
+  R().text(8, 84, "clip: scroll list (rows cut at the panel edge)", ts(F12, col::gold));
+  const float lx = 8, ly = 100, lw = 200, lh = 60;
+  gfx::rect(lx - 1, ly - 1, lw + 2, lh + 2, kPanelEdge);
+  gfx::rect(lx, ly, lw, lh, kPanel);
+  gfx::pushClip(lx, ly, lw, lh);
+  float off = std::fmod(t * 12, 36.f);
+  for (int i = -1; i < 4; ++i) nine(row, lx + 2, ly + i * 36 - off + 4, lw - 4, 32);
+  for (int i = -1; i < 4; ++i) R().text(lx + 10, ly + i * 36 - off + 12, "row text runs under the edge", ts(F12, col::white));
+  gfx::popClip();
+  R().text(8, 168, "text: shadow / outline / colour shadow", ts(F12, col::gold));
+  TextStyle o = ts(F16, col::white);
+  o.outline = 0x000000FF;
+  R().text(8, 184, "Outline 描边", o);
+  TextStyle sh = ts(F16, col::gold);
+  sh.shadowColor = 0xC03A3AFF; sh.shadowDx = 2; sh.shadowDy = 2;
+  R().text(120, 184, "Shadow 阴影", sh);
+  R().text(8, 208, "gradient / fade: pushAlpha", ts(F12, col::gold));
+  gfx::gradient(8, 224, 120, 12, 0xC03A3AFF, 0x4A86C8FF, 0xC03A3AFF, 0x4A86C8FF);
+  gfx::gradient(134, 224, 80, 12, 0x000000FF, 0x000000FF, 0xFFFFFFFF, 0xFFFFFFFF);
+  gfx::pushAlpha(0.5f + 0.5f * std::sin(t * 3));
+  nine(row, 220, 96, 92, 36);
+  R().text(230, 106, "alpha", ts(F16, col::white));
+  gfx::popAlpha();
 }
 
 void drawStyleMock(int which, bool top) {
   switch (which) {
+    case 5: mockRenderer(top); break;
     case 4: mockGallery(top); break;
     case 1: mockReward(top); break;
     case 2: mockCombat(top); break;

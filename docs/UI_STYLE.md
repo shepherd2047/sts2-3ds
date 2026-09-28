@@ -145,3 +145,11 @@ Until U4, the widget kit only calls `ui::sfx(Sfx::Click)` style hooks that do no
 3. Anything longer than the space scrolls in a ScrollList; never shrink body text below F12 x 0.85.
 4. Show why a control is locked; never silently disable it.
 5. Check both screens in preview screenshots before committing (Chinese and, once Y3 lands, English).
+
+## Renderer features (F2, `gfx.h`)
+
+`nineSlice` (margins come from `Sprite::nl/nt/nr/nb`), `gradient` (four corners) and `rectGradient`,
+`imageRotated`, `pushClip/popClip` (scroll lists; cuts image, rect, text, gradient; transformed draws are only
+skipped when fully outside), `pushAlpha/popAlpha` (fades, disabled widgets), text `outline` (4 extra draws per
+glyph: titles only) and `shadowColor/shadowDx/shadowDy`. Tint, blend, scale and rotation already existed
+(`image` tint/blend, `pushTransform`). `STS_MOCK=5` shows all of it; the 3DS side is compile-checked only.

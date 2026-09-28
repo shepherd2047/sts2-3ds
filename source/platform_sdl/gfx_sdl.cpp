@@ -190,6 +190,7 @@ void beginFrame() {
 }
 
 void screen(Screen s, uint32_t clear) {
+  detail::resetState();
   ox = s == TOP ? 0.f : (float)(kTopW - kBottomW) / 2;
   oy = s == TOP ? 0.f : (float)kScreenH;
   SDL_Rect clip{(int)ox, (int)oy, s == TOP ? kTopW : kBottomW, kScreenH};
@@ -322,7 +323,7 @@ static uint32_t tintColor(uint32_t tint, float blend) {
   return (mix(24) << 24) | (mix(16) << 16) | (mix(8) << 8) | (tint & 255);
 }
 
-void image(Texture* t, float sx, float sy, float sw, float sh, float dx, float dy, float dw, float dh, uint32_t tint,
+void detail::rawImage(Texture* t, float sx, float sy, float sw, float sh, float dx, float dy, float dw, float dh, uint32_t tint,
            float blend) {
   if (!t) return;
   if (detail::transformed()) { detail::texQuad(t, sx, sy, sw, sh, dx, dy, dw, dh, tintColor(tint, blend)); return; }
@@ -335,7 +336,7 @@ void image(Texture* t, float sx, float sy, float sw, float sh, float dx, float d
   SDL_RenderCopyF(ren, t->tex, &src, &dst);
 }
 
-void rect(float x, float y, float w, float h, uint32_t rgba) {
+void detail::rawRect(float x, float y, float w, float h, uint32_t rgba) {
   if (detail::transformed()) { detail::texQuad(detail::whiteTexture(), 0, 0, 1, 1, x, y, w, h, rgba); return; }
   SDL_Color c = col(rgba);
   SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a);
@@ -343,16 +344,7 @@ void rect(float x, float y, float w, float h, uint32_t rgba) {
   SDL_RenderFillRectF(ren, &r);
 }
 
-void rectGradient(float x, float y, float w, float h, uint32_t top, uint32_t bottom) {
-  SDL_Color a = col(top), b = col(bottom);
-  SDL_Vertex v[4] = {
-      {{x + ox, y + oy}, a, {0, 0}}, {{x + ox + w, y + oy}, a, {0, 0}},
-      {{x + ox + w, y + oy + h}, b, {0, 0}}, {{x + ox, y + oy + h}, b, {0, 0}}};
-  int idx[6] = {0, 1, 2, 0, 2, 3};
-  SDL_RenderGeometry(ren, nullptr, v, 4, idx, 6);
-}
-
-void line(float x0, float y0, float x1, float y1, float th, uint32_t rgba) {
+void detail::rawLine(float x0, float y0, float x1, float y1, float th, uint32_t rgba) {
   float dx = x1 - x0, dy = y1 - y0, len = std::sqrt(dx * dx + dy * dy);
   if (len < 0.001f) return;
   float nx = -dy / len * th / 2, ny = dx / len * th / 2;
@@ -363,7 +355,7 @@ void line(float x0, float y0, float x1, float y1, float th, uint32_t rgba) {
   SDL_RenderGeometry(ren, nullptr, v, 4, idx, 6);
 }
 
-void circle(float x, float y, float r, uint32_t rgba) {
+void detail::rawCircle(float x, float y, float r, uint32_t rgba) {
   constexpr int N = 24;
   SDL_Color c = col(rgba);
   std::vector<SDL_Vertex> v;
@@ -377,7 +369,7 @@ void circle(float x, float y, float r, uint32_t rgba) {
   SDL_RenderGeometry(ren, nullptr, v.data(), (int)v.size(), idx.data(), (int)idx.size());
 }
 
-void triangles(Texture* t, const Vert* verts, int count, const uint16_t* indices, int indexCount, bool additive) {
+void detail::rawTriangles(Texture* t, const Vert* verts, int count, const uint16_t* indices, int indexCount, bool additive) {
   if (!t || count == 0) return;
   static std::vector<SDL_Vertex> v;
   static std::vector<int> idx;

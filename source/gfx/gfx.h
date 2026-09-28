@@ -56,6 +56,27 @@ void rectGradient(float x, float y, float w, float h, uint32_t top, uint32_t bot
 void line(float x0, float y0, float x1, float y1, float thickness, uint32_t rgba);
 void circle(float x, float y, float r, uint32_t rgba);
 
+// ---- F2 renderer features (gfx_common.cpp; identical on both backends) -------------------
+// 9-slice: the source rect (sx, sy, sw, sh) has margins l/t/r/b (source pixels) that keep their size;
+// the edges and the centre stretch to fill (dx, dy, dw, dh). Margins shrink if the target is smaller.
+void nineSlice(Texture* t, float sx, float sy, float sw, float sh, float l, float tp, float r, float b,
+               float dx, float dy, float dw, float dh, uint32_t tint = 0xFFFFFFFF, float blend = 0.f);
+// A four-corner gradient (colours 0xRRGGBBAA, bilinear inside): vertical, horizontal or anything.
+void gradient(float x, float y, float w, float h, uint32_t topLeft, uint32_t topRight, uint32_t bottomLeft,
+              uint32_t bottomRight);
+// Image centred on (cx, cy), w x h big, rotated by `radians` (positive = clockwise on screen).
+void imageRotated(Texture* t, float sx, float sy, float sw, float sh, float cx, float cy, float w, float h,
+                  float radians, uint32_t tint = 0xFFFFFFFF, float blend = 0.f);
+// Scissor: draws inside pushClip/popClip are cut to the rectangle (screen coordinates of the current
+// screen, nested clips intersect). Applies to image, rect, text, gradient and nineSlice; transformed
+// (rotated / scaled) draws and lines / circles / meshes are only skipped when entirely outside.
+void pushClip(float x, float y, float w, float h);
+void popClip();
+// Global alpha: every draw inside pushAlpha/popAlpha is multiplied by `a` (0..1); nests by multiplying.
+// Screen fades, dimmed pages and disabled widgets use it. Both stacks reset when a screen begins.
+void pushAlpha(float a);
+void popAlpha();
+
 // Textured, vertex-coloured triangles (Spine meshes). Colours are 0xRRGGBBAA.
 struct Vert {
   float x, y, u, v;
@@ -88,6 +109,14 @@ void popTransform();
 namespace detail {
 bool transformed();
 const Affine& current();
+// Backend primitives; the public draw functions add the clip and global alpha and call these.
+void rawImage(Texture* t, float sx, float sy, float sw, float sh, float dx, float dy, float dw, float dh,
+              uint32_t tint, float blend);
+void rawRect(float x, float y, float w, float h, uint32_t rgba);
+void rawLine(float x0, float y0, float x1, float y1, float thickness, uint32_t rgba);
+void rawCircle(float x, float y, float r, uint32_t rgba);
+void rawTriangles(Texture* t, const Vert* verts, int count, const uint16_t* indices, int indexCount, bool additive);
+void resetState();  // clip and alpha stacks; the backends call it from screen()
 Texture* whiteTexture();  // provided by each backend
 // Draws a transformed textured quad (tex may be the white texture) via triangles().
 void texQuad(Texture* t, float sx, float sy, float sw, float sh, float dx, float dy, float dw, float dh, uint32_t rgba);

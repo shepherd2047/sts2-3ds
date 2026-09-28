@@ -43,6 +43,9 @@ struct TextStyle {
   float scale = 1.f;
   float lineGap = 1.f;
   bool shadow = true;
+  uint32_t shadowColor = 0x000000C0;  // drop shadow, offset (shadowDx, shadowDy) * scale
+  float shadowDx = 1, shadowDy = 1;
+  uint32_t outline = 0;  // colour of a 1 px outline (4 extra draws per glyph: use sparingly); 0 = none
 };
 
 class Res {
