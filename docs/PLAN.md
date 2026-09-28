@@ -286,9 +286,9 @@ and `Models.Powers\`.
 |---|---|---|---|
 | X0 | All | Character plumbing (see Engine lane order #1) | done (engine), accepted 2026-09-28 |
 | X1.0-X1.5 | Silent | Shiv tokens, Poison, discard triggers (Sly), Retain, Accuracy-style powers | X1.0 done (engine), accepted 2026-09-28; X1.1-X1.5 todo |
-| X2.0-X2.5 | Defect | Orbs (Lightning, Frost, Dark, Plasma, Glass), channel/evoke, Focus, orb slots and their rendering on the top screen | todo |
-| X3.0-X3.5 | Regent | Stars (second resource with a HUD counter), Forge and Sovereign Blade, summons | todo |
-| X4.0-X4.5 | Necrobinder | Osty (companion creature with its own HP, targeting, death), Doom, Souls | todo |
+| X2.0-X2.5 | Defect | Orbs (Lightning, Frost, Dark, Plasma, Glass), channel/evoke, Focus, orb slots and their rendering on the top screen | X2.0 done (subagent), accepted 2026-09-28; X2.1-X2.5 todo |
+| X3.0-X3.5 | Regent | Stars (second resource with a HUD counter), Forge and Sovereign Blade, summons | X3.0 done (subagent), accepted 2026-09-28; X3.1-X3.5 todo |
+| X4.0-X4.5 | Necrobinder | Osty (companion creature with its own HP, targeting, death), Doom, Souls | X4.0 done (subagent), accepted 2026-09-28; X4.1-X4.5 todo |
 | X6 | All characters | ColorfulPhilosophers, cross-character Orobas options, per-character Ancient dialogue lines, Random character, per-character act-transition quotes | todo |
 
 That is 7 packages per character (X*.0, .1, .2, .3a, .3b, .4, .5), X1-X4 in order. X6
@@ -318,6 +318,20 @@ characterId)` reads it; `Run::characterId` / `Run::character()` replace every Ir
 A new character's per-character systems go in `source/core/char_<name>.cpp` (a hook in a core file only when
 it cannot be avoided). New card base classes must set the card frame / pool the same way `IroncladT` does and
 their `clone()` must call `adoptEnchantment()`.
+
+**X2.0-X4.0 notes (Defect, Regent, Necrobinder systems, done).** Engine pieces the card packages build on:
+- **Defect:** `Orb` (game.h) and the 5 orbs in `char_defect.h`; `Combat::orbQueue` / `orbCapacity` (from
+  `Character::orbSlots` in `Run::fight`); `cmd::channelOrb / evokeNextOrb / evokeLastOrb / orbPassive / addOrbSlots /
+  removeOrbSlots`; `db::randomOrb`; FocusPower / TemporaryFocusPower; hooks `modifyOrbValue`,
+  `modifyOrbPassiveTriggerCount`, `afterOrbChanneled`, `afterOrbEvoked`. Orbs are not drawn yet (UI).
+- **Regent:** `Combat::stars`, `Combat::starCost(card)`, `Card::starCost / costsStarsX / starXValue`,
+  `cmd::gainStars / loseStars / setStars`, star checks in `canPlay` / `playCard`; `cmd::forge` and the Sovereign
+  Blade token (`tagSovereignBlade`); StarNextTurnPower, SeekingEdgePower, ParryPower. ChildOfTheStars / DyingStar
+  powers are left for their cards. No star counter in the HUD yet (UI).
+- **Necrobinder:** `summonOsty(combat, amount)` (Osty is `Combat::osty`, a player-side creature with
+  `petOwner`, not in `enemies`); `cmd::damage` now has the C# Before/After-Osty phases and
+  `modifyUnblockedDamageTarget` (DieForYouPower) with overkill spilling onto the owner; DoomPower + `doomKill`,
+  SoulboundPower, NecroMasteryPower, the Soul token (`createSoulsInHand`). Osty is not drawn yet (UI).
 
 **X1.0 notes (Silent systems, done).** Shared engine pieces the Silent's cards (X1.1-X1.4) build on:
 - **Discard:** `cmd::discardCards(combat, cards, drawAfter)` / `discardCard` = `CardCmd.Discard` /
