@@ -13,7 +13,7 @@
 
 #include "game.h"
 #include "progress.h"
-#include "settings.h"
+#include "settings_store.h"
 
 namespace sts {
 

@@ -1,5 +1,5 @@
 // Split from ui.cpp (F3).
-#include "../core/settings.h"
+#include "../core/settings_store.h"
 #include "ui_common.h"
 
 namespace ui {
