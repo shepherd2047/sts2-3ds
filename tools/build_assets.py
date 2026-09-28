@@ -281,20 +281,25 @@ class Assets:
             self._atlas_pages[page] = img
         return img.crop((int(x), int(y), int(x + w), int(y + h)))
 
+    # X1.5-X4.5: card_portraits/ has one directory per pool (images/packed/card_portraits/<dir>/),
+    # not just the Ironclad's; a card whose portrait was only ever drawn for one release shows up
+    # under a "beta" subdirectory instead of the pool's own. Order matters only for cards that
+    # exist in more than one place (there are none in practice), so this is just "try every pool".
+    PORTRAIT_DIRS = ('ironclad', 'silent', 'defect', 'regent', 'necrobinder', 'colorless', 'status',
+                      'curse', 'token', 'event', 'quest')
+
     def card_portrait(self, key):
         snake = key.lower()
-        cands = [f'images/packed/card_portraits/ironclad/{snake}.png',
-                 f'images/packed/card_portraits/status/{snake}.png',
-                 f'images/packed/card_portraits/status/beta/{snake}.png',
-                 f'images/packed/card_portraits/colorless/{snake}.png',
-                 f'images/packed/card_portraits/token/{snake}.png']
-        for c in cands:
-            if c + '.import' in self.g.pck.files:
-                return self.g.image(c)
+        for d in self.PORTRAIT_DIRS:
+            for sub in ('', 'beta/'):
+                c = f'images/packed/card_portraits/{d}/{sub}{snake}.png'
+                if c + '.import' in self.g.pck.files:
+                    return self.g.image(c)
         # Some portraits only live in the card atlas.
-        tres = f'images/atlases/card_atlas.sprites/ironclad/{snake}.tres'
-        if tres in self.g.pck.files:
-            return self.sprite(tres)
+        for d in self.PORTRAIT_DIRS:
+            tres = f'images/atlases/card_atlas.sprites/{d}/{snake}.tres'
+            if tres in self.g.pck.files:
+                return self.sprite(tres)
         print('  missing portrait', key)
         return Image.new('RGBA', (1000, 760), (60, 60, 60, 255))
 
@@ -579,12 +584,15 @@ def build(args):
         border = fit_height(a.sprite(f'images/atlases/ui_atlas.sprites/card/card_portrait_border_{kind}_s.tres'), 96)
         packer.add(f'card/frame_{kind}', frame)
         packer.add(f'card/border_{kind}', border)
-        # X1.5-X4.5: card_frame_<colour>_mat.tres (CardPoolModel.CardFrameMaterialPath) is an
-        # HSV shader over this same neutral shape; retint per character (Colorless/Status/Curse
-        # cards, i.e. Rarity::Token/Status/Curse in game.h, keep the plain frame above).
+        # X1.5-X4.5: card_frame_<colour>_mat.tres (CardPoolModel.CardFrameMaterialPath) is an HSV
+        # shader over this same neutral frame shape; retint per character (Colorless/Status/Curse
+        # cards, i.e. Rarity::Token/Status/Curse in game.h, keep the plain frame above). The
+        # portrait border and title banner are a *different* node (scenes/cards/card.tscn:
+        # PortraitBorder/TitleBanner use materials/cards/banners/card_banner_<rarity>_mat.tres,
+        # not the frame material) - they vary by rarity, not by character, so they are NOT
+        # retinted here; doing so previously gave every character a wrong, made-up border colour.
         for c in OTHER_CHARS:
             packer.add(f'card/frame_{kind}_{c}', retint_card_frame(frame, c))
-            packer.add(f'card/border_{kind}_{c}', retint_card_frame(border, c))
     packer.add('card/frame_ancient', fit(a.sprite('images/atlases/ui_atlas.sprites/card/card_frame_ancient_s.tres'), (120, 169)))
     packer.add('card/banner', fit_height(a.sprite('images/atlases/ui_atlas.sprites/card/card_banner.tres'), 28))
     packer.add('card/ancient_banner', fit_height(a.sprite('images/atlases/ui_atlas.sprites/card/ancient_banner.tres'), 28))
