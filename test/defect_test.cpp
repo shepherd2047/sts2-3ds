@@ -3,6 +3,7 @@
 // Dark's growth, Plasma, Glass).
 // X2.1 additions: the starter deck (StrikeDefect/DefendDefect/Zap/Dualcast), the 8 character
 // relics and the 3 potions.
+// X2.2 additions: the Common card pool (char_defect_cards.cpp).
 // Build: make -f Makefile.sdl build/defect_test ; run: ./build/defect_test
 #include <cstdio>
 #include <cstdlib>
@@ -364,6 +365,171 @@ int main() {
     int capacity = f.c->orbCapacity;
     runTask(p->onUse(f.c->player));
     CHECK(f.c->orbCapacity - capacity == 2);
+  }
+
+  // ================================================================ X2.2: Common cards
+
+  {  // Barrage: hit count == orbs currently queued (0 with an empty queue, 2 with two queued).
+    Fight f;
+    Card* barrage = f.c->addCard(db::card("Barrage"));
+    f.toHand(barrage);
+    int hpSum = f.enemyHpSum();
+    f.play(barrage, f.enemy());
+    CHECK(hpSum == f.enemyHpSum());  // no orbs: 0 hits, no damage
+    runTask(cmd::channelOrb(*f.c, std::make_unique<LightningOrb>()));
+    runTask(cmd::channelOrb(*f.c, std::make_unique<FrostOrb>()));
+    barrage = f.c->addCard(db::card("Barrage"));
+    f.toHand(barrage);
+    hpSum = f.enemyHpSum();
+    f.play(barrage, f.enemy());
+    CHECK(hpSum - f.enemyHpSum() == 10);  // 2 hits x Damage(5)
+  }
+  {  // Claw: playing one raises the Damage var of every Claw in the fight, including itself
+    // and copies not yet drawn.
+    Fight f;
+    Card* claw1 = f.c->addCard(db::card("Claw"));
+    Card* claw2 = f.c->addCard(db::card("Claw"));  // stays in the draw pile, never played
+    runTask(cmd::moveCard(*f.c, claw2, Pile::Draw, true));
+    f.toHand(claw1);
+    int hpSum = f.enemyHpSum();
+    f.play(claw1, f.enemy());
+    CHECK(hpSum - f.enemyHpSum() == 3);  // base Damage(3)
+    CHECK(claw1->var("Damage")->base == Dec(5));   // 3 + Increase(2)
+    CHECK(claw2->var("Damage")->base == Dec(5));   // buffed even though never played
+    f.toHand(claw2);
+    hpSum = f.enemyHpSum();
+    f.play(claw2, f.enemy());
+    CHECK(hpSum - f.enemyHpSum() == 5);
+    CHECK(claw1->var("Damage")->base == Dec(7));   // buffed again by claw2's play
+  }
+  {  // CompileDriver: draws one card per *distinct* orb type queued, not per orb.
+    Fight f;
+    runTask(cmd::channelOrb(*f.c, std::make_unique<LightningOrb>()));
+    runTask(cmd::addOrbSlots(*f.c, 5));
+    runTask(cmd::channelOrb(*f.c, std::make_unique<FrostOrb>()));
+    runTask(cmd::channelOrb(*f.c, std::make_unique<FrostOrb>()));  // duplicate type
+    Card* driver = f.c->addCard(db::card("CompileDriver"));
+    f.toHand(driver);
+    size_t handBefore = f.c->hand.size() - 1;  // exclude the card about to be played away
+    f.play(driver, f.enemy());
+    CHECK(f.c->hand.size() - handBefore == 2);  // Lightning + Frost = 2 distinct types
+  }
+  {  // ChargeBattery: block now, +Energy at the start of the player's next turn.
+    Fight f;
+    Card* battery = f.c->addCard(db::card("ChargeBattery"));
+    f.toHand(battery);
+    int block = f.c->player->block;
+    f.play(battery);
+    CHECK(f.c->player->block - block == 7);
+    f.endTurn();
+    CHECK(f.c->energy == f.c->maxEnergy + 1);  // EnergyNextTurnPower fired on the reset
+  }
+  {  // FocusedStrike: attack + temporary Focus that is removed (reverted) at end of turn.
+    Fight f;
+    Card* strike = f.c->addCard(db::card("FocusedStrike"));
+    f.toHand(strike);
+    int hpSum = f.enemyHpSum();
+    f.play(strike, f.enemy());
+    CHECK(hpSum - f.enemyHpSum() == 9);
+    CHECK(f.c->player->powerAmount<FocusPower>() == 1);
+    f.endTurn();
+    CHECK(f.c->player->powerAmount<FocusPower>() == 0);  // TemporaryFocusPower reverts itself
+  }
+  {  // GoForTheEyes: Weak only applies when the target currently intends to attack. Against the
+    // Nibbits, the front enemy's first move is an attack (SLICE_MOVE), the back one a Buff (HISS).
+    Fight f;
+    CHECK(f.enemy(0)->monster->nextMove && f.enemy(0)->monster->nextMove->intents[0].kind == Intent::Attack);
+    CHECK(f.enemy(1)->monster->nextMove && f.enemy(1)->monster->nextMove->intents[0].kind != Intent::Attack);
+    Card* eyes1 = f.c->addCard(db::card("GoForTheEyes"));
+    f.toHand(eyes1);
+    f.play(eyes1, f.enemy(0));
+    CHECK(f.enemy(0)->powerAmount<WeakPower>() == 1);
+    Card* eyes2 = f.c->addCard(db::card("GoForTheEyes"));
+    f.toHand(eyes2);
+    f.play(eyes2, f.enemy(1));
+    CHECK(f.enemy(1)->powerAmount<WeakPower>() == 0);  // not attacking: no Weak
+  }
+  {  // GunkUp: 3-hit attack, then a Slimed lands in the discard pile.
+    Fight f;
+    Card* gunk = f.c->addCard(db::card("GunkUp"));
+    f.toHand(gunk);
+    int hpSum = f.enemyHpSum();
+    f.play(gunk, f.enemy());
+    CHECK(hpSum - f.enemyHpSum() == 12);  // 3 x Damage(4)
+    bool sawSlimed = false;
+    for (Card* c : f.c->discard) sawSlimed |= c->id == "Slimed";
+    CHECK(sawSlimed);
+  }
+  {  // Hologram: block, then optionally pulls one chosen card back from discard into hand.
+    Fight f;
+    Card* toDiscard = f.c->addCard(db::card("Zap"));
+    runTask(cmd::moveCard(*f.c, toDiscard, Pile::Discard));
+    Card* holo = f.c->addCard(db::card("Hologram"));
+    f.toHand(holo);
+    size_t handBefore = f.c->hand.size() - 1;
+    int block = f.c->player->block;
+    PlayerAction a;
+    a.kind = PlayerAction::PlayCard;
+    a.card = holo;
+    f.c->energy = 10;
+    f.c->actions.fire(a);
+    pump([&] { return f.c->choice.active && f.c->choice.result.waiting(); });
+    f.c->choice.result.fire({toDiscard});
+    pump([&] { return f.c->playerPhase && f.c->actions.waiting(); });
+    CHECK(f.c->player->block - block == 3);
+    CHECK(f.c->hand.size() - handBefore == 1);
+    bool inHand = false;
+    for (Card* c : f.c->hand) inHand |= c == toDiscard;
+    CHECK(inHand);
+  }
+  {  // LightningRod: block now; channels a Lightning orb on each of the next 2 energy resets.
+    Fight f;
+    Card* rod = f.c->addCard(db::card("LightningRod"));
+    f.toHand(rod);
+    int block = f.c->player->block;
+    f.play(rod);
+    CHECK(f.c->player->block - block == 4);
+    Power* lrp = f.c->player->power("LightningRodPower");
+    CHECK(lrp && lrp->amount == 2);
+    f.endTurn();
+    CHECK(f.c->orbQueue.size() == 1 && f.c->orbQueue[0]->id == "LightningOrb");
+    lrp = f.c->player->power("LightningRodPower");
+    CHECK(lrp && lrp->amount == 1);
+  }
+  {  // MomentumStrike: attack, then becomes 0-cost for the rest of the fight.
+    Fight f;
+    Card* strike = f.c->addCard(db::card("MomentumStrike"));
+    CHECK(strike->cost == 1);
+    f.toHand(strike);
+    int hpSum = f.enemyHpSum();
+    f.play(strike, f.enemy());
+    CHECK(hpSum - f.enemyHpSum() == 11);
+    CHECK(strike->cost == 0);
+  }
+  {  // Turbo: gains energy, then a Void lands in the discard pile; drawing it later costs energy.
+    Fight f;
+    Card* turbo = f.c->addCard(db::card("Turbo"));
+    f.toHand(turbo);
+    f.play(turbo);  // Fight::play sets energy to 10 right before firing the play action
+    CHECK(f.c->energy == 12);  // 10 + Turbo's Energy(2); Turbo itself costs 0
+    Card* voidCard = nullptr;
+    for (Card* c : f.c->discard) if (c->id == "Void") voidCard = c;
+    CHECK(voidCard != nullptr);
+    runTask(cmd::moveCard(*f.c, voidCard, Pile::Draw, true));
+    int energyBefore = f.c->energy;
+    runTask([](Combat* c) -> Task<> { co_await cmd::drawCards(*c, Dec(1)); }(f.c));
+    CHECK(energyBefore - f.c->energy == 1);  // Void's own Energy var, lost once drawn
+  }
+  {  // Uproar: a 2-hit attack, then auto-plays a random Attack card from the draw pile.
+    Fight f;
+    for (Card* c : f.c->draw) c->keywords |= kwUnplayable;  // force everything unplayable but one
+    Card* onlyAttack = f.c->addCard(db::card("StrikeDefect"));
+    runTask(cmd::moveCard(*f.c, onlyAttack, Pile::Draw, true));
+    Card* uproar = f.c->addCard(db::card("Uproar"));
+    f.toHand(uproar);
+    int hpSum = f.enemyHpSum();
+    f.play(uproar, f.enemy());
+    CHECK(hpSum - f.enemyHpSum() == 12 + 6);  // 2x Damage(6) + auto-played StrikeDefect(6)
   }
 
   printf("%d checks, %d failed\n", checks, failures);
