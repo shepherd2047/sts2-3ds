@@ -93,4 +93,10 @@ void drawToasts(float dt);
 // A ribbon banner (reward screen headers, act transitions).
 void banner(float cx, float y, const std::string& text, float scale = 1.f);
 
+// A keyword glossary popover (F4): `ui/hover_tip` sized to fit title + description, anchored
+// above/right of (anchorX, anchorY) and flipped to stay on screen (screen is kTopW wide on the
+// top pass, kBottomW on the bottom). For HoverTipFactory-style glossary entries (card_keywords,
+// static_hover_tips, powers, ...) -- callers pass the already-localised title/description.
+void keywordTip(const std::string& title, const std::string& description, float anchorX, float anchorY, bool top);
+
 }  // namespace ui::widgets

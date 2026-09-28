@@ -20,9 +20,9 @@ namespace ui {
 std::string actTexture(const sts::Run& r, const char* kind);
 // The player character's Spine / sprite key. visuals.cpp.
 std::string playerArt(sts::Run* r);
-// Card and event text: [dynvar] and pluralisation formatting for loc strings. cardtext.cpp.
+// Card and event text: [dynvar], pluralisation and choose() formatting for loc strings. cardtext.cpp.
 std::string expandSmart(const std::string& src, const std::vector<DynVar>& vars, bool inCombat,
-                        const std::map<std::string, std::string>* strVars = nullptr);
+                        const std::map<std::string, std::string>* strVars = nullptr, bool upgraded = false);
 
 namespace {
 

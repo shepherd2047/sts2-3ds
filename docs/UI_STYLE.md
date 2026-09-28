@@ -166,3 +166,23 @@ control in the pressed direction using the previous frame's hit boxes; touch alw
 hides the ring. `STS_MOCK=6` exercises all of it. Screen files in `source/ui/screens/*.cpp`
 adopt this kit as each S package rebuilds that screen; until then they keep using `App::panel`/
 `App::button` (`source/ui/legacy_widgets.cpp`), so no screen is built twice.
+
+## Rich text (F4)
+
+Inline icons: `[icon:energy|gold|hp|star|block|<atlas/name>]` in any `Res::text` string, square
+and sized to the line's font height (`Res::iconIndex` allocates a private-use codepoint per
+unique name; `Res::text` draws the sprite instead of a glyph). Keyword colour is already baked
+into the game's own loc strings (`[gold]牌组[/gold]` etc.) -- nothing to add there. `choose()`:
+`expandSmart` (relics/potions/events; `App::describe` is the separate card-only path and keeps
+its own DynVar-diff colouring) now supports `{Name:choose(V1|V2|...):alt1|alt2|...[|fallback]}`,
+matching Name's DynVar value (numeric) or an event's string var against V1.. and expanding the
+matching alt (a bare `{}` inside it is replaced with Name's value); an extra trailing alt is the
+no-match fallback. Also fixed: `{IfUpgraded:...}` was hardcoded to `false` in `expandSmart`
+(cards were fine; relics/potions/events were not) -- it now takes an `upgraded` parameter.
+MadScience's card text additionally needs per-card string/bool extra description args (C#
+`CardModel.AddExtraArgsToDescription`) that `Card` does not model yet; that is an engine hook for
+whichever package ports TinkerTime (A7d), not a UI-lane change. `widgets::keywordTip(title, desc,
+x, y, top)` draws a `ui/hover_tip` glossary popover anchored to a point, flipped to stay on
+screen -- the reusable piece for a HoverTips-style glossary; wiring it to a press-and-hold on
+keyword words in card/relic text is left to the S packages that rebuild those screens.
+`STS_MOCK=7` shows all of it.

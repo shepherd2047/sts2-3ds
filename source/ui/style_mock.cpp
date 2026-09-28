@@ -7,9 +7,12 @@
 #include <cstdio>
 #include <string>
 
+#include "../core/game.h"
 #include "res.h"
 #include "style.h"
 #include "widgets.h"
+
+using namespace sts;
 
 namespace ui {
 
@@ -329,8 +332,30 @@ void mockWidgets(bool top) {
   widgets::endFrame();
 }
 
+// ---------------------------------------------------------------- 7: rich text (F4)
+void mockRichText(bool top) {
+  gfx::rect(0, 0, top ? kTop : kBot, kH, 0x1C242CFF);
+  if (!top) return;
+  R().text(8, 4, "inline icons: [icon:energy] cost  [icon:gold] 42  [icon:hp] 80/80  [icon:star] 3",
+           ts(F12, col::white, LEFT, kTop - 16));
+  R().text(8, 26, "keyword colour (from loc.txt, unchanged): " + R().loc("card_keywords.EXHAUST.description"),
+           ts(F12, col::white, LEFT, kTop - 16));
+  extern std::string expandSmart(const std::string&, const std::vector<DynVar>&, bool,
+                                  const std::map<std::string, std::string>*, bool);
+  std::vector<DynVar> v1{{"Repeat", Dec(1), Dec(1)}, {"Damage", Dec(8), Dec(8)}};
+  std::vector<DynVar> v3{{"Repeat", Dec(3), Dec(3)}, {"Damage", Dec(8), Dec(8)}};
+  std::string once = expandSmart(R().loc("intents.ATTACK.description"), v1, false, nullptr, false);
+  std::string thrice = expandSmart(R().loc("intents.ATTACK.description"), v3, false, nullptr, false);
+  R().text(8, 70, "choose(), real loc string intents.ATTACK.description:", ts(F12, col::gold));
+  R().text(8, 86, "Repeat=1: " + once, ts(F12, col::white, LEFT, kTop - 16));
+  R().text(8, 106, "Repeat=3: " + thrice, ts(F12, col::white, LEFT, kTop - 16));
+  R().text(8, 140, "keyword glossary tooltip (touch EXHAUST on the bottom screen):", ts(F12, col::gold));
+  widgets::keywordTip(R().loc("card_keywords.EXHAUST.title"), R().loc("card_keywords.EXHAUST.description"), 60, 30, true);
+}
+
 void drawStyleMock(int which, bool top) {
   switch (which) {
+    case 7: mockRichText(top); break;
     case 6: mockWidgets(top); break;
     case 5: mockRenderer(top); break;
     case 4: mockGallery(top); break;

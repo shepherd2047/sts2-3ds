@@ -275,6 +275,16 @@ float Res::text(float x, float y, const std::string& s, const TextStyle& st) {
     if (st.align == CENTER) cx = x - w / 2;
     else if (st.align == RIGHT) cx = x - w;
     for (auto& [cp, color] : line.glyphs) {
+      if (cp >= kIconBase) {
+        float size = f.lineHeight * st.scale;
+        size_t idx = cp - kIconBase;
+        if (idx < iconSprites_.size()) {
+          Sprite s2 = sprite(iconSprites_[idx]);
+          if (s2) gfx::image(s2.tex, s2.x, s2.y, s2.w, s2.h, cx, cy, size, size);
+        }
+        cx += size;
+        continue;
+      }
       auto it = f.glyphs.find(cp);
       if (it == f.glyphs.end()) { cx += f.px * 0.5f * st.scale; continue; }
       const Glyph& g = it->second;

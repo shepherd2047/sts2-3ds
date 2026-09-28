@@ -349,6 +349,22 @@ void drawToasts(float dt) {
   }
 }
 
+void keywordTip(const std::string& title, const std::string& description, float anchorX, float anchorY, bool top) {
+  const float screenW = top ? 400.f : 320.f;
+  const float w = 176, pad = 8;
+  TextStyle dt = ts(F12, col::white, LEFT, w - 2 * pad);
+  float dh;
+  R().measure(description, dt, &dh);
+  float th = R().lineHeight(F16);
+  float h = pad * 3 + th + dh;
+  float x = std::clamp(anchorX - w / 2, 4.f, screenW - w - 4);
+  float y = anchorY - h - 8;
+  if (y < 4) y = anchorY + 20;  // flip below the anchor near the top edge
+  panel("ui/hover_tip", x, y, w, h);
+  R().text(x + pad, y + pad - 2, title, ts(F16, col::gold));
+  R().text(x + pad, y + pad + th, description, dt);
+}
+
 void banner(float cx, float y, const std::string& text, float scale) {
   Sprite b = R().sprite("ui/reward_banner");
   if (b) spr(b, cx - b.w * scale / 2, y, b.w * scale, b.h * scale);
