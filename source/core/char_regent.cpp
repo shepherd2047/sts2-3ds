@@ -5,7 +5,56 @@
 
 namespace sts {
 
+void registerRegentRelics();   // char_regent_relics.cpp
+void registerRegentPotions();  // char_regent_relics.cpp
+
 namespace {
+
+// StrikeRegent.cs / DefendRegent.cs: same numbers as StrikeIronclad / DefendIronclad (only
+// portrait, attack vfx and colour differ in the C#).
+struct StrikeRegent : IroncladT<StrikeRegent> {
+  CARD_HEADER(StrikeRegent, "STRIKE_REGENT", 1, Attack, Basic, AnyEnemy)
+    tags = tagStrike;
+    addVar("Damage", 6);
+  }
+  Task<> onPlay(CardPlay& p) override { co_await attack(p.target, val("Damage")); }
+  void onUpgrade() override { upgradeVar("Damage", 3); }
+};
+
+struct DefendRegent : IroncladT<DefendRegent> {
+  CARD_HEADER(DefendRegent, "DEFEND_REGENT", 1, Skill, Basic, Self)
+    tags = tagDefend;
+    addVar("Block", 5);
+  }
+  Task<> onPlay(CardPlay&) override { co_await block(val("Block")); }
+  void onUpgrade() override { upgradeVar("Block", 3); }
+};
+
+// FallingStar.cs: 0 cost, 2 stars, Attack. Damage 8, then Weak 1 and Vulnerable 1 on the target.
+struct FallingStar : IroncladT<FallingStar> {
+  CARD_HEADER(FallingStar, "FALLING_STAR", 0, Attack, Basic, AnyEnemy)
+    starCost = 2;
+    addVar("Damage", 8);
+    addVar("WeakPower", 1);
+    addVar("VulnerablePower", 1);
+  }
+  Task<> onPlay(CardPlay& p) override {
+    co_await attack(p.target, val("Damage"));
+    co_await applyPower<WeakPower>(p.target, val("WeakPower"), me(), this);
+    co_await applyPower<VulnerablePower>(p.target, val("VulnerablePower"), me(), this);
+  }
+  void onUpgrade() override { upgradeVar("Damage", 4); }
+};
+
+// Venerate.cs: 1 cost, Skill, Self. Gain 2 stars (the generic non-Attack "Cast" anim already
+// fires from Combat::playCard).
+struct Venerate : IroncladT<Venerate> {
+  CARD_HEADER(Venerate, "VENERATE", 1, Skill, Basic, Self)
+    addVar("Stars", 2);
+  }
+  Task<> onPlay(CardPlay&) override { co_await cmd::gainStars(*combat, val("Stars").toInt()); }
+  void onUpgrade() override { upgradeVar("Stars", 1); }
+};
 
 // SovereignBlade.cs: 2 cost, Attack, Token, Retain. Damage 10 (+CalculatedBlock via Parry),
 // Repeat 1. Targets every enemy while the player has SeekingEdgePower, else AnyEnemy.
@@ -78,6 +127,12 @@ void registerRegent() {
   registerPowerType<SeekingEdgePower>();
   registerPowerType<ParryPower>();
   registerCardType<SovereignBlade>();
+  registerCardType<StrikeRegent>();
+  registerCardType<DefendRegent>();
+  registerCardType<FallingStar>();
+  registerCardType<Venerate>();
+  registerRegentRelics();
+  registerRegentPotions();
 }
 
 }  // namespace sts
