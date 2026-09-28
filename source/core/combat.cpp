@@ -269,10 +269,29 @@ int Combat::maxEnergyNow() {
   return std::max(0, e.toInt());
 }
 
+// CardModel.GetStarCostWithModifiers.
+int Combat::starCost(Card* c) {
+  if (c->costsStarsX) return stars;
+  if (c->starCost < 0) return c->starCost;
+  int cost = c->starCost;
+  for (Model* m : listeners()) cost = m->modifyStarCost(c, cost);
+  return cost;
+}
+
 bool Combat::canPlay(Card* c, std::string* reason) {
   if (!playerPhase || over || ending) return false;
   if (c->has(kwUnplayable) || (c->cost < 0 && !c->costsX)) { if (reason) *reason = "UNPLAYABLE"; return false; }
-  if (!c->costsX && energyCost(c) > energy) { if (reason) *reason = "ENERGY"; return false; }
+  // PlayerCombatState.HasEnoughResourcesFor: excess energy cost can be paid with stars (never
+  // true today; the hook exists for a future Regent relic/power).
+  int need = c->costsX ? 0 : energyCost(c);
+  int starsNeed = std::max(0, starCost(c));
+  if (!c->costsX && need > energy) {
+    bool payExcess = false;
+    for (Model* m : listeners()) if (m->shouldPayExcessEnergyCostWithStars()) { payExcess = true; break; }
+    if (payExcess) { starsNeed += (need - energy) * 2; need = energy; }
+  }
+  if (!c->costsX && need > energy) { if (reason) *reason = "ENERGY"; return false; }
+  if (starsNeed > stars) { if (reason) *reason = "STARS"; return false; }
   if (c->target == TargetType::AnyEnemy && aliveEnemies().empty()) return false;
   for (Model* m : listeners())
     if (!m->shouldPlay(c)) { if (reason) *reason = "UNPLAYABLE"; return false; }
@@ -617,6 +636,28 @@ Task<> gainEnergy(Combat& c, int amount) {
   co_await wait(0.1);
 }
 
+// PlayerCmd.GainStars: the only star command that checks ShouldGainStars and fires AfterStarsGained.
+Task<> gainStars(Combat& c, int amount) {
+  if (c.ending) co_return;
+  for (Model* m : c.listeners()) if (!m->shouldGainStars(amount)) co_return;
+  c.stars = std::max(0, c.stars + amount);
+  for (Model* m : c.listeners()) co_await m->afterStarsGained(amount);
+}
+
+// PlayerCmd.LoseStars: no hook (AfterStarsSpent only fires when a card's star cost is paid).
+Task<> loseStars(Combat& c, int amount) {
+  if (c.ending) co_return;
+  c.stars = std::max(0, c.stars - amount);
+  co_return;
+}
+
+// PlayerCmd.SetStars.
+Task<> setStars(Combat& c, int amount) {
+  if (c.ending) co_return;
+  if (c.stars < amount) co_await gainStars(c, amount - c.stars);
+  else if (c.stars > amount) co_await loseStars(c, c.stars - amount);
+}
+
 Task<> gainMaxHp(Creature* cr, int amount) {
   cr->maxHp += amount;
   cr->hp += amount;
@@ -949,14 +990,26 @@ Task<bool> Combat::checkWinCondition() {
 
 Task<> Combat::playCard(Card* card, Creature* target, bool autoPlay, bool forceExhaust) {
   // CardModel.SpendResources: X-cost cards spend everything and capture X.
-  int spent = 0;
+  int spent = 0, starsSpent = 0;
   if (!autoPlay) {
     spent = card->costsX ? energy : energyCost(card);
+    starsSpent = card->costsStarsX ? stars : std::max(0, starCost(card));
+    if (!card->costsX && spent > energy) {
+      bool payExcess = false;
+      for (Model* m : listeners()) if (m->shouldPayExcessEnergyCostWithStars()) { payExcess = true; break; }
+      if (payExcess) { starsSpent += (spent - energy) * 2; spent = energy; }
+    }
     energy -= std::max(spent, 0);
+    stars = std::max(0, stars - starsSpent);
   }
+  card->lastStarsSpent = starsSpent;
   if (card->costsX) {
     card->xValue = spent;
     for (Model* m : listeners()) card->xValue = m->modifyXValue(card, card->xValue);  // Hook.ModifyXValue
+  }
+  if (card->costsStarsX) {
+    card->starXValue = starsSpent;
+    for (Model* m : listeners()) card->starXValue = m->modifyXValue(card, card->starXValue);  // Hook.ModifyXValue
   }
   ++cardsPlayedThisTurn;
   removeFromPiles(card);
@@ -979,6 +1032,7 @@ Task<> Combat::playCard(Card* card, Creature* target, bool autoPlay, bool forceE
   }
   for (Model* m : countModifiers) co_await m->afterModifyingCardPlayCount(card);
   if (spent > 0) for (Model* m : listeners()) co_await m->afterEnergySpent(card, spent);
+  if (starsSpent > 0) for (Model* m : listeners()) co_await m->afterStarsSpent(starsSpent);  // CardModel.SpendStars
 
   if (card->type != CardType::Attack) push({VisualEvent::Anim, player, 0, "Cast"});
   co_await wait(autoPlay ? 0.3 : 0.1);

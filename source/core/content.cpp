@@ -632,6 +632,7 @@ void registerPotions();      // potions.cpp
 void registerEnchantments(); // enchantments.cpp
 void registerSilent();       // char_silent.cpp
 void registerNecrobinder();  // char_necrobinder.cpp
+void registerRegent();       // char_regent.cpp
 
 namespace db {
 
@@ -729,6 +730,7 @@ void init() {
   registerEnchantments();
   registerSilent();
   registerNecrobinder();
+  registerRegent();
   registerRelics();
   registerEvents();
   registerAncients();
