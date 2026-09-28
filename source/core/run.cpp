@@ -149,7 +149,10 @@ Task<> Run::runEvent(std::unique_ptr<Event> e) {
 Task<std::vector<Card*>> Run::selectFromDeck(std::string prompt, std::function<bool(Card*)> filter, int count,
                                              bool canCancel, bool showUpgrade, int minCount) {
   std::vector<Card*> opts;
-  for (auto& c : deck) if (!filter || filter(c.get())) opts.push_back(c.get());
+  // CardSelectCmd.FromDeckForRemoval / FromDeckForTransformation: Eternal cards are not offered.
+  bool removal = prompt == "card_selection.TO_REMOVE", transform = prompt == "card_selection.TO_TRANSFORM";
+  for (auto& c : deck)
+    if ((!filter || filter(c.get())) && !((removal || transform) && !c->isRemovable())) opts.push_back(c.get());
   if (opts.empty()) co_return std::vector<Card*>{};
   deckChoice.prompt = std::move(prompt);
   deckChoice.options = std::move(opts);
@@ -180,7 +183,7 @@ void Run::removeCardFromDeck(Card* c) {
 }
 
 Card* Run::transformCard(Card* c, std::unique_ptr<Card> into) {
-  if (!into) return c;
+  if (!into || !c->isTransformable()) return c;  // CardCmd.Transform skips Eternal cards
   for (auto& d : deck)
     if (d.get() == c) { d = std::move(into); return d.get(); }
   return addCardToDeck(std::move(into));
@@ -230,7 +233,10 @@ Task<bool> Run::eventFight(const std::string& encounterId) {
 // cards (through the card reward hooks) and any extra card rewards (Prayer Wheel, White Star).
 Task<> Run::combatRewards(RoomType type) {
   Rng& rr = rng("Rewards");
-  co_await gainGold(type == RoomType::Boss ? 100 : type == RoomType::Elite ? rr.nextInt(35, 46) : rr.nextInt(10, 21));
+  // EncounterModel.Min/MaxGoldReward: 10-20 / 35-45 / 100, times 0.75 (truncated) with Poverty.
+  auto poor = [&](int v) { return hasAscension(kPoverty) ? (int)(v * 0.75) : v; };
+  co_await gainGold(type == RoomType::Boss ? poor(100)
+                    : type == RoomType::Elite ? rr.nextInt(poor(35), poor(45) + 1) : rr.nextInt(poor(10), poor(20) + 1));
   bool finalBoss = type == RoomType::Boss && actIndex + 1 >= kActs;
   int extraGold = 0;
   if (!finalBoss) for (auto& rel : relics) extraGold += rel->extraCombatGold(type);
@@ -289,9 +295,11 @@ Task<> Run::gainGold(int amount) {
   for (Model* m : listeners()) co_await m->afterGoldGained(n);
 }
 
-void Run::start(uint64_t s, const std::string& charId) {
+void Run::start(uint64_t s, const std::string& charId, int ascensionLevel) {
   db::init();
   seed = s;
+  if (const char* env = getenv("STS_ASCENSION")) ascensionLevel = std::atoi(env);  // debug: STS_ASCENSION=0-10
+  ascension = std::clamp(ascensionLevel, 0, 10);
   characterId = db::character(charId).id;  // unknown ids fall back to the Ironclad
   const Character& ch = character();
   rngs.clear();
@@ -313,11 +321,14 @@ void Run::start(uint64_t s, const std::string& charId) {
     rel->run = this;
     relics.push_back(std::move(rel));
   }
+  // AscensionManager.ApplyEffectsTo: AscendersBane goes into the starting deck (TightBelt is the potion slot above).
+  if (hasAscension(kAscendersBane))
+    if (auto bane = db::card("AscendersBane")) deck.push_back(std::move(bane));
   populateRelicBags();
   visitedEvents.clear();
   died = false;
   potions.clear();
-  potions.resize(3);  // Player: 3 potion slots
+  potions.resize((size_t)ascValue(kTightBelt, 2, 3));  // Player: 3 potion slots, one fewer with TightBelt
   potionRewardOdds = 0.4f;
   shopRemovalsUsed = 0;
   // Debug: STS_RELICS=Girya,Shovel,... adds relics (pickup effects skipped).
@@ -418,6 +429,13 @@ void Run::enterAct(int index) {
   for (auto& id : sharedAncients[actIndex]) if (db::event(id)) candidates.push_back(id);
   if (!candidates.empty() && !debugStart) ancientId = up.nextItem(candidates);
   if (const char* forced = getenv("STS_ANCIENT"); forced && db::event(forced) && !debugStart) ancientId = forced;
+  // RunManager.GenerateRooms: DoubleBoss gives the last act a second boss (another of its bosses, UpFront stream).
+  secondBossId.clear();
+  if (hasAscension(kDoubleBoss) && actIndex == kActs - 1) {
+    std::vector<std::string> others;
+    for (auto& b : bosses) if (b != bossId) others.push_back(b);
+    if (!others.empty()) secondBossId = up.nextItem(others);
+  }
   // SetActInternal: UnknownMapPointOdds.ResetToBase.
   unknownMonsterOdds = 0.1f;
   unknownTreasureOdds = 0.02f;
@@ -434,7 +452,13 @@ Task<> Run::enterAncient() {
   ancientPending = false;
   auto e = db::event(ancientId);
   if (!e) co_return;
-  player->hp = player->maxHp;
+  // AncientEventModel.BeforeEventStarted: heal to full (Neow starts from 0 HP); WearyTraveler heals 80%.
+  if (hasAscension(kWearyTraveler)) {
+    int from = ancientId == "Neow" ? 0 : player->hp;
+    player->hp = std::min(player->maxHp, (Dec(from) + Dec(player->maxHp - from) * Dec::lit(0.8)).toInt());
+  } else {
+    player->hp = player->maxHp;
+  }
   co_await runEvent(std::move(e));
 }
 
@@ -451,7 +475,8 @@ void Run::generateMap() {
   // StandardActMap (mapgen.cpp): the game's own generator, paths, pruning and types.
   // StandardActMap.CreateFor: Rng(seed, "act_<n>_map").
   std::string stream = "act_" + std::to_string(actIndex + 1) + "_map";
-  nodes = generateStandardActMap(rng(stream.c_str()), actIndex);
+  // MapPointTypeCounts.NumOfElites: 5, 8 (round(5 * 1.6)) with SwarmingElites.
+  nodes = generateStandardActMap(rng(stream.c_str()), actIndex, hasAscension(kSwarmingElites) ? 8 : 5);
   // NMapScreen layout: each point jittered by up to ±21 / ±25 units (map_jitter_<act>
   // stream) and tilted by NextGaussianFloat(0, 8) degrees (Rng.Chaotic in C#: cosmetic only).
   std::string jitter = "map_jitter_" + std::to_string(actIndex);
@@ -484,19 +509,30 @@ std::vector<int> Run::reachableNodes() const {
   return out;
 }
 
-// CardRarityOdds.Roll (non-ascension values).
+// CardRarityOdds.Roll; Scarcity lowers the rare odds and the growth of the offset.
 Rarity Run::rollRarity(RoomType room) {
   float rare, uncommon;
   float offset = rarityOffset;
+  bool scarce = hasAscension(kScarcity);
   if (room == RoomType::Boss) { rare = 1.f; uncommon = 0.f; offset = 0.f; }
-  else if (room == RoomType::Elite) { rare = 0.1f; uncommon = 0.4f; }
-  else { rare = 0.03f; uncommon = 0.37f; }
+  else if (room == RoomType::Elite) { rare = scarce ? 0.05f : 0.1f; uncommon = 0.4f; }
+  else { rare = scarce ? 0.0149f : 0.03f; uncommon = 0.37f; }
   float r = rng("Rewards").nextFloat();
   float rareOdds = rare + offset;
   Rarity result = r < rareOdds ? Rarity::Rare : r < uncommon + rareOdds ? Rarity::Uncommon : Rarity::Common;
   if (result == Rarity::Rare) rarityOffset = -0.05f;
-  else rarityOffset = std::min(rarityOffset + 0.01f, 0.4f);
+  else rarityOffset = std::min(rarityOffset + (scarce ? 0.005f : 0.01f), 0.4f);
   return result;
+}
+
+// PORT NOTE: the C# compares (decimal)float with a decimal; here both are doubles.
+void Run::rollCardUpgrade(Card& c, double baseChance) {
+  double num = rng("Rewards").nextFloat();
+  if (!c.upgradable()) return;
+  double odds = baseChance;
+  if (c.rarity != Rarity::Rare) odds += actIndex * (hasAscension(kScarcity) ? 0.125 : 0.25);
+  // Hook.ModifyCardRewardUpgradeOdds: no model overrides it.
+  if (num <= odds) c.upgrade();
 }
 
 // CardFactory.CreateForReward: roll a rarity per card, no duplicates.
@@ -517,6 +553,7 @@ std::vector<std::unique_ptr<Card>> Run::cardReward(RoomType room, int count) {
     std::string id = rng("Rewards").nextItem(pool);
     taken.push_back(id);
     out.push_back(db::card(id));
+    rollCardUpgrade(*out.back(), 0);  // CardFactory.CreateForReward: RollForUpgrade(baseChance 0)
   }
   return out;
 }
@@ -652,7 +689,17 @@ Task<> Run::main() {
       if (!won) { screen = Screen::GameOver; co_return; }
       // RewardsSet.WithRewardsFromRoom: the last act's boss gives nothing; the run is won.
       // PORT NOTE: C# then enters TheArchitect event (the ending); not ported yet.
-      if (type == RoomType::Boss && actIndex + 1 >= kActs) { screen = Screen::Victory; co_return; }
+      if (type == RoomType::Boss && actIndex + 1 >= kActs) {
+        // DoubleBoss: the second boss follows the first (which, like every boss of the last act, gives no rewards).
+        if (!secondBossId.empty()) {
+          std::string second = secondBossId;
+          secondBossId.clear();
+          ++floor;
+          if (!co_await fight(second)) { screen = Screen::GameOver; co_return; }
+        }
+        screen = Screen::Victory;
+        co_return;
+      }
 
       // Rewards (RewardsSet): gold, then for elites a relic, then a pick of three cards.
       // EncounterModel gold: monster 10-20, elite 35-45, boss 100.

@@ -195,18 +195,18 @@ struct PollinousCore : Relic {
 // FlailKnight.cs (the Mysterious Knight of The Lantern Key is a stronger one).
 struct FlailKnight : Monster {
   FlailKnight() { id = "FlailKnight"; locKey = "FLAIL_KNIGHT"; }
-  int minHp() const override { return 101; }
-  int maxHp() const override { return 101; }
+  int minHp() const override { return asc(kToughEnemies, 108, 101); }
+  int maxHp() const override { return minHp(); }
   void buildMoves() override {
     auto* chant = machine.add<MoveState>("WAR_CHANT");
     chant->perform = [this](Targets) { return applyToSelf<StrengthPower>(3); };
     chant->intents = {kindIntent(Intent::Buff)};
     auto* flail = machine.add<MoveState>("FLAIL_MOVE");
-    flail->perform = [this](Targets) { return attack(9, 2); };
-    flail->intents = {attackIntent(9, 2)};
+    flail->perform = [this](Targets) { return attack(asc(kDeadlyEnemies, 10, 9), 2); };
+    flail->intents = {attackIntent(asc(kDeadlyEnemies, 10, 9), 2)};
     auto* ram = machine.add<MoveState>("RAM_MOVE");
-    ram->perform = [this](Targets) { return attack(15); };
-    ram->intents = {attackIntent(15)};
+    ram->perform = [this](Targets) { return attack(asc(kDeadlyEnemies, 17, 15)); };
+    ram->intents = {attackIntent(asc(kDeadlyEnemies, 17, 15))};
     auto* rand = machine.add<RandomBranchState>("RAND");
     rand->add(chant, MoveRepeat::CannotRepeat);
     rand->add(flail, MoveRepeat::CanRepeatForever, 2.f);

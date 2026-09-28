@@ -28,6 +28,12 @@ struct Orb;
 struct Combat;
 struct Run;
 
+// AscensionLevel (Entities.Ascension): a run at level N has every level <= N (Run::hasAscension).
+enum AscensionLevel : int {
+  kAscNone, kSwarmingElites, kWearyTraveler, kPoverty, kTightBelt, kAscendersBane,
+  kInflation, kScarcity, kToughEnemies, kDeadlyEnemies, kDoubleBoss
+};
+
 enum class Side { Player, Enemy };
 enum class CardType { Attack, Skill, Power, Status, Curse };
 enum class Rarity { Basic, Common, Uncommon, Rare, Ancient, Token, Status, Curse };
@@ -45,7 +51,7 @@ enum : int { kUnblockable = 2, kUnpowered = 4, kMove = 8, kSkipHurtAnim = 16 };
 inline bool isPoweredAttack(int p) { return (p & kMove) && !(p & kUnpowered); }
 inline bool isPoweredBlock(int p) { return (p & kMove) && !(p & kUnpowered); }
 
-enum Keyword : int { kwExhaust = 1, kwUnplayable = 2, kwEthereal = 4, kwInnate = 8, kwRetain = 16, kwSly = 32 };
+enum Keyword : int { kwExhaust = 1, kwUnplayable = 2, kwEthereal = 4, kwInnate = 8, kwRetain = 16, kwSly = 32, kwEternal = 64 };
 enum CardTag : int { tagStrike = 1, tagDefend = 2, tagMinion = 4, tagOstyAttack = 8, tagShiv = 16, tagSovereignBlade = 32 };
 
 struct DamageResult {
@@ -468,6 +474,9 @@ struct Card : Model {
   // CardModel.GetEnchantedReplayCount: extra plays from BaseReplayCount and the enchantment.
   // CardModel.HasSingleTurnRetain / HasSingleTurnSly: set by effects, cleared at the end of the turn.
   bool singleTurnRetain = false, singleTurnSly = false;
+  // CardModel.IsRemovable / IsTransformable: Eternal cards cannot leave the deck (removal, transform).
+  bool isRemovable() const { return !has(kwEternal); }
+  bool isTransformable() const { return isRemovable(); }
   bool shouldRetainThisTurn() const { return has(kwRetain) || singleTurnRetain; }
   bool isSlyThisTurn() const { return has(kwSly) || singleTurnSly; }
   int enchantedReplayCount() const { return enchantment ? enchantment->enchantPlayCount(baseReplayCount) : baseReplayCount; }
@@ -588,6 +597,7 @@ struct Monster : Model {
   MoveStateMachine machine;
   MoveState* nextMove = nullptr;
   bool spawnedThisTurn = false;
+  std::vector<std::pair<int, int>> attackLog;  // (damage, hits) of Monster::attack calls in the current move (STS_ASC_CHECK)
 
   virtual int minHp() const = 0;
   virtual int maxHp() const = 0;
@@ -596,6 +606,9 @@ struct Monster : Model {
 
   void rollMove(Rng& rng) { nextMove = machine.rollMove(*this, rng); }
   Task<> performMove();
+  // AscensionHelper.GetValueIfAscension for monsters: `ascValue` from that ascension level on, else `base`.
+  // (The value read while a monster is built or acts comes from the run the combat belongs to.)
+  int asc(AscensionLevel level, int ascValue, int base) const;
   // CreatureCmd.Stun: the next move becomes STUNNED (running stunMove, if any), then
   // nextMoveId (default: the last logged state).
   void stun(std::function<Task<>(const std::vector<Creature*>&)> stunMove = nullptr, std::string nextMoveId = "");
@@ -924,7 +937,7 @@ struct MapNode {
 // the act's rooms in our indexing (row 0 = the game's row 1, the start point is
 // dropped; the boss is the last node, row 15, col 3). next = child indices.
 // Implemented in mapgen.cpp.
-std::vector<MapNode> generateStandardActMap(Rng& mapRng, int actIndex);
+std::vector<MapNode> generateStandardActMap(Rng& mapRng, int actIndex, int numOfElites = 5);
 
 struct Encounter {
   std::string id;
@@ -1022,6 +1035,9 @@ struct ShopItem {
 struct Run {
   uint64_t seed = 1;
   std::string characterId = "Ironclad";  // Player.Character: db::character(characterId)
+  int ascension = 0;                     // RunState.AscensionLevel (0-10)
+  bool hasAscension(AscensionLevel l) const { return ascension >= (int)l; }
+  int ascValue(AscensionLevel l, int ascValue, int base) const { return hasAscension(l) ? ascValue : base; }
   const Character& character() const;
   std::unique_ptr<Creature> player;
   std::vector<std::unique_ptr<Card>> deck;
@@ -1037,9 +1053,15 @@ struct Run {
   std::unique_ptr<Combat> combat;
   std::vector<std::string> normalQueue, weakQueue;
   std::string bossId;
+  // DoubleBoss (ascension 10, last act only): the act's second boss, fought right after the first.
+  // PORT NOTE: the C# adds it as a second boss node on the map (C11); here the fights are chained.
+  std::string secondBossId;
   std::map<std::string, std::unique_ptr<Rng>> rngs;
   float rarityOffset = -0.05f;  // CardRarityOdds.CurrentValue
   Rarity rollRarity(RoomType room);
+  // CardFactory.RollForUpgrade: one Rewards float; the card upgrades when it is <= baseChance plus the
+  // act index times the scaling (0.25, 0.125 with Scarcity; not for Rare cards).
+  void rollCardUpgrade(Card& c, double baseChance);
   std::vector<std::unique_ptr<Card>> cardReward(RoomType room, int count);
 
   Screen screen = Screen::Title;
@@ -1140,7 +1162,7 @@ struct Run {
     if (!r) r = std::make_unique<Rng>(seed, stream);
     return *r;
   }
-  void start(uint64_t seed, const std::string& characterId = "Ironclad");
+  void start(uint64_t seed, const std::string& characterId = "Ironclad", int ascension = 0);
   void enterAct(int index);        // RunManager.EnterAct: new map, encounters and events
   const db::ActDef& act() const;
   void generateMap();
@@ -1172,6 +1194,7 @@ void init();
 std::unique_ptr<Card> card(const std::string& id);
 std::unique_ptr<Power> power(const std::string& id);
 const Encounter* encounter(const std::string& id);
+std::vector<std::string> encounterIds();  // every registered encounter (tests, tools)
 std::unique_ptr<Relic> relic(const std::string& id);
 std::unique_ptr<Potion> potion(const std::string& id);
 void registerPotion(const std::string& id, PotionFactoryFn f);

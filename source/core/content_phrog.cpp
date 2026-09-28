@@ -30,12 +30,12 @@ struct Wriggler : Monster {
   MONSTER_HEADER(Wriggler, "WRIGGLER")
   bool startStunned = false;
   int slot = 1;  // "wriggler1".."wriggler4": the slot picks the opening move
-  int minHp() const override { return 17; }
-  int maxHp() const override { return 21; }
+  int minHp() const override { return asc(kToughEnemies, 18, 17); }
+  int maxHp() const override { return asc(kToughEnemies, 22, 21); }
   void buildMoves() override {
     auto* bite = machine.add<MoveState>("NASTY_BITE_MOVE");
-    bite->perform = [this](Targets) { return attack(6); };
-    bite->intents = {attackIntent(6)};
+    bite->perform = [this](Targets) { return attack(asc(kDeadlyEnemies, 7, 6)); };
+    bite->intents = {attackIntent(asc(kDeadlyEnemies, 7, 6))};
     auto* wriggle = machine.add<MoveState>("WRIGGLE_MOVE");
     wriggle->perform = [this](Targets) { return wriggleMove(); };
     wriggle->intents = {kindIntent(Intent::Buff), kindIntent(Intent::Status, 1)};
@@ -76,16 +76,16 @@ struct InfestedPower : Power {
 
 struct PhrogParasite : Monster {
   MONSTER_HEADER(PhrogParasite, "PHROG_PARASITE")
-  int minHp() const override { return 61; }
-  int maxHp() const override { return 64; }
+  int minHp() const override { return asc(kToughEnemies, 66, 61); }
+  int maxHp() const override { return asc(kToughEnemies, 68, 64); }
   Task<> afterAddedToRoom() override { co_await applyToSelf<InfestedPower>(4); }
   void buildMoves() override {
     auto* infect = machine.add<MoveState>("INFECT_MOVE");
     infect->perform = [this](Targets) { return cmd::addStatusCards(*combat, "Infection", Pile::Discard, 3); };
     infect->intents = {kindIntent(Intent::Status, 3)};
     auto* lash = machine.add<MoveState>("LASH_MOVE");
-    lash->perform = [this](Targets) { return attack(4, 4); };
-    lash->intents = {attackIntent(4, 4)};
+    lash->perform = [this](Targets) { return attack(asc(kDeadlyEnemies, 5, 4), 4); };
+    lash->intents = {attackIntent(asc(kDeadlyEnemies, 5, 4), 4)};
     auto* rand = machine.add<RandomBranchState>("RAND");
     infect->followUp = lash;
     lash->followUp = infect;

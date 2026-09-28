@@ -88,7 +88,6 @@ struct Node {
 
 constexpr int kMapWidth = 7;               // StandardActMap._mapWidth
 constexpr int kNumOfShops = 3;              // MapPointTypeCounts.NumOfShops
-constexpr int kNumOfElites = 5;             // MapPointTypeCounts.NumOfElites (no SwarmingElites)
 
 bool inSet(MPType t, std::initializer_list<MPType> set) {
   for (MPType s : set) if (s == t) return true;
@@ -146,6 +145,7 @@ struct MapBuilder {
   Node* startingPoint = nullptr;
   Node* bossPoint = nullptr;
   int numOfRests = 0;
+  int numOfElites = 5;
   int numOfUnknowns = 0;
 
   MapBuilder(Rng& r, int len) : rng(r), mapLength(len), grid(kMapWidth, std::vector<Node*>(len, nullptr)) {}
@@ -319,7 +319,7 @@ struct MapBuilder {
     std::deque<MPType> toAssign;
     for (int i = 0; i < numOfRests; i++) toAssign.push_back(MPType::RestSite);
     for (int i = 0; i < kNumOfShops; i++) toAssign.push_back(MPType::Shop);
-    for (int i = 0; i < kNumOfElites; i++) toAssign.push_back(MPType::Elite);
+    for (int i = 0; i < numOfElites; i++) toAssign.push_back(MPType::Elite);
     for (int i = 0; i < numOfUnknowns; i++) toAssign.push_back(MPType::Unknown);
     assignRemainingTypesToRandomPoints(toAssign);
 
@@ -521,7 +521,7 @@ struct MapBuilder {
     // Not short-circuited: every call must run to keep the Rng stream in sync
     // with the original (C#'s `|=` on bool doesn't short-circuit either).
     bool a = repairPointType(MPType::Shop, kNumOfShops);
-    bool b = repairPointType(MPType::Elite, kNumOfElites);
+    bool b = repairPointType(MPType::Elite, numOfElites);
     bool c = repairPointType(MPType::RestSite, numOfRests);
     bool d = repairPointType(MPType::Unknown, numOfUnknowns);
     return a || b || c || d;
@@ -680,7 +680,7 @@ RoomType toRoomType(MPType t) {
 
 }  // namespace
 
-std::vector<MapNode> generateStandardActMap(Rng& mapRng, int actIndex) {
+std::vector<MapNode> generateStandardActMap(Rng& mapRng, int actIndex, int numOfElites) {
   // BaseNumberOfRooms: Overgrowth 15, Hive 14, Glory 13.
   static const int kRooms[] = {15, 14, 13};
   actIndex = std::clamp(actIndex, 0, 2);
@@ -694,6 +694,7 @@ std::vector<MapNode> generateStandardActMap(Rng& mapRng, int actIndex) {
   else if (actIndex == 1) b.numOfRests = nextGaussianInt(mapRng, 6, 1, 6, 7);
   else b.numOfRests = mapRng.nextInt(5, 7);
   b.numOfUnknowns = nextGaussianInt(mapRng, 12, 1, 10, 14) - (actIndex > 0 ? 1 : 0);
+  b.numOfElites = numOfElites;
 
   b.generateMap();
   b.assignPointTypes();

@@ -57,7 +57,10 @@ std::unique_ptr<Relic> Run::pullRelicFromBack(RelicRarity k) {
 
 // MerchantEntry.Cost: the stored cost through Hook.ModifyMerchantPrice.
 int Run::shopPrice(const ShopItem& it) {
-  Dec price = it.kind == ShopItem::Removal ? Dec(75 + 25 * shopRemovalsUsed) : Dec(it.cost);
+  // MerchantCardRemovalEntry: 75 + 25 per removal already bought, 100 + 50 with Inflation.
+  Dec price = it.kind == ShopItem::Removal
+                  ? Dec(ascValue(kInflation, 100, 75) + ascValue(kInflation, 50, 25) * shopRemovalsUsed)
+                  : Dec(it.cost);
   for (Model* m : listeners()) price = m->modifyMerchantPrice(price);
   return price.toInt();
 }
@@ -78,13 +81,14 @@ void fillCard(Run& r, ShopItem& it) {
     });
   };
   float roll = r.rng("Rewards").nextFloat();
-  float rare = 0.09f + r.rarityOffset;
+  float rare = (r.hasAscension(kScarcity) ? 0.045f : 0.09f) + r.rarityOffset;
   Rarity want = roll < rare ? Rarity::Rare : roll < 0.37f + rare ? Rarity::Uncommon : Rarity::Common;
   std::vector<std::string> ids;
   for (int k = 0; k < 3 && (ids = ofRarity(want)).empty(); ++k)  // GetNextHighestRarityWithWrapping
     want = want == Rarity::Common ? Rarity::Uncommon : want == Rarity::Uncommon ? Rarity::Rare : Rarity::Common;
   if (ids.empty()) { it.card.reset(); return; }
   it.card = db::card(r.rng("Shops").nextItem(ids));
+  r.rollCardUpgrade(*it.card, -999999999);  // CardFactory.CreateForMerchant: the roll is made but can never succeed
   for (auto& rel : r.relics)  // ModifyMerchantCardCreationResults (the eggs)
     if (rel->upgradesNewCard(*it.card)) it.card->upgrade();
   it.cost = roundEven(cardBaseCost(*it.card) * r.rng("Shops").nextFloat(0.95f, 1.05f));
