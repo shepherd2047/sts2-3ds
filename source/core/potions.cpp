@@ -9,6 +9,7 @@
 #include <cstdlib>
 
 #include "cards.h"
+#include "progress.h"
 
 namespace sts {
 
@@ -633,6 +634,7 @@ bool Run::procurePotion(std::unique_ptr<Potion> p) {
   for (auto& slot : potions)
     if (!slot) {
       p->run = this;
+      progress::markPotionSeen(p->id);
       slot = std::move(p);
       // Hook.AfterPotionProcured (Belt Buckle); fire and forget from this synchronous call.
       for (Model* m : listeners()) spawnSide(m->afterPotionProcured());

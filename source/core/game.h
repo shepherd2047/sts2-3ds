@@ -1105,6 +1105,7 @@ struct Run {
   Task<> combatRewards(RoomType type);  // RewardsSet after a won fight
   Task<> restSite();
   bool died = false;
+  bool progressRecorded = false;  // guards progress::onRunEnded against firing twice (see abandon())
   // A room that is not ported yet (events, shops): Screen::Placeholder shows this text.
   std::string placeholderText;
   std::string ancientId;            // this act's Ancient event ("Neow" in act 1), empty if none
@@ -1185,6 +1186,13 @@ struct Run {
   void spawnSide(Task<> t);
   std::string save();
   bool load(const std::string& data);  // on a fresh Run; then spawn main()
+  // Profile progress (progress.cpp, package M1): call when the player abandons this run from
+  // the pause menu (a run that ends by winning or losing records itself from Run::main). A
+  // no-op if the run already ended (died or screen is already GameOver/Victory).
+  // PORT NOTE: not called anywhere yet -- the abandon confirm button lives in source/ui/ (a
+  // separate package's screen); wiring `run_->abandon()` into App::returnTitle before it resets
+  // run_ is a one-line follow-up for that lane.
+  void abandon();
 };
 
 // ---------------------------------------------------------------- registry

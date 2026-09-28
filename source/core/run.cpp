@@ -5,10 +5,18 @@
 #include <set>
 
 #include "game.h"
+#include "progress.h"
 
 namespace sts {
 
 namespace {
+// progress::onRunEnded, guarded so a run is only ever recorded once (Run::main has several
+// GameOver/Victory exits, and Run::abandon() is a separate, UI-triggered path).
+void recordRunEnd(Run& r, progress::RunOutcome outcome) {
+  if (r.progressRecorded) return;
+  r.progressRecorded = true;
+  progress::onRunEnded(r.characterId, r.ascension, outcome);
+}
 // Registered ids of a list, in order.
 std::vector<std::string> registered(const std::vector<std::string>& ids) {
   std::vector<std::string> out;
@@ -84,6 +92,7 @@ Task<> Run::obtainRelic(std::unique_ptr<Relic> rel) {
   if (!rel) co_return;
   rel->run = this;
   rel->combat = combat && combat->inProgress ? combat.get() : nullptr;
+  progress::markRelicSeen(rel->id);
   Relic* raw = rel.get();
   for (auto& [k, v] : relicBag) v.erase(std::remove(v.begin(), v.end(), raw->id), v.end());
   for (auto& [k, v] : sharedRelicBag) v.erase(std::remove(v.begin(), v.end(), raw->id), v.end());
@@ -172,6 +181,7 @@ Card* Run::addCardToDeck(std::unique_ptr<Card> c) {
   if (!c) return nullptr;
   for (auto& rel : relics)
     if (rel->upgradesNewCard(*c)) c->upgrade();
+  progress::markCardSeen(c->id);
   deck.push_back(std::move(c));
   Card* added = deck.back().get();
   for (auto& rel : relics) rel->afterCardAddedToDeck(added);
@@ -313,12 +323,13 @@ void Run::start(uint64_t s, const std::string& charId, int ascensionLevel) {
   deck.clear();
   // PORT NOTE: cards / relics of a character that is not ported yet are skipped, so its run
   // starts with what exists (db::characterPlayable says whether it is complete).
-  for (auto& id : ch.starterDeck) if (auto c = db::card(id)) deck.push_back(std::move(c));
+  for (auto& id : ch.starterDeck) if (auto c = db::card(id)) { progress::markCardSeen(c->id); deck.push_back(std::move(c)); }
   relics.clear();
   for (auto& id : ch.startingRelics) {
     auto rel = db::relic(id);
     if (!rel) continue;
     rel->run = this;
+    progress::markRelicSeen(rel->id);
     relics.push_back(std::move(rel));
   }
   // AscensionManager.ApplyEffectsTo: AscendersBane goes into the starting deck (TightBelt is the potion slot above).
@@ -552,6 +563,7 @@ std::vector<std::unique_ptr<Card>> Run::cardReward(RoomType room, int count) {
     if (pool.empty()) break;
     std::string id = rng("Rewards").nextItem(pool);
     taken.push_back(id);
+    progress::markCardSeen(id);  // seen once offered, whether or not it is picked
     out.push_back(db::card(id));
     rollCardUpgrade(*out.back(), 0);  // CardFactory.CreateForReward: RollForUpgrade(baseChance 0)
   }
@@ -584,7 +596,7 @@ Task<bool> Run::fight(const std::string& encounterId) {
   rng("Shuffle").shuffle(c.draw);
   for (Model* m : c.listeners()) m->modifyShuffleOrder(c.draw, true);  // CardPile.RandomizeOrderInternal
 
-  for (auto& m : enc->generate(rng("Encounters"))) c.createEnemy(std::move(m));
+  for (auto& m : enc->generate(rng("Encounters"))) { progress::markMonsterSeen(m->id); c.createEnemy(std::move(m)); }
 
   screen = Screen::Combat;
   // CombatRoom.EnterInternal: Hook.AfterRoomEntered once the fight is set up.
@@ -613,7 +625,7 @@ Task<> Run::main() {
   for (;;) {
     if (ancientPending) {
       co_await enterAncient();
-      if (died) { screen = Screen::GameOver; co_return; }
+      if (died) { recordRunEnd(*this, progress::RunOutcome::Loss); screen = Screen::GameOver; co_return; }
     }
     while (pendingSide > 0) co_await wait(0.05);
     screen = Screen::Map;
@@ -651,7 +663,7 @@ Task<> Run::main() {
       if (!e) e = pullNextEvent();
       if (e) {
         co_await runEvent(std::move(e));
-        if (died) { screen = Screen::GameOver; co_return; }
+        if (died) { recordRunEnd(*this, progress::RunOutcome::Loss); screen = Screen::GameOver; co_return; }
         continue;
       }
     }
@@ -686,7 +698,7 @@ Task<> Run::main() {
       if (!devNextEncounter.empty() && db::encounter(devNextEncounter)) { id = devNextEncounter; devNextEncounter.clear(); }
 
       bool won = co_await fight(id);
-      if (!won) { screen = Screen::GameOver; co_return; }
+      if (!won) { recordRunEnd(*this, progress::RunOutcome::Loss); screen = Screen::GameOver; co_return; }
       // RewardsSet.WithRewardsFromRoom: the last act's boss gives nothing; the run is won.
       // PORT NOTE: C# then enters TheArchitect event (the ending); not ported yet.
       if (type == RoomType::Boss && actIndex + 1 >= kActs) {
@@ -695,8 +707,9 @@ Task<> Run::main() {
           std::string second = secondBossId;
           secondBossId.clear();
           ++floor;
-          if (!co_await fight(second)) { screen = Screen::GameOver; co_return; }
+          if (!co_await fight(second)) { recordRunEnd(*this, progress::RunOutcome::Loss); screen = Screen::GameOver; co_return; }
         }
+        recordRunEnd(*this, progress::RunOutcome::Win);
         screen = Screen::Victory;
         co_return;
       }
@@ -795,5 +808,9 @@ Task<> Run::restSite() {
   }
   restOptions.clear();
 }
+
+// Player-initiated abandon (pause menu -> confirm). See the PORT NOTE on the declaration in
+// game.h: nothing calls this yet because the confirm button is in source/ui/, a separate package.
+void Run::abandon() { recordRunEnd(*this, progress::RunOutcome::Abandon); }
 
 }  // namespace sts
