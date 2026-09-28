@@ -1,4 +1,5 @@
 // Split from ui.cpp (F3).
+#include "../core/settings.h"
 #include "ui_common.h"
 
 namespace ui {
@@ -20,34 +21,36 @@ std::string actTexture(const Run& r, const char* kind) {
 
 // ================================================================ setup
 
+// Saves: the run is written at every map choice (Run::onSavePoint) and deleted when it
+// ends. Automated previews (STS_HIDDEN) and STS_NO_SAVE neither read nor write it (nor
+// settings.sav / progress.sav -- see App::init/saveSettings below).
+namespace {
+constexpr const char* kSaveName = "run.sav";
+bool savesEnabled() { return !getenv("STS_HIDDEN") && !getenv("STS_NO_SAVE"); }
+}
+
 bool App::init() {
   if (!R().load()) return false;
   run_ = std::make_unique<Run>();
   autoplay_ = getenv("STS_AUTOPLAY") != nullptr;
   hasSave_ = hasSave();
-  std::string saved;
-  if (!getenv("STS_HIDDEN") && !getenv("STS_NO_SAVE") && gfx::readSave("settings.txt", saved)) {
-    int fast = 0, shake = 1;
-    if (std::sscanf(saved.c_str(), "v1 %d %d", &fast, &shake) == 2) {
-      fastMode_ = fast == 1;
-      screenShake_ = shake != 0;
-    }
-  }
+  // Y1: settings.sav, loaded once at startup. STS_HIDDEN/STS_NO_SAVE (automated previews, and the
+  // headless sim which never links ui.cpp at all) must never touch the real player's file; the
+  // in-memory settings::state() then just keeps its defaults for that run of the app.
+  if (savesEnabled()) settings::load();
+  fastMode_ = settings::state().fastMode;
+  screenShake_ = settings::state().screenShake;
   Scheduler::get().speed = fastMode_ ? 1.75 : 1.0;
   return true;
 }
 
-// Saves: the run is written at every map choice (Run::onSavePoint) and deleted when it
-// ends. Automated previews (STS_HIDDEN) and STS_NO_SAVE neither read nor write it.
-namespace {
-constexpr const char* kSaveName = "run.sav";
-constexpr const char* kSettingsName = "settings.txt";
-bool savesEnabled() { return !getenv("STS_HIDDEN") && !getenv("STS_NO_SAVE"); }
-}
-
+// fastMode_/screenShake_ stay as App fields (read every frame by ui.cpp/combat_ui.cpp/
+// combat_scene.cpp) but now just mirror settings::state(); this is the one place they are
+// written back and persisted, through the Y1 core module instead of the old ad hoc "settings.txt".
 void App::saveSettings() {
-  if (savesEnabled())
-    gfx::writeSave(kSettingsName, "v1 " + num(fastMode_ ? 1 : 0) + " " + num(screenShake_ ? 1 : 0));
+  settings::state().fastMode = fastMode_;
+  settings::state().screenShake = screenShake_;
+  if (savesEnabled()) settings::save();
 }
 
 bool App::hasSave() const {
