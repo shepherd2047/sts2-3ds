@@ -284,6 +284,7 @@ and `Models.Powers\`.
 
 | id | Character | Step 0 systems | Status |
 |---|---|---|---|
+| X0 | All | Character plumbing (see Engine lane order #1) | todo |
 | X1.0-X1.5 | Silent | Shiv tokens, Poison, discard triggers (Sly), Retain, Accuracy-style powers | todo |
 | X2.0-X2.5 | Defect | Orbs (Lightning, Frost, Dark, Plasma, Glass), channel/evoke, Focus, orb slots and their rendering on the top screen | todo |
 | X3.0-X3.5 | Regent | Stars (second resource with a HUD counter), Forge and Sovereign Blade, summons | todo |
@@ -381,28 +382,23 @@ same PC (`git worktree add ../sts2-3ds-<lane> main`), with its own `build/`. Cop
 | **Content** | Sonnet | A1a-c, A2, A3b-c, A5-A9, A11a-e, M5, M7, then X*.1-X*.4 for each character after its X*.0 | new `content_*.cpp` / `relics_*.cpp` / `events_*.cpp` files, one registration line each |
 | **Audio** | Sonnet (U1: Opus) | U1-U5, then H4 | `source/audio/**`, `source/platform_*/audio*`, `tools/audio*.py` |
 
-**Engine lane order** (owner, 2026-09-28: afflictions last):
+**Engine lane order** (owner, 2026-09-28: character mechanics first and in parallel;
+3DS/hardware work after ascension; afflictions last):
 
-| # | Package | Why this position |
-|---|---|---|
-| 1 | X1.0 Silent systems + character plumbing | Unblocks the content lane's biggest job (character cards); removes the Ironclad-only assumptions for everyone. |
-| 2 | Y5 3DS system behaviour | Small; makes real-hardware play safe (lid, HOME, power loss). |
-| 3 | C10 Ascension | Before the content lane ports the Underdocks monsters, so they are written with their ascension values and need no second sweep. |
-| 4 | X2.0 Defect systems (orbs) | The hardest character system; the content lane moves on to Defect cards. |
-| 5 | M1 Profile / progress save | Unblocks achievements (M5) and the UI lane's compendium and stats screens. |
-| 6 | Y1 Settings store | Builds on the existing START page; unblocks S21 and Y3. |
-| 7 | X3.0 Regent systems | Unblocks the Regent cards. |
-| 8 | X4.0 Necrobinder systems | Unblocks the Necrobinder cards. |
-| 9 | A10 TheArchitect ending | Completes the run structure. |
-| 10 | A11f Underdocks as act 1 | Once A11a-e are done; skip it until then. |
-| 11 | C11 Map extras | Needs C10. |
-| 12 | Y4 Profiles | Needs M1. |
-| 13 | M2 Run history | Needs M1. |
-| 14 | M11 Custom run | – |
-| 15 | M12 Daily run | Needs M11. |
-| 16 | X6 Cross-character content | Needs all X*.1-X*.4. |
-| 17 | A4 Afflictions | Last, by the owner's decision. The act 2/3 approximations stay until then. |
-| 18 | H* | Release packages. |
+| # | Package | Who | Why this position |
+|---|---|---|---|
+| 1 | **X0 Character plumbing** | engine lane | A small package that must come first. `Run::start(seed, characterId)`; a `Character` table built from `Models.Characters\*.cs` (HP, gold, starter deck, starting relic, card, relic and potion pools, energy orb, Spine id). Everything that assumes the Ironclad must read it from the character: the IRONCLAD Spine, `Res` keeping the IRONCLAD pages, the `_ironclad` icon fallback, card frame colour, `db::cardPool`, Neow/Ancient per-character lines, saves (character id, save version 3), and sim `SIM_CHAR=Silent`. Each character's system hooks then live in their own file. |
+| 2 | **X1.0 Silent · X2.0 Defect · X3.0 Regent · X4.0 Necrobinder, in parallel** | engine lane does X1.0; three Sonnet subagents (spawned and reviewed by the reviewer session) do X2.0-X4.0 in worktrees | Each system goes in `source/core/char_<name>.cpp` with the smallest possible hooks in core files. The content lane starts each character's cards (X*.1-X*.4) as soon as that character's X*.0 is accepted. |
+| 3 | C10 Ascension | engine lane | Before the Underdocks monsters are ported (no second sweep). |
+| 4 | Y5 3DS system behaviour + H1 performance pass + H3 romfs budget check on real hardware | engine lane | The owner wants the 3DS optimisation and hardware-limit tests right after ascension. |
+| 5 | M1 Profile / progress save | engine lane | Unblocks achievements and the compendium/stats screens. |
+| 6 | Y1 Settings store | engine lane | Unblocks S21 and Y3. |
+| 7 | A10 TheArchitect ending | engine lane | – |
+| 8 | A11f Underdocks as act 1 | engine lane | Once A11a-e are done. |
+| 9 | C11, Y4, M2, M11, M12 | engine lane | – |
+| 10 | X6 Cross-character content | engine lane | Needs all X*.1-X*.4. |
+| 11 | A4 Afflictions | engine lane | Last, by the owner's decision. |
+| 12 | H2, H4-H6 | – | Release packages. |
 
 Waiting points: content A3b needs A3a, and X*.1 needs X*.0. The engine lane does those
 first, so content never waits. The UI lane stubs anything that does not exist yet (the
