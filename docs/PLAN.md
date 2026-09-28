@@ -276,7 +276,7 @@ screenshots of both screens, and tick the U table at the end of this file.
 | S11 | U13 | Draw, discard and exhaust piles and deck view: grid on the bottom, focused card on top, sort | F5 | partial (combat pile tabs) |
 | S12 | U14 | Hand select (discard/exhaust/retain N): counter, confirm/cancel | F5 | todo |
 | S13 | U15/U16 | Deck grid select (upgrade/remove/transform with preview) and choose-one | F5 | todo |
-| S14 | U17/U18 | **Reward list** (gold, potion, relic, card rows: claim or skip, then proceed) + card reward with skip / Singing Bowl | F5 | in progress (UI) |
+| S14 | U17/U18 | **Reward list** (gold, potion, relic, card rows: claim or skip, then proceed) + card reward with skip / Singing Bowl | F5 | done (subagent), accepted 2026-09-28: RewardsSet generate-then-offer (C# order gold, potion, card, relic), rows claimed in any order, Proceed forfeits the rest; CardRewardAlternative options besides Skip not yet |
 | S15 | U19/U23 | Relic choice and treasure chest (chest opening, relic on top) | F3 | todo |
 | S16 | U20 | Shop: goods grid, price tags, sale, removal service, focused item on top | F5 | todo |
 | S17 | U21 | Events: art and text on top, large option buttons on the bottom, locked options shown with the reason | F4 | todo |
