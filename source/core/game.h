@@ -44,8 +44,8 @@ enum : int { kUnblockable = 2, kUnpowered = 4, kMove = 8, kSkipHurtAnim = 16 };
 inline bool isPoweredAttack(int p) { return (p & kMove) && !(p & kUnpowered); }
 inline bool isPoweredBlock(int p) { return (p & kMove) && !(p & kUnpowered); }
 
-enum Keyword : int { kwExhaust = 1, kwUnplayable = 2, kwEthereal = 4, kwInnate = 8, kwRetain = 16 };
-enum CardTag : int { tagStrike = 1, tagDefend = 2 };
+enum Keyword : int { kwExhaust = 1, kwUnplayable = 2, kwEthereal = 4, kwInnate = 8, kwRetain = 16, kwSly = 32 };
+enum CardTag : int { tagStrike = 1, tagDefend = 2, tagMinion = 4, tagOstyAttack = 8, tagShiv = 16 };
 
 struct DamageResult {
   Creature* receiver = nullptr;
@@ -151,6 +151,7 @@ struct Model {
   virtual Task<> afterAutoPrePlayPhaseEntered() { return {}; }  // player turn set up, before the play phase
   virtual Task<> beforeFlush() { return {}; }                   // player turn ends, before the hand is discarded
   virtual void modifyShuffleOrder(std::vector<Card*>& /*cards*/, bool /*isInitialShuffle*/) {}  // index 0 = top
+  virtual Task<> afterCardDiscarded(Card*) { return {}; }  // Hook.AfterCardDiscarded (CardCmd.Discard only, not the end-of-turn flush)
 };
 
 // ---------------------------------------------------------------- saves
@@ -408,6 +409,10 @@ struct Card : Model {
   // every clone() (CardT, IroncladT, ...) must call this on the new card.
   void adoptEnchantment() { if (enchantment) enchantment->card = this; }
   // CardModel.GetEnchantedReplayCount: extra plays from BaseReplayCount and the enchantment.
+  // CardModel.HasSingleTurnRetain / HasSingleTurnSly: set by effects, cleared at the end of the turn.
+  bool singleTurnRetain = false, singleTurnSly = false;
+  bool shouldRetainThisTurn() const { return has(kwRetain) || singleTurnRetain; }
+  bool isSlyThisTurn() const { return has(kwSly) || singleTurnSly; }
   int enchantedReplayCount() const { return enchantment ? enchantment->enchantPlayCount(baseReplayCount) : baseReplayCount; }
   // CardModel.GainsBlock is an override on 80 cards; here: the card has a Block var.
   // PORT NOTE: approximation, cards that gain block without a Block/CalculatedBlock var need an override.
@@ -694,6 +699,14 @@ struct Combat {
   std::vector<std::unique_ptr<Enchantment>> enchantGraveyard;  // cleared enchantments (listener snapshots may still hold them)
   std::vector<Creature*> stayingDead;             // being killed but not leaving (illusions)
   std::vector<Card*> draw, hand, discard, exhaust, play;
+  // CombatHistory.CardDiscarded entries (round + side they happened in), for "discarded this turn".
+  struct DiscardEntry { int round; Side side; Card* card; };
+  std::vector<DiscardEntry> discardHistory;
+  int discardsThisTurn() const {
+    int n = 0;
+    for (auto& e : discardHistory) if (e.round == roundNumber && e.side == currentSide) ++n;
+    return n;
+  }
 
   int energy = 0, maxEnergy = 3;
   int turnNumber = 1, roundNumber = 1;
@@ -762,6 +775,12 @@ Task<std::vector<Card*>> drawCards(Combat& c, Dec count, bool fromHandDraw = fal
 Task<> shuffle(Combat& c);
 Task<> moveCard(Combat& c, Card* card, Pile to, bool top = true);
 Task<> exhaustCard(Combat& c, Card* card, bool causedByEthereal = false);
+// CardCmd.Discard / DiscardAndDraw: the cards go to the discard pile one by one (AfterCardDiscarded each),
+// then `drawAfter` cards are drawn, then every card that was Sly is played automatically.
+// Use the list form for several cards, as the C# asks.
+Task<> discardCards(Combat& c, std::vector<Card*> cards, int drawAfter = 0);
+Task<> discardCard(Combat& c, Card* card);
+Task<> loseBlock(Creature* target, Dec amount);  // CreatureCmd.LoseBlock (no AfterBlockBroken hook yet)
 Task<> gainEnergy(Combat& c, int amount);
 Task<> gainMaxHp(Creature* cr, int amount);
 Task<> loseMaxHp(Creature* cr, int amount);

@@ -630,6 +630,7 @@ void registerAncients();     // ancients.cpp: Neow
 void registerAncientsLater(); // ancients_later.cpp: acts 2-3 and Darv
 void registerPotions();      // potions.cpp
 void registerEnchantments(); // enchantments.cpp
+void registerSilent();       // char_silent.cpp
 
 namespace db {
 
@@ -725,6 +726,7 @@ void init() {
   registerRelic("BurningBlood", [] { return std::unique_ptr<Relic>(new BurningBlood()); });
   registerRelic("Circlet", [] { return std::unique_ptr<Relic>(new Circlet()); });
   registerEnchantments();
+  registerSilent();
   registerRelics();
   registerEvents();
   registerAncients();

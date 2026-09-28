@@ -394,8 +394,7 @@ struct GamblingChip : Relic {
     auto picked = co_await cmd::selectCards(*combat, locKey, combat->hand, 0, (int)combat->hand.size());
     if (picked.empty()) co_return;
     doFlash();
-    for (Card* c : picked) co_await cmd::moveCard(*combat, c, Pile::Discard);
-    co_await cmd::drawCards(*combat, (int)picked.size());
+    co_await cmd::discardCards(*combat, picked, (int)picked.size());  // CardCmd.DiscardAndDraw
   }
 };
 

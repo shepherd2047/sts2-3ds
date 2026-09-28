@@ -555,6 +555,27 @@ Task<> exhaustCard(Combat& c, Card* card, bool causedByEthereal) {
   for (Model* m : c.listeners()) co_await m->afterCardExhausted(card, causedByEthereal);
 }
 
+Task<> discardCards(Combat& c, std::vector<Card*> cards, int drawAfter) {
+  if (c.over || c.ending || cards.empty()) co_return;
+  std::vector<Card*> sly;
+  for (Card* k : cards) {
+    if (k->isSlyThisTurn()) sly.push_back(k);
+    c.removeFromPiles(k);
+    c.discard.push_back(k);
+    c.discardHistory.push_back({c.roundNumber, c.currentSide, k});
+    for (Model* m : c.listeners()) co_await m->afterCardDiscarded(k);
+  }
+  if (drawAfter > 0) co_await drawCards(c, drawAfter);
+  for (Card* k : sly) co_await autoPlay(c, k);  // AutoPlayType.SlyDiscard
+}
+
+Task<> discardCard(Combat& c, Card* card) { co_await discardCards(c, {card}); }
+
+Task<> loseBlock(Creature* target, Dec amount) {
+  if (!target || target->dead() || amount <= Dec(0) || (target->combat && (target->combat->over || target->combat->ending))) co_return;
+  target->block = std::max(0, target->block - amount.toInt());
+}
+
 Task<> gainEnergy(Combat& c, int amount) {
   c.energy = std::max(0, c.energy + amount);
   co_await wait(0.1);
@@ -853,10 +874,13 @@ Task<> Combat::endPlayerTurnPhaseTwo() {
   bool flushHand = true;
   for (Model* m : listeners()) flushHand = flushHand && m->shouldFlush();
   if (flushHand)
-    for (Card* c : hand) if (!c->has(kwRetain)) flush.push_back(c);
+    for (Card* c : hand) if (!c->shouldRetainThisTurn()) flush.push_back(c);
   for (Card* c : flush) { removeFromPiles(c); discard.push_back(c); }
   if (!flush.empty()) co_await wait(0.25);
-  for (Card* c : allCards()) c->clearCostMods(Card::kEndOfTurn);  // PlayerCombatState.EndOfTurnCleanup
+  for (Card* c : allCards()) {  // PlayerCombatState.EndOfTurnCleanup -> CardModel.EndOfTurnCleanup
+    c->clearCostMods(Card::kEndOfTurn);
+    c->singleTurnRetain = c->singleTurnSly = false;
+  }
   std::vector<Creature*> ps{player};
   for (Model* m : listeners()) co_await m->afterSideTurnEnd(Side::Player, ps);
 }

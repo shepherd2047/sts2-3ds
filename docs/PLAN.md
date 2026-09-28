@@ -285,7 +285,7 @@ and `Models.Powers\`.
 | id | Character | Step 0 systems | Status |
 |---|---|---|---|
 | X0 | All | Character plumbing (see Engine lane order #1) | done (engine), accepted 2026-09-28 |
-| X1.0-X1.5 | Silent | Shiv tokens, Poison, discard triggers (Sly), Retain, Accuracy-style powers | X1.0 in progress (engine) |
+| X1.0-X1.5 | Silent | Shiv tokens, Poison, discard triggers (Sly), Retain, Accuracy-style powers | X1.0 done (engine); X1.1-X1.5 todo |
 | X2.0-X2.5 | Defect | Orbs (Lightning, Frost, Dark, Plasma, Glass), channel/evoke, Focus, orb slots and their rendering on the top screen | todo |
 | X3.0-X3.5 | Regent | Stars (second resource with a HUD counter), Forge and Sovereign Blade, summons | todo |
 | X4.0-X4.5 | Necrobinder | Osty (companion creature with its own HP, targeting, death), Doom, Souls | todo |
@@ -318,6 +318,25 @@ characterId)` reads it; `Run::characterId` / `Run::character()` replace every Ir
 A new character's per-character systems go in `source/core/char_<name>.cpp` (a hook in a core file only when
 it cannot be avoided). New card base classes must set the card frame / pool the same way `IroncladT` does and
 their `clone()` must call `adoptEnchantment()`.
+
+**X1.0 notes (Silent systems, done).** Shared engine pieces the Silent's cards (X1.1-X1.4) build on:
+- **Discard:** `cmd::discardCards(combat, cards, drawAfter)` / `discardCard` = `CardCmd.Discard` /
+  `DiscardAndDraw`: cards move one by one (`Model::afterCardDiscarded` for each), then the draw, then every card
+  that was Sly is auto-played. Use the list form for several cards. The end-of-turn flush is not a discard (no hook,
+  no Sly), as in the C#. GamblersBrew and GamblingChip now use it. `Combat::discardsThisTurn()` is the
+  `CardDiscardedEntry` count of this turn (MementoMori).
+- **Keywords:** `kwSly`; `Card::singleTurnSly / singleTurnRetain` (`giveSingleTurnSly`-style effects just set the flag;
+  cleared at the end of the turn), read through `isSlyThisTurn()` / `shouldRetainThisTurn()` (the flush uses the
+  latter). **The card text does not show Sly / Retain / Innate yet** (the C# adds them from the keyword lists):
+  that is UI (F5).
+- **Tags:** `tagMinion`, `tagOstyAttack`, `tagShiv` next to `tagStrike` / `tagDefend`.
+- **`char_silent.h/.cpp`:** `PoisonPower` (turn-start damage, Accelerant, `calculateTotalDamageNextTurn()` for a
+  future intent preview), `AccelerantPower`, `AccuracyPower`, `FanOfKnivesPower` (keeps every Shiv's target in step
+  because `Card::target` is a field, not a property), the `Shiv` token and `createShivsInHand(combat, n)`.
+  Cards include `char_silent.h`; no Silent card is registered yet (the character is not `characterPlayable`).
+- `cmd::loseBlock` (no AfterBlockBroken hook yet).
+- Tests: `test/silent_test.cpp` (in `make check`). Not done here on purpose: the powers only one card needs
+  (Envenom, NoxiousFumes, ...) belong to the content packages that port those cards.
 
 ### Track M: meta and progression
 

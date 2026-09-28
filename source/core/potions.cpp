@@ -357,8 +357,7 @@ struct GamblersBrew : PotionBase {
   POTION_HEADER(GamblersBrew, "GAMBLERS_BREW", Uncommon, CombatOnly, Self) }
   Task<> onUse(Creature*) override {
     auto picked = co_await cmd::selectCards(c(), prompt(), c().hand, 0, 999);
-    for (Card* k : picked) co_await cmd::moveCard(c(), k, Pile::Discard);
-    if (!picked.empty()) co_await cmd::drawCards(c(), Dec((int)picked.size()));
+    co_await cmd::discardCards(c(), picked, (int)picked.size());  // CardCmd.DiscardAndDraw
   }
 };
 
