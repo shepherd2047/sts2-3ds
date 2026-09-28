@@ -139,6 +139,10 @@ void App::updatePotions(const gfx::Input& in) {
 
 // PotionReward: the potion on top; take or skip below. With a full belt the belt is
 // listed so one can be discarded first (the game refuses the reward while it is full).
+// S14: when this offer is part of the post-combat reward sequence (run_->rewardItems is
+// non-empty), the same reward-list strip (drawRewardList, reward.cpp) shows what has already
+// been resolved -- this potion is the last entry in that log and is excluded from the strip
+// since it is the one currently being offered, not yet resolved.
 void App::drawPotionOffer(bool top) {
   Run& r = *run_;
   Potion* p = r.potionOffer.get();
@@ -154,6 +158,7 @@ void App::drawPotionOffer(bool top) {
       R().text(kTop / 2.f, 124, L("potions." + p->locKey + ".title"), nt);
       R().text(kTop / 2.f, 152, describePotion(p), ts(F12, col::white, CENTER, kTop - 60));
     }
+    if (!r.rewardItems.empty()) drawRewardList(true, 180, /*excludeLast=*/true);
     return;
   }
   drawSceneBg(false, 0.55f);
@@ -176,8 +181,15 @@ void App::drawPotionOffer(bool top) {
       hits_.push_back({x, y, pw, 80, ID_POTION0 + i});
     }
   }
-  button(10, 196, 110, 36, "跳过", ID_SKIP);
-  button(kBot - 120, 196, 110, 36, "拿取", ID_TAKE, p != nullptr && room, true);
+  // S14: nine-slice widget buttons (F3) in place of the flat-fill legacy button().
+  widgets::beginFrame(gfx::input());
+  if (widgets::button(1, 10, style::kActionY, 110, style::kButtonH, "跳过") && r.potionOfferChoice.waiting())
+    r.potionOfferChoice.fire(0);
+  if (widgets::button(2, kBot - 120, style::kActionY, 110, style::kButtonH, "拿取", widgets::Kind::Primary,
+                      p != nullptr && room) &&
+      r.potionOfferChoice.waiting())
+    r.potionOfferChoice.fire(1);
+  widgets::endFrame();
 }
 
 void App::updatePotionOffer(const gfx::Input& in) {
@@ -185,8 +197,8 @@ void App::updatePotionOffer(const gfx::Input& in) {
   if (!r.potionOfferChoice.waiting()) return;
   int id = in.touchDown ? hitAt(in.tx, in.ty) : ID_NONE;
   if (id >= ID_POTION0 && id < ID_POTION0 + (int)r.potions.size()) { r.discardPotion(id - ID_POTION0); return; }
-  if (((in.down & gfx::BTN_A) || id == ID_TAKE) && r.hasOpenPotionSlot()) { r.potionOfferChoice.fire(1); return; }
-  if ((in.down & gfx::BTN_B) || id == ID_SKIP) r.potionOfferChoice.fire(0);
+  if ((in.down & gfx::BTN_A) && r.hasOpenPotionSlot()) { r.potionOfferChoice.fire(1); return; }
+  if (in.down & gfx::BTN_B) r.potionOfferChoice.fire(0);
 }
 
 }  // namespace ui

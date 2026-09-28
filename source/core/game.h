@@ -1069,6 +1069,17 @@ struct Run {
   Signal<int> mapChoice;             // node index
   std::vector<std::unique_ptr<Card>> rewardCards;
   Signal<int> rewardChoice;          // index or -1 skip
+  // S14: a running, display-only log of what the current combatRewards sequence has granted
+  // so far (RGDSplus U17's reward list). Appended to at the exact point each reward already
+  // resolves in combatRewards -- it does not drive anything, so it cannot change RNG order;
+  // see the comment on combatRewards before changing this.
+  enum class RewardKind { Gold, Potion, Relic, Card };
+  struct RewardItem {
+    RewardKind kind;
+    int gold = 0;         // Gold: the amount granted
+    std::string label;    // Potion/Relic: locKey, for the icon and name; Card: unused
+  };
+  std::vector<RewardItem> rewardItems;
   Signal<int> restChoice;            // an id from restOptions, or -1 to leave (after one, Miniature Tent)
   // RestSiteOption ids offered now: 0 heal, 1 smith, 2 lift (Girya), 3 dig (Shovel).
   std::vector<int> restOptions;

@@ -85,6 +85,11 @@ class App {
   void drawMap(bool top);
   void drawCombat(bool top);
   void drawReward(bool top);
+  // S14: the running reward-list strip (RGDSplus U17) -- one disabled row per already-resolved
+  // entry in run_->rewardItems (gold, and any potion/relic already taken or skipped this
+  // sequence). `excludeLast` hides the last entry, used by the potion/relic offer screens
+  // where that entry is the one currently being offered, not yet resolved.
+  void drawRewardList(bool top, float y0, bool excludeLast);
   void drawRest(bool top);
   void drawUpgrade(bool top);
   void drawDeck(bool top);
