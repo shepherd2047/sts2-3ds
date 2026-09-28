@@ -284,7 +284,7 @@ and `Models.Powers\`.
 
 | id | Character | Step 0 systems | Status |
 |---|---|---|---|
-| X0 | All | Character plumbing (see Engine lane order #1) | done (engine) |
+| X0 | All | Character plumbing (see Engine lane order #1) | done (engine), accepted 2026-09-28 |
 | X1.0-X1.5 | Silent | Shiv tokens, Poison, discard triggers (Sly), Retain, Accuracy-style powers | X1.0 in progress (engine) |
 | X2.0-X2.5 | Defect | Orbs (Lightning, Frost, Dark, Plasma, Glass), channel/evoke, Focus, orb slots and their rendering on the top screen | todo |
 | X3.0-X3.5 | Regent | Stars (second resource with a HUD counter), Forge and Sovereign Blade, summons | todo |
@@ -472,6 +472,9 @@ same checks itself first. The reviewer runs:
    `SIM_ALLRELICS=1 SIM_ALLCARDS=1`, `SIM_ALLPOTIONS=1`, `SIM_ENCHANT=1`, and plain,
    run `./build/sim 12` with and without `SIM_SAVELOAD=K` for K = 3, 9, 17, 30. The
    `seed` lines must be identical.
+   `bash tools/accept.sh --3ds` (UCRT64 shell) runs steps 2-3 and prints `ACCEPT: PASS` /
+   `FAIL`. Use `--quick` between commits. Set `ACCEPT_CHARS="Silent"` to add a character's
+   ALLCARDS runs once its cards exist.
 4. **Screenshots**, if the package changes the UI.
 5. **Record the result** in the status column (`accepted <date>`) and fix what was
    found, or send it back to the lane.

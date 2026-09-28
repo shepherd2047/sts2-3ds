@@ -254,7 +254,7 @@ struct InfernalBlade : IroncladT<InfernalBlade> {
     keywords = kwExhaust;
   }
   Task<> onPlay(CardPlay&) override {
-    auto pool = db::ironcladCards([](const Card& c) { return c.type == CardType::Attack; });
+    auto pool = db::characterCards(combat->run->characterId, [](const Card& c) { return c.type == CardType::Attack; });  // Owner.Character.CardPool
     if (!pool.empty()) {
       std::string id = combat->rng("CombatCardGeneration").nextItem(pool);
       auto card = db::card(id);
