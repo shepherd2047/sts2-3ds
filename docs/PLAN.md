@@ -219,7 +219,7 @@ own art, and every screen in track S is then rebuilt with it.
 
 | id | Package | Kind | Needs | Status |
 |---|---|---|---|---|
-| F0 | UI style guide `docs/UI_STYLE.md`: palette, font sizes per screen, margins, minimum touch target 32 px, button families, focus ring, animation timings, which sound each control makes. Mock three screens in the preview and get the owner's approval. | design, *Opus* | – | done (UI) |
+| F0 | UI style guide `docs/UI_STYLE.md`: palette, font sizes per screen, margins, minimum touch target 32 px, button families, focus ring, animation timings, which sound each control makes. Mock three screens in the preview and get the owner's approval. | design, *Opus* | – | done (UI), accepted 2026-09-28 with notes (combat keeps the measured RGDSplus layout) |
 | F1 | UI art extraction (`images/ui/**`, 255 files): buttons (proceed, confirm, cancel, back, end turn), panels, banners, tooltip frame, top bar, checkboxes, sliders, tabs, scrollbar, reward rows, shop tags, map legend, all intent and power icons, rarity gems, character energy orbs → a UI atlas | tools | F0 | in progress (UI) |
 | F2 | Renderer features: 9-slice, tint and alpha, scale and rotation, scissor clipping for scroll lists, text outline and shadow, gradients and fades (SDL and 3DS) | gfx | – | todo |
 | F3 | Split `ui.cpp` into one file per screen (`source/ui/screens/*.cpp`), then the widget kit `source/ui/widgets.*`: Button (normal/focus/pressed/disabled, press animation), IconButton, Panel, ScrollList (drag, inertia, scrollbar), Grid, Tabs, Toggle, Slider, Paginator, Tooltip, Modal (confirm), Toast, Banner. One input model for touch and for D-pad/A/B/L/R with a focus ring. | UI, *Opus* | F1, F2 | todo |
