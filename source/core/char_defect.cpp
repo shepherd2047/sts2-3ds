@@ -5,8 +5,9 @@
 
 namespace sts {
 
-void registerDefectRelics();   // char_defect_relics.cpp
-void registerDefectPotions();  // char_defect_relics.cpp
+void registerDefectRelics();      // char_defect_relics.cpp
+void registerDefectPotions();     // char_defect_relics.cpp
+void registerDefectCommonCards(); // char_defect_cards.cpp
 
 namespace {
 template <class T> void regOrbType() { db::registerOrb(T::kId, [] { return std::unique_ptr<Orb>(new T()); }); }
@@ -66,6 +67,7 @@ void registerDefect() {
   registerCardType<DefendDefect>();
   registerCardType<Zap>();
   registerCardType<Dualcast>();
+  registerDefectCommonCards();
   registerDefectRelics();
   registerDefectPotions();
 }
