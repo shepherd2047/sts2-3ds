@@ -300,15 +300,20 @@ int main() {
     for (Card* k : f.c->hand) if (k->id == "Shiv") ++shivs;
     CHECK(shivs == 0);
   }
-  {  // PaperKrane: Weak reduces the owner's own damage by an extra 15% (40% total, not 25%)
+  {  // PaperKrane (held by the target): a Weak enemy's attack on the owner deals 40% less, not 25%
     Fight f("Silent", {"PaperKrane"});
-    f.apply<WeakPower>(f.c->player, 1);
+    Creature* e = f.enemy(0);
+    f.apply<WeakPower>(e, 1);
+    f.c->player->block = 0;
+    int hp = f.c->player->hp;
+    runTask([](Creature* t, Creature* by) -> Task<> { co_await cmd::damage(t, Dec(10), kMove, by, nullptr); }(f.c->player, e));
+    CHECK(hp - f.c->player->hp == 6);  // 10 * (0.75 - 0.15)
+    f.apply<WeakPower>(f.c->player, 1);  // the owner's own Weak is unchanged (25%)
     Card* strike = f.find("StrikeSilent");
     f.toHand(strike);
-    Creature* e = f.enemy(0);
-    int hp = e->hp;
+    int ehp = e->hp;
     f.play(strike, e);
-    CHECK(hp - e->hp == 3);  // 6 * (0.75 - 0.15) = 3.6 -> floored to 3
+    CHECK(ehp - e->hp == 4);  // 6 * 0.75 = 4.5 -> 4
   }
   {  // Potions (Silent4Epoch): PoisonPotion, GhostInAJar (Intangible), CunningPotion (upgraded Shivs)
     Fight f("Silent");

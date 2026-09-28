@@ -111,8 +111,8 @@ struct ToughBandages : Relic {
   }
 };
 
-// PaperKrane.cs (Rare): +15% extra damage reduction from the owner's own Weak, on top of the
-// usual 25%. The relic itself has no hooks; the effect is special-cased directly in
+// PaperKrane.cs (Rare): a Weak enemy attacking the owner deals 15% less on top of the usual
+// 25%. The relic itself has no hooks; the effect is special-cased directly in
 // WeakPower::modifyDamageMultiplicative (powers.h), the same way VulnerablePower there
 // special-cases PaperPhrog / CrueltyPower, instead of adding a new hook family.
 struct PaperKrane : Relic {
