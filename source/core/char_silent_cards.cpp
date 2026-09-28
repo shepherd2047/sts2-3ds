@@ -54,28 +54,7 @@ struct PiercingWailPower : Power {
   }
 };
 
-// BlockNextTurnPower (DodgeAndRoll.cs): the block from the card is granted again the next time this
-// creature's block is cleared (start of its next turn). Same mechanic/id as potions.cpp's private
-// copy (BlockPotion) -- kept separate per-package rather than sharing a header, as instructed.
-struct BlockNextTurnPower : Power {
-  POWER_HEADER(BlockNextTurnPower, "BLOCK_NEXT_TURN_POWER")
-  Task<> afterBlockCleared(Creature* c) override {
-    if (c != owner) co_return;
-    flash = 1.f;
-    co_await cmd::gainBlock(owner, Dec(amount), kUnpowered, nullptr);
-    co_await cmd::removePower(this);
-  }
-};
-
-// DrawCardsNextTurnPower (Predator.cs): draw N extra cards at the start of next turn, then remove
-// itself. Same mechanic/id as ancients_later.cpp's private copy (a Wish reward) -- see note above.
-struct DrawCardsNextTurnPower : Power {
-  POWER_HEADER(DrawCardsNextTurnPower, "DRAW_CARDS_NEXT_TURN_POWER")
-  Dec modifyHandDraw(Dec count) override { return amountOnTurnStart == 0 ? count : count + Dec(amount); }
-  Task<> afterSideTurnStart(Side, const std::vector<Creature*>& participants) override {
-    if (contains(participants, owner) && amountOnTurnStart != 0) co_await cmd::removePower(this);
-  }
-};
+// BlockNextTurnPower (DodgeAndRoll) and DrawCardsNextTurnPower (Predator) are the shared ones in powers.h.
 
 // ---------------------------------------------------------------- cards
 
