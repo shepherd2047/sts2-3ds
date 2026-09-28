@@ -383,7 +383,7 @@ their `clone()` must call `adoptEnchantment()`.
 
 | id | Package | Kind | Needs | Status |
 |---|---|---|---|---|
-| M1 | Profile save `progress.sav` (versioned, atomic write): per-character wins, losses, best streak, max ascension; seen/unlocked cards, relics, potions and monsters; counters for stats and achievements | engine, *Opus* | – | todo |
+| M1 | Profile save `progress.sav` (versioned, atomic write): per-character wins, losses, best streak, max ascension; seen/unlocked cards, relics, potions and monsters; counters for stats and achievements | engine, *Opus* | – | done (subagent), accepted 2026-09-28: `progress.h/.cpp` (ProgressSaveManager rules, seen sets, counters); not persisted yet (Y4 picks the path and calls `progress::save/load`), `Run::abandon()` still to be called from the UI abandon button |
 | M2 | Run history store: the last 50 runs (seed, character, ascension, path, deck, relics, floor reached, killed by, time, score) | engine | M1 | todo |
 | M3 | Timeline / epochs engine | – | – | n/a (owner: everything unlocked) |
 | M4 | Timeline screen + unlock reveals | – | – | n/a (owner: everything unlocked) |
