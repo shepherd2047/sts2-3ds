@@ -1,0 +1,135 @@
+# UI style guide (F0)
+
+The numbers here are in `source/ui/style.h`; widgets (F3) read them from there. The
+mock-ups (`STS_MOCK=1|2|3`, `source/ui/style_mock.cpp`) show them on screen: 1 reward list,
+2 combat bottom screen, 3 event. Change a number in the header, not in a screen.
+
+## Screens and layout
+
+- Top 400 x 240 is **look**, bottom 320 x 240 is **touch**. Nothing the player must tap is on the
+  top screen. A continuous scene (map, tall background) stays inside x 40..360 of the virtual canvas
+  (CLAUDE.md layout rule).
+- Outer margin **8 px**, gap between controls **4 px** (8 between groups). Text never touches an edge.
+- Bottom **action bar**: buttons 34 px tall, top at y = 198. Primary (confirm, proceed) at the right,
+  secondary (details, back, deck) at the left, at most three buttons. Back is always bottom-left.
+- Top **status bar**: 20 px, black at 72 %, brass line under it. Fields left to right: HP (red), gold,
+  floor, deck, potion belt, relic strip (right, scrolls). It is drawn by S19 and shared by every room.
+- Screen title: F16 at 1.25x (about 20 px), gold, with a 2 px brass line under it. Only one title per
+  screen, on the top screen except for pure list pages.
+- Panels: fill `kPanel`, 1 px brass border, a faint 1 px highlight inside the top edge. Square
+  corners (the art is plated).
+- Scrims: a scene background under a page is dimmed with `kScrim`-family black: 0.25 (combat top),
+  0.4-0.55 (pages), 0.6 (placeholders).
+
+## Touch and controller
+
+- Minimum touch target **32 x 32** (a stylus is precise, a fingertip is not). Rows are 36 px, standard
+  buttons 34 px, icon buttons 32 px, list rows and option buttons are the full width of their panel.
+  Cards in a grid may be smaller but always have a hit box of at least 32 px wide (grid mini card = 55 px).
+- Every screen can be played with the D-pad + A/B. **One input model**: a focus ring on exactly one
+  control; the D-pad moves it to the nearest control in that direction, A presses, B is back / cancel,
+  L/R switch tab or page, X opens details or inspect, Y is the secondary action (potions in combat),
+  START pauses / settings, SELECT is the developer menu.
+- Touch: a control is **pressed on release** if the stylus is still on it; it highlights on touch-down.
+  Dragging more than 5 px off a control cancels the press. Scroll lists start scrolling after 5 px.
+  In lists a first tap on an item focuses it and a tap on the focused item activates it (fast play);
+  buttons activate on the first tap.
+- Long-press (0.35 s) on a card, relic, potion or keyword shows its tooltip / detail; releasing closes it.
+- The focus ring is not shown while the player is using the stylus, and appears at once when a D-pad key
+  is pressed.
+
+## Type
+
+Two font pages, F12 (12 px) and F16 (16 px). Scaling is allowed between 0.8 and 1.6 only where noted.
+
+| Use | Font | Colour |
+|---|---|---|
+| Screen title | F16 x 1.25 (x 1.6 for victory / death banners) | gold |
+| Button label, row label, card title | F16 (shrinks to fit, min 0.75) | cream |
+| Body text, descriptions, tooltips | F12 | cream |
+| Numbers on cards (cost) | F16 | cream, green when reduced, red when raised |
+| Small counters (HP under bars, relic counters) | F12 x 0.85 (the smallest allowed) | cream |
+| Disabled | same size | grey `col::gray` |
+| Hint / reason line under a locked control | F12 | red |
+| Section labels, rarity, sub-titles | F12 | gold |
+
+Colour words in loc text use the rich-text tags (`[gold]`, `[blue]`, `[green]`, `[red]`, `[purple]`).
+Gold is for names, values and emphasis, blue for block / defence and cards, green for good,
+red for damage / bad, purple for special. Shadow is on for all text (needed over scene art).
+Max line length on the bottom screen is 300 px, on the top 380 px.
+
+## Palette (`style.h` and `res.h col::`)
+
+| Token | Value | Use |
+|---|---|---|
+| `kClear` | 0B0B12 | screen clear |
+| `kPanel` / `kPanelEdge` / `kPanelHi` | 17131C / 8A6D3B / C9A55C | panel fill, border, title underline |
+| `kPlate` / `kPlateHover` / `kPlatePress` / `kPlateOff` | 4A3626 / 62462D / 2E2118 / 262626 | button states |
+| `kPrimary` | 8A5A20 | the one main action on a screen |
+| `kDanger` | 7A2A2A | abandon, delete, remove |
+| `kEdge` / `kEdgeOff` | B89A60 / 555555 | button border |
+| `kFocus` | FFD870 | focus ring, selected outline |
+| `col::white` (cream) / `gold` / `blue` / `green` / `red` / `purple` / `gray` | FFF6E2 / EFC851 / 87CEEB / 7FFF00 / FF6563 / EE82EE / 9A9A9A | text |
+
+Once F1 lands, the game's own plates (proceed, confirm, cancel, reward rows, top bar) replace the
+flat fills; the layout, states and colours above stay, and the flat versions remain the fallback.
+
+## Button families
+
+1. **Primary**: gold-brown plate, one per screen (Proceed, Confirm, End turn, Start).
+2. **Secondary**: brown plate (Details, Deck, Back, Skip).
+3. **Danger**: red plate, always behind a confirm modal.
+4. **Icon button**: 32 x 32, art only (piles, potion, deck, map, settings); a 4 px hit padding.
+5. **List row**: full-width 36 px, 32 px icon at the left, F16 label, right-aligned F12 value or state
+   ("已领取", rarity). Used by rewards, shop lists, settings, run history.
+6. **Option button**: full-width 44 px with a centred F16 label, used by events and Ancients; a locked one
+   is drawn as disabled with the reason on a red line under it.
+7. **Tab**: 32 px tall, selected tab has a brass underline and a lighter plate; L/R switch.
+8. **Toggle / checkbox**: 32 x 32 hit box, tick art from `checkbox_*`; **slider**: 32 px tall track, 16 px knob,
+   D-pad left/right steps by 10 %.
+
+States for every control: **normal**, **focus** (lighter plate + 2 px `kFocus` ring), **pressed**
+(darker plate, label moves 1 px down, no sheen), **disabled** (grey plate and text, not focusable,
+not registered as a hit).
+
+## Motion
+
+| What | Time | Curve |
+|---|---|---|
+| Button press-in | 0.08 s | linear |
+| Screen change | 0.18 s fade through black | linear |
+| Panel / modal slide-in | 0.22 s from 12 px below | ease-out cubic |
+| Toast | 1.6 s, fades in 0.15 s, out 0.3 s | linear |
+| Tooltip delay | 0.35 s (long-press) | – |
+| Gold / HP counters | 0.4 s | ease-out |
+| Focus ring pulse | 1.2 s, alpha 0.7-1.0 | sine |
+| Card flight (play, discard) | 0.25 s | ease-in for discards, ease-out for draws |
+| Damage number | rises 24 px in 0.8 s, fades in the last 0.3 s | ease-out |
+
+Fast mode (settings) speeds all combat timing up by 1.75x; UI timings above do not change. Screen shake
+is a setting (default on) and never moves the bottom screen.
+
+## Sound (wired in U4; names are the C# events)
+
+| Control | Event |
+|---|---|
+| Press a button, pick a row | `event:/sfx/ui/clicks/ui_click` |
+| Focus / hover change | `event:/sfx/ui/clicks/ui_hover` |
+| Back / cancel / close | `event:/sfx/ui/clicks/ui_back` |
+| Toggle on / off | `event:/sfx/ui/clicks/ui_checkbox_on` / `_off` |
+| Open / close the map | `event:/sfx/ui/map/map_open` / `map_close`; node pick `map_select` |
+| Pause open / close | `event:/sfx/ui/pause_open` / `pause_close` |
+| Gold gained | `event:/sfx/ui/gold/gold_1..3` |
+| Relic flash | `event:/sfx/ui/relic_activate_general` (`_draw` for draw relics) |
+| Card moves | `event:/sfx/ui/cards/card_movement_*` |
+| Energy gained | `event:/sfx/ui/gain_energy` |
+
+Until U4, the widget kit only calls `ui::sfx(Sfx::Click)` style hooks that do nothing.
+
+## Rules for screen authors
+
+1. Use widgets and tokens; no raw colour or size literals in screen code except art positions.
+2. Every screen has a focus order (top-to-bottom, then left-to-right) and works with the D-pad alone.
+3. Anything longer than the space scrolls in a ScrollList; never shrink body text below F12 x 0.85.
+4. Show why a control is locked; never silently disable it.
+5. Check both screens in preview screenshots before committing (Chinese and, once Y3 lands, English).

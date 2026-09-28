@@ -923,6 +923,7 @@ void App::draw() {
   for (int pass = 0; pass < 2; ++pass) {
     bool top = pass == 0;
     gfx::screen(top ? gfx::TOP : gfx::BOTTOM, 0x0B0B12FF);
+    if (const char* m = getenv("STS_MOCK")) { drawStyleMock(std::atoi(m), top); continue; }
     if (settingsOpen_) { drawSettings(top); continue; }
     if (devOpen_) { drawDev(top); continue; }
     if (detailCard_ || detailRelic_) { drawDetail(top); continue; }

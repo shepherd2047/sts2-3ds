@@ -10,6 +10,8 @@
 
 namespace ui {
 
+void drawStyleMock(int which, bool top);  // style_mock.cpp: STS_MOCK=1|2|3 draws a style mock-up
+
 class App {
  public:
   bool init();

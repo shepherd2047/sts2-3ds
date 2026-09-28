@@ -2,6 +2,7 @@
 // mouse standing in for the stylus on the bottom screen.
 //
 // Keys: Z=A  X=B  A=Y  S=X  Q=L  W=R  arrows=D-pad  Enter=START  Backspace=SELECT
+#include <algorithm>
 #include <SDL.h>
 #include <sys/stat.h>
 #ifdef _WIN32
@@ -213,6 +214,12 @@ void endFrame() {
     SDL_FreeSurface(surf);
   }
   SDL_RenderPresent(ren);
+  // Scripted runs (STS_SHOTS) end after the last screenshot.
+  if (!shots.empty() && !getenv("STS_KEEP_OPEN")) {
+    int last = 0;
+    for (auto& sh : shots) last = std::max(last, sh.first);
+    if (frameCount > last) quit = true;
+  }
 }
 
 namespace detail {
