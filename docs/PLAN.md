@@ -196,7 +196,7 @@ own art, and every screen in track S is then rebuilt with it.
 | F0 | UI style guide `docs/UI_STYLE.md`: palette, font sizes per screen, margins, minimum touch target 32 px, button families, focus ring, animation timings, which sound each control makes. Mock three screens in the preview and get the owner's approval. | design, *Opus* | – | todo |
 | F1 | UI art extraction (`images/ui/**`, 255 files): buttons (proceed, confirm, cancel, back, end turn), panels, banners, tooltip frame, top bar, checkboxes, sliders, tabs, scrollbar, reward rows, shop tags, map legend, all intent and power icons, rarity gems, character energy orbs → a UI atlas | tools | F0 | todo |
 | F2 | Renderer features: 9-slice, tint and alpha, scale and rotation, scissor clipping for scroll lists, text outline and shadow, gradients and fades (SDL and 3DS) | gfx | – | todo |
-| F3 | Widget kit `source/ui/widgets.*`: Button (normal/focus/pressed/disabled, press animation), IconButton, Panel, ScrollList (drag, inertia, scrollbar), Grid, Tabs, Toggle, Slider, Paginator, Tooltip, Modal (confirm), Toast, Banner. One input model for touch and for D-pad/A/B/L/R with a focus ring. | UI, *Opus* | F1, F2 | todo |
+| F3 | Split `ui.cpp` into one file per screen (`source/ui/screens/*.cpp`), then the widget kit `source/ui/widgets.*`: Button (normal/focus/pressed/disabled, press animation), IconButton, Panel, ScrollList (drag, inertia, scrollbar), Grid, Tabs, Toggle, Slider, Paginator, Tooltip, Modal (confirm), Toast, Banner. One input model for touch and for D-pad/A/B/L/R with a focus ring. | UI, *Opus* | F1, F2 | todo |
 | F4 | Rich text: inline icons (energy per character, gold, star, HP), keyword colours, keyword glossary tooltips from `HoverTips`, `choose()` / plural formatters for all loc strings (fixes MadScience) | UI | F3 | todo |
 | F5 | Card renderer v2: faithful frames per type/rarity/character, portrait crop, cost gem (X, unplayable), type banner, green upgrade text, enchantment badge, affliction overlay. Three sizes: hand, large, grid mini. | UI, *Opus* | F1, F4 | todo |
 | F6 | Motion: screen transitions (fade/slide), card draw/discard/exhaust flights, damage/block numbers, power icon pop, relic flash, gold/HP counters that tick, screen shake (setting), button feedback | UI | F3 | todo |
@@ -359,6 +359,20 @@ Waiting points: content A3b needs A3a, and X*.1 needs X*.0. The engine lane does
 first, so content never waits. The UI lane stubs anything that does not exist yet (the
 enchantment badge in F5, characters in S04) and fills it in when it lands. The audio
 lane is independent until U3/U4, which only add play calls at existing places.
+
+Several agents in one lane. A lane leader session may run Sonnet subagents
+(`isolation: worktree`, one package each, tight brief, and the leader reviews and
+merges), or the owner opens more sessions for the same lane. Only packages that touch
+disjoint files can run side by side:
+- **Content:** up to 3-4 at once.
+  - A1b, A1c, A2, A7a, A7b and A11a-e are parallel-safe, but A1b and A1c start only
+    after A1a has created the colorless pool.
+  - For each character, X*.2, X*.3a, X*.3b and X*.4 can all run together once its
+    X*.1 is done.
+- **UI:** one agent until F3. F3 splits `ui.cpp` into one file per screen, and after
+  that two S packages can run at once. The owner's reviews are the real limit.
+- **Engine:** one agent only; its packages all edit the same core files.
+- **Audio:** one agent. U4 (mapping the sound effects) can be split in two.
 
 Rules:
 1. **Claim before starting.** Set the package status to `in progress (<lane>)`, then
