@@ -209,7 +209,7 @@ replay line (`App::describe`); the badge, glow and the enchant preview screen ar
 
 | id | Package | Kind | Needs | Status |
 |---|---|---|---|---|
-| C10 | Ascension 1-10 (SwarmingElites … DoubleBoss): `AscensionManager`, every `GetValueIfAscension` in ported content (script to list them), AscendersBane at A5, double boss at A10 | engine + content sweep, *Opus* | – | done (engine) |
+| C10 | Ascension 1-10 (SwarmingElites … DoubleBoss): `AscensionManager`, every `GetValueIfAscension` in ported content (script to list them), AscendersBane at A5, double boss at A10 | engine + content sweep, *Opus* | – | done (engine), accepted 2026-09-28 (merged by the reviewer: the lane session went offline before pushing) |
 | C11 | Map extras: boss preview, the act's second boss as a map node at ascension 10 (C10 chains the fights, see notes), map legend | engine + UI | C10 | todo |
 
 **C10 notes (ascension, done).** `Run::ascension` (0-10, `Run::start(seed, character, ascension)`; debug
