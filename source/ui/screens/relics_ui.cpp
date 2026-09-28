@@ -5,8 +5,10 @@ namespace ui {
 
 // ================================================================ relics
 
-// Elite relic reward / treasure chest: the relic is shown large on top (RGDSplus
-// U19/U23: focus on top, take/skip below).
+// Treasure chest / Ancient / event relic offer: the relic is shown large on top (RGDSplus
+// U19/U23: focus on top, take/skip below). Not used for combat rewards any more -- S14 moved
+// the Elite relic (and any Black Star bonus relic) into the interactive reward list
+// (reward.cpp), which claims it in place instead of pushing through this screen.
 void App::drawRelicOffer(bool top) {
   Run& r = *run_;
   Relic* rel = r.relicOffer.get();
@@ -27,11 +29,17 @@ void App::drawRelicOffer(bool top) {
     float s = 40, x = kBot / 2 - s / 2, y = 74;
     gfx::circle(kBot / 2.f, y + s / 2, 30, 0xFFE07040);
     drawRelicIcon(rel, x, y, s);
-    hits_.push_back({x - 10, y - 10, s + 20, s + 20, ID_TAKE});
     R().text(kBot / 2, y + s + 8, L("relics." + rel->locKey + ".title"), ts(F16, col::white, CENTER));
   }
-  button(10, 196, 110, 36, "跳过", ID_SKIP);
-  button(kBot - 120, 196, 110, 36, "拿取", ID_TAKE, rel != nullptr, true);
+  // S14: nine-slice widget buttons (F3) in place of the flat-fill legacy button().
+  widgets::beginFrame(gfx::input());
+  if (widgets::button(1, 10, style::kActionY, 110, style::kButtonH, "跳过") && r.relicChoice.waiting())
+    r.relicChoice.fire(0);
+  if (widgets::button(2, kBot - 120, style::kActionY, 110, style::kButtonH, "拿取", widgets::Kind::Primary,
+                      rel != nullptr) &&
+      r.relicChoice.waiting())
+    r.relicChoice.fire(1);
+  widgets::endFrame();
 }
 
 void App::updateRelicOffer(const gfx::Input& in) {
@@ -39,11 +47,6 @@ void App::updateRelicOffer(const gfx::Input& in) {
   if (!r.relicChoice.waiting()) return;
   if (in.down & gfx::BTN_A) { r.relicChoice.fire(1); return; }
   if (in.down & gfx::BTN_B) { r.relicChoice.fire(0); return; }
-  if (in.touchDown) {
-    int id = hitAt(in.tx, in.ty);
-    if (id == ID_TAKE) r.relicChoice.fire(1);
-    else if (id == ID_SKIP) r.relicChoice.fire(0);
-  }
 }
 
 // Owned relics: a grid below, the selected one described above (RGDSplus U24/U25).

@@ -1,5 +1,34 @@
 # Development plan
 
+## Handover (2026-09-28, PC -> Mac)
+
+The reviewer session ("architech") ran on the Windows PC; the owner continues on the Mac from here.
+Everything accepted is on `main`. State:
+
+- **Accepted today:** A3a, X0, F0-F6, C10, X1.0-X4.0, X1.1-X4.1 (starter decks, character relics, potions),
+  X1.2-X4.2 (all Common cards of the four characters), M1 (progress.sav core), Y1 (settings.sav core), S14
+  (interactive reward list).
+- **In progress, not merged: X1.5-X4.5 character visuals**, branch `wip/x5-character-visuals`
+  (commit 0b336a9 + a WIP commit). Done there: combat Spine for SILENT/DEFECT/REGENT/NECROBINDER + Osty baked,
+  select art baked (`gfx/bg_character_<key>`, `ui/<key>_select`), energy orb / card gem per character, Osty drawn
+  next to the player, Defect orb row, Regent star counter. **Review found three problems, still open:**
+  1. card portraits of the four new pools (and their tokens) are not baked -> cards show blank art;
+  2. the per-character frame retint gives wrong inner-border colours (Silent purple, Defect orange); the WIP
+     commit starts reverting the border to the plain sprite — verify against the game's materials;
+  3. the Regent's combat Spine renders as a dark tower with orange fragments (skin / unsupported attachment?).
+  Finish these, take screenshots per character, run accept.sh, then merge into main.
+- **Next packages** (the owner asked for character art first): finish X*.5 above, then S04 character select
+  (the baked select art is waiting for it), then X1.3a-X4.3a (Uncommon cards, first half), X*.3b, X*.4 (Rare +
+  tokens), then the engine order (Y5 + H1/H3 need the real 3DS, A10, A11f, ...).
+- **Rules learned today** (also in CLAUDE.md): one class per power id (shared powers in `powers.h`);
+  no two .cpp files with the same basename (3DS object names are flattened); `Card::createdByPlayer` is the
+  C#'s `creator == Owner` check; subagents in worktrees must export `OS=Windows_NT` on Windows.
+- **Mac:** `bash tools/accept.sh --quick --3ds` now builds the .3dsx in `~/dev/sts2-3ds-build` on macOS
+  (untested on the Mac yet). Rebuild assets after pulling (`python3 tools/build_assets.py`): new UI icons
+  and many new card strings need the new font glyphs.
+- Leftover worktrees on the PC (`.claude/worktrees/agent-*`, `../sts2-3ds-engine`, `../sts2-3ds-ui`) are all
+  merged except the visuals one (pushed as the wip branch); they can be deleted.
+
 ## Goal
 
 A **finished product**: the complete Slay the Spire 2 on the New 3DS. That means
@@ -276,7 +305,7 @@ screenshots of both screens, and tick the U table at the end of this file.
 | S11 | U13 | Draw, discard and exhaust piles and deck view: grid on the bottom, focused card on top, sort | F5 | partial (combat pile tabs) |
 | S12 | U14 | Hand select (discard/exhaust/retain N): counter, confirm/cancel | F5 | todo |
 | S13 | U15/U16 | Deck grid select (upgrade/remove/transform with preview) and choose-one | F5 | todo |
-| S14 | U17/U18 | **Reward list** (gold, potion, relic, card rows: claim or skip, then proceed) + card reward with skip / Singing Bowl | F5 | in progress (UI) |
+| S14 | U17/U18 | **Reward list** (gold, potion, relic, card rows: claim or skip, then proceed) + card reward with skip / Singing Bowl | F5 | done (subagent), accepted 2026-09-28: RewardsSet generate-then-offer (C# order gold, potion, card, relic), rows claimed in any order, Proceed forfeits the rest; CardRewardAlternative options besides Skip not yet |
 | S15 | U19/U23 | Relic choice and treasure chest (chest opening, relic on top) | F3 | todo |
 | S16 | U20 | Shop: goods grid, price tags, sale, removal service, focused item on top | F5 | todo |
 | S17 | U21 | Events: art and text on top, large option buttons on the bottom, locked options shown with the reason | F4 | todo |

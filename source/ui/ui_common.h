@@ -11,6 +11,7 @@
 #include "res.h"
 #include "style.h"
 #include "ui.h"
+#include "widgets.h"
 
 using namespace sts;
 
