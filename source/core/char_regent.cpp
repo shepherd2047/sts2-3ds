@@ -7,6 +7,7 @@ namespace sts {
 
 void registerRegentRelics();   // char_regent_relics.cpp
 void registerRegentPotions();  // char_regent_relics.cpp
+void registerRegentCards();    // char_regent_cards.cpp: the Regent's common cards (X3.2)
 
 namespace {
 
@@ -126,6 +127,7 @@ void registerRegent() {
   registerPowerType<StarNextTurnPower>();
   registerPowerType<SeekingEdgePower>();
   registerPowerType<ParryPower>();
+  registerPowerType<DrawCardsNextTurnPower>();
   registerCardType<SovereignBlade>();
   registerCardType<StrikeRegent>();
   registerCardType<DefendRegent>();
@@ -133,6 +135,7 @@ void registerRegent() {
   registerCardType<Venerate>();
   registerRegentRelics();
   registerRegentPotions();
+  registerRegentCards();
 }
 
 }  // namespace sts
