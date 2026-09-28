@@ -138,11 +138,10 @@ void App::updatePotions(const gfx::Input& in) {
 }
 
 // PotionReward: the potion on top; take or skip below. With a full belt the belt is
-// listed so one can be discarded first (the game refuses the reward while it is full).
-// S14: when this offer is part of the post-combat reward sequence (run_->rewardItems is
-// non-empty), the same reward-list strip (drawRewardList, reward.cpp) shows what has already
-// been resolved -- this potion is the last entry in that log and is excluded from the strip
-// since it is the one currently being offered, not yet resolved.
+// listed so one can be discarded first (the game refuses the reward while it is full). Used by
+// treasure chests, Ancients and events, not by combat rewards -- S14 moved the post-combat
+// potion into the interactive reward list (reward.cpp), which claims it in place instead of
+// pushing through this screen.
 void App::drawPotionOffer(bool top) {
   Run& r = *run_;
   Potion* p = r.potionOffer.get();
@@ -158,7 +157,6 @@ void App::drawPotionOffer(bool top) {
       R().text(kTop / 2.f, 124, L("potions." + p->locKey + ".title"), nt);
       R().text(kTop / 2.f, 152, describePotion(p), ts(F12, col::white, CENTER, kTop - 60));
     }
-    if (!r.rewardItems.empty()) drawRewardList(true, 180, /*excludeLast=*/true);
     return;
   }
   drawSceneBg(false, 0.55f);

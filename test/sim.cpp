@@ -201,7 +201,24 @@ int main(int argc, char** argv) {
           break;
         }
         case Screen::Reward:
+          // S14: claim every reward-list row top to bottom (a Card row opens the nested card
+          // grid, where index 0 is picked as before), then Proceed once nothing is left.
           if (cur->rewardChoice.waiting()) cur->rewardChoice.fire(0);
+          else if (cur->rewardListChoice.waiting()) {
+            if (!cur->rewardItems.empty()) {
+              auto& it = cur->rewardItems[0];
+              // A full belt would otherwise leave this row stuck at index 0 forever (claiming
+              // it is a no-op until there's room) -- discard one first, as the old PotionOffer
+              // sim policy did.
+              if (it.kind == Run::RewardKind::Potion && !cur->hasOpenPotionSlot()) cur->discardPotion(0);
+              if (getenv("SIM_FIGHTS")) {
+                const char* kind = it.kind == Run::RewardKind::Gold ? "gold" : it.kind == Run::RewardKind::Potion ? "potion"
+                                  : it.kind == Run::RewardKind::Relic ? "relic" : "card";
+                printf("  reward claim %s\n", kind);
+              }
+            }
+            cur->rewardListChoice.fire(cur->rewardItems.empty() ? -1 : 0);
+          }
           break;
         case Screen::Rest:
           if (cur->restChoice.waiting()) {

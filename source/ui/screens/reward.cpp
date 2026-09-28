@@ -5,100 +5,116 @@ namespace ui {
 
 // ================================================================ reward
 
-// S14: the reward-list strip shared by this screen and the potion/relic offer screens
-// (RGDSplus U17) -- a disabled ui/btn_row per resolved run_->rewardItems entry (gold, and
-// any potion/relic already taken or skipped). Card entries just mark "a card choice is
-// pending" for run.cpp's own bookkeeping and are never shown as a row here (the card grid /
-// large-card preview already represents that step). Ids are throwaway: every row is drawn
-// disabled, so widgets::hit() never registers them.
-void App::drawRewardList(bool top, float y0, bool excludeLast) {
-  Run& r = *run_;
-  int n = (int)r.rewardItems.size();
-  int end = excludeLast ? n - 1 : n;
-  float x = top ? (kTop - 304) / 2.f : (kBot - 304) / 2.f, w = 304, y = y0;
-  // Rows shared between screens with different room (drawReward has less of it, sharing the
-  // top screen with the card list header/footer): stop with a "+N" row rather than overflow.
-  const int maxRows = 3;
-  int shown = 0, extra = 0;
-  for (int i = 0; i < end; ++i) {
-    auto& it = r.rewardItems[i];
-    std::string icon, label, value;
-    switch (it.kind) {
-      case Run::RewardKind::Gold:
-        icon = "ui/reward_money";
-        label = num(it.gold) + " 金币";
-        value = "已领取";
-        break;
-      case Run::RewardKind::Potion:
-        icon = "potion/" + it.label;
-        label = it.label.empty() ? "" : L("potions." + it.label + ".title");
-        value = "已处理";  // taken or skipped -- this log doesn't track which
-        break;
-      case Run::RewardKind::Relic:
-        icon = it.label.empty() ? "" : "relic/" + it.label;
-        label = it.label.empty() ? "?" : L("relics." + it.label + ".title");
-        value = "已处理";
-        break;
-      default:
-        continue;  // Card: no row, the card grid / preview is the current step
-    }
-    if (label.empty()) continue;
-    if (shown >= maxRows) { ++extra; continue; }
-    widgets::row(900 + i, x, y, w, icon, label, value, /*enabled=*/false);
-    y += style::kRowH + style::kGap;
-    ++shown;
-  }
-  if (extra > 0) widgets::row(999, x, y, w, "", "+" + num(extra) + " 更多", "", /*enabled=*/false);
-}
-
+// S14 (RGDSplus U17, C# NRewardsScreen): the interactive reward list. run_->rewardItems holds
+// every reward of the room (real payloads, nothing granted yet, see the ordering comment on
+// Run::combatRewards); tapping a row claims it (fires rewardListChoice with that row's index),
+// which actually grants it and removes the row on success, or leaves it in place if the claim
+// failed (a Card row that was skipped keeps its same options; a Potion row stays if the belt is
+// full). "继续" (Proceed) leaves with whatever is left unclaimed, forfeited, matching the C#.
+//
+// A Card row reuses the existing card grid as a nested sub-screen: run_->rewardCards is empty in
+// list mode and holds that row's options while it is open (Run::combatRewards moves them in and,
+// if skipped, back out) -- drawReward/updateReward branch on that instead of adding new state.
 void App::drawReward(bool top) {
   Run& r = *run_;
-  int n = (int)r.rewardCards.size();
+  bool cardMode = !r.rewardCards.empty();
+  int n = cardMode ? (int)r.rewardCards.size() : (int)r.rewardItems.size();
+
+  if (cardMode) {
+    if (top) {
+      gfx::Texture* bg = R().texture(actTexture(*run_, "bg_"));
+      gfx::image(bg, 0, 0, kTop, kH, 0, 0, kTop, kH, 0x000000FF, 0.55f);
+      drawTopBar();
+      if (sel_ >= 0 && sel_ < n) {
+        drawCard(r.rewardCards[sel_].get(), (kTop - 132) / 2, 34, 1.1f, false, true);
+      } else {
+        TextStyle t = ts(F16, col::gold, CENTER);
+        t.scale = 1.6f;
+        R().text(kTop / 2, 70, "战斗胜利！", t);
+        R().text(kTop / 2, 120, L("gameplay_ui.COMBAT_REWARD_ADD_CARD"), ts(F16, col::white, CENTER));
+      }
+      return;
+    }
+    drawSceneBg(false, 0.55f);
+    R().text(kBot / 2, 4, L("gameplay_ui.CHOOSE_CARD_HEADER"), ts(F16, col::gold, CENTER));
+    const float s = 0.78f, cw = 120 * s;
+    float gap = (kBot - 3 * cw) / 4;
+    for (int i = 0; i < n; ++i) {
+      float x = gap + i * (cw + gap), y = 28;
+      drawCard(r.rewardCards[i].get(), x, y, s, false, true, i == sel_);
+      hits_.push_back({x, y, cw, 169 * s, ID_REWARD0 + i});
+    }
+    widgets::beginFrame(gfx::input());
+    if (widgets::button(1, 10, style::kActionY, 110, style::kButtonH, L("gameplay_ui.CHOOSE_CARD_SKIP_BUTTON")) &&
+        r.rewardChoice.waiting())
+      r.rewardChoice.fire(-1);
+    if (widgets::button(2, 122, style::kActionY, 76, style::kButtonH, "详情", widgets::Kind::Secondary,
+                        sel_ >= 0 && sel_ < n))
+      { detailCard_ = r.rewardCards[sel_].get(); detailUpgrade_ = false; }
+    if (widgets::button(3, kBot - 120, style::kActionY, 110, style::kButtonH, "选择", widgets::Kind::Primary,
+                        sel_ >= 0 && sel_ < n) &&
+        r.rewardChoice.waiting())
+      r.rewardChoice.fire(sel_);
+    widgets::endFrame();
+    return;
+  }
+
+  // ---- list mode ----
   if (top) {
     gfx::Texture* bg = R().texture(actTexture(*run_, "bg_"));
     gfx::image(bg, 0, 0, kTop, kH, 0, 0, kTop, kH, 0x000000FF, 0.55f);
     drawTopBar();
-    if (sel_ >= 0 && sel_ < n) {
-      drawCard(r.rewardCards[sel_].get(), (kTop - 132) / 2, 34, 1.1f, false, true);
-    } else {
-      TextStyle t = ts(F16, col::gold, CENTER);
-      t.scale = 1.6f;
-      R().text(kTop / 2, 26, "战斗胜利！", t);
-      gfx::rect(kTop / 2.f - 70, 50, 140, 2, style::kPanelHi);
-      // S14: everything this reward sequence has already granted (gold, potion, relic).
-      drawRewardList(true, 62, /*excludeLast=*/false);
-      R().text(kTop / 2, 200, L("gameplay_ui.COMBAT_REWARD_ADD_CARD"), ts(F16, col::white, CENTER));
-    }
+    TextStyle t = ts(F16, col::gold, CENTER);
+    t.scale = 1.6f;
+    R().text(kTop / 2, 60, "战斗胜利！", t);
+    gfx::rect(kTop / 2.f - 70, 84, 140, 2, style::kPanelHi);
+    R().text(kTop / 2, 112, n > 0 ? "点选下方的奖励，领取后继续" : "没有更多奖励了", ts(F16, col::white, CENTER));
     return;
   }
   drawSceneBg(false, 0.55f);
-  R().text(kBot / 2, 4, L("gameplay_ui.CHOOSE_CARD_HEADER"), ts(F16, col::gold, CENTER));
-  const float s = 0.78f, cw = 120 * s;
-  float gap = (kBot - 3 * cw) / 4;
-  for (int i = 0; i < n; ++i) {
-    float x = gap + i * (cw + gap), y = 28;
-    drawCard(r.rewardCards[i].get(), x, y, s, false, true, i == sel_);
-    hits_.push_back({x, y, cw, 169 * s, ID_REWARD0 + i});
-  }
-  // S14: skip / detail / select as nine-slice widget buttons (F3), not flat fills. Guarded by
-  // waiting(): updateReward() may already have resolved the choice this same frame (BTN_A/B),
-  // and a widget button that happens to hold pad focus must not fire a second time.
+  const float x = style::kMargin, w = kBot - 2 * style::kMargin;
+  float y = 4;
   widgets::beginFrame(gfx::input());
-  if (widgets::button(1, 10, style::kActionY, 110, style::kButtonH, L("gameplay_ui.CHOOSE_CARD_SKIP_BUTTON")) &&
-      r.rewardChoice.waiting())
-    r.rewardChoice.fire(-1);
-  if (widgets::button(2, 122, style::kActionY, 76, style::kButtonH, "详情", widgets::Kind::Secondary,
-                      sel_ >= 0 && sel_ < n))
-    { detailCard_ = r.rewardCards[sel_].get(); detailUpgrade_ = false; }
-  if (widgets::button(3, kBot - 120, style::kActionY, 110, style::kButtonH, "选择", widgets::Kind::Primary,
-                      sel_ >= 0 && sel_ < n) &&
-      r.rewardChoice.waiting())
-    r.rewardChoice.fire(sel_);
+  for (int i = 0; i < n; ++i) {
+    auto& item = r.rewardItems[i];
+    std::string icon, label, value;
+    bool enabled = true;
+    switch (item.kind) {
+      case Run::RewardKind::Gold:
+        icon = "ui/reward_money";
+        label = num(item.gold) + " 金币";
+        break;
+      case Run::RewardKind::Potion:
+        icon = "potion/" + item.potion->locKey;
+        label = item.potion ? L("potions." + item.potion->locKey + ".title") : "?";
+        enabled = r.hasOpenPotionSlot();
+        if (!enabled) value = "药水栏已满";
+        break;
+      case Run::RewardKind::Relic:
+        icon = item.relic ? "relic/" + item.relic->locKey : "";
+        label = item.relic ? L("relics." + item.relic->locKey + ".title") : "?";
+        break;
+      case Run::RewardKind::Card:
+        icon = "ui/reward_card";
+        label = L("gameplay_ui.COMBAT_REWARD_ADD_CARD");
+        break;
+    }
+    if (widgets::row(100 + i, x, y, w, icon, label, value, enabled) && r.rewardListChoice.waiting())
+      r.rewardListChoice.fire(i);
+    y += style::kRowH + style::kGap;
+  }
+  if (widgets::button(999, kBot - 120, style::kActionY, 110, style::kButtonH, "继续", widgets::Kind::Primary) &&
+      r.rewardListChoice.waiting())
+    r.rewardListChoice.fire(-1);
   widgets::endFrame();
 }
 
 void App::updateReward(const gfx::Input& in) {
   Run& r = *run_;
+  bool cardMode = !r.rewardCards.empty();
+  if (cardMode && !rewardCardOpen_) sel_ = -1;  // a card row just opened: nothing focused yet
+  rewardCardOpen_ = cardMode;
+  if (!cardMode) return;  // list mode: fully widget-driven from drawReward
   if (!r.rewardChoice.waiting()) return;
   int n = (int)r.rewardCards.size();
   if (in.down & gfx::BTN_RIGHT) sel_ = std::min(n - 1, sel_ + 1);

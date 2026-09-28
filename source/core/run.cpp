@@ -239,17 +239,32 @@ Task<bool> Run::eventFight(const std::string& encounterId) {
 // that changed the RNG order whenever a relic's afterObtained hook (or a potion's
 // afterPotionProcured, both fire via spawnSide) ran relative to the *next* reward's roll, so
 // SIM_ALLCARDS / SIM_ALLRELICS stopped matching. Don't restage without re-checking that.
+// S14 (RGDSplus U17, C# RewardsSet.WithRewardsFromRoom -> GenerateRewardsFor ->
+// GenerateWithoutOffering -> Offer; NRewardsScreen): every reward of the room is generated up
+// front here (a list of RewardItem, nothing granted yet), then offered as one interactive list
+// the player claims in any order (the loop below) until they Proceed.
+//
+// Generation order matches the C#'s RNG consumption, which is NOT simply "gold, potion, relic,
+// card": RewardsSet.GenerateRewardsFor pushes Gold, then (maybe) Potion, then CardReward, then
+// -- for Elite only -- RelicReward, and RewardsSet.GenerateWithoutOffering calls Populate() (the
+// point each reward actually rolls its RNG) on that list in push order, i.e. Gold, Potion, Card,
+// Relic. An earlier version of this package kept the pre-S14 order (gold, potion, relic, card)
+// as a side effect of also granting things immediately; that is wrong for Elite rooms and has
+// been fixed here: the card reward now rolls before the relic reward. Rewards.Sort() then
+// reorders the final *list* by RewardsSetIndex (Gold < Potion < Relic < Card) regardless of
+// populate order, which is why the stable_sort below runs after generation, not during it.
+// Hook-added extras (Black Star's bonus relic, Amethyst Aubergine's extra flat-gold row, Prayer
+// Wheel / White Star's extra card rounds -- all via TryModifyRewards in the C#) are rolled after
+// all the base rewards, in relic order, matching Hook.ModifyRewards running once after the base
+// Populate() loop; none of ours consume RNG except the relic pulls and card rolls, so this only
+// affects card/relic order, already covered above.
 Task<> Run::combatRewards(RoomType type) {
   Rng& rr = rng("Rewards");
   // EncounterModel.Min/MaxGoldReward: 10-20 / 35-45 / 100, times 0.75 (truncated) with Poverty.
   auto poor = [&](int v) { return hasAscension(kPoverty) ? (int)(v * 0.75) : v; };
   int baseGold = type == RoomType::Boss ? poor(100)
                 : type == RoomType::Elite ? rr.nextInt(poor(35), poor(45) + 1) : rr.nextInt(poor(10), poor(20) + 1);
-  co_await gainGold(baseGold);
   bool finalBoss = type == RoomType::Boss && actIndex + 1 >= kActs;
-  int extraGold = 0;
-  if (!finalBoss) for (auto& rel : relics) extraGold += rel->extraCombatGold(type);
-  if (extraGold > 0) co_await gainGold(extraGold);
   // The fight is freed and the screen leaves it in the same step (nothing may wait in
   // between: the UI still shows Screen::Combat until then).
   combat.reset();
@@ -258,47 +273,89 @@ Task<> Run::combatRewards(RoomType type) {
   screen = Screen::Reward;
 
   rewardItems.clear();
-  RewardItem goldItem;
-  goldItem.kind = RewardKind::Gold;
-  goldItem.gold = baseGold + extraGold;  // display only: the amount already granted above
-  rewardItems.push_back(goldItem);
+  { RewardItem g; g.kind = RewardKind::Gold; g.gold = baseGold; rewardItems.push_back(std::move(g)); }
 
-  if (rollPotionReward(type)) {  // RollForPotionAndAddTo
-    auto potion = randomPotion(rr, false);
+  if (rollPotionReward(type)) {  // RollForPotionAndAddTo / PotionReward.Populate
     RewardItem item;
     item.kind = RewardKind::Potion;
-    item.label = potion->locKey;
+    item.potion = randomPotion(rr, false);
     rewardItems.push_back(std::move(item));
-    co_await offerPotion(std::move(potion));
   }
-  if (type == RoomType::Elite) {
-    int relicRewards = 1;
-    for (auto& rel : relics) relicRewards += rel->bonusRelicRewards(RoomType::Elite);  // Black Star
-    for (int i = 0; i < relicRewards; ++i) {
-      auto relic = pullRelicFromFront(relicBag, rollRelicRarity(rr));
-      RewardItem item;
-      item.kind = RewardKind::Relic;
-      item.label = relic ? relic->locKey : std::string();
-      rewardItems.push_back(std::move(item));
-      co_await offerRelic(std::move(relic), false);
-    }
-  }
-  std::vector<RoomType> rewards{type};
-  for (auto& rel : relics)
-    for (RoomType odds : rel->extraCardRewards(type)) rewards.push_back(odds);
-  for (RoomType odds : rewards) {
-    rewardCards = cardReward(odds, 3);
-    for (bool late : {false, true})
-      for (auto& rel : relics) rel->modifyCardReward(rewardCards, type, late);
-    screen = Screen::Reward;
+
+  auto makeCardItem = [&](RoomType odds) {
     RewardItem item;
     item.kind = RewardKind::Card;
-    rewardItems.push_back(item);
-    int pick = co_await rewardChoice.next();
-    if (pick >= 0 && pick < (int)rewardCards.size()) addCardToDeck(std::move(rewardCards[pick]));
-    rewardCards.clear();
+    item.cards = cardReward(odds, 3);
+    for (bool late : {false, true})
+      for (auto& rel : relics) rel->modifyCardReward(item.cards, odds, late);
+    rewardItems.push_back(std::move(item));
+  };
+  makeCardItem(type);  // CardReward.Populate -- before the relic reward, see comment above
+
+  if (type == RoomType::Elite) {
+    RewardItem item;
+    item.kind = RewardKind::Relic;
+    item.relic = pullRelicFromFront(relicBag, rollRelicRarity(rr));
+    rewardItems.push_back(std::move(item));
+    int bonus = 0;
+    for (auto& rel : relics) bonus += rel->bonusRelicRewards(RoomType::Elite);  // Black Star (hook-added, after)
+    for (int i = 0; i < bonus; ++i) {
+      RewardItem b;
+      b.kind = RewardKind::Relic;
+      b.relic = pullRelicFromFront(relicBag, rollRelicRarity(rr));
+      rewardItems.push_back(std::move(b));
+    }
+  }
+  // Amethyst Aubergine: TryModifyRewards adds its own flat GoldReward, not a bonus folded into
+  // the base one -- so it is its own row here too.
+  if (!finalBoss) for (auto& rel : relics) {
+    int extra = rel->extraCombatGold(type);
+    if (extra > 0) { RewardItem g; g.kind = RewardKind::Gold; g.gold = extra; rewardItems.push_back(std::move(g)); }
+  }
+  for (auto& rel : relics)
+    for (RoomType odds : rel->extraCardRewards(type)) makeCardItem(odds);  // Prayer Wheel / White Star
+
+  std::stable_sort(rewardItems.begin(), rewardItems.end(), [](const RewardItem& a, const RewardItem& b) {
+    auto rank = [](RewardKind k) { return k == RewardKind::Gold ? 0 : k == RewardKind::Potion ? 1 : k == RewardKind::Relic ? 2 : 3; };
+    return rank(a.kind) < rank(b.kind);
+  });
+
+  // ---- offer: claim rows in any order; Proceed (-1 or an out-of-range index) forfeits the rest.
+  for (;;) {
+    int pick = co_await rewardListChoice.next();
+    if (pick < 0 || pick >= (int)rewardItems.size()) break;
+    RewardItem& item = rewardItems[pick];
+    bool claimed = false;
+    switch (item.kind) {
+      case RewardKind::Gold:
+        co_await gainGold(item.gold);
+        claimed = true;
+        break;
+      case RewardKind::Potion:
+        // PotionReward.OnSelect: fails (row stays) while the belt is full.
+        if (hasOpenPotionSlot()) { procurePotion(std::move(item.potion)); claimed = true; }
+        break;
+      case RewardKind::Relic:
+        co_await obtainRelic(std::move(item.relic));
+        claimed = true;
+        break;
+      case RewardKind::Card: {
+        rewardCards = std::move(item.cards);
+        int cardPick = co_await rewardChoice.next();
+        if (cardPick >= 0 && cardPick < (int)rewardCards.size()) {
+          addCardToDeck(std::move(rewardCards[cardPick]));
+          claimed = true;
+        } else {
+          item.cards = std::move(rewardCards);  // skipped: same options, the row stays
+        }
+        rewardCards.clear();
+        break;
+      }
+    }
+    if (claimed) rewardItems.erase(rewardItems.begin() + pick);
   }
   rewardItems.clear();
+  rewardCards.clear();
 }
 
 // UnknownMapPointOdds.Roll (single player, no blacklist): Monster 10%, Treasure 2%,

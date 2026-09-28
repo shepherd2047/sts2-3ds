@@ -1067,19 +1067,27 @@ struct Run {
   Screen screen = Screen::Title;
   // UI requests
   Signal<int> mapChoice;             // node index
-  std::vector<std::unique_ptr<Card>> rewardCards;
-  Signal<int> rewardChoice;          // index or -1 skip
-  // S14: a running, display-only log of what the current combatRewards sequence has granted
-  // so far (RGDSplus U17's reward list). Appended to at the exact point each reward already
-  // resolves in combatRewards -- it does not drive anything, so it cannot change RNG order;
-  // see the comment on combatRewards before changing this.
+  // S14 (RGDSplus U17, C# RewardsSet): rewardItems holds every reward of the room, generated
+  // up front (see the ordering comment on combatRewards), with its real payload -- nothing is
+  // granted yet. The UI claims rows in any order via rewardListChoice (row index, or -1/out of
+  // range to Proceed and forfeit whatever is left); claiming a row is what actually performs the
+  // C# Reward.OnSelect() side effect (gainGold, procurePotion, obtainRelic, addCardToDeck) and
+  // only then erases the row. A Card row reuses rewardCards/rewardChoice (the existing card grid)
+  // as a nested sub-screen; skipping it puts the same (un-rerolled) options back and the row stays,
+  // matching CardReward.OnSelect returning false. A Potion row whose claim fails (belt full, C#
+  // PotionReward.OnSelect / PotionProcureFailureReason.TooFull) also stays.
   enum class RewardKind { Gold, Potion, Relic, Card };
   struct RewardItem {
     RewardKind kind;
-    int gold = 0;         // Gold: the amount granted
-    std::string label;    // Potion/Relic: locKey, for the icon and name; Card: unused
+    int gold = 0;                              // Gold: the amount, not yet granted
+    std::unique_ptr<Potion> potion;            // Potion: the rolled potion, not yet in the belt
+    std::unique_ptr<Relic> relic;              // Relic: the rolled relic, not yet obtained
+    std::vector<std::unique_ptr<Card>> cards;  // Card: the options currently on offer
   };
   std::vector<RewardItem> rewardItems;
+  Signal<int> rewardListChoice;       // row index to claim, or -1/out of range = Proceed
+  std::vector<std::unique_ptr<Card>> rewardCards;  // the open Card row's options (empty = list mode)
+  Signal<int> rewardChoice;           // index into rewardCards, or -1 skip (row stays)
   Signal<int> restChoice;            // an id from restOptions, or -1 to leave (after one, Miniature Tent)
   // RestSiteOption ids offered now: 0 heal, 1 smith, 2 lift (Girya), 3 dig (Shovel).
   std::vector<int> restOptions;

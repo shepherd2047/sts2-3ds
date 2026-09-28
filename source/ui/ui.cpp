@@ -374,9 +374,22 @@ void App::autoplay(double dt) {
       break;
     }
     case Screen::Reward:
-      if (r.rewardChoice.waiting()) {
-        if (sel_ < 0) { sel_ = 1; autoT_ = -0.6; return; }  // linger so the choice is visible
-        r.rewardChoice.fire(sel_);
+      // S14: the reward list (Run::rewardItems) is claimed top to bottom; a Card row opens the
+      // nested card grid (rewardCards non-empty), where the same "linger so the choice is
+      // visible" policy as before picks index 1 (or 0 if there's only one option).
+      if (!r.rewardCards.empty()) {
+        if (r.rewardChoice.waiting()) {
+          if (sel_ < 0) { sel_ = std::min(1, (int)r.rewardCards.size() - 1); autoT_ = -0.6; return; }
+          r.rewardChoice.fire(sel_);
+        } else acted = false;
+      } else if (r.rewardListChoice.waiting()) {
+        if (r.rewardItems.empty()) {
+          r.rewardListChoice.fire(-1);  // nothing left: Proceed
+        } else {
+          // A full belt would otherwise leave a Potion row stuck at index 0 forever.
+          if (r.rewardItems[0].kind == Run::RewardKind::Potion && !r.hasOpenPotionSlot()) r.discardPotion(0);
+          r.rewardListChoice.fire(0);  // claim top to bottom
+        }
       } else acted = false;
       break;
     case Screen::Rest:

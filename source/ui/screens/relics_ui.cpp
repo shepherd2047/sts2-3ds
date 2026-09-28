@@ -5,11 +5,10 @@ namespace ui {
 
 // ================================================================ relics
 
-// Elite relic reward / treasure chest: the relic is shown large on top (RGDSplus
-// U19/U23: focus on top, take/skip below). S14: when this offer is part of the post-combat
-// reward sequence (run_->rewardItems non-empty, i.e. not a treasure chest / ancient / event
-// relic), the reward-list strip shows what has already been resolved, excluding this relic
-// itself (the last entry -- it's the one currently offered, not yet resolved).
+// Treasure chest / Ancient / event relic offer: the relic is shown large on top (RGDSplus
+// U19/U23: focus on top, take/skip below). Not used for combat rewards any more -- S14 moved
+// the Elite relic (and any Black Star bonus relic) into the interactive reward list
+// (reward.cpp), which claims it in place instead of pushing through this screen.
 void App::drawRelicOffer(bool top) {
   Run& r = *run_;
   Relic* rel = r.relicOffer.get();
@@ -19,7 +18,6 @@ void App::drawRelicOffer(bool top) {
     TextStyle t = ts(F16, col::gold, CENTER);
     R().text(kTop / 2, 24, r.relicOfferFromChest ? "宝箱" : "精英战利品", t);
     if (rel) drawRelicDetail(rel, 88);
-    if (!r.relicOfferFromChest && !r.rewardItems.empty()) drawRewardList(true, 180, /*excludeLast=*/true);
     return;
   }
   drawSceneBg(false, 0.55f);
