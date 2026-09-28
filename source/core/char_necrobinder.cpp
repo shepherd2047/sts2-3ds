@@ -167,6 +167,14 @@ Task<> doomKill(Combat& c, std::vector<Creature*> creatures) {
   for (Model* m : c.listeners()) co_await m->afterDiedToDoom(creatures);
 }
 
+// ---------------------------------------------------------------- SummonNextTurnPower (X4.2: Invoke)
+
+Task<> SummonNextTurnPower::afterPlayerTurnStart() {
+  if (amountOnTurnStart == 0 || !owner || !owner->combat) co_return;
+  co_await summonOsty(*owner->combat, amount);
+  co_await cmd::removePower(this);
+}
+
 // ---------------------------------------------------------------- Souls
 
 Task<std::vector<Card*>> createSoulsInHand(Combat& c, int count) {
@@ -177,8 +185,9 @@ Task<std::vector<Card*>> createSoulsInHand(Combat& c, int count) {
   co_return made;
 }
 
-Task<Card*> addSoulToDrawPileRandom(Combat& c) {
+Task<Card*> addSoulToDrawPileRandom(Combat& c, bool upgraded) {
   Card* raw = c.addCard(db::card("Soul"));
+  if (upgraded) raw->upgrade();
   int idx = c.rng("Shuffle").nextInt((int)c.draw.size() + 1);  // CardPilePosition.Random
   c.draw.insert(c.draw.begin() + idx, raw);
   for (Model* m : c.listeners()) co_await m->afterCardEnteredCombat(raw);
@@ -206,12 +215,14 @@ Task<> NecroMasteryPower::afterCurrentHpChanged(Creature* creature, Dec delta) {
 // ---------------------------------------------------------------- registry
 
 void registerNecrobinderRelics();  // char_necrobinder_relics.cpp (X4.1: BigHat...UndyingSigil)
+void registerNecrobinderCards();   // char_necrobinder_cards.cpp (X4.2: the Common card pool)
 
 void registerNecrobinder() {
   registerPowerType<DieForYouPower>();
   registerPowerType<DoomPower>();
   registerPowerType<SoulboundPower>();
   registerPowerType<NecroMasteryPower>();
+  registerPowerType<SummonNextTurnPower>();
   registerCardType<Soul>();
   registerCardType<StrikeNecrobinder>();
   registerCardType<DefendNecrobinder>();
@@ -219,6 +230,7 @@ void registerNecrobinder() {
   registerCardType<Unleash>();
   db::registerRelic("BoundPhylactery", [] { return std::unique_ptr<Relic>(new BoundPhylactery()); });
   registerNecrobinderRelics();
+  registerNecrobinderCards();
 }
 
 }  // namespace sts
