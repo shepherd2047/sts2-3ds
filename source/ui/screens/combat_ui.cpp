@@ -1,0 +1,453 @@
+// Split from ui.cpp (F3).
+#include "../ui_common.h"
+#include "combat_internal.h"
+
+namespace ui {
+
+void App::drawCombat(bool top) {
+  Combat* cb = run_->combat.get();
+  if (!cb) return;
+  auto enemies = visibleEnemies();
+  auto alive = cb->aliveEnemies();
+  int n = (int)cb->hand.size();
+  if (sel_ >= n) sel_ = -1;
+  if (target_ >= (int)alive.size()) target_ = 0;
+  Card* selCard = sel_ >= 0 ? cb->hand[sel_] : nullptr;
+  bool canAct = cb->playerPhase && cb->actions.waiting();
+
+  // Which card aims where this frame.
+  Creature* tgt = nullptr;
+  bool arrow = false, arrowAlly = false;
+  float afx = 0, afy = 0;
+  if (drag_.down && drag_.moved && drag_.armed && drag_.card) {
+    afx = drag_.x + kBotOX;
+    afy = drag_.y - kCardH * kDragS / 2 + kBotOY;
+    if (drag_.card->target == TargetType::AnyEnemy && drag_.target) { tgt = drag_.target; arrow = true; }
+    else if (drag_.card->target == TargetType::Self) { tgt = cb->player; arrow = arrowAlly = true; }
+  } else if (potionsOpen_ && potionAim_ && !alive.empty()) {
+    if (target_ >= (int)alive.size()) target_ = 0;
+    tgt = alive[target_];
+  } else if (aiming_ && selCard && !alive.empty()) {
+    float cx = std::clamp(handSlot(n, sel_).x, 70.f, kBot - 70.f);
+    afx = cx + kBotOX;
+    afy = kPreviewY + kBotOY;
+    tgt = alive[target_];
+    arrow = true;
+  }
+  float atx = 0, aty = 0;
+  if (arrow && centers_.count(tgt)) { atx = centers_[tgt].first; aty = centers_[tgt].second; }
+  else arrow = false;
+
+  if (top) {
+    gfx::Texture* bg = R().texture(actTexture(*run_, "bg_"));
+    gfx::image(bg, 0, 0, kTop, kH, 0, 0, kTop, kH);
+    gfx::rectGradient(0, 150, kTop, 90, 0x00000000, 0x00000060);
+    const float feet = 170;  // ~70% down the screen, the room's floor line (RGDSplus/native)
+    auto center = [&](Creature* c, float x) {
+      Sprite s = R().sprite("creature/" + (c->isPlayer ? playerArt(run_.get()) : c->name));
+      centers_[c] = {x, s ? feet - s.ay + s.h / 2.f : feet - 30};
+    };
+    center(cb->player, 95);
+    drawCreature(cb->player, 95, feet, tgt == cb->player && !arrowAlly);
+    for (int i = 0; i < (int)enemies.size(); ++i) {
+      float x = enemyX(i, (int)enemies.size());
+      center(enemies[i], x);
+      bool aoe = drag_.down && drag_.armed && drag_.card && drag_.card->target == TargetType::AllEnemies;
+      drawCreature(enemies[i], x, feet, enemies[i] == tgt || (aoe && enemies[i]->alive()));
+    }
+    for (auto& f : floats_) {
+      if (f.t < 0) continue;
+      float x = 95, y = feet - 60;
+      if (f.who && !f.who->isPlayer)
+        for (int i = 0; i < (int)enemies.size(); ++i)
+          if (enemies[i] == f.who) x = enemyX(i, (int)enemies.size());
+      float a = std::clamp(1.2f - f.t, 0.f, 1.f);
+      TextStyle st = ts(F16, (f.color & 0xFFFFFF00) | (uint32_t)(a * 255), CENTER);
+      st.scale = 1.3f;
+      R().text(x + f.dx, y - f.t * 40, f.text, st);
+    }
+    drawTopBar();
+    if (cb->bannerTime > 0) {
+      cb->bannerTime -= 1.f / 60;
+      float a = std::min(1.f, cb->bannerTime * 2);
+      gfx::rect(0, 96, kTop, 40, (uint32_t)(a * 0xA0));
+      TextStyle st = ts(F16, col::gold, CENTER);
+      st.scale = 1.6f;
+      R().text(kTop / 2, 104, cb->banner, st);
+    }
+    if (arrow) drawArrow(true, afx, afy, atx, aty, true, arrowAlly);
+    drawFlights(true);
+    return;
+  }
+
+  // ---- bottom screen (RGDSplus layout): the same room behind, no status strip, the hand
+  // centred, energy and end turn at the sides below it, piles in the bottom corners.
+  gfx::Texture* room = R().texture(actTexture(*run_, "bg_"));
+  gfx::image(room, kBotOX, 0, kBot, kH, 0, 0, kBot, kH, 0x000000FF, 0.15f);
+
+  if (cb->choice.active) {
+    gfx::rect(0, 0, kBot, kH, 0x000000A0);
+    const CardChoice& ch = cb->choice;
+    std::string prompt = R().hasLoc(ch.prompt) ? L(ch.prompt)
+                         : R().hasLoc("cards." + ch.prompt + ".title") ? L("cards." + ch.prompt + ".title") + "：选择一张牌" : ch.prompt;
+    R().text(kBot / 2, 4, prompt, ts(F16, col::gold, CENTER, kBot - 8, 0.9f));
+    drawCardGrid(ch.options, sel_, 26, 196, scroll_);
+    bool multi = ch.maxCount > 1;
+    if (multi) {  // picked cards get a gold tick (as in the deck choice)
+      for (int i : deckPicks_) {
+        int row = i / 5 - scroll_;
+        const float gs = 0.46f, cw = 120 * gs, gch = 169 * gs, gap = (kBot - 5 * cw) / 6;
+        float x = gap + (i % 5) * (cw + gap), y = 26 + row * (gch + 8);
+        if (y >= 26 && y < 196) gfx::circle(x + cw - 6, y + 6, 6, 0xFFD870FF);
+      }
+    }
+    bool ready = multi ? (int)deckPicks_.size() >= ch.minCount : sel_ >= 0 && sel_ < (int)ch.options.size();
+    if (ch.minCount == 0) button(kBot / 2 - 50, 200, 100, 34, "跳过", ID_SKIP);
+    button(kBot - 110, 200, 100, 34, "确认", ID_CONFIRM, ready);
+    if (!multi && sel_ >= 0 && sel_ < (int)ch.options.size()) R().text(10, 206, cardTitle(ch.options[sel_]), ts(F12, col::white));
+    if (multi) R().text(10, 208, "已选 " + num((int)deckPicks_.size()), ts(F12, col::white));
+    return;
+  }
+
+  // Energy orb left and end turn right, level with each other a little below the hand
+  // (~77% down, ~10% / ~87% across on RGDSplus).
+  Sprite orb = R().sprite("ui/energy_orb");
+  const float ox = 32, oy = 185, od = 34;
+  spr(orb, ox - od / 2, oy - od / 2, od, od);
+  TextStyle et = ts(F12, cb->energy > 0 ? col::white : col::gray, CENTER);
+  R().text(ox, oy - R().lineHeight(F12) / 2, num(cb->energy) + "/" + num(cb->maxEnergyNow()), et);
+  Sprite endTurn = R().sprite("ui/end_turn");
+  const float ew = 64, eh = 32, ex = 278 - ew / 2, ey = oy - eh / 2;  // sprite is 2:1
+  spr(endTurn, ex, ey, ew, eh, canAct ? 0xFFFFFFFF : 0x000000FF, canAct ? 0 : 0.5f);
+  {
+    // The visible plate is ~78% x 62% of the sprite, centred; the label fills 80% of it.
+    const float pw = ew * 0.78f, ph = eh * 0.62f;
+    TextStyle lt = ts(F16, canAct ? col::white : col::gray, CENTER);
+    // The text box takes 80% of the plate; CJK ink sits a little below the box middle (measured).
+    const float inkMid = 0.53f;
+    float lw = R().measure("结束", lt), lh = R().lineHeight(F16);
+    lt.scale = std::min(0.8f * pw / lw, 0.8f * ph / lh);
+    R().text(ex + ew / 2, ey + eh / 2 - lh * lt.scale * inkMid, "结束", lt);
+  }
+  if (canAct) hits_.push_back({ex, ey - 4, ew, eh + 8, ID_END_TURN});
+  // Potions: a small button bottom centre, between the piles (opens the belt list).
+  {
+    const float pw = 58, ph = 22, px = (kBot - pw) / 2, py = 214;
+    panel(px, py, pw, ph, canAct ? 0x3A2E24E8 : 0x2A2A2AC0, canAct ? 0xB89A60FF : 0x555555FF);
+    int filled = 0;
+    for (auto& pt : run_->potions) filled += pt != nullptr;
+    R().text(px + pw / 2, py + (ph - R().lineHeight(F12)) / 2, "药水 " + num(filled), ts(F12, canAct ? col::white : col::gray, CENTER));
+    if (canAct) hits_.push_back({px, py - 2, pw, ph + 4, ID_POTIONS});
+  }
+  // Piles: small icons in the corners with a red count badge.
+  auto pile = [&](const char* sprite, float cx, float cy, int count) {
+    spr(R().sprite(sprite), cx - 12, cy - 12, 24, 24);
+    gfx::circle(cx + 10, cy + 8, 7, 0xC02828FF);
+    R().text(cx + 10, cy + 8 - R().lineHeight(F12) * 0.4f, num(count), ts(F12, col::white, CENTER, 0, 0.8f));
+  };
+  int waiting = 0;  // drawn cards still sitting on the pile, waiting for their turn to fly
+  for (auto& [c, p] : poses_) waiting += p.delay > 0;
+  pile("ui/draw_pile", kDrawPileX, kDrawPileY, (int)cb->draw.size() + waiting);
+  pile("ui/discard_pile", kDiscardX, kDiscardY, (int)cb->discard.size());
+  hits_.push_back({0, 201, 34, 39, ID_PILE_DRAW});
+  hits_.push_back({kBot - 34.f, 201, 34, 39, ID_PILE_DISCARD});
+  if (!cb->exhaust.empty()) {
+    R().text(kBot - 38, 200, "消耗 " + num((int)cb->exhaust.size()), ts(F12, col::white, RIGHT));
+    hits_.push_back({kBot - 104.f, 196, 66, 24, ID_PILE_EXHAUST});
+  }
+
+  auto flying = [&](Card* c) {
+    for (auto& f : flights_) if (f.card == c) return true;
+    return false;
+  };
+  drawGhosts();
+  // Fan, left to right so right cards overlap left ones (native order); cards still
+  // arriving from the draw pile go on top.
+  for (int pass = 0; pass < 2; ++pass)
+    for (int i = 0; i < n; ++i) {
+      Card* c = cb->hand[i];
+      if (flying(c) || (drag_.down && drag_.moved && drag_.card == c) || (i == sel_ && !drag_.down)) continue;
+      auto it = poses_.find(c);
+      if (it == poses_.end() || it->second.delay > 0) continue;
+      const Pose& p = it->second;
+      if ((p.drawT < 1) != (pass == 1)) continue;
+      gfx::pushTransform(gfx::Affine::rotateAround(p.x, p.y, p.angle));
+      drawCard(c, p.x - kCardW * p.s / 2, p.y - kCardH * p.s / 2, p.s, !cb->canPlay(c) && canAct, true, false);
+      gfx::popTransform();
+    }
+  // Tapped card: raised and enlarged so its text is readable (native hover).
+  if (selCard && !flying(selCard) && !(drag_.down && drag_.moved && drag_.card == selCard)) {
+    float cx = std::clamp(handSlot(n, sel_).x, 70.f, kBot - 70.f);
+    drawCard(selCard, cx - kCardW * kPreviewS / 2, kPreviewY, kPreviewS, !cb->canPlay(selCard) && canAct, true, aiming_);
+    std::string why;
+    if (canAct && !cb->canPlay(selCard, &why)) {
+      std::string msg = why == "ENERGY" ? L("combat_messages.NOT_ENOUGH_ENERGY") : L("combat_messages.UNPLAYABLE");
+      for (auto& ch : msg) if (ch == '\n') ch = ' ';
+      R().text(cx, kPreviewY + kCardH * kPreviewS + 2, msg, ts(F12, col::red, CENTER));
+    }
+  }
+  // Play line and cancel zone while dragging; the hint sits between the energy orb and
+  // end turn, below the hand, where neither the finger nor the card covers it.
+  if (drag_.down && drag_.moved && drag_.card && !flying(drag_.card)) {
+    float pulse = 0.5f + 0.5f * std::sin(clock_ * 6.f);
+    std::string hint;
+    uint32_t hc;
+    if (drag_.armed) {
+      gfx::rect(0, kPlayLine, kBot, kH - kPlayLine, 0x00000060);
+      gfx::rect(0, kPlayLine, kBot, 1, 0xFFFFFF60);
+      hint = "松手打出 · 拖回手牌取消";
+      hc = 0x90FF90FF;
+    } else {
+      gfx::rect(0, 0, kBot, kPlayLine, 0x60C0FF00 | (uint32_t)(0x10 + pulse * 0x18));
+      for (float x = 4; x < kBot; x += 12) gfx::rect(x, kPlayLine, 6, 2, 0x60C0FFC0);
+      hint = "↑ 拖过虚线出牌 · 松手取消";
+      hc = 0x90D0FFFF;
+    }
+    TextStyle st = ts(F12, hc, CENTER);
+    float w = R().measure(hint, st);
+    gfx::rect(kBot / 2 - w / 2 - 6, 200, w + 12, 16, 0x000000B0);
+    R().text(kBot / 2, 201, hint, st);
+  }
+  // Card being dragged, following the finger; glows when it is in the play zone.
+  if (drag_.down && drag_.moved && drag_.card && !flying(drag_.card)) {
+    float s = kDragS;
+    if (drag_.armed) gfx::rect(drag_.x - kCardW * s / 2 - 3, drag_.y - kCardH * s / 2 - 3, kCardW * s + 6, kCardH * s + 6, 0x60D0FF90);
+    drawCard(drag_.card, drag_.x - kCardW * s / 2, drag_.y - kCardH * s / 2, s, false, true, false);
+  }
+  if (arrow) drawArrow(false, afx, afy, atx, aty, true, arrowAlly);
+  drawFlights(false);
+}
+
+void App::updateCombat(const gfx::Input& in) {
+  Combat* cb = run_->combat.get();
+  if (!cb) return;
+  float visualDt = (float)gfx::dt() * (fastMode_ ? 1.75f : 1.f);
+  clock_ += visualDt;
+  animateHand(visualDt);
+  for (auto& f : flights_) f.t += visualDt;
+  flights_.erase(std::remove_if(flights_.begin(), flights_.end(), [](const Flight& f) { return f.t > 0.42f; }),
+                 flights_.end());
+  auto alive = cb->aliveEnemies();
+  int n = (int)cb->hand.size();
+
+  if (cb->choice.active) {
+    drag_ = {};
+    aiming_ = false;
+    int m = (int)cb->choice.options.size();
+    if (!cb->choice.result.waiting()) return;
+    if (in.down & gfx::BTN_RIGHT) sel_ = std::min(m - 1, sel_ + 1);
+    if (in.down & gfx::BTN_LEFT) sel_ = std::max(0, sel_ - 1);
+    if (in.down & gfx::BTN_DOWN) sel_ = std::min(m - 1, sel_ + 5);
+    if (in.down & gfx::BTN_UP) sel_ = std::max(0, sel_ - 5);
+    if (sel_ >= 0) scroll_ = std::max(0, sel_ / 5 - 1);
+    const bool multi = cb->choice.maxCount > 1;
+    auto finish = [&](std::vector<Card*> picked) {
+      deckPicks_.clear();
+      sel_ = -1;
+      scroll_ = 0;
+      cb->choice.result.fire(std::move(picked));
+    };
+    auto toggle = [&](int i) {
+      auto it = std::find(deckPicks_.begin(), deckPicks_.end(), i);
+      if (it != deckPicks_.end()) deckPicks_.erase(it);
+      else if ((int)deckPicks_.size() < cb->choice.maxCount) deckPicks_.push_back(i);
+    };
+    auto confirmMulti = [&] {
+      if ((int)deckPicks_.size() < cb->choice.minCount) return;
+      std::vector<Card*> picked;
+      for (int i : deckPicks_) picked.push_back(cb->choice.options[i]);
+      finish(std::move(picked));
+    };
+    if (multi) {
+      if ((in.down & gfx::BTN_A) && sel_ >= 0 && sel_ < m) toggle(sel_);
+      if (in.down & gfx::BTN_X) { confirmMulti(); return; }
+    }
+    bool confirm = !multi && (in.down & gfx::BTN_A) && sel_ >= 0 && sel_ < m;
+    if ((in.down & gfx::BTN_B) && cb->choice.minCount == 0) { finish({}); return; }
+    if (in.touchDown) {
+      int id = hitAt(in.tx, in.ty);
+      if (id >= ID_GRID0 && id - ID_GRID0 < m) {
+        if (multi) toggle(id - ID_GRID0);
+        else if (sel_ == id - ID_GRID0) confirm = true;
+        sel_ = id - ID_GRID0;
+      }
+      if (id == ID_SKIP && cb->choice.minCount == 0) { finish({}); return; }
+      if (id == ID_CONFIRM) {
+        if (multi) { confirmMulti(); return; }
+        if (sel_ >= 0) confirm = true;
+      }
+    }
+    if (confirm) finish({cb->choice.options[sel_]});
+    return;
+  }
+
+  if (in.touchDown) {
+    int id = hitAt(in.tx, in.ty);
+    CardListMode mode;
+    if (id == ID_PILE_DRAW) mode = CardListMode::Draw;
+    else if (id == ID_PILE_DISCARD) mode = CardListMode::Discard;
+    else if (id == ID_PILE_EXHAUST) mode = CardListMode::Exhaust;
+    else mode = CardListMode::Deck;
+    if (id == ID_PILE_DRAW || id == ID_PILE_DISCARD || id == ID_PILE_EXHAUST) {
+      openCardList(mode);
+      drag_ = {};
+      aiming_ = false;
+      return;
+    }
+  }
+  bool canAct = cb->playerPhase && cb->actions.waiting();
+  if (sel_ >= n) sel_ = -1;
+  if (!canAct) {
+    drag_ = {};
+    aiming_ = false;
+    return;
+  }
+  if (target_ >= (int)alive.size()) target_ = 0;
+
+  auto play = [&](Card* c, Creature* t, float x, float y, float s) {
+    if (!cb->canPlay(c)) return false;
+    if (c->target == TargetType::AnyEnemy && (!t || t->dead())) return false;
+    PlayerAction a;
+    a.kind = PlayerAction::PlayCard;
+    a.card = c;
+    a.target = c->target == TargetType::AnyEnemy ? t : nullptr;
+    cb->actions.fire(a);
+    startFlight(c, x, y, s, a.target);
+    sel_ = -1;
+    aiming_ = false;
+    return true;
+  };
+
+  // ---- touch: drag to play (RGDSplus R4 drag-lock rules)
+  if (in.touchDown && hitAt(in.tx, in.ty) == ID_POTIONS) {
+    potionsOpen_ = true;
+    potionAim_ = false;
+    potionSel_ = -1;
+    drag_ = {};
+    aiming_ = false;
+    sel_ = -1;
+    return;
+  }
+  if (in.touchDown) {
+    int i = hitHandCard(in.tx, in.ty);
+    if (i >= 0) {
+      drag_ = {};
+      drag_.down = true;
+      drag_.index = i;
+      drag_.card = cb->hand[i];
+      float cx, cy;
+      if (i == sel_) {
+        cx = std::clamp(handSlot(n, i).x, 70.f, kBot - 70.f);
+        cy = kPreviewY + kCardH * kPreviewS / 2;
+      } else {
+        HandSlot h = handSlot(n, i);
+        cx = h.x;
+        cy = h.y;
+      }
+      drag_.grabDX = 0;  // the dragged card centres on the finger
+      drag_.grabDY = 0;
+      drag_.originY = in.ty;
+      drag_.x = cx;
+      drag_.y = cy;
+      drag_.startTx = drag_.lastTx = in.tx;
+      drag_.startTy = in.ty;
+      aiming_ = false;
+    } else {
+      int id = hitAt(in.tx, in.ty);
+      if (id == ID_END_TURN) {
+        cb->actions.fire({PlayerAction::EndTurn});
+        sel_ = -1;
+        aiming_ = false;
+        return;
+      }
+      sel_ = -1;
+      aiming_ = false;
+    }
+  }
+  if (drag_.down && in.touching) {
+    if (!drag_.moved && std::hypot(in.tx - drag_.startTx, in.ty - drag_.startTy) > kTapSlop) {
+      drag_.moved = true;
+      if (sel_ != drag_.index) sel_ = -1;
+    }
+    if (drag_.moved) {
+      drag_.x = (float)in.tx;
+      drag_.y = (float)in.ty;
+      float lift = drag_.originY - in.ty;
+      bool needsTarget = drag_.card->target == TargetType::AnyEnemy;
+      if (!drag_.armed && lift >= kArm && in.ty < kPlayLine) {
+        drag_.armed = true;
+        drag_.accum = 0;
+        drag_.lastTx = in.tx;
+        if (needsTarget) {
+          // Lock the enemy nearest to the card in the two-screen space.
+          float vx = drag_.x + kBotOX, vy = drag_.y + kBotOY, best = 1e9f;
+          drag_.target = nullptr;
+          for (auto* e : alive) {
+            if (!centers_.count(e)) continue;
+            float d = std::hypot(centers_[e].first - vx, centers_[e].second - vy);
+            if (d < best) { best = d; drag_.target = e; }
+          }
+        }
+      } else if (drag_.armed && (lift <= 0 || in.ty > kPlayLine + 6)) {
+        drag_.armed = false;  // dragged back: unlock, gesture continues
+        drag_.target = nullptr;
+      }
+      if (drag_.armed && needsTarget && drag_.target) {
+        drag_.accum += in.tx - drag_.lastTx;
+        drag_.lastTx = in.tx;
+        std::vector<Creature*> order = alive;
+        std::sort(order.begin(), order.end(), [&](Creature* a, Creature* b) { return centers_[a].first < centers_[b].first; });
+        int idx = (int)(std::find(order.begin(), order.end(), drag_.target) - order.begin());
+        while (drag_.accum >= kSwitch && idx + 1 < (int)order.size()) { ++idx; drag_.accum -= kSwitch; }
+        while (drag_.accum <= -kSwitch && idx > 0) { --idx; drag_.accum += kSwitch; }
+        if (idx < (int)order.size()) drag_.target = order[idx];
+        drag_.accum = std::clamp(drag_.accum, -kSwitch, kSwitch);
+      }
+    }
+  }
+  if (drag_.down && in.touchUp) {
+    if (!drag_.moved) {
+      if (sel_ == drag_.index) {
+        detailCard_ = drag_.card;  // second tap: inspect without playing
+        detailUpgrade_ = false;
+        detailKeyword_ = -1;
+      } else {
+        sel_ = drag_.index;  // first tap: preview
+      }
+    } else {
+      bool edge = in.tx <= 2 || in.ty <= 2 || in.tx >= kBot - 3 || in.ty >= kH - 3;
+      if (drag_.armed && !edge) play(drag_.card, drag_.target, drag_.x, drag_.y, kDragS);
+    }
+    drag_ = {};
+  }
+  if (drag_.down && (in.down & gfx::BTN_B)) drag_ = {};
+
+  // ---- buttons: L/R or ←→ choose a card, A to aim/play, ←→ choose an enemy, A confirm, B back.
+  if (drag_.down) return;
+  Card* selCard = sel_ >= 0 ? cb->hand[sel_] : nullptr;
+  if (in.down & gfx::BTN_Y) { openCardList(CardListMode::Deck); aiming_ = false; return; }
+  if (in.down & gfx::BTN_X) { cb->actions.fire({PlayerAction::EndTurn}); sel_ = -1; aiming_ = false; return; }
+  if (in.down & gfx::BTN_B) {
+    if (aiming_) aiming_ = false;
+    else sel_ = -1;
+  }
+  if (in.down & gfx::BTN_R) { sel_ = n ? (sel_ + 1) % n : -1; aiming_ = false; }
+  if (in.down & gfx::BTN_L) { sel_ = n ? (sel_ <= 0 ? n - 1 : sel_ - 1) : -1; aiming_ = false; }
+  if (in.down & (gfx::BTN_LEFT | gfx::BTN_RIGHT)) {
+    int d = (in.down & gfx::BTN_RIGHT) ? 1 : -1;
+    if (aiming_ && !alive.empty()) target_ = std::clamp(target_ + d, 0, (int)alive.size() - 1);
+    else if (n) sel_ = sel_ < 0 ? 0 : (sel_ + d + n) % n;
+  }
+  if (in.down & gfx::BTN_A) {
+    if (!selCard) {
+      sel_ = n ? 0 : -1;
+    } else if (selCard->target == TargetType::AnyEnemy && !aiming_) {
+      if (cb->canPlay(selCard) && !alive.empty()) aiming_ = true;
+    } else {
+      float cx = std::clamp(handSlot(n, sel_).x, 70.f, kBot - 70.f);
+      play(selCard, alive.empty() ? nullptr : alive[target_], cx, kPreviewY + kCardH * kPreviewS / 2, kPreviewS);
+    }
+  }
+}
+
+}  // namespace ui

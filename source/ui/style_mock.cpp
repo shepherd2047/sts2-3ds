@@ -9,6 +9,7 @@
 
 #include "res.h"
 #include "style.h"
+#include "widgets.h"
 
 namespace ui {
 
@@ -301,8 +302,36 @@ void mockRenderer(bool top) {
   gfx::popAlpha();
 }
 
+// ---------------------------------------------------------------- 6: widget kit (F3)
+void mockWidgets(bool top) {
+  gfx::rect(0, 0, top ? kTop : kBot, kH, 0x1C242CFF);
+  if (top) {
+    R().text(8, 4, "F3 widget kit -- D-pad or touch the bottom screen", ts(F12, col::gold));
+    R().text(8, 22, "focused: " + std::to_string(widgets::focused()) + (widgets::usingPad() ? "  (pad)" : "  (touch)"),
+             ts(F12, col::white));
+    widgets::drawToasts(1.f / 60);
+    return;
+  }
+  widgets::beginFrame(gfx::input());
+  if (widgets::button(1, 8, 8, 90, 34, "Primary", widgets::Kind::Primary)) widgets::toast("primary!");
+  if (widgets::button(2, 106, 8, 90, 34, "Secondary")) widgets::toast("secondary!");
+  if (widgets::button(3, 204, 8, 108, 34, "Danger", widgets::Kind::Danger)) widgets::toast("danger!");
+  widgets::row(4, 8, 48, 304, "ui/reward_money", "42 金币", "已领取", false);
+  widgets::row(5, 8, 88, 304, "ui/reward_shared_relic", "遗物名字", "遗物");
+  static bool tv = true;
+  tv = widgets::toggle(6, 8, 130, tv, "开关");
+  static float sv = 0.4f;
+  sv = widgets::slider(7, 8, 168, 150, sv);
+  static int pg = 0;
+  pg = widgets::paginator(8, 170, 168, 140, pg, 5);
+  static int tab = 0;
+  tab = widgets::tabs(20, 8, 202, 200, 30, {"A", "B", "C"}, tab);
+  widgets::endFrame();
+}
+
 void drawStyleMock(int which, bool top) {
   switch (which) {
+    case 6: mockWidgets(top); break;
     case 5: mockRenderer(top); break;
     case 4: mockGallery(top); break;
     case 1: mockReward(top); break;

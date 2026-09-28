@@ -153,3 +153,16 @@ Until U4, the widget kit only calls `ui::sfx(Sfx::Click)` style hooks that do no
 skipped when fully outside), `pushAlpha/popAlpha` (fades, disabled widgets), text `outline` (4 extra draws per
 glyph: titles only) and `shadowColor/shadowDx/shadowDy`. Tint, blend, scale and rotation already existed
 (`image` tint/blend, `pushTransform`). `STS_MOCK=5` shows all of it; the 3DS side is compile-checked only.
+
+## Widget kit (F3, `source/ui/widgets.h`)
+
+Immediate-mode, art-backed (F1 sprites + F2 9-slice/clip/alpha), one input model for touch and
+D-pad/A/B/L/R with a focus ring (`widgets::beginFrame(in)` / `endFrame()` once per frame; each
+widget takes a stable `id`, draws, registers its hit box, returns whether it fired). Controls:
+`button` (Primary/Secondary/Danger/Row/Event/Ancient), `iconButton`, `row`, `optionButton`
+(locked reason line), `tabs`, `toggle`, `slider`, `paginator`, `ScrollList` (drag + clip;
+inertia and a thumb), `modal` (confirm), `toast`, `banner`. D-pad focus moves to the nearest
+control in the pressed direction using the previous frame's hit boxes; touch always wins and
+hides the ring. `STS_MOCK=6` exercises all of it. Screen files in `source/ui/screens/*.cpp`
+adopt this kit as each S package rebuilds that screen; until then they keep using `App::panel`/
+`App::button` (`source/ui/legacy_widgets.cpp`), so no screen is built twice.
