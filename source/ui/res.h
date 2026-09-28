@@ -65,7 +65,8 @@ class Res {
   const std::string& loc(const std::string& key) const;
   bool hasLoc(const std::string& key) const { return strings_.count(key) > 0; }
 
-  // Rich text: [gold]..[/gold], [blue], [green], [red], [purple], [b] and \n.
+  // Rich text: [gold]..[/gold], [blue], [green], [red], [purple], [b], \n and inline icons
+  // [icon:energy|gold|hp|star|block|<atlas/name>] (F4; square, sized to the line height).
   // Returns the height drawn.
   float text(float x, float y, const std::string& s, const TextStyle& st = {});
   float measure(const std::string& s, const TextStyle& st, float* outHeight = nullptr);
@@ -82,6 +83,11 @@ class Res {
   struct Line { std::vector<std::pair<uint32_t, uint32_t>> glyphs; float width = 0; };  // (codepoint, colour)
 
   std::vector<Line> layout(const std::string& s, const TextStyle& st);
+  // [icon:NAME] codepoints are allocated from a private-use range above kIconBase; iconSprites_
+  // maps the offset back to an atlas sprite name so text() can draw it instead of a font glyph.
+  static constexpr uint32_t kIconBase = 0xF0000;
+  int iconIndex(const std::string& name);
+  std::vector<std::string> iconSprites_;
 
   std::vector<gfx::Texture*> atlasPages_;
   std::unordered_map<std::string, Sprite> sprites_;

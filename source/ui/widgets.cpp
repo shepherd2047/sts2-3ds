@@ -35,8 +35,10 @@ void spr(const Sprite& s, float x, float y, float w = -1, float h = -1, uint32_t
   if (s) gfx::image(s.tex, s.x, s.y, s.w, s.h, x, y, w < 0 ? s.w : w, h < 0 ? s.h : h, tint);
 }
 
-void nine(const Sprite& s, float x, float y, float w, float h, uint32_t tint = 0xFFFFFFFF) {
-  if (s) gfx::nineSlice(s.tex, s.x, s.y, s.w, s.h, (float)s.nl, (float)s.nt, (float)s.nr, (float)s.nb, x, y, w, h, tint);
+// blend 0 leaves the art's own colours; blend 1 fully recolors it to `tint` (a white-outline
+// asset like ui/tab_stroke needs blend=1 to take on a plate colour).
+void nine(const Sprite& s, float x, float y, float w, float h, uint32_t tint = 0xFFFFFFFF, float blend = 0.f) {
+  if (s) gfx::nineSlice(s.tex, s.x, s.y, s.w, s.h, (float)s.nl, (float)s.nt, (float)s.nr, (float)s.nb, x, y, w, h, tint, blend);
 }
 
 // Nearest previous-frame box in `dir` (0 right, 1 left, 2 up, 3 down) from the focused box.
@@ -189,7 +191,7 @@ bool row(int id, float x, float y, float w, const std::string& iconSprite, const
   if (focus) gfx::rect(x, y, w, h, kSelectedFill);
   Sprite ic = R().sprite(iconSprite);
   if (ic) spr(ic, x + 4, y + 2, h - 4, h - 4, enabled ? 0xFFFFFFFF : 0x808080FF);
-  float labelX = ic ? x + h : x + 10;
+  float labelX = ic ? x + h + kGap : x + 10;
   R().text(labelX, y + (h - R().lineHeight(F16)) / 2, label, ts(F16, enabled ? col::white : col::gray));
   if (!rightValue.empty()) R().text(x + w - 8, y + (h - R().lineHeight(F12)) / 2, rightValue,
                                     ts(F12, enabled ? rightColor : col::gray, RIGHT));
@@ -218,8 +220,9 @@ int tabs(int baseId, float x, float y, float w, float h, const std::vector<std::
     float tx = x + i * tw;
     bool selected = i == sel;
     if (hit(baseId + i, tx, y, tw, h, true)) sel = i;
+    // tab_stroke is a plain white outline meant to be tinted; tab_selected is already coloured.
     Sprite art = R().sprite(selected ? "ui/tab_selected" : "ui/tab_stroke");
-    if (art) nine(art, tx, y, tw - 2, h);
+    if (art) nine(art, tx, y, tw - 2, h, selected ? 0xFFFFFFFF : kPlate, selected ? 0.f : 1.f);
     else { gfx::rect(tx, y, tw - 2, h, selected ? kPlateHover : kPlate); gfx::rect(tx, y + h - 2, tw - 2, 2, kPanelHi); }
     R().text(tx + (tw - 2) / 2, y + (h - R().lineHeight(F12)) / 2, labels[i], ts(F12, selected ? col::gold : col::white, CENTER));
     focusRing(baseId + i, tx, y, tw - 2, h);

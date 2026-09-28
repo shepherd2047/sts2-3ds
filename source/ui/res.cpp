@@ -167,6 +167,25 @@ static uint32_t tagColor(const std::string& tag, uint32_t base) {
   return base;
 }
 
+// Short [icon:NAME] names -> atlas sprite path; anything with a '/' is used as the sprite
+// name directly (e.g. [icon:relic/BURNING_BLOOD]).
+static const char* iconSpritePath(const std::string& name) {
+  if (name == "energy") return "card/energy";
+  if (name == "gold") return "ui/reward_money";
+  if (name == "hp") return "ui/tb_heart";
+  if (name == "star") return "ui/star";
+  if (name == "block") return "ui/block";
+  return nullptr;
+}
+
+int Res::iconIndex(const std::string& name) {
+  for (size_t i = 0; i < iconSprites_.size(); ++i)
+    if (iconSprites_[i] == name) return (int)i;
+  const char* path = iconSpritePath(name);
+  iconSprites_.push_back(path ? path : name);
+  return (int)iconSprites_.size() - 1;
+}
+
 std::vector<Res::Line> Res::layout(const std::string& s, const TextStyle& st) {
   const Font& f = fonts_[st.size];
   std::vector<Line> lines(1);
@@ -194,7 +213,14 @@ std::vector<Res::Line> Res::layout(const std::string& s, const TextStyle& st) {
       size_t close = s.find(']', i);
       if (close != std::string::npos && close - i < 24) {
         std::string tag = s.substr(i + 1, close - i - 1);
-        if (!tag.empty() && tag[0] == '/') {
+        if (tag.rfind("icon:", 0) == 0) {
+          flushWord();
+          uint32_t cp = kIconBase + (uint32_t)iconIndex(tag.substr(5));
+          float a = f.lineHeight;
+          if (lines.back().width + a > maxW && !lines.back().glyphs.empty()) lines.emplace_back();
+          lines.back().glyphs.push_back({cp, colorStack.back()});
+          lines.back().width += a;
+        } else if (!tag.empty() && tag[0] == '/') {
           if (colorStack.size() > 1) colorStack.pop_back();
         } else {
           colorStack.push_back(tagColor(tag, colorStack.back()));
