@@ -33,17 +33,7 @@ struct LightningRodPower : Power {
   }
 };
 
-// EnergyNextTurnPower (Models.Powers): grants Amount energy on the next AfterEnergyReset, then
-// removes itself. Already exists privately in ancients_later.cpp (Relax); duplicated here
-// (same Key, so save/load and description lookups still resolve to one definition) rather than
-// exposing that file's anonymous-namespace type.
-struct EnergyNextTurnPower : Power {
-  POWER_HEADER(EnergyNextTurnPower, "ENERGY_NEXT_TURN_POWER")
-  Task<> afterEnergyReset() override {
-    co_await cmd::gainEnergy(*owner->combat, amount);
-    co_await cmd::removePower(this);
-  }
-};
+// EnergyNextTurnPower (ChargeBattery) is the shared one in powers.h.
 
 // Void.cs: an unplayable, Ethereal status card that, once drawn, costs the player Energy on a
 // short delay (matching the vfx-timed AfterCardDrawn in the C#).
