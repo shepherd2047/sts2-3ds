@@ -232,7 +232,7 @@ screenshots of both screens, and tick the U table at the end of this file.
 | S20 | U25 | Detail popups for card/relic/potion: large on top with keywords, controls (upgrade preview, close) on the bottom | F5 | partial (modal + keyword pages) |
 | S21 | U26 | Settings and pause menus (screens only; logic in Y1/Y2) | Y1 | partial (START page) |
 | S22 | U27 | Tutorials, confirmations, errors | M13 | todo |
-| S23 | U28 | Death / victory / unlock / timeline reveal: score, badges, continue | M7 | partial (summary, menu/restart) |
+| S23 | U28 | Death / victory: score, badges, continue | M7 | partial (summary, menu/restart) |
 | S24 | U29 | Compendium: cards, relics, potions, bestiary | M8-M10 | todo |
 | S25 | U30 | Stats and run history | M6 | todo |
 | S26 | U31 | Credits (scroll across both screens) | F3 | todo |
@@ -274,8 +274,8 @@ with the new renderer.
 |---|---|---|---|---|
 | M1 | Profile save `progress.sav` (versioned, atomic write): per-character wins, losses, best streak, max ascension; seen/unlocked cards, relics, potions and monsters; counters for stats and achievements | engine, *Opus* | – | todo |
 | M2 | Run history store: the last 50 runs (seed, character, ascension, path, deck, relics, floor reached, killed by, time, score) | engine | M1 | todo |
-| M3 | Timeline / epochs engine: the 60 epochs (`Timeline.Epochs`, `UnlockState`), which cards, relics, potions, acts and characters each unlocks, and a 全部解锁 option in settings | engine, *Opus* | M1 | todo |
-| M4 | Timeline screen (`Nodes.Screens.Timeline`) + unlock reveal screens after a run | UI | M3, F3 | todo |
+| M3 | Timeline / epochs engine | – | – | n/a (owner: everything unlocked) |
+| M4 | Timeline screen + unlock reveals | – | – | n/a (owner: everything unlocked) |
 | M5 | Achievements (22, `Achievements\`): checks, toast, achievement list page | content + UI | M1 | todo |
 | M6 | Stats screen: general and per-character stats (`Nodes.Screens.StatsScreen`) + run history viewer | UI | M2, F3 | todo |
 | M7 | Score and badges at the end of a run (28 badges, `Models.Badges`), used by S23 | content | M2 | todo |
@@ -290,7 +290,7 @@ with the new renderer.
 
 | id | Package | Kind | Needs | Status |
 |---|---|---|---|---|
-| Y1 | Settings store `settings.sav` + logic: fast mode, screen shake, BGM/SFX/ambience volume, language, run timer, text effects, long-press confirm, common tooltips, hand card count, reset tutorials, 全部解锁, delete data | engine | – | partial (fast mode, shake, abandon saved) |
+| Y1 | Settings store `settings.sav` + logic: fast mode, screen shake, BGM/SFX/ambience volume, language, run timer, text effects, long-press confirm, common tooltips, hand card count, reset tutorials, delete data | engine | – | partial (fast mode, shake, abandon saved) |
 | Y2 | Pause menu (START during a run): resume, settings, deck, compendium, save & quit, abandon run (with confirm) | UI | Y1, F3 | todo |
 | Y3 | Languages: bake English + 简体中文 loc and fonts, switch at runtime | tools + UI | Y1 | todo |
 | Y4 | Profiles: 3 slots on SD, rename and delete; the run save and progress files are per profile | engine | M1 | todo |
@@ -300,8 +300,8 @@ with the new renderer.
 
 | id | Package | Kind | Needs | Status |
 |---|---|---|---|---|
-| U1 | Extraction: FMOD `banks/desktop/*.bank` (FSB5) and `*.mp3` → OGG (Vorbis) in romfs, with a list of events and names; keep the size in budget | tools, *Opus* | – | todo |
-| U2 | Audio engine: 3DS ndsp streaming for music (tremor), mixer for SFX voices; SDL backend | platform | U1 | todo |
+| U1 | Extraction: FMOD `banks/desktop/*.bank` (FSB5) and `*.mp3` → DSP-ADPCM in romfs, with a list of events and names; keep the size in budget | tools, *Opus* | – | todo |
+| U2 | Audio engine: 3DS ndsp streaming of ADPCM music from romfs, SFX voices; SDL backend decodes the same files; SDL backend | platform | U1 | todo |
 | U3 | Music routing: title, each act's map and fights, elite, boss, shop, rest, Ancient, victory, death; crossfades | UI | U2 | todo |
 | U4 | SFX: cards, hits, block, buffs, gold, relics, potions and UI controls, mapped from the C# `SfxCmd` names | content | U2 | todo |
 | U5 | Ambience per room, and wiring the volume sliders | UI | U3, Y1 | todo |
@@ -321,7 +321,8 @@ with the new renderer.
 
 ## Order
 
-Each phase can start when the one before it is done. Within a phase the packages are
+With one session: each phase starts when the one before it is done. With lanes (below):
+each lane takes its own packages in this order and only waits on the listed dependencies. Within a phase the packages are
 listed in order.
 
 1. **UI foundation:** F0 → F1 → F2 → F3 → F4 → F5 → F6.
@@ -332,21 +333,53 @@ listed in order.
    C10, C11, then A11a-f.
 4. **System:** Y1, Y2 + S21, Y5, Y3, M1, Y4 + S03.
 5. **Characters:** X1 (Silent), X2 (Defect), X3 (Regent), X4 (Necrobinder), then X6 + S04.
-6. **Meta:** M2, M3, M4, M5, M6, M7 + S23, M8, M9, M10 + S24, S25, M11 + S05, M12,
+6. **Meta:** M2, M5, M6, M7 + S23, M8, M9, M10 + S24, S25, M11 + S05, M12,
    M13 + S22, S26.
 7. **Audio:** U1 → U5.
 8. **Release:** H1, H3, H2, H4, H5, H6.
 
 Rough size: 23 content, 2 rules, 8 UI foundation, 26 screens, 29 character,
-13 meta, 5 system, 5 audio and 6 release packages, about **117 packages** in all.
+11 meta, 5 system, 5 audio and 6 release packages, about **115 packages** in all.
 
-## Decisions for the owner (defaults in bold)
+## Lanes (running several sessions at once)
 
-- Unlocks: **port the timeline faithfully, with 全部解锁 in settings**, or everything
-  unlocked from the start.
-- Languages: **简体中文 + English**, or Chinese only.
-- Audio format: **OGG Vorbis** (small), or ADPCM (less CPU).
-- Old 3DS: **not supported** (New 3DS only).
+Up to four sessions can work at the same time, one per lane. Each lane owns different
+files, so they rarely conflict. Each session works in its own git worktree on the
+same PC (`git worktree add ../sts2-3ds-<lane> main`), with its own `build/`. Copy
+`romfs/` and `romfs_3ds/` into the worktree once; `build_assets.py` can also be rerun there.
+
+| Lane | Model | Packages | Owns |
+|---|---|---|---|
+| **UI** | Opus | F0-F7, then S01-S26, M4-M10 screens, Y2 | `source/ui/**`, `source/gfx/**`, `source/platform_*/gfx*`, UI parts of `build_assets.py` |
+| **Engine** | Opus | A3a, A4, A10, A11f, C10, C11, M1, M2, M11, M12, Y1, Y4, Y5, then X1.0 → X2.0 → X3.0 → X4.0, X6, H* | `game.h`, `combat.cpp`, `run.cpp`, `save.cpp`, `mapgen.cpp`, `acts.cpp` |
+| **Content** | Sonnet | A1a-c, A2, A3b-c, A5-A9, A11a-e, M5, M7, then X*.1-X*.4 for each character after its X*.0 | new `content_*.cpp` / `relics_*.cpp` / `events_*.cpp` files, one registration line each |
+| **Audio** | Sonnet (U1: Opus) | U1-U5, then H4 | `source/audio/**`, `source/platform_*/audio*`, `tools/audio*.py` |
+
+Rules:
+1. **Claim before starting.** Set the package status to `in progress (<lane>)`, then
+   commit and push that one line. If the push is rejected, pull, and pick another package.
+2. **Small commits, pull often.** Run `git pull --rebase` before every commit. Never
+   force-push, and never revert another lane's files.
+3. **Engine edits from other lanes.** A lane that needs a hook in an engine file adds
+   the smallest possible hook in the style of the existing ones. It says so in its
+   commit message.
+4. **A content package that needs a missing engine feature** does not build the
+   feature itself. It locks that card, relic or option with a PORT NOTE naming the
+   package that will unlock it, or it waits.
+5. **UI changes need the owner's review.** The UI lane shows screenshots to the owner.
+   Other lanes do not change how screens look, except to add text for new content.
+6. **Talk to the owner in Chinese.** At the end of each package, report what was done,
+   the tests, and the next package.
+
+## Owner decisions (2026-09-28)
+
+- **Everything is unlocked from the start.** There is no timeline or epoch progression:
+  all characters, acts (incl. Underdocks), cards, relics and potions are available.
+  M3/M4 are n/a. Where the C# asks `UnlockState`, answer "unlocked".
+- **Languages: 简体中文 + English** (Y3).
+- **Audio: ADPCM** (3DS DSP-ADPCM, played by ndsp without a decoder). Watch romfs size:
+  use mono or a lower sample rate for long music tracks if needed (U1, H3).
+- **New 3DS only.**
 
 ---
 
