@@ -350,10 +350,15 @@ same PC (`git worktree add ../sts2-3ds-<lane> main`), with its own `build/`. Cop
 
 | Lane | Model | Packages | Owns |
 |---|---|---|---|
-| **UI** | Opus | F0-F7, then S01-S26, M4-M10 screens, Y2 | `source/ui/**`, `source/gfx/**`, `source/platform_*/gfx*`, UI parts of `build_assets.py` |
-| **Engine** | Opus | A3a, A4, A10, A11f, C10, C11, M1, M2, M11, M12, Y1, Y4, Y5, then X1.0 → X2.0 → X3.0 → X4.0, X6, H* | `game.h`, `combat.cpp`, `run.cpp`, `save.cpp`, `mapgen.cpp`, `acts.cpp` |
+| **UI** | Opus | F0-F7, then S01-S26, X*.5 (character visuals), M6/M8-M10 screens, Y2 | `source/ui/**`, `source/gfx/**`, `source/platform_*/gfx*`, UI parts of `build_assets.py` |
+| **Engine** | Opus | A3a, A4, C10, X1.0, X2.0, X3.0, X4.0 first (they unblock the other lanes), then A10, A11f, C11, M1, M2, Y1, Y4, Y5, M11, M12, X6, H* | `game.h`, `combat.cpp`, `run.cpp`, `save.cpp`, `mapgen.cpp`, `acts.cpp` |
 | **Content** | Sonnet | A1a-c, A2, A3b-c, A5-A9, A11a-e, M5, M7, then X*.1-X*.4 for each character after its X*.0 | new `content_*.cpp` / `relics_*.cpp` / `events_*.cpp` files, one registration line each |
 | **Audio** | Sonnet (U1: Opus) | U1-U5, then H4 | `source/audio/**`, `source/platform_*/audio*`, `tools/audio*.py` |
+
+Waiting points: content A3b needs A3a, and X*.1 needs X*.0. The engine lane does those
+first, so content never waits. The UI lane stubs anything that does not exist yet (the
+enchantment badge in F5, characters in S04) and fills it in when it lands. The audio
+lane is independent until U3/U4, which only add play calls at existing places.
 
 Rules:
 1. **Claim before starting.** Set the package status to `in progress (<lane>)`, then
