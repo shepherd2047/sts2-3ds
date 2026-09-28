@@ -501,9 +501,21 @@ def build(args):
     for kind in ('attack', 'skill', 'power'):
         packer.add(f'card/frame_{kind}', fit(a.sprite(f'images/atlases/ui_atlas.sprites/card/card_frame_{kind}_s.tres'), (120, 169)))
         packer.add(f'card/border_{kind}', fit_height(a.sprite(f'images/atlases/ui_atlas.sprites/card/card_portrait_border_{kind}_s.tres'), 96))
+    packer.add('card/frame_ancient', fit(a.sprite('images/atlases/ui_atlas.sprites/card/card_frame_ancient_s.tres'), (120, 169)))
     packer.add('card/banner', fit_height(a.sprite('images/atlases/ui_atlas.sprites/card/card_banner.tres'), 28))
+    packer.add('card/ancient_banner', fit_height(a.sprite('images/atlases/ui_atlas.sprites/card/ancient_banner.tres'), 28))
     packer.add('card/energy', fit(a.sprite('images/atlases/ui_atlas.sprites/card/energy_ironclad.tres'), (28, 28)))
     packer.add('card/unplayable', fit(a.sprite('images/atlases/ui_atlas.sprites/card/card_unplayable_icon.tres'), (24, 24)))
+    # F5: enchantment badge (NCard.UpdateEnchantmentVisuals: an icon in the card's corner, an
+    # amount label when the enchantment shows one). Frame is card_enchant_s; icons are
+    # images/enchantments/<snake of the KEY>.png, falling back to missing_enchantment.png.
+    packer.add('card/enchant_badge', fit(a.sprite('images/atlases/ui_atlas.sprites/card/card_enchant_s.tres'), (28, 22)))
+    for key in ENCHANTMENTS:
+        snake = key.lower()
+        path = f'images/enchantments/{snake}.png'
+        if path + '.import' not in g.pck.files:
+            path = 'images/enchantments/missing_enchantment.png'
+        packer.add('enchant/' + key, fit(g.image(path), (20, 20)))
 
     print('creatures')
     os.makedirs(os.path.join(OUT, 'spine'), exist_ok=True)

@@ -88,6 +88,10 @@ std::string App::describe(Card* c) {
         out += num(((Dec(1) - raw(name)) * Dec(100)).toInt());
       } else if (rest.rfind("plural:", 0) == 0) {
         out += choose(rest.substr(7), raw(name) == Dec(1));
+      } else if (colon != std::string::npos && rest.find('|') != std::string::npos) {
+        // A plain {Name:a|b} conditional on a flag this port doesn't model (e.g. IsMultiplayer,
+        // or a per-card extra arg like MadScience's rider flags): missing means false, not "?".
+        out += choose(rest, c->var(name.c_str()) && raw(name) != Dec(0));
       } else {
         out += value(name);
       }
@@ -180,7 +184,12 @@ std::string expandSmart(const std::string& src, const std::vector<DynVar>& vars,
       else if (rest.rfind("percentMore", 0) == 0) out += num(((raw(name) - Dec(1)) * Dec(100)).toInt());
       else if (rest.rfind("percentLess", 0) == 0) out += num(((Dec(1) - raw(name)) * Dec(100)).toInt());
       else if (rest.rfind("plural:", 0) == 0) out += choose(rest.substr(7), raw(name) == Dec(1));
-      else if (find(name)) out += num(raw(name).toInt());
+      else if (colon != std::string::npos && rest.find('|') != std::string::npos) {
+        // A plain {Name:a|b} conditional on a flag this port doesn't model: missing means
+        // false (e.g. IsMultiplayer), not "?".
+        bool v = find(name) ? raw(name) != Dec(0) : strVars && strVars->count(name) && strOf(name) != "";
+        out += choose(rest, v);
+      } else if (find(name)) out += num(raw(name).toInt());
       else if (strVars && strVars->count(name)) out += strOf(name);
       else out += "?";
     }

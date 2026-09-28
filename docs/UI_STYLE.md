@@ -186,3 +186,22 @@ x, y, top)` draws a `ui/hover_tip` glossary popover anchored to a point, flipped
 screen -- the reusable piece for a HoverTips-style glossary; wiring it to a press-and-hold on
 keyword words in card/relic text is left to the S packages that rebuild those screens.
 `STS_MOCK=7` shows all of it.
+
+## Card renderer v2 (F5)
+
+`App::drawCard` now draws: the correct frame (`card/frame_ancient` for Rarity::Ancient, the
+type frame otherwise), a rarity-coloured title outline (`rarityOutline`, StsColors
+`cardTitleOutline*`; skipped below `s = 0.55` where it stops reading), the unplayable icon
+(`card/unplayable`) in place of the cost gem when `kwUnplayable`, and an enchantment badge
+(`card/enchant_badge` + `enchant/<KEY>`, dimmed while disabled, its amount shown when
+`showAmount()`) at every size including the ~0.5-scale 5-card hand -- the badge is the only sign
+an enchantment is there, so it never disappears, just floors at a legible pixel size. The
+existing single `drawCard(..., s)` already covers all three sizes (hand ~0.5-0.62, grid mini
+0.46, large detail 1.1-1.3); F5 did not need a second code path. Affliction overlays wait for A4
+(no affliction cards exist yet to test against). New F1 art baked for this: `card/frame_ancient`,
+`card/ancient_banner`, `card/enchant_badge`, `enchant/<ENCHANTMENT_KEY>` (one per registered
+enchantment, `missing_enchantment.png` fallback).
+
+Also fixed while touching card/event text: a plain `{Name:a|b}` conditional on a flag this port
+doesn't model (`IsMultiplayer`, per-card extra args like MadScience's riders) now defaults to
+false and picks the empty/second alt, instead of printing "?" for the whole clause.
