@@ -181,6 +181,11 @@ struct Model {
   virtual Task<> afterModifyingOrbPassiveTriggerCount(Orb*) { return {}; }
   virtual Task<> afterOrbChanneled(Orb*) { return {}; }
   virtual Task<> afterOrbEvoked(Orb*, const std::vector<Creature*>& /*targets*/) { return {}; }
+
+  // Added for the Necrobinder's relics (X4.1; Hook.* of the same names).
+  virtual Task<> afterAttack(Creature* /*attacker*/) { return {}; }  // Hook.AfterAttack (AttackCommand.Execute, once per card)
+  // Hook.AfterFlush: hand cards discarded / retained at the end of the player's turn.
+  virtual Task<> afterFlush(const std::vector<Card*>& /*flushed*/, const std::vector<Card*>& /*retained*/) { return {}; }
 };
 
 // ---------------------------------------------------------------- saves

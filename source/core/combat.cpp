@@ -869,6 +869,7 @@ Task<> Attack::execute(Combat& c) {
     std::vector<Creature*> ts = target ? std::vector<Creature*>{target} : valid;
     results.push_back(co_await damage(ts, amount, props, attacker, source));
   }
+  for (Model* m : c.listeners()) co_await m->afterAttack(attacker);  // Hook.AfterAttack (once per Execute)
 }
 
 }  // namespace cmd
@@ -1071,13 +1072,16 @@ Task<> Combat::endPlayerTurnPhaseOne() {
 
 Task<> Combat::endPlayerTurnPhaseTwo() {
   // FlushPlayerHand
-  std::vector<Card*> flush;
+  std::vector<Card*> flush, retained;
   bool flushHand = true;
   for (Model* m : listeners()) flushHand = flushHand && m->shouldFlush();
-  if (flushHand)
-    for (Card* c : hand) if (!c->shouldRetainThisTurn()) flush.push_back(c);
+  for (Card* c : hand) {
+    if (!flushHand || c->shouldRetainThisTurn()) retained.push_back(c);
+    else flush.push_back(c);
+  }
   for (Card* c : flush) { removeFromPiles(c); discard.push_back(c); }
   if (!flush.empty()) co_await wait(0.25);
+  for (Model* m : listeners()) co_await m->afterFlush(flush, retained);  // Hook.AfterFlush
   for (Card* c : allCards()) {  // PlayerCombatState.EndOfTurnCleanup -> CardModel.EndOfTurnCleanup
     c->clearCostMods(Card::kEndOfTurn);
     c->singleTurnRetain = c->singleTurnSly = false;

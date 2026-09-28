@@ -17,6 +17,76 @@ struct Soul : IroncladT<Soul> {
   void onUpgrade() override { upgradeVar("Cards", 1); }
 };
 
+// StrikeNecrobinder.cs / DefendNecrobinder.cs: same numbers as the Ironclad's Strike/Defend --
+// "The only difference between the starting Strike cards are portrait, attack vfx, and color."
+struct StrikeNecrobinder : IroncladT<StrikeNecrobinder> {
+  CARD_HEADER(StrikeNecrobinder, "STRIKE_NECROBINDER", 1, Attack, Basic, AnyEnemy)
+    tags = tagStrike;
+    addVar("Damage", 6);
+  }
+  Task<> onPlay(CardPlay& p) override { co_await attack(p.target, val("Damage")); }
+  void onUpgrade() override { upgradeVar("Damage", 3); }
+};
+
+struct DefendNecrobinder : IroncladT<DefendNecrobinder> {
+  CARD_HEADER(DefendNecrobinder, "DEFEND_NECROBINDER", 1, Skill, Basic, Self)
+    tags = tagDefend;
+    addVar("Block", 5);
+  }
+  Task<> onPlay(CardPlay&) override { co_await block(val("Block")); }
+  void onUpgrade() override { upgradeVar("Block", 3); }
+};
+
+// Bodyguard.cs: summon Osty with 5 (+2 upgraded) HP, or raise his max HP by that amount if he's
+// already alive (summonOsty handles both cases). PORT NOTE: TriggerAnim's "summonTrigger" anim
+// (Necrobinder.GetSummonAnimIfApplicable) is UI, not ported.
+struct Bodyguard : IroncladT<Bodyguard> {
+  CARD_HEADER(Bodyguard, "BODYGUARD", 1, Skill, Basic, Self)
+    addVar("Summon", 5);
+  }
+  Task<> onPlay(CardPlay&) override { co_await summonOsty(*combat, val("Summon").toInt()); }
+  void onUpgrade() override { upgradeVar("Summon", 2); }
+};
+
+// Unleash.cs: Osty attacks for 6 (+3 upgraded) plus Osty's current HP. The dealer is Osty
+// (attacker = combat->osty, not the player): Attack::execute's `!attacker || attacker->dead()`
+// guard already no-ops the whole card when Osty is missing or dead, matching
+// `Osty.CheckMissingWithAnim` skipping OnPlay entirely.
+struct Unleash : IroncladT<Unleash> {
+  CARD_HEADER(Unleash, "UNLEASH", 1, Attack, Basic, AnyEnemy)
+    tags = tagOstyAttack;
+    addVar("CalculationBase", 6);
+    addVar("ExtraDamage", 1);
+    addVar("CalculatedDamage", 0);
+    calcMultiplier = [](Card* c) { return c->combat && c->combat->osty && c->combat->osty->alive() ? c->combat->osty->hp : 0; };
+  }
+  Task<> onPlay(CardPlay& p) override {
+    cmd::Attack a;
+    a.calcFrom = this;
+    a.attacker = combat->osty;
+    a.source = this;
+    a.single = p.target;
+    co_await a.execute(*combat);
+  }
+  void onUpgrade() override { upgradeVar("CalculationBase", 3); }
+};
+
+// BoundPhylactery.cs (Starter relic): summon Osty with 1 HP before combat starts; every turn
+// after the first, summon him again for 1 (raising his max HP by 1, or resummoning him at 1 HP
+// if he died) via AfterEnergyResetLate. PORT NOTE: AfterEnergyResetLate vs. AfterEnergyReset only
+// matters for ordering against other Osty-existence checks (e.g. Friendship), not ported yet;
+// this engine's single afterEnergyReset() hook is used instead.
+struct BoundPhylactery : Relic {
+  RELIC_HEADER(BoundPhylactery, "BOUND_PHYLACTERY", Starter)
+    addVar("Summon", 1);
+  }
+  Task<> beforeCombatStart() override { co_await summonOsty(*combat, val("Summon").toInt()); }
+  Task<> afterEnergyReset() override {
+    if (!combat || combat->turnNumber == 1) co_return;
+    co_await summonOsty(*combat, val("Summon").toInt());
+  }
+};
+
 }  // namespace
 
 // ---------------------------------------------------------------- Osty
@@ -135,12 +205,20 @@ Task<> NecroMasteryPower::afterCurrentHpChanged(Creature* creature, Dec delta) {
 
 // ---------------------------------------------------------------- registry
 
+void registerNecrobinderRelics();  // char_necrobinder_relics.cpp (X4.1: BigHat...UndyingSigil)
+
 void registerNecrobinder() {
   registerPowerType<DieForYouPower>();
   registerPowerType<DoomPower>();
   registerPowerType<SoulboundPower>();
   registerPowerType<NecroMasteryPower>();
   registerCardType<Soul>();
+  registerCardType<StrikeNecrobinder>();
+  registerCardType<DefendNecrobinder>();
+  registerCardType<Bodyguard>();
+  registerCardType<Unleash>();
+  db::registerRelic("BoundPhylactery", [] { return std::unique_ptr<Relic>(new BoundPhylactery()); });
+  registerNecrobinderRelics();
 }
 
 }  // namespace sts
