@@ -45,7 +45,7 @@ inline bool isPoweredAttack(int p) { return (p & kMove) && !(p & kUnpowered); }
 inline bool isPoweredBlock(int p) { return (p & kMove) && !(p & kUnpowered); }
 
 enum Keyword : int { kwExhaust = 1, kwUnplayable = 2, kwEthereal = 4, kwInnate = 8, kwRetain = 16, kwSly = 32 };
-enum CardTag : int { tagStrike = 1, tagDefend = 2, tagMinion = 4, tagOstyAttack = 8, tagShiv = 16 };
+enum CardTag : int { tagStrike = 1, tagDefend = 2, tagMinion = 4, tagOstyAttack = 8, tagShiv = 16, tagSovereignBlade = 32 };
 
 struct DamageResult {
   Creature* receiver = nullptr;
@@ -152,6 +152,14 @@ struct Model {
   virtual Task<> beforeFlush() { return {}; }                   // player turn ends, before the hand is discarded
   virtual void modifyShuffleOrder(std::vector<Card*>& /*cards*/, bool /*isInitialShuffle*/) {}  // index 0 = top
   virtual Task<> afterCardDiscarded(Card*) { return {}; }  // Hook.AfterCardDiscarded (CardCmd.Discard only, not the end-of-turn flush)
+
+  // Added for the Regent (X3.0): Stars, the second resource, and Forge / Sovereign Blade.
+  virtual int modifyStarCost(Card*, int cost) { return cost; }  // Hook.ModifyStarCost (TryModifyStarCost)
+  virtual bool shouldGainStars(int /*amount*/) { return true; }  // Hook.ShouldGainStars
+  virtual bool shouldPayExcessEnergyCostWithStars() { return false; }  // AbstractModel.ShouldPayExcessEnergyCostWithStars
+  virtual Task<> afterStarsGained(int) { return {}; }  // Hook.AfterStarsGained (PlayerCmd.GainStars only)
+  virtual Task<> afterStarsSpent(int) { return {}; }   // Hook.AfterStarsSpent (paying a card's star cost only)
+  virtual Task<> afterForge(Dec /*amount*/, Model* /*source*/) { return {}; }  // Hook.AfterForge (ForgeCmd.Forge)
 };
 
 // ---------------------------------------------------------------- saves
@@ -357,6 +365,10 @@ struct Card : Model {
   bool isDupe = false;
   bool costsX = false;   // HasEnergyCostX
   int xValue = 0;        // captured X when played (ResolveEnergyXValue)
+  int starCost = -1;         // CanonicalStarCost (Regent's Stars resource); -1 = no star cost
+  bool costsStarsX = false;  // HasStarCostX
+  int lastStarsSpent = 0;    // LastStarsSpent, captured when played
+  int starXValue = 0;        // captured stars spent, with modifyXValue applied (ResolveStarXValue)
   // CardEnergyCost local modifiers.
   enum CostExpiry : int { kEndOfTurn = 1, kWhenPlayed = 2, kEndOfCombat = 4 };
   struct CostMod { int value; bool absolute; int expiry; bool reduceOnly; };
@@ -709,6 +721,7 @@ struct Combat {
   }
 
   int energy = 0, maxEnergy = 3;
+  int stars = 0;  // PlayerCombatState.Stars (Regent's second resource; char_regent.h/.cpp)
   int turnNumber = 1, roundNumber = 1;
   int cardsPlayedThisTurn = 0;  // CombatHistory.CardPlaysStarted this turn (player)
   Side currentSide = Side::Player;
@@ -727,6 +740,7 @@ struct Combat {
   Task<> runCombat();
   bool canPlay(Card* c, std::string* reason = nullptr);
   int energyCost(Card* c);  // CardEnergyCost.GetWithModifiers(All)
+  int starCost(Card* c);    // CardModel.GetStarCostWithModifiers
   int maxEnergyNow();
   bool isValidTarget(Card* c, Creature* t);
   std::vector<Creature*> hittableEnemies();
@@ -782,6 +796,12 @@ Task<> discardCards(Combat& c, std::vector<Card*> cards, int drawAfter = 0);
 Task<> discardCard(Combat& c, Card* card);
 Task<> loseBlock(Creature* target, Dec amount);  // CreatureCmd.LoseBlock (no AfterBlockBroken hook yet)
 Task<> gainEnergy(Combat& c, int amount);
+// PlayerCmd.GainStars / LoseStars / SetStars (Regent's Stars resource). GainStars is the only
+// one that fires a hook (AfterStarsGained); LoseStars does not (spending a card's star cost
+// fires AfterStarsSpent instead, from Combat::playCard).
+Task<> gainStars(Combat& c, int amount);
+Task<> loseStars(Combat& c, int amount);
+Task<> setStars(Combat& c, int amount);
 Task<> gainMaxHp(Creature* cr, int amount);
 Task<> loseMaxHp(Creature* cr, int amount);
 // CardPileCmd.AddGeneratedCardToCombat: returns the card now owned by the combat.
