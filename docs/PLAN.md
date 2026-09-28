@@ -285,7 +285,7 @@ and `Models.Powers\`.
 | id | Character | Step 0 systems | Status |
 |---|---|---|---|
 | X0 | All | Character plumbing (see Engine lane order #1) | done (engine), accepted 2026-09-28 |
-| X1.0-X1.5 | Silent | Shiv tokens, Poison, discard triggers (Sly), Retain, Accuracy-style powers | X1.0 done (engine); X1.1-X1.5 todo |
+| X1.0-X1.5 | Silent | Shiv tokens, Poison, discard triggers (Sly), Retain, Accuracy-style powers | X1.0 done (engine), accepted 2026-09-28; X1.1-X1.5 todo |
 | X2.0-X2.5 | Defect | Orbs (Lightning, Frost, Dark, Plasma, Glass), channel/evoke, Focus, orb slots and their rendering on the top screen | todo |
 | X3.0-X3.5 | Regent | Stars (second resource with a HUD counter), Forge and Sovereign Blade, summons | todo |
 | X4.0-X4.5 | Necrobinder | Osty (companion creature with its own HP, targeting, death), Doom, Souls | todo |
