@@ -190,6 +190,7 @@ class App {
 
   // selection state
   int sel_ = -1;       // hand index / reward index / grid index
+  bool rewardCardOpen_ = false;  // S14: tracks the reward list's card sub-screen, to reset sel_
   int target_ = 0;     // index into alive enemies
   int mapSel_ = 0;
   int scroll_ = 0;

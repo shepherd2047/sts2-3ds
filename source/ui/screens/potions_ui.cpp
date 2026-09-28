@@ -138,7 +138,10 @@ void App::updatePotions(const gfx::Input& in) {
 }
 
 // PotionReward: the potion on top; take or skip below. With a full belt the belt is
-// listed so one can be discarded first (the game refuses the reward while it is full).
+// listed so one can be discarded first (the game refuses the reward while it is full). Used by
+// treasure chests, Ancients and events, not by combat rewards -- S14 moved the post-combat
+// potion into the interactive reward list (reward.cpp), which claims it in place instead of
+// pushing through this screen.
 void App::drawPotionOffer(bool top) {
   Run& r = *run_;
   Potion* p = r.potionOffer.get();
@@ -176,8 +179,15 @@ void App::drawPotionOffer(bool top) {
       hits_.push_back({x, y, pw, 80, ID_POTION0 + i});
     }
   }
-  button(10, 196, 110, 36, "跳过", ID_SKIP);
-  button(kBot - 120, 196, 110, 36, "拿取", ID_TAKE, p != nullptr && room, true);
+  // S14: nine-slice widget buttons (F3) in place of the flat-fill legacy button().
+  widgets::beginFrame(gfx::input());
+  if (widgets::button(1, 10, style::kActionY, 110, style::kButtonH, "跳过") && r.potionOfferChoice.waiting())
+    r.potionOfferChoice.fire(0);
+  if (widgets::button(2, kBot - 120, style::kActionY, 110, style::kButtonH, "拿取", widgets::Kind::Primary,
+                      p != nullptr && room) &&
+      r.potionOfferChoice.waiting())
+    r.potionOfferChoice.fire(1);
+  widgets::endFrame();
 }
 
 void App::updatePotionOffer(const gfx::Input& in) {
@@ -185,8 +195,8 @@ void App::updatePotionOffer(const gfx::Input& in) {
   if (!r.potionOfferChoice.waiting()) return;
   int id = in.touchDown ? hitAt(in.tx, in.ty) : ID_NONE;
   if (id >= ID_POTION0 && id < ID_POTION0 + (int)r.potions.size()) { r.discardPotion(id - ID_POTION0); return; }
-  if (((in.down & gfx::BTN_A) || id == ID_TAKE) && r.hasOpenPotionSlot()) { r.potionOfferChoice.fire(1); return; }
-  if ((in.down & gfx::BTN_B) || id == ID_SKIP) r.potionOfferChoice.fire(0);
+  if ((in.down & gfx::BTN_A) && r.hasOpenPotionSlot()) { r.potionOfferChoice.fire(1); return; }
+  if (in.down & gfx::BTN_B) r.potionOfferChoice.fire(0);
 }
 
 }  // namespace ui
