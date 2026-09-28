@@ -344,13 +344,14 @@ def bake_ancient(g, anc, args):
 
 
 def build(args):
-    global CARDS, POWERS, MONSTERS, RELICS, EVENTS, POTIONS
+    global CARDS, POWERS, MONSTERS, RELICS, EVENTS, POTIONS, ENCHANTMENTS
     CARDS = sorted(set(CARDS_FIXED) | set(keys_from_source('CARD_HEADER')))
     POWERS = sorted(set(POWERS_FIXED) | set(keys_from_source('POWER_HEADER')))
     MONSTERS = keys_from_source('MONSTER_HEADER')
     RELICS = keys_from_source('RELIC_HEADER')
     EVENTS = keys_from_source('EVENT_HEADER')
     POTIONS = keys_from_source('POTION_HEADER')
+    ENCHANTMENTS = keys_from_source('ENCHANTMENT_HEADER')
     g = Game(args.pck) if args.pck else Game()
     a = Assets(g)
     os.makedirs(os.path.join(OUT, 'gfx'), exist_ok=True)
@@ -569,6 +570,8 @@ def build(args):
     take('events', lambda k: k.split('.')[0] in EVENTS or k.startswith('GENERIC'))
     take('ancients', lambda k: k.split('.')[0] in EVENTS)
     take('potions', lambda k: k.split('.')[0] in POTIONS)
+    take('enchantments', lambda k: k.split('.')[0] in ENCHANTMENTS)
+    take('static_hover_tips', lambda k: k.startswith('REPLAY'))  # the enchantment replay line
     take('merchant_room')
     for t in ('card_keywords', 'gameplay_ui', 'rest_site_ui', 'card_reward_ui', 'map', 'combat_messages',
               'card_selection', 'intents', 'game_over_screen', 'characters'):

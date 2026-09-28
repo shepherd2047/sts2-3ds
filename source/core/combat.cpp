@@ -217,7 +217,10 @@ std::vector<Model*> Combat::listeners() {
   out.reserve(64);
   for (auto& p : player->powers) out.push_back(p.get());
   for (auto& r : run->relics) out.push_back(r.get());
-  for (Card* c : allCards()) out.push_back(c);
+  for (Card* c : allCards()) {
+    out.push_back(c);
+    if (c->enchantment) out.push_back(c->enchantment.get());  // card, (affliction,) enchantment
+  }
   for (auto* e : enemies) {
     if (e->removed) continue;
     for (auto& p : e->powers) out.push_back(p.get());
@@ -227,7 +230,12 @@ std::vector<Model*> Combat::listeners() {
 }
 
 Dec Combat::modifyDamage(Creature* target, Creature* dealer, Dec dmg, int props, Card* src) {
-  // Hook.ModifyDamageInternal: all additive, then all multiplicative.
+  // Hook.ModifyDamageInternal: the card's enchantment first (additive, then multiplicative),
+  // then all listeners additive, then all multiplicative.
+  if (src && src->enchantment) {
+    dmg += src->enchantment->enchantDamageAdditive(dmg, props);
+    dmg *= src->enchantment->enchantDamageMultiplicative(dmg, props);
+  }
   auto ls = listeners();
   for (Model* m : ls) dmg += m->modifyDamageAdditive(target, dmg, props, dealer, src);
   for (Model* m : ls) dmg *= m->modifyDamageMultiplicative(target, dmg, props, dealer, src);
@@ -235,6 +243,10 @@ Dec Combat::modifyDamage(Creature* target, Creature* dealer, Dec dmg, int props,
 }
 
 Dec Combat::modifyBlock(Creature* target, Dec block, int props, Card* src) {
+  if (src && src->enchantment) {
+    block += src->enchantment->enchantBlockAdditive(block);
+    block *= src->enchantment->enchantBlockMultiplicative(block);
+  }
   auto ls = listeners();
   for (Model* m : ls) block += m->modifyBlockAdditive(target, block, props, src);
   for (Model* m : ls) block *= m->modifyBlockMultiplicative(target, block, props, src);
@@ -496,6 +508,7 @@ Task<> shuffle(Combat& c) {
   list.insert(list.end(), c.draw.begin(), c.draw.end());
   std::stable_sort(list.begin(), list.end(), [](Card* a, Card* b) { return a->id < b->id; });
   c.rng("Shuffle").shuffle(list);
+  for (Model* m : c.listeners()) m->modifyShuffleOrder(list, false);  // Hook.ModifyShuffleOrder (PerfectFit)
   c.discard.clear();
   c.draw = list;
   c.push({VisualEvent::Shuffle, nullptr, (int)list.size()});
@@ -752,6 +765,8 @@ Task<> Combat::startTurn() {
 
   if (currentSide == Side::Player) {
     co_await checkWinCondition();
+    // CombatManager.RunAutoPrePlayPhase: Hook.AfterAutoPrePlayPhaseEntered (Imbued auto-plays).
+    if (!over) for (Model* m : listeners()) co_await m->afterAutoPrePlayPhaseEntered();
   } else {
     co_await checkWinCondition();
     if (!over) co_await executeEnemyTurn();
@@ -769,9 +784,12 @@ Task<> Combat::setupPlayerTurn() {
   Dec handDraw = 5;
   for (Model* m : listeners()) handDraw = m->modifyHandDraw(handDraw);
   if (turnNumber == 1) {
-    // Innate cards go on top of the draw pile.
+    // Enchanted cards that start at the bottom (Imbued), then innate cards on top of the draw pile.
+    std::vector<Card*> bottom;
+    for (Card* c : draw) if (c->enchantment && c->enchantment->shouldStartAtBottomOfDrawPile()) bottom.push_back(c);
+    for (Card* c : bottom) { draw.erase(std::find(draw.begin(), draw.end(), c)); draw.push_back(c); }
     std::vector<Card*> innate;
-    for (Card* c : draw) if (c->has(kwInnate)) innate.push_back(c);
+    for (Card* c : draw) if (c->has(kwInnate) && std::find(bottom.begin(), bottom.end(), c) == bottom.end()) innate.push_back(c);
     for (Card* c : innate) { draw.erase(std::find(draw.begin(), draw.end(), c)); draw.insert(draw.begin(), c); }
     handDraw = Dec(std::min(std::max(handDraw.toInt(), (int)innate.size()), kMaxHand));
   }
@@ -826,7 +844,7 @@ Task<> Combat::endPlayerTurnPhaseOne() {
     if (c->has(kwEthereal)) co_await cmd::exhaustCard(*this, c, true);
     else { removeFromPiles(c); discard.push_back(c); }
   }
-  co_await checkWinCondition();
+  if (!(co_await checkWinCondition())) for (Model* m : listeners()) co_await m->beforeFlush();  // Hook.BeforeFlush
 }
 
 Task<> Combat::endPlayerTurnPhaseTwo() {
@@ -892,7 +910,7 @@ Task<> Combat::playCard(Card* card, Creature* target, bool autoPlay, bool forceE
   for (Model* m : listeners()) result = m->modifyCardPlayResultLocation(card, autoPlay, result);
 
   // Hook.ModifyCardPlayCount
-  int playCount = 1 + card->baseReplayCount;
+  int playCount = 1 + card->enchantedReplayCount();  // GetEnchantedReplayCount + 1
   std::vector<Model*> countModifiers;
   for (Model* m : listeners()) {
     int n = m->modifyCardPlayCount(card, target, playCount);
@@ -914,6 +932,8 @@ Task<> Combat::playCard(Card* card, Creature* target, bool autoPlay, bool forceE
     CardPlay cp{card, target, result, autoPlay, spent, i, playCount};
     for (Model* m : listeners()) co_await m->beforeCardPlayed(cp);
     co_await card->onPlay(cp);
+    // CardModel.OnPlayWrapper: the enchantment's OnPlay follows the card's own effect.
+    if (card->enchantment && player->alive()) co_await card->enchantment->onPlay(cp);
     if (player->alive() && !over)
       for (Model* m : listeners()) co_await m->afterCardPlayed(cp);
   }

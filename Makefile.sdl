@@ -19,14 +19,16 @@ endif
 CORE_SRC := $(wildcard source/core/*.cpp)
 EXTRA_PREVIEW_SRC := source/spine/spine.cpp source/gfx/gfx_common.cpp source/platform_sdl/gfx_sdl.cpp source/ui/res.cpp source/ui/ui.cpp source/main.cpp
 SIM_SRC := test/sim.cpp
+TEST_SRC := test/enchant_test.cpp
 
 OBJ_DIR := build/obj
 
 CORE_OBJS := $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(CORE_SRC))
 PREVIEW_EXTRA_OBJS := $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(EXTRA_PREVIEW_SRC))
 SIM_EXTRA_OBJS := $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(SIM_SRC))
+TEST_EXTRA_OBJS := $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(TEST_SRC))
 
-ALL_OBJS := $(CORE_OBJS) $(PREVIEW_EXTRA_OBJS) $(SIM_EXTRA_OBJS)
+ALL_OBJS := $(CORE_OBJS) $(PREVIEW_EXTRA_OBJS) $(SIM_EXTRA_OBJS) $(TEST_EXTRA_OBJS)
 DEPS := $(ALL_OBJS:.o=.d)
 
 all: build/sts2-preview build/sim
@@ -54,12 +56,20 @@ build/sim: $(CORE_OBJS) $(SIM_EXTRA_OBJS)
 	@mkdir -p build
 	$(CXX) $(BASE_CXXFLAGS) $^ -o $@
 
+# Engine unit checks (enchantments): not part of `all`.
+build/enchant_test: $(CORE_OBJS) $(TEST_EXTRA_OBJS)
+	@mkdir -p build
+	$(CXX) $(BASE_CXXFLAGS) $^ -o $@
+
 sim: build/sim
 	./build/sim 200
+
+check: build/enchant_test
+	./build/enchant_test
 
 clean:
 	rm -rf build
 
-.PHONY: all sim clean
+.PHONY: all sim check clean
 
 -include $(DEPS)

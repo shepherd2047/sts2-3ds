@@ -11,7 +11,7 @@ namespace sts {
 
 namespace {
 
-constexpr int kSaveVersion = 1;
+constexpr int kSaveVersion = 2;  // 2: card enchantments
 
 void ioCard(Archive& a, std::unique_ptr<Card>& c) {
   std::string id = c ? c->id : "";
@@ -27,7 +27,25 @@ void ioCard(Archive& a, std::unique_ptr<Card>& c) {
   a.io(replay);
   a.io(names);
   a.io(values);
-  if (!a.reading) return;
+  // The enchantment: id ("" = none), amount, status, vars, then its own state. The card's
+  // keywords / cost / vars above already include what OnEnchant changed, so it is not rerun.
+  std::string enchId = c && c->enchantment ? c->enchantment->id : "";
+  int enchAmount = c && c->enchantment ? c->enchantment->amount : 0;
+  int enchStatus = c && c->enchantment ? (int)c->enchantment->status : 0;
+  std::vector<std::string> enchNames;
+  std::vector<int64_t> enchValues;
+  if (c && c->enchantment) for (auto& v : c->enchantment->vars) { enchNames.push_back(v.name); enchValues.push_back(v.base.raw); }
+  a.io(enchId);
+  if (!enchId.empty()) {
+    a.io(enchAmount);
+    a.io(enchStatus);
+    a.io(enchNames);
+    a.io(enchValues);
+  }
+  if (!a.reading) {
+    if (c && c->enchantment) c->enchantment->persist(a);
+    return;
+  }
   c = db::card(id);
   if (!c) { a.ok = false; return; }
   for (int i = 0; i < level; ++i) c->upgrade();
@@ -36,6 +54,17 @@ void ioCard(Archive& a, std::unique_ptr<Card>& c) {
   c->baseReplayCount = replay;
   for (size_t i = 0; i < names.size() && i < values.size(); ++i)
     if (auto* v = c->var(names[i].c_str())) v->base = Dec::fromRaw(values[i]);
+  if (!enchId.empty()) {
+    auto e = db::enchantment(enchId);
+    if (!e) { a.ok = false; return; }
+    e->card = c.get();
+    e->amount = enchAmount;
+    e->status = (EnchantStatus)enchStatus;
+    for (size_t i = 0; i < enchNames.size() && i < enchValues.size(); ++i)
+      if (auto* v = e->var(enchNames[i].c_str())) v->base = Dec::fromRaw(enchValues[i]);
+    c->enchantment.p = std::move(e);
+    c->enchantment->persist(a);
+  }
 }
 
 void ioRelic(Archive& a, Run& r, std::unique_ptr<Relic>& rel) {

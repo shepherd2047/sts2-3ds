@@ -187,6 +187,10 @@ scripts drift; delete the debug file afterwards.
   state lasts between rooms overrides `persist(Archive&)`; new ones must too. Files: PC
   `saves/run.sav`, 3DS `sdmc:/3ds/sts2-3ds/run.sav`. STS_HIDDEN / STS_NO_SAVE turn saves off.
   `SIM_SAVELOAD=K ./build/sim N` must print the same results as without it.
+- Enchantments: `enchantments.cpp` (`Enchantment` Model in `Card::enchantment`, `ENCHANTMENT_HEADER`,
+  `cmd::enchant`, `Run::selectForEnchantment`; hooks in `combat.cpp`, saved by `save.cpp`). Debug:
+  `STS_ENCHANT=Sharp:3,Glam`, `SIM_ENCHANT=1`; `make -f Makefile.sdl check` runs `test/enchant_test.cpp`.
+  Every card `clone()` must call `adoptEnchantment()`. Details in docs/PLAN.md (A3a notes).
 - Merchant: `shop.cpp` (`Run::enterShop`, `Run::shop` items, `shopChoice`; prices through the
   `modifyMerchantPrice` hook). Art `gfx/bg_merchant.t3t`. `STS_ROOM=Shop` makes the first room a shop.
 - Debug: `STS_ROOM=Treasure|Rest|Elite|Boss|Event` makes the first room that type,

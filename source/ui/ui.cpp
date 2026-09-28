@@ -358,6 +358,8 @@ std::string App::cardTitle(Card* c) {
   return t;
 }
 
+static std::string enchantmentCardText(Card* c);  // defined after expandSmart
+
 // SmartFormat subset used by these cards: {Var:diff()}, {Var},
 // {InCombat:a|b}, {IfUpgraded:show:a|b}.
 std::string App::describe(Card* c) {
@@ -442,6 +444,8 @@ std::string App::describe(Card* c) {
 
   std::string d = expand(src);
   if (c->has(kwUnplayable)) d = "[gold]" + L("card_keywords.UNPLAYABLE.title") + "[/gold]" + L("card_keywords.PERIOD") + (d.empty() ? "" : "\n" + d);
+  std::string ench = enchantmentCardText(c);  // enchantment extra text, then the replay line
+  if (!ench.empty()) d += (d.empty() ? "" : "\n") + ench;
   if (c->has(kwExhaust)) d += (d.empty() ? "" : "\n") + std::string("[gold]") + L("card_keywords.EXHAUST.title") + "[/gold]" + L("card_keywords.PERIOD");
   return d;
 }
@@ -497,6 +501,27 @@ std::string expandSmart(const std::string& src, const std::vector<DynVar>& vars,
     return out;
   };
   return expand(src);
+}
+
+// CardModel.GetDescriptionForPile: an enchantment's extraCardText (purple) and, when it adds
+// replays, the REPLAY line; nothing for enchantments without extra text or once disabled.
+// PORT NOTE: the enchantment badge and the affliction line belong to the card renderer (F5).
+static std::string enchantmentCardText(Card* c) {
+  std::string out;
+  Enchantment* e = c->enchantment.get();
+  if (!e) return out;
+  if (e->hasExtraCardText() && !e->disabled()) {
+    std::vector<DynVar> vars = e->vars;
+    vars.push_back({"Amount", Dec(e->amount), Dec(e->amount)});
+    std::string key = "enchantments." + e->locKey + ".extraCardText";
+    if (R().hasLoc(key)) out += "[purple]" + expandSmart(L(key), vars, c->combat != nullptr) + "[/purple]";
+  }
+  int times = c->enchantedReplayCount();
+  if (times > 0 && R().hasLoc("static_hover_tips.REPLAY.extraText")) {
+    std::vector<DynVar> vars{{"Times", Dec(times), Dec(times)}};
+    out += (out.empty() ? "" : "\n") + expandSmart(L("static_hover_tips.REPLAY.extraText"), vars, false);
+  }
+  return out;
 }
 
 std::string App::describeRelic(Relic* r) {

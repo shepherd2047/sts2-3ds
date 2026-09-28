@@ -147,6 +147,10 @@ struct Model {
   virtual Task<> afterShuffle() { return {}; }
   virtual bool shouldForcePotionReward(RoomType) { return false; }
   virtual bool shouldProcurePotion() { return true; }  // Sozu
+  // Added for enchantments (Hook.AfterAutoPrePlayPhaseEntered / BeforeFlush / ModifyShuffleOrder).
+  virtual Task<> afterAutoPrePlayPhaseEntered() { return {}; }  // player turn set up, before the play phase
+  virtual Task<> beforeFlush() { return {}; }                   // player turn ends, before the hand is discarded
+  virtual void modifyShuffleOrder(std::vector<Card*>& /*cards*/, bool /*isInitialShuffle*/) {}  // index 0 = top
 };
 
 // ---------------------------------------------------------------- saves
@@ -236,6 +240,83 @@ struct DynVar {
   Dec canonical;  // before upgrades, for diff() colouring
 };
 
+// ---------------------------------------------------------------- enchantments
+
+enum class EnchantStatus { Normal, Disabled };
+
+// EnchantmentModel: a permanent modifier attached to one card (Sharp, Vigorous, ...). It is
+// a Model, so while its card is in combat it hears the combat hooks like the card does.
+// `amount` is EnchantmentModel.Amount; the block/damage/play-count hooks run for the
+// enchanted card only, before every other listener (Hook.ModifyDamage / ModifyBlock).
+struct Enchantment : Model {
+  std::string id;      // class name, e.g. "Sharp"
+  std::string locKey;  // e.g. "SHARP" (enchantments.<key>.title / description / extraCardText)
+  Card* card = nullptr;
+  int amount = 0;
+  EnchantStatus status = EnchantStatus::Normal;
+  std::vector<DynVar> vars;  // CanonicalVars, for the description / extra card text
+
+  virtual bool showAmount() const { return false; }
+  virtual int displayAmount() const { return amount; }
+  virtual bool hasExtraCardText() const { return false; }  // shown purple under the card text
+  virtual bool isStackable() const { return false; }
+  virtual bool shouldStartAtBottomOfDrawPile() const { return false; }
+  virtual bool shouldGlowGold() const { return false; }
+  virtual bool shouldGlowRed() const { return false; }
+  virtual bool canEnchantCardType(CardType) const { return true; }
+  // CanEnchant: subclasses call Enchantment::canEnchant first and only add restrictions.
+  virtual bool canEnchant(const Card& c) const;
+
+  virtual Task<> onPlay(CardPlay&) { return {}; }  // OnPlay, after the card's own effect, per play
+  virtual void onEnchant() {}                      // OnEnchant: change keywords, cost, ...
+  virtual void recalculateValues() {}              // RecalculateValues: refresh vars from `amount`
+  virtual Dec enchantBlockAdditive(Dec) { return 0; }
+  virtual Dec enchantBlockMultiplicative(Dec) { return 1; }
+  virtual Dec enchantDamageAdditive(Dec, int /*props*/) { return 0; }
+  virtual Dec enchantDamageMultiplicative(Dec, int /*props*/) { return 1; }
+  virtual int enchantPlayCount(int n) { return n; }
+  // State that lasts between rooms beyond amount/status/vars (saves; both directions).
+  virtual void persist(Archive&) {}
+  virtual std::unique_ptr<Enchantment> clone() const = 0;
+
+  void modifyCard() { onEnchant(); recalculateValues(); }  // EnchantmentModel.ModifyCard
+  bool disabled() const { return status == EnchantStatus::Disabled; }
+  DynVar* var(const char* n) { for (auto& v : vars) if (v.name == n) return &v; return nullptr; }
+  Dec val(const char* n) { auto* v = var(n); return v ? v->base : Dec(0); }
+  void addVar(const char* n, Dec v) { vars.push_back({n, v, v}); }
+};
+
+template <class Derived> struct EnchantmentT : Enchantment {
+  std::unique_ptr<Enchantment> clone() const override { return std::make_unique<Derived>(static_cast<const Derived&>(*this)); }
+};
+
+// ENCHANTMENT_HEADER(Sharp, "SHARP") { ...vars... }
+#define ENCHANTMENT_HEADER(Name, Key)  \
+  static constexpr const char* kId = #Name; \
+  Name() { id = #Name; locKey = Key;
+using EnchantmentFactory = std::unique_ptr<Enchantment> (*)();
+
+// Card::enchantment: copying a card deep-copies its enchantment (the back pointer is
+// fixed by CardT::clone).
+struct EnchantSlot {
+  std::unique_ptr<Enchantment> p;
+  EnchantSlot() = default;
+  EnchantSlot(const EnchantSlot& o) : p(o.p ? o.p->clone() : nullptr) {}
+  EnchantSlot& operator=(const EnchantSlot& o) { p = o.p ? o.p->clone() : nullptr; return *this; }
+  Enchantment* get() const { return p.get(); }
+  Enchantment* operator->() const { return p.get(); }
+  explicit operator bool() const { return p != nullptr; }
+};
+
+// CardModel.DeckVersion: the run's deck card a combat card was made from. A copy of a card
+// never inherits it (CardModel.DeepCloneFields clears it).
+struct DeckLink {
+  Card* p = nullptr;
+  DeckLink() = default;
+  DeckLink(const DeckLink&) {}
+  DeckLink& operator=(const DeckLink&) { return *this; }
+};
+
 struct Card : Model {
   std::string id;      // class name
   std::string locKey;  // e.g. "STRIKE_IRONCLAD"
@@ -259,6 +340,8 @@ struct Card : Model {
   std::vector<CostMod> costMods;
   std::vector<DynVar> vars;
   Combat* combat = nullptr;
+  EnchantSlot enchantment;  // CardModel.Enchantment (null = none)
+  DeckLink deckVersion;     // CardModel.DeckVersion (combat cards only)
 
   // Hand-view calculation for CalculatedDamageVar (Body Slam, Perfected Strike).
   std::function<int(Card*)> calcMultiplier;
@@ -297,6 +380,16 @@ struct Card : Model {
   bool upgradable() const { return upgradeLevel < maxUpgradeLevel; }
   void upgrade() { if (upgradable()) { ++upgradeLevel; onUpgrade(); } }
   bool has(int kw) const { return (keywords & kw) != 0; }
+  void addKeyword(int kw) { keywords |= kw; }      // CardModel.AddKeyword
+  void removeKeyword(int kw) { keywords &= ~kw; }  // CardCmd.RemoveKeyword
+  // A copied card owns a copy of the enchantment that still points at the original card:
+  // every clone() (CardT, IroncladT, ...) must call this on the new card.
+  void adoptEnchantment() { if (enchantment) enchantment->card = this; }
+  // CardModel.GetEnchantedReplayCount: extra plays from BaseReplayCount and the enchantment.
+  int enchantedReplayCount() const { return enchantment ? enchantment->enchantPlayCount(baseReplayCount) : baseReplayCount; }
+  // CardModel.GainsBlock is an override on 80 cards; here: the card has a Block var.
+  // PORT NOTE: approximation, cards that gain block without a Block/CalculatedBlock var need an override.
+  virtual bool gainsBlock() const { return const_cast<Card*>(this)->var("Block") || const_cast<Card*>(this)->var("CalculatedBlock"); }
 
   DynVar* var(const char* n) { for (auto& v : vars) if (v.name == n) return &v; return nullptr; }
   Dec val(const char* n) { auto* v = var(n); return v ? v->base : Dec(0); }
@@ -308,7 +401,11 @@ struct Card : Model {
 };
 
 template <class Derived> struct CardT : Card {
-  std::unique_ptr<Card> clone() const override { return std::make_unique<Derived>(static_cast<const Derived&>(*this)); }
+  std::unique_ptr<Card> clone() const override {
+    auto c = std::make_unique<Derived>(static_cast<const Derived&>(*this));
+    c->adoptEnchantment();
+    return c;
+  }
 };
 
 using CardFactory = std::unique_ptr<Card> (*)();
@@ -572,6 +669,7 @@ struct Combat {
   std::vector<std::unique_ptr<Creature>> ownedEnemies;
   std::vector<std::unique_ptr<Card>> cardStore;
   std::vector<std::unique_ptr<Power>> graveyard;  // removed powers, freed with the combat
+  std::vector<std::unique_ptr<Enchantment>> enchantGraveyard;  // cleared enchantments (listener snapshots may still hold them)
   std::vector<Creature*> stayingDead;             // being killed but not leaving (illusions)
   std::vector<Card*> draw, hand, discard, exhaust, play;
 
@@ -655,6 +753,11 @@ Task<std::vector<Card*>> selectCards(Combat& c, std::string prompt, std::vector<
 Task<> autoPlayFromDrawPile(Combat& c, int count, bool forceExhaust);
 // CreatureCmd.Add: a monster joins mid-combat (summons, splits).
 Task<Creature*> addMonster(Combat& c, std::unique_ptr<Monster> m);
+
+// CardCmd.Enchant: null if the enchantment can't go on this card (the C# throws). Adding the
+// same stackable enchantment again adds to its amount. CardCmd.ClearEnchantment.
+Enchantment* enchant(Card* card, std::unique_ptr<Enchantment> e, int amount);
+void clearEnchantment(Card* card);
 
 // Attack builder (AttackCommand), covering the targeting modes in this build.
 struct Attack {
@@ -830,6 +933,13 @@ struct Run {
   Task<std::vector<Card*>> selectFromDeck(std::string prompt, std::function<bool(Card*)> filter, int count,
                                           bool canCancel = false, bool showUpgrade = false, int minCount = -1);
   Card* addCardToDeck(std::unique_ptr<Card> c);
+  // Enchantments on deck cards (events, relics): CardSelectCmd.FromDeckForEnchantment lists the
+  // deck cards `id` can go on (and `filter`, if given); enchantCard is CardCmd.Enchant<T>.
+  // PORT NOTE: no enchant preview screen; the picker is the plain deck list.
+  Task<std::vector<Card*>> selectForEnchantment(const std::string& id, int count = 1,
+                                                std::function<bool(Card*)> filter = nullptr);
+  bool canEnchantAny(const std::string& id, std::function<bool(Card*)> filter = nullptr);
+  Enchantment* enchantCard(Card* c, const std::string& id, int amount);
   void removeCardFromDeck(Card* c);
   Card* transformCard(Card* c, std::unique_ptr<Card> into);   // replaces it in the deck
   std::unique_ptr<Card> randomTransformFor(Card* c, Rng& rng); // CardFactory transform target
@@ -952,6 +1062,10 @@ void registerCard(const std::string& id, CardFactory f);
 void registerPower(const std::string& id, PowerFactory f);
 void registerRelic(const std::string& id, RelicFactoryFn f);
 void registerEvent(const std::string& id, EventFactory f);
+// Enchantments (enchantments.cpp). `enchantmentIds()` lists the registered ones.
+void registerEnchantment(const std::string& id, EnchantmentFactory f);
+std::unique_ptr<Enchantment> enchantment(const std::string& id);
+const std::vector<std::string>& enchantmentIds();
 std::unique_ptr<Event> event(const std::string& id);
 // Overgrowth.AllEvents in the game's order (registered or not).
 const std::vector<std::string>& act1Events();

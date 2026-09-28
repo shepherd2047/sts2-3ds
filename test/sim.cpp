@@ -45,6 +45,17 @@ int main(int argc, char** argv) {
       }
       cur->player->hp = cur->player->maxHp = 999;
     }
+    if (getenv("SIM_ENCHANT")) {
+      // Every registered enchantment goes round the deck (amount 1-3), on each card it fits.
+      const auto& ids = db::enchantmentIds();
+      size_t k = 0;
+      for (auto& c : cur->deck)
+        for (size_t t = 0; t < ids.size() && !c->enchantment; ++t) {
+          const std::string& id = ids[(k + t) % ids.size()];
+          auto e = db::enchantment(id);
+          if (e->canEnchant(*c)) { cur->enchantCard(c.get(), id, 1 + (int)(k % 3)); ++k; }
+        }
+    }
     if (getenv("SIM_ALLRELICS")) {
       // Every registered pool relic (pickup effects skipped; Potion Belt applied by hand).
       // Ancient relics are in no pool: a comma list can name them too.
@@ -178,7 +189,11 @@ int main(int argc, char** argv) {
               if (best->target == TargetType::AnyEnemy) a.target = weakest;
             }
             if (a.card) played[a.card->id + (a.card->upgraded() ? "+" : "")]++;
-            if (verbose && a.card) printf("  play %s -> %s  E=%d\n", a.card->id.c_str(), a.target ? a.target->name.c_str() : "-", c.energy);
+            if (verbose && a.card) {
+              const Card* k = a.card;
+              std::string en = k->enchantment ? " [" + k->enchantment->id + ":" + std::to_string(k->enchantment->amount) + (k->enchantment->disabled() ? " off]" : "]") : "";
+              printf("  play %s%s%s -> %s  E=%d\n", k->id.c_str(), en.c_str(), k->costWithLocalMods() != k->cost ? " (cost mod)" : "", a.target ? a.target->name.c_str() : "-", c.energy);
+            }
             c.actions.fire(a);
           }
           break;

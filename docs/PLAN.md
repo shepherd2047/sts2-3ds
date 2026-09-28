@@ -159,9 +159,9 @@ meta and progression (M), system (Y), audio (U) and hardware/release (H).
 | A1b | Colorless cards 2/3: HandOfGreed … Purity (22) | content, parallel-safe | A1a | todo |
 | A1c | Colorless cards 3/3: Rally … Volley (19); skip cards the C# marks multiplayer-only | content, parallel-safe | A1a | todo |
 | A2 | Missing curses/status (AscendersBane, Debt, Writhe, Beckon, Debris, Void), 13 event cards, quest cards Dowsing and SpoilsMap | content | – | todo |
-| A3a | Enchantment engine: enchantment slot on Card, hooks (`Models\EnchantmentModel.cs`), save, card badge + text in the UI, `enchant` event helpers | engine, *Opus* | – | in progress (engine) |
-| A3b | Enchantments 1/2 (11) + unlock SapphireSeed PLANT, WoodCarvings SNAKE, FieldOfManSizedHoles, Grave of the Forgotten | content | A3a | todo |
-| A3c | Enchantments 2/2 (11) + relics that enchant (DingyRug, GnarledHammer, Kifuda, RoyalStamp …) | content | A3b | todo |
+| A3a | Enchantment engine: enchantment slot on Card, hooks (`Models\EnchantmentModel.cs`), save, card badge + text in the UI, `enchant` event helpers | engine, *Opus* | – | done (engine) |
+| A3b | Enchantments 1/2: Sown, Slither, Adroit, Clone (used by CloneRestSiteOption), Corrupted, Goopy, Inky, SoulsPower + unlock SapphireSeed PLANT, WoodCarvings SNAKE, FieldOfManSizedHoles ENTER_YOUR_HOLE (PerfectFit exists), Grave of the Forgotten | content | A3a | todo |
+| A3c | Enchantments 2/2: Instinct, Momentum, Nimble, RoyallyApproved, Spiral, Steady, TezcatarasEmber (needs the Eternal keyword, see notes) + relics that enchant (DingyRug, GnarledHammer, Kifuda, RoyalStamp …) | content | A3b | todo |
 | A4 | Affliction engine + all 7 (Bound, Entangled, Galvanized, Hexed, Ringing, Smog, Tainted); replace the per-power approximations in acts 2/3 | engine | – | todo |
 | A5 | 10 skipped shared relics (DingyRug, FresnelLens, GnarledHammer, Kifuda, MysticLighter, PunchDagger, RoyalStamp, Toolbox, UnsettlingLamp, WingCharm) + `IsBeforeAct3TreasureChest` | content | A1a, A3c | todo |
 | A6 | Locked Ancient relics (Sea Glass, Prismatic Gem, Driftwood, Pael's Wing/Eye/Legion, Golden Compass, Fur Coat, Toy Box, Whispering Earring …) and remaining Neow options (PhialHolster, LostCoffer, NeowsSacrifice …) | content | A3c | todo |
@@ -178,6 +178,32 @@ meta and progression (M), system (Y), audio (U) and hardware/release (H).
 | A11d | Underdocks bosses: WaterfallGiant, SoulFysh, LagavulinMatriarch | content (+engine) | – | todo |
 | A11e | Underdocks events (AbyssalBaths, DrowningBeacon, EndlessConveyor, PunchOff + encounter, SpiralingWhirlpool, SunkenTreasury, DoorsOfLightAndDark, TrashHeap, WaterloggedScriptorium) | content | – | todo |
 | A11f | Underdocks as act 1: act choice as in `ActModel` / `RunManager` discovery order, map bg, room art, boss icons, per-act music hook | engine | A11a-e | todo |
+
+**A3a notes (enchantment engine, done).** `Enchantment` (game.h) is a `Model` owned by
+`Card::enchantment`; write one like `Sharp` in `enchantments.cpp` (`ENCHANTMENT_HEADER(Name, "KEY")`,
+`EnchantmentT<Name>`, register in `registerEnchantments()`; loc comes from `enchantments.<KEY>.*`,
+`build_assets.py` collects it from the header). Already there: Sharp, Vigorous, Swift, Glam, Imbued,
+PerfectFit, SlumberingEssence (they exercise every hook). What the engine gives you:
+- hooks: `enchantDamage/BlockAdditive/Multiplicative`, `enchantPlayCount`, `onPlay`, `onEnchant`,
+  `recalculateValues`, `shouldStartAtBottomOfDrawPile`, plus the Model hooks `afterAutoPrePlayPhaseEntered`,
+  `beforeFlush` and `modifyShuffleOrder` (all other combat hooks reach an enchanted card's enchantment
+  as usual); `status` (Normal/Disabled), `amount`, `vars`; `persist(Archive&)` for extra state (saves
+  keep id, amount, status and vars on their own; save version is now 2, so old `run.sav` files are refused);
+- `cmd::enchant(card, db::enchantment("Id"), amount)` (null if it can't; same stackable type adds up),
+  `cmd::clearEnchantment`, `Run::enchantCard`, `Run::selectForEnchantment(id, count, filter)` (the deck
+  picker for events, no preview screen yet), `Run::canEnchantAny(id, filter)` (for locked options);
+- `Card::deckVersion` (Goopy), `Card::addKeyword/removeKeyword`, `Card::gainsBlock()` (approximation: a
+  Block/CalculatedBlock var; override it on cards that gain block another way), `Card::adoptEnchantment()`
+  (every new card `clone()` template must call it);
+- debug: `STS_ENCHANT=Sharp:3,Glam` enchants the first fitting deck cards, `SIM_ENCHANT=1 ./build/sim N`
+  spreads every registered enchantment over the deck, `make -f Makefile.sdl check` runs
+  `test/enchant_test.cpp` (add a case there for each new enchantment with a rule of its own).
+Open points for the next packages: `Enchantment::canEnchant` does not refuse Quest cards yet (A2 adds
+that type); TezcatarasEmber and the `IsRemovable` rule need the Eternal card keyword (add `kwEternal` and make
+deck removal skip such cards in A3c); enchantments do not hear run-level hooks outside combat (the C#
+also lists deck cards there; none of the 22 needs it). The card text shows the enchantment's extra text and
+replay line (`App::describe`); the badge, glow and the enchant preview screen are F5 / S13 (data:
+`card->enchantment->showAmount()/displayAmount()/shouldGlowGold()/shouldGlowRed()/locKey`).
 
 ### Track C: rules that span the game
 

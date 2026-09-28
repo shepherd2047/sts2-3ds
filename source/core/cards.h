@@ -64,7 +64,11 @@ struct IroncladCard : Card {
     target = TargetType::Tgt;
 
 template <class Derived> struct IroncladT : IroncladCard {
-  std::unique_ptr<Card> clone() const override { return std::make_unique<Derived>(static_cast<const Derived&>(*this)); }
+  std::unique_ptr<Card> clone() const override {
+    auto c = std::make_unique<Derived>(static_cast<const Derived&>(*this));
+    c->adoptEnchantment();
+    return c;
+  }
 };
 
 

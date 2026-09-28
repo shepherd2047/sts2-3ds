@@ -333,6 +333,22 @@ void Run::start(uint64_t s) {
       a = b + 1;
     }
   }
+  // Debug: STS_ENCHANT=Sharp:3,Glam,... enchants the first fitting deck card for each entry.
+  if (const char* list = getenv("STS_ENCHANT")) {
+    std::string s = list;
+    for (size_t a = 0; a <= s.size();) {
+      size_t b = s.find(',', a);
+      if (b == std::string::npos) b = s.size();
+      std::string item = s.substr(a, b - a);
+      size_t colon = item.find(':');
+      int amount = colon == std::string::npos ? 1 : std::atoi(item.c_str() + colon + 1);
+      auto probe = db::enchantment(item.substr(0, colon));
+      if (probe)
+        for (auto& c : deck)
+          if (!c->enchantment && probe->canEnchant(*c)) { enchantCard(c.get(), probe->id, amount); break; }
+      a = b + 1;
+    }
+  }
   freeMap = getenv("STS_PATH_ONLY") == nullptr;
   // Debug: STS_ACT=2|3 starts the run in that act.
   const char* startAct = getenv("STS_ACT");
@@ -513,9 +529,14 @@ Task<bool> Run::fight(const std::string& encounterId) {
   for (auto& rel : relics) rel->combat = &c;
 
   // Deck -> draw pile, shuffled.
-  for (auto& card : deck) c.draw.push_back(c.addCard(card->clone()));
+  for (auto& card : deck) {
+    Card* cc = c.addCard(card->clone());
+    cc->deckVersion.p = card.get();  // CardModel.DeckVersion
+    c.draw.push_back(cc);
+  }
   std::stable_sort(c.draw.begin(), c.draw.end(), [](Card* a, Card* b) { return a->id < b->id; });
   rng("Shuffle").shuffle(c.draw);
+  for (Model* m : c.listeners()) m->modifyShuffleOrder(c.draw, true);  // CardPile.RandomizeOrderInternal
 
   for (auto& m : enc->generate(rng("Encounters"))) c.createEnemy(std::move(m));
 
