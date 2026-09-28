@@ -209,7 +209,7 @@ replay line (`App::describe`); the badge, glow and the enchant preview screen ar
 
 | id | Package | Kind | Needs | Status |
 |---|---|---|---|---|
-| C10 | Ascension 1-10 (SwarmingElites … DoubleBoss): `AscensionManager`, every `GetValueIfAscension` in ported content (script to list them), AscendersBane at A5, double boss at A10 | engine + content sweep, *Opus* | – | todo |
+| C10 | Ascension 1-10 (SwarmingElites … DoubleBoss): `AscensionManager`, every `GetValueIfAscension` in ported content (script to list them), AscendersBane at A5, double boss at A10 | engine + content sweep, *Opus* | – | in progress (engine) |
 | C11 | Map extras: boss preview, the act's second boss at ascension 10, map legend | engine + UI | C10 | todo |
 
 ### Track F: UI foundation (do this before redoing any screen)
