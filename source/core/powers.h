@@ -60,7 +60,11 @@ struct WeakPower : Power {
   PowerType type() const override { return PowerType::Debuff; }
   Dec modifyDamageMultiplicative(Creature*, Dec, int props, Creature* dealer, Card*) override {
     if (dealer != owner || !isPoweredAttack(props)) return 1;
-    return Dec::lit(0.75);
+    Dec mult = Dec::lit(0.75);
+    // PaperKrane.ModifyWeakMultiplier (Silent relic): Weak reduces its owner's own damage by an
+    // extra 15% (same special-case style as VulnerablePower's PaperPhrog / Cruelty, below).
+    if (dealer->isPlayer && dealer->combat && dealer->combat->run->hasRelic("PaperKrane")) mult -= Dec::lit(0.15);
+    return mult;
   }
   Task<> afterSideTurnEnd(Side side, const std::vector<Creature*>&) override {
     if (side == Side::Enemy) co_await cmd::tickDownDuration(this);

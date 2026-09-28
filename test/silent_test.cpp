@@ -46,12 +46,17 @@ struct DiscardRelic : Relic {
   Task<> afterCardDiscarded(Card* k) override { seen.push_back(k); co_return; }
 };
 
-// The first turn of a fight against the Nibbits, both with 500 HP.
+// The first turn of a fight against the Nibbits, both with 500 HP. `extraRelics` are added
+// before the fight starts (so turn-1-only hooks like RingOfTheSnake / NinjaScroll / TwistedFunnel
+// see them) and get their `combat` pointer set the same way Run::fight sets it for the rest.
 struct Fight {
   std::unique_ptr<Run> r = std::make_unique<Run>();
   Combat* c = nullptr;
-  Fight() {
-    r->start(3);
+  Fight(const std::string& charId = "Ironclad", const std::vector<std::string>& extraRelics = {}) {
+    r->start(3, charId);
+    for (auto& id : extraRelics) {
+      if (auto rel = db::relic(id)) { rel->run = r.get(); r->relics.push_back(std::move(rel)); }
+    }
     Scheduler::get().spawn(fightTask(r.get()));
     pump([&] { return r->combat && r->combat->playerPhase && r->combat->actions.waiting(); });
     c = r->combat.get();
@@ -215,6 +220,119 @@ int main() {
     CHECK(f.c->player->block == 6);
     runTask(cmd::loseBlock(f.c->player, 99));
     CHECK(f.c->player->block == 0);
+  }
+  {  // X1.1: starter deck + RingOfTheSnake (draw 2 extra cards, turn 1 only)
+    Fight f("Silent");
+    CHECK(f.c->hand.size() == 7);  // 5 + RingOfTheSnake's 2
+    for (Card* k : f.c->hand)
+      CHECK(k->id == "StrikeSilent" || k->id == "DefendSilent" || k->id == "Neutralize" || k->id == "Survivor");
+    f.endTurn();
+    CHECK(f.c->hand.size() == 5);  // no bonus after turn 1
+  }
+  {  // Neutralize: 3 damage + 1 Weak
+    Fight f("Silent");
+    Card* k = f.find("Neutralize");
+    f.toHand(k);
+    Creature* e = f.enemy(0);
+    int hp = e->hp;
+    f.play(k, e);
+    CHECK(hp - e->hp == 3);
+    CHECK(e->powerAmount<WeakPower>() == 1);
+  }
+  {  // Survivor: 8 block, then discard a chosen card from hand
+    Fight f("Silent");
+    Card* survivor = f.find("Survivor");
+    f.toHand(survivor);
+    Card* other = f.c->hand[0] == survivor ? f.c->hand[1] : f.c->hand[0];
+    int block = f.c->player->block;
+    PlayerAction a;
+    a.kind = PlayerAction::PlayCard;
+    a.card = survivor;
+    f.c->energy = 10;
+    f.c->actions.fire(a);
+    pump([&] { return f.c->choice.active && f.c->choice.result.waiting(); });
+    CHECK(f.c->choice.active && f.c->choice.minCount == 1 && f.c->choice.maxCount == 1);
+    f.c->choice.result.fire({other});
+    pump([&] { return f.c->playerPhase && f.c->actions.waiting(); });
+    CHECK(f.c->player->block - block == 8);
+    CHECK(f.c->pileOf(other) == Pile::Discard);
+  }
+  {  // SneckoSkull: Poison the owner applies is increased by the relic's amount, fresh and stacking
+    Fight f("Silent", {"SneckoSkull"});
+    Creature* e = f.enemy(0);
+    f.apply<PoisonPower>(e, 3);
+    CHECK(e->powerAmount<PoisonPower>() == 4);  // 3 + 1
+    f.apply<PoisonPower>(e, 2);
+    CHECK(e->powerAmount<PoisonPower>() == 7);  // 4 + (2 + 1)
+  }
+  {  // HelicalDart: playing a Shiv gives Dexterity for the rest of the turn only
+    Fight f("Silent", {"HelicalDart"});
+    std::vector<Card*> made;
+    runTask(makeShivs(f.c, 1, &made));
+    f.play(made[0], f.enemy(0));
+    CHECK(f.c->player->powerAmount<DexterityPower>() == 1);
+    f.endTurn();
+    CHECK(f.c->player->powerAmount<DexterityPower>() == 0);
+  }
+  {  // Tingsha + ToughBandages: discarding on your own turn hits a random enemy / gives block
+    Fight f("Silent", {"Tingsha", "ToughBandages"});
+    Card* k = f.c->hand[0];
+    int hpSum = f.enemy(0)->hp + f.enemy(1)->hp;
+    int block = f.c->player->block;
+    runTask(cmd::discardCard(*f.c, k));
+    CHECK(f.enemy(0)->hp + f.enemy(1)->hp == hpSum - 3);
+    CHECK(f.c->player->block - block == 3);
+  }
+  {  // TwistedFunnel: Poisons every enemy at the start of turn 1, not turn 2
+    Fight f("Silent", {"TwistedFunnel"});
+    CHECK(f.enemy(0)->powerAmount<PoisonPower>() == 4 && f.enemy(1)->powerAmount<PoisonPower>() == 4);
+    f.endTurn();
+    f.endTurn();
+    CHECK(f.enemy(0)->powerAmount<PoisonPower>() == 2);  // ticked down twice, not re-applied
+  }
+  {  // NinjaScroll: 3 Shivs in hand before the turn-1 draw, not turn 2
+    Fight f("Silent", {"NinjaScroll"});
+    int shivs = 0;
+    for (Card* k : f.c->hand) if (k->id == "Shiv") ++shivs;
+    CHECK(shivs == 3);
+    f.endTurn();
+    shivs = 0;
+    for (Card* k : f.c->hand) if (k->id == "Shiv") ++shivs;
+    CHECK(shivs == 0);
+  }
+  {  // PaperKrane: Weak reduces the owner's own damage by an extra 15% (40% total, not 25%)
+    Fight f("Silent", {"PaperKrane"});
+    f.apply<WeakPower>(f.c->player, 1);
+    Card* strike = f.find("StrikeSilent");
+    f.toHand(strike);
+    Creature* e = f.enemy(0);
+    int hp = e->hp;
+    f.play(strike, e);
+    CHECK(hp - e->hp == 3);  // 6 * (0.75 - 0.15) = 3.6 -> floored to 3
+  }
+  {  // Potions (Silent4Epoch): PoisonPotion, GhostInAJar (Intangible), CunningPotion (upgraded Shivs)
+    Fight f("Silent");
+    Creature* e = f.enemy(0);
+    auto poison = db::potion("PoisonPotion");
+    poison->run = f.r.get();
+    poison->combat = f.c;
+    runTask(poison->onUse(e));
+    CHECK(e->powerAmount<PoisonPower>() == 6);
+
+    auto ghost = db::potion("GhostInAJar");
+    ghost->run = f.r.get();
+    ghost->combat = f.c;
+    runTask(ghost->onUse(f.c->player));
+    CHECK(f.c->player->power("IntangiblePower") != nullptr);
+
+    auto cunning = db::potion("CunningPotion");
+    cunning->run = f.r.get();
+    cunning->combat = f.c;
+    size_t before = f.c->hand.size();
+    runTask(cunning->onUse(f.c->player));
+    int upgradedShivs = 0;
+    for (size_t i = before; i < f.c->hand.size(); ++i) if (f.c->hand[i]->id == "Shiv" && f.c->hand[i]->upgraded()) ++upgradedShivs;
+    CHECK(upgradedShivs == 3);
   }
   printf("%d checks, %d failed\n", checks, failures);
   return failures ? 1 : 0;
