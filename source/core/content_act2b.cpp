@@ -116,18 +116,18 @@ struct FlutterPower : Power {
 
 struct HunterKiller : Monster {
   MONSTER_HEADER(HunterKiller, "HUNTER_KILLER")
-  int minHp() const override { return 121; }
-  int maxHp() const override { return 121; }
+  int minHp() const override { return asc(kToughEnemies, 126, 121); }
+  int maxHp() const override { return minHp(); }
   void buildMoves() override {
     auto* goop = machine.add<MoveState>("TENDERIZING_GOOP_MOVE");
     goop->perform = [this](Targets t) { return applyToTargets<TenderPower>(t, 1); };
     goop->intents = {kindIntent(Intent::Debuff)};
     auto* bite = machine.add<MoveState>("BITE_MOVE");
-    bite->perform = [this](Targets) { return attack(17); };
-    bite->intents = {attackIntent(17)};
+    bite->perform = [this](Targets) { return attack(asc(kDeadlyEnemies, 19, 17)); };
+    bite->intents = {attackIntent(asc(kDeadlyEnemies, 19, 17))};
     auto* puncture = machine.add<MoveState>("PUNCTURE_MOVE");
-    puncture->perform = [this](Targets) { return attack(7, 3); };
-    puncture->intents = {attackIntent(7, 3)};
+    puncture->perform = [this](Targets) { return attack(asc(kDeadlyEnemies, 8, 7), 3); };
+    puncture->intents = {attackIntent(asc(kDeadlyEnemies, 8, 7), 3)};
     auto* rand = machine.add<RandomBranchState>("RAND");
     goop->followUp = rand;
     bite->followUp = rand;
@@ -143,16 +143,16 @@ struct HunterKiller : Monster {
 struct LouseProgenitor : Monster {
   MONSTER_HEADER(LouseProgenitor, "LOUSE_PROGENITOR")
   bool curled = false;
-  int minHp() const override { return 134; }
-  int maxHp() const override { return 136; }
-  Task<> afterAddedToRoom() override { co_await applyToSelf<CurlUpPower>(14); }
+  int minHp() const override { return asc(kToughEnemies, 138, 134); }
+  int maxHp() const override { return asc(kToughEnemies, 141, 136); }
+  Task<> afterAddedToRoom() override { co_await applyToSelf<CurlUpPower>(asc(kToughEnemies, 18, 14)); }
   void buildMoves() override {
     auto* web = machine.add<MoveState>("WEB_CANNON_MOVE");
     web->perform = [this](Targets t) { return webMove(t); };
-    web->intents = {attackIntent(9), kindIntent(Intent::Debuff)};
+    web->intents = {attackIntent(asc(kDeadlyEnemies, 10, 9)), kindIntent(Intent::Debuff)};
     auto* pounce = machine.add<MoveState>("POUNCE_MOVE");
     pounce->perform = [this](Targets) { return pounceMove(); };
-    pounce->intents = {attackIntent(14)};
+    pounce->intents = {attackIntent(asc(kDeadlyEnemies, 16, 14))};
     auto* curl = machine.add<MoveState>("CURL_AND_GROW_MOVE");
     curl->perform = [this](Targets) { return curlAndGrowMove(); };
     curl->intents = {kindIntent(Intent::Defend), kindIntent(Intent::Buff)};
@@ -163,17 +163,17 @@ struct LouseProgenitor : Monster {
   }
   Task<> webMove(Targets t) {
     curled = false;
-    co_await attack(9);
+    co_await attack(asc(kDeadlyEnemies, 10, 9));
     co_await applyToTargets<FrailPower>(t, 2);
   }
   Task<> curlAndGrowMove() {
-    co_await gainBlock(14);
-    co_await applyToSelf<StrengthPower>(5);
+    co_await gainBlock(asc(kToughEnemies, 18, 14));
+    co_await applyToSelf<StrengthPower>(asc(kDeadlyEnemies, 7, 5));
     curled = true;
   }
   Task<> pounceMove() {
     curled = false;
-    co_await attack(14);
+    co_await attack(asc(kDeadlyEnemies, 16, 14));
   }
 };
 
@@ -197,8 +197,8 @@ Task<> CurlUpPower::afterCardPlayed(const CardPlay& p) {
 struct ToughEgg : Monster {
   MONSTER_HEADER(ToughEgg, "TOUGH_EGG")
   bool isHatched = false;
-  int minHp() const override { return 14; }
-  int maxHp() const override { return 18; }
+  int minHp() const override { return asc(kToughEnemies, 15, 14); }
+  int maxHp() const override { return asc(kToughEnemies, 19, 18); }
   Task<> afterAddedToRoom() override {
     // PORT NOTE: the C# only ever creates unhatched eggs here (IsHatched is for save/restore).
     co_await applyToSelf<HatchPower>(combat->currentSide != Side::Enemy ? 1 : 2);
@@ -208,8 +208,8 @@ struct ToughEgg : Monster {
     hatch->perform = [this](Targets) { return hatchMove(); };
     hatch->intents = {kindIntent(Intent::Summon)};
     auto* nibble = machine.add<MoveState>("NIBBLE_MOVE");
-    nibble->perform = [this](Targets) { return attack(4); };
-    nibble->intents = {attackIntent(4)};
+    nibble->perform = [this](Targets) { return attack(asc(kDeadlyEnemies, 5, 4)); };
+    nibble->intents = {attackIntent(asc(kDeadlyEnemies, 5, 4))};
     hatch->followUp = nibble;
     nibble->followUp = nibble;
     machine.start(hatch);
@@ -221,15 +221,15 @@ struct ToughEgg : Monster {
     std::vector<Power*> drop;
     for (auto& p : creature->powers) if (p->id != "MinionPower") drop.push_back(p.get());
     for (Power* p : drop) co_await cmd::removePower(p);
-    int hp = combat->rng("Niche").nextInt(19, 22 + 1);  // HatchlingMinHp..HatchlingMaxHp
+    int hp = combat->rng("Niche").nextInt(asc(kToughEnemies, 20, 19), asc(kToughEnemies, 23, 22) + 1);  // HatchlingMinHp..HatchlingMaxHp
     creature->hp = creature->maxHp = hp;                // CreatureCmd.SetMaxAndCurrentHp
   }
 };
 
 struct Ovicopter : Monster {
   MONSTER_HEADER(Ovicopter, "OVICOPTER")
-  int minHp() const override { return 124; }
-  int maxHp() const override { return 130; }
+  int minHp() const override { return asc(kToughEnemies, 126, 124); }
+  int maxHp() const override { return asc(kToughEnemies, 132, 130); }
   bool canLay() const {
     int alive = 0;
     for (auto* e : combat->enemies) if (e->alive() && !e->removed) ++alive;
@@ -240,13 +240,13 @@ struct Ovicopter : Monster {
     lay->perform = [this](Targets) { return layEggsMove(); };
     lay->intents = {kindIntent(Intent::Summon)};
     auto* smash = machine.add<MoveState>("SMASH_MOVE");
-    smash->perform = [this](Targets) { return attack(16); };
-    smash->intents = {attackIntent(16)};
+    smash->perform = [this](Targets) { return attack(asc(kDeadlyEnemies, 17, 16)); };
+    smash->intents = {attackIntent(asc(kDeadlyEnemies, 17, 16))};
     auto* tender = machine.add<MoveState>("TENDERIZER_MOVE");
     tender->perform = [this](Targets t) { return tenderizerMove(t); };
-    tender->intents = {attackIntent(7), kindIntent(Intent::Debuff)};
+    tender->intents = {attackIntent(asc(kDeadlyEnemies, 8, 7)), kindIntent(Intent::Debuff)};
     auto* paste = machine.add<MoveState>("NUTRITIONAL_PASTE_MOVE");
-    paste->perform = [this](Targets) { return applyToSelf<StrengthPower>(3); };
+    paste->perform = [this](Targets) { return applyToSelf<StrengthPower>(asc(kDeadlyEnemies, 4, 3)); };
     paste->intents = {kindIntent(Intent::Buff)};
     auto* branch = machine.add<ConditionalBranchState>("SUMMON_BRANCH_STATE");
     lay->followUp = smash;
@@ -269,7 +269,7 @@ struct Ovicopter : Monster {
     }
   }
   Task<> tenderizerMove(Targets t) {
-    co_await attack(7);
+    co_await attack(asc(kDeadlyEnemies, 8, 7));
     co_await applyToTargets<VulnerablePower>(t, 2);
   }
 };
@@ -279,10 +279,10 @@ struct Ovicopter : Monster {
 struct SlumberingBeetle : Monster {
   MONSTER_HEADER(SlumberingBeetle, "SLUMBERING_BEETLE")
   bool isAwake = false;
-  int minHp() const override { return 86; }
-  int maxHp() const override { return 86; }
+  int minHp() const override { return asc(kToughEnemies, 89, 86); }
+  int maxHp() const override { return minHp(); }
   Task<> afterAddedToRoom() override {
-    co_await applyToSelf<PlatingPower>(15);
+    co_await applyToSelf<PlatingPower>(asc(kToughEnemies, 18, 15));
     co_await applyToSelf<SlumberPower>(3);
   }
   Task<> wakeUpMove(Targets) {
@@ -295,7 +295,7 @@ struct SlumberingBeetle : Monster {
     snore->intents = {kindIntent(Intent::Sleep)};
     auto* roll = machine.add<MoveState>("ROLL_OUT_MOVE");
     roll->perform = [this](Targets) { return rolloutMove(); };
-    roll->intents = {attackIntent(16), kindIntent(Intent::Buff)};
+    roll->intents = {attackIntent(asc(kDeadlyEnemies, 18, 16)), kindIntent(Intent::Buff)};
     auto* next = machine.add<ConditionalBranchState>("SNORE_NEXT");
     snore->followUp = next;
     next->add(snore, [this] { return creature->get<SlumberPower>() != nullptr; });
@@ -304,7 +304,7 @@ struct SlumberingBeetle : Monster {
     machine.start(snore);
   }
   Task<> rolloutMove() {
-    co_await attack(16);
+    co_await attack(asc(kDeadlyEnemies, 18, 16));
     co_await applyToSelf<StrengthPower>(2);
   }
 };
@@ -330,14 +330,14 @@ Task<> SlumberPower::afterSideTurnEnd(Side, const std::vector<Creature*>& partic
 struct Parafright : Monster {
   MONSTER_HEADER(Parafright, "PARAFRIGHT")
   int minHp() const override { return 21; }
-  int maxHp() const override { return 21; }
+  int maxHp() const override { return minHp(); }
   Task<> afterAddedToRoom() override {
     co_await cmd::applyPower(db::power("IllusionPower"), creature, 1, creature, nullptr);
   }
   void buildMoves() override {
     auto* slam = machine.add<MoveState>("SLAM_MOVE");
-    slam->perform = [this](Targets) { return attack(16); };
-    slam->intents = {attackIntent(16)};
+    slam->perform = [this](Targets) { return attack(asc(kDeadlyEnemies, 17, 16)); };
+    slam->intents = {attackIntent(asc(kDeadlyEnemies, 17, 16))};
     slam->followUp = slam;
     machine.start(slam);
   }
@@ -346,21 +346,21 @@ struct Parafright : Monster {
 struct TheObscura : Monster {
   MONSTER_HEADER(TheObscura, "THE_OBSCURA")
   bool hasSummoned = false;
-  int minHp() const override { return 123; }
-  int maxHp() const override { return 123; }
+  int minHp() const override { return asc(kToughEnemies, 129, 123); }
+  int maxHp() const override { return minHp(); }
   void buildMoves() override {
     auto* illusion = machine.add<MoveState>("ILLUSION_MOVE");
     illusion->perform = [this](Targets) { return illusionMove(); };
     illusion->intents = {kindIntent(Intent::Summon)};
     auto* gaze = machine.add<MoveState>("PIERCING_GAZE_MOVE");
-    gaze->perform = [this](Targets) { return attack(10); };
-    gaze->intents = {attackIntent(10)};
+    gaze->perform = [this](Targets) { return attack(asc(kDeadlyEnemies, 11, 10)); };
+    gaze->intents = {attackIntent(asc(kDeadlyEnemies, 11, 10))};
     auto* wail = machine.add<MoveState>("SAIL_MOVE");  // sic: the C# id
     wail->perform = [this](Targets) { return wailMove(); };
     wail->intents = {kindIntent(Intent::Buff)};
     auto* strike = machine.add<MoveState>("HARDENING_STRIKE_MOVE");
     strike->perform = [this](Targets) { return hardeningStrikeMove(); };
-    strike->intents = {attackIntent(6), kindIntent(Intent::Defend)};
+    strike->intents = {attackIntent(asc(kDeadlyEnemies, 7, 6)), kindIntent(Intent::Defend)};
     auto* rand = machine.add<RandomBranchState>("RAND");
     illusion->followUp = rand;
     gaze->followUp = rand;
@@ -381,8 +381,8 @@ struct TheObscura : Monster {
     co_await applyToTargets<StrengthPower>(mates, 3);
   }
   Task<> hardeningStrikeMove() {
-    co_await attack(6);
-    co_await gainBlock(6);
+    co_await attack(asc(kDeadlyEnemies, 7, 6));
+    co_await gainBlock(asc(kDeadlyEnemies, 7, 6));
   }
 };
 
@@ -391,19 +391,19 @@ struct TheObscura : Monster {
 struct ThievingHopper : Monster {
   MONSTER_HEADER(ThievingHopper, "THIEVING_HOPPER")
   bool isHovering = false;
-  int minHp() const override { return 79; }
-  int maxHp() const override { return 79; }
+  int minHp() const override { return asc(kToughEnemies, 84, 79); }
+  int maxHp() const override { return minHp(); }
   Task<> afterAddedToRoom() override { co_await applyToSelf<EscapeArtistPower>(5); }
   void buildMoves() override {
     auto* thievery = machine.add<MoveState>("THIEVERY_MOVE");
     thievery->perform = [this](Targets t) { return thieveryMove(t); };
-    thievery->intents = {attackIntent(17), kindIntent(Intent::Debuff)};  // CardDebuffIntent
+    thievery->intents = {attackIntent(asc(kDeadlyEnemies, 19, 17)), kindIntent(Intent::Debuff)};  // CardDebuffIntent
     auto* nab = machine.add<MoveState>("NAB_MOVE");
-    nab->perform = [this](Targets) { return attack(14); };
-    nab->intents = {attackIntent(14)};
+    nab->perform = [this](Targets) { return attack(asc(kDeadlyEnemies, 16, 14)); };
+    nab->intents = {attackIntent(asc(kDeadlyEnemies, 16, 14))};
     auto* hat = machine.add<MoveState>("HAT_TRICK_MOVE");
-    hat->perform = [this](Targets) { return attack(21); };
-    hat->intents = {attackIntent(21)};
+    hat->perform = [this](Targets) { return attack(asc(kDeadlyEnemies, 23, 21)); };
+    hat->intents = {attackIntent(asc(kDeadlyEnemies, 23, 21))};
     auto* flutter = machine.add<MoveState>("FLUTTER_MOVE");
     flutter->perform = [this](Targets) { return flutterMove(); };
     flutter->intents = {kindIntent(Intent::Buff)};
@@ -461,7 +461,7 @@ struct ThievingHopper : Monster {
       swipe->stolenCard = std::move(stolen);
       co_await cmd::applyPower(std::move(swipe), creature, 1, creature, nullptr);
     }
-    co_await attack(17);
+    co_await attack(asc(kDeadlyEnemies, 19, 17));
   }
   Task<> flutterMove() {
     isHovering = true;

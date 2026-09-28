@@ -23,7 +23,8 @@ int main(int argc, char** argv) {
     std::vector<std::unique_ptr<Run>> keep;  // runs replaced by a load stay alive (their coroutines)
     keep.push_back(std::make_unique<Run>());
     Run* cur = keep.back().get();
-    cur->start((uint64_t)s * 7919, getenv("SIM_CHAR") ? getenv("SIM_CHAR") : "Ironclad");  // SIM_CHAR=Silent
+    cur->start((uint64_t)s * 7919, getenv("SIM_CHAR") ? getenv("SIM_CHAR") : "Ironclad",
+                getenv("SIM_ASC") ? atoi(getenv("SIM_ASC")) : 0);  // SIM_CHAR=Silent, SIM_ASC=10
     cur->freeMap = getenv("STS_FREE_MAP") != nullptr;
     // SIM_SAVELOAD=K: at floor K's map choice, save, load into a new run and carry on with it
     // (the result must match a run without SIM_SAVELOAD). Every save point also checks that

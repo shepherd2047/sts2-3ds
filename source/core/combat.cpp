@@ -1,6 +1,7 @@
 // Combat engine: Hook.*, CreatureCmd/PowerCmd/CardPileCmd and the
 // CombatManager turn loop, reduced to one local player.
 #include <algorithm>
+#include <cstdio>
 
 #include "game.h"
 
@@ -79,17 +80,33 @@ Task<> Monster::performMove() {
     combat->push({VisualEvent::Anim, creature, 0, debuff ? "Debuff" : "Cast"});
   }
   move->performedAtLeastOnce = true;
+  attackLog.clear();
   co_await move->perform(targets);
+  // Debug (STS_ASC_CHECK=1): the damage dealt by the move must be the damage its intent showed.
+  static const bool check = getenv("STS_ASC_CHECK") != nullptr;
+  if (check && !attackLog.empty())
+    for (auto& in : move->intents)
+      if (in.kind == Intent::Attack) {
+        if (attackLog[0].first != in.damage || attackLog[0].second != in.hits)
+          printf("ASC CHECK %s %s: intent %dx%d, attack %dx%d\n", id.c_str(), move->id.c_str(), in.damage, in.hits,
+                 attackLog[0].first, attackLog[0].second);
+        break;
+      }
   machine.performedFirstMove = true;
 }
 
 Task<> Monster::attack(int damage, int hits) {
+  attackLog.push_back({damage, hits});
   cmd::Attack a;
   a.damagePerHit = damage;
   a.hits = hits;
   a.attacker = creature;
   a.allOpponents = true;  // FromMonster -> TargetingAllOpponents
   co_await a.execute(*combat);
+}
+
+int Monster::asc(AscensionLevel level, int ascValue, int base) const {
+  return combat && combat->run && combat->run->hasAscension(level) ? ascValue : base;
 }
 
 Task<> Monster::gainBlock(int amount) { co_await cmd::gainBlock(creature, amount, kMove, nullptr); }
@@ -180,6 +197,7 @@ Creature* Combat::createEnemy(std::unique_ptr<Monster> m) {
   auto cr = std::make_unique<Creature>();
   cr->side = Side::Enemy;
   cr->combat = this;
+  m->combat = this;  // ascension-dependent values (Monster::asc) need the run
   // Creature.SetUniqueMonsterHpValue: prefer an HP no other enemy on the side has.
   std::vector<int> options;
   for (int hp = m->minHp(); hp <= m->maxHp(); ++hp) {

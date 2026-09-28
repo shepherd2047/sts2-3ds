@@ -45,8 +45,8 @@ cheapest way to run this. Do not spawn subagents or other sessions unless the ow
    whole codebase or the whole decompiled tree. Open only the files a package names
    and the C# classes it lists.
 2. The source of truth is `../sts2-decompiled/` (C#). Translate faithfully:
-   - use the same numbers (the non-ascension value is the last argument of
-     `GetValueIfAscension`; ascension values arrive with package C10);
+   - use the same numbers, including ascension: `GetValueIfAscension(level, a, b)` in a monster is
+     `asc(kToughEnemies, a, b)` / `asc(kDeadlyEnemies, a, b)` (`Monster::asc`, see the C10 notes);
    - keep the same move order and the same RNG call order;
    - drop VFX, SFX and animation code unless a package asks for it.
 3. Mark anything you cannot express with `// PORT NOTE: <what is missing>`.
@@ -158,7 +158,7 @@ meta and progression (M), system (Y), audio (U) and hardware/release (H).
 | A1a | Colorless cards 1/3: Alchemize … GoldAxe (22) + the colorless pool, and ColorlessPotion | content | – | todo |
 | A1b | Colorless cards 2/3: HandOfGreed … Purity (22) | content, parallel-safe | A1a | todo |
 | A1c | Colorless cards 3/3: Rally … Volley (19); skip cards the C# marks multiplayer-only | content, parallel-safe | A1a | todo |
-| A2 | Missing curses/status (AscendersBane, Debt, Writhe, Beckon, Debris, Void), 13 event cards, quest cards Dowsing and SpoilsMap | content | – | todo |
+| A2 | Missing curses/status (AscendersBane exists since C10, Debt, Writhe, Beckon, Debris, Void), 13 event cards, quest cards Dowsing and SpoilsMap | content | – | todo |
 | A3a | Enchantment engine: enchantment slot on Card, hooks (`Models\EnchantmentModel.cs`), save, card badge + text in the UI, `enchant` event helpers | engine, *Opus* | – | done (engine), accepted 2026-09-28 |
 | A3b | Enchantments 1/2: Sown, Slither, Adroit, Clone (used by CloneRestSiteOption), Corrupted, Goopy, Inky, SoulsPower + unlock SapphireSeed PLANT, WoodCarvings SNAKE, FieldOfManSizedHoles ENTER_YOUR_HOLE (PerfectFit exists), Grave of the Forgotten | content | A3a | todo |
 | A3c | Enchantments 2/2: Instinct, Momentum, Nimble, RoyallyApproved, Spiral, Steady, TezcatarasEmber (needs the Eternal keyword, see notes) + relics that enchant (DingyRug, GnarledHammer, Kifuda, RoyalStamp …) | content | A3b | todo |
@@ -209,8 +209,35 @@ replay line (`App::describe`); the badge, glow and the enchant preview screen ar
 
 | id | Package | Kind | Needs | Status |
 |---|---|---|---|---|
-| C10 | Ascension 1-10 (SwarmingElites … DoubleBoss): `AscensionManager`, every `GetValueIfAscension` in ported content (script to list them), AscendersBane at A5, double boss at A10 | engine + content sweep, *Opus* | – | in progress (engine) |
-| C11 | Map extras: boss preview, the act's second boss at ascension 10, map legend | engine + UI | C10 | todo |
+| C10 | Ascension 1-10 (SwarmingElites … DoubleBoss): `AscensionManager`, every `GetValueIfAscension` in ported content (script to list them), AscendersBane at A5, double boss at A10 | engine + content sweep, *Opus* | – | done (engine) |
+| C11 | Map extras: boss preview, the act's second boss as a map node at ascension 10 (C10 chains the fights, see notes), map legend | engine + UI | C10 | todo |
+
+**C10 notes (ascension, done).** `Run::ascension` (0-10, `Run::start(seed, character, ascension)`; debug
+`STS_ASCENSION=`, `SIM_ASC=`), `Run::hasAscension(kToughEnemies)`, `Run::ascValue(level, a, b)`. Saved (save
+version 4). What each level does now:
+- 1 SwarmingElites: 8 elites per map (`generateStandardActMap(rng, act, 8)`; the map rules can leave fewer);
+  2 WearyTraveler: an Ancient heals 80% (Neow starts from 0 HP); 3 Poverty: fight gold x0.75 (truncated);
+  4 TightBelt: 2 potion slots; 5 AscendersBane: the curse (`content_ascension.cpp`, keywords Eternal / Unplayable /
+  Ethereal) starts in the deck; 6 Inflation: card removal 100 + 50 per use; 7 Scarcity: rare odds and their growth
+  (`rollRarity`, shop) and the upgrade chance of reward cards per act (0.25 -> 0.125); 8 ToughEnemies / 9
+  DeadlyEnemies: monster HP / damage and other numbers; 10 DoubleBoss: the last act's second boss.
+- **New base rule found on the way:** reward and shop cards go through `Run::rollCardUpgrade` like
+  `CardFactory.RollForUpgrade` (one Rewards float per card; from act 2 a reward card can arrive upgraded at
+  `actIndex * 0.25`). This changes the Rewards RNG stream for every run, ascension or not.
+- **Eternal cards** (`kwEternal`, `Card::isRemovable()`): `Run::selectFromDeck` does not offer them for
+  `TO_REMOVE` / `TO_TRANSFORM` and `transformCard` skips them. The Eternal keyword text in the card body is UI (F5).
+- **Monsters:** every ported monster's HP and damage / block / power / status numbers were swept
+  (`tools/ascension_sweep.py` finds the C# values and edits the C++; `tools/ascension_check.py` compares HP and
+  attack intents with the C# at levels 0 / 8 / 9 / 10 from `build/ascension_dump`; `make check` runs both when python
+  and `../sts2-decompiled` exist). `STS_ASC_CHECK=1` prints a line when a move's damage differs from its intent.
+  **A monster that is not ported yet must use `asc(...)` from the start: A11a-e (Underdocks), A7c
+  (FakeMerchantMonster) and every later monster read the C# `GetValueIfAscension` lines.** The sweep script
+  can list a new monster's values (`python tools/ascension_sweep.py --json`).
+- **DoubleBoss:** `Run::secondBossId` (another boss of act 3, UpFront stream) is fought right after the first
+  boss, which gives no rewards, as in the C# (RewardsSet skips every boss of the last act). PORT NOTE: the C#
+  makes the second boss a map node; C11 replaces the chained fight with that node and the boss preview.
+- Not ported: the ascension text in the character select (S04 uses `ascension.LEVEL_nn` loc) and the
+  modifier-run rules.
 
 ### Track F: UI foundation (do this before redoing any screen)
 

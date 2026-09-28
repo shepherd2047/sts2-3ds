@@ -73,12 +73,18 @@ int main() {
     std::istringstream in(v3);
     std::vector<std::string> toks;
     for (std::string t; in >> t;) toks.push_back(t);
-    CHECK(toks.size() > 4 && toks[0] == "STS2SAVE" && toks[1] == "3" && toks[3] == "Ironclad");
-    std::string v2 = "STS2SAVE 2";
-    for (size_t k = 2; k < toks.size(); ++k) if (k != 3) v2 += " " + toks[k];
-    Run old;
-    CHECK(old.load(v2));
-    CHECK(old.characterId == "Ironclad" && old.save() == v3);
+    CHECK(toks.size() > 5 && toks[0] == "STS2SAVE" && toks[1] == "4" && toks[3] == "Ironclad" && toks[4] == "0");
+    // A save from a newer build is refused; an ascension run keeps its level.
+    std::string future = v3;
+    future.replace(future.find("STS2SAVE 4"), 10, "STS2SAVE 9");
+    Run refused;
+    CHECK(!refused.load(future));
+    Run asc;
+    asc.start(7, "Ironclad", 10);
+    Run ascBack;
+    CHECK(ascBack.load(asc.save()));
+    CHECK(ascBack.ascension == 10 && ascBack.hasAscension(kDoubleBoss) && ascBack.deck.size() == 11);  // + AscendersBane
+    CHECK(ascBack.potions.size() == 2);                                                             // TightBelt
   }
   printf("%d checks, %d failed\n", checks, failures);
   return failures ? 1 : 0;

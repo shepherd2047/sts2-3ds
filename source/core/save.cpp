@@ -11,7 +11,7 @@ namespace sts {
 
 namespace {
 
-constexpr int kSaveVersion = 3;  // 2: card enchantments, 3: character id (2 loads as the Ironclad)
+constexpr int kSaveVersion = 4;  // 2: card enchantments, 3: character id, 4: ascension (older saves load as Ironclad / ascension 0)
 
 void ioCard(Archive& a, std::unique_ptr<Card>& c) {
   std::string id = c ? c->id : "";
@@ -107,9 +107,10 @@ void ioRun(Archive& a, Run& r) {
   a.tag("STS2SAVE");
   int version = kSaveVersion;
   a.io(version);
-  if (version != kSaveVersion && version != 2) { a.ok = false; return; }
+  if (version < 2 || version > kSaveVersion) { a.ok = false; return; }
   a.io(r.seed);
   if (version >= 3) a.io(r.characterId);
+  if (version >= 4) a.io(r.ascension);
   a.io(r.player->hp); a.io(r.player->maxHp);
   a.io(r.gold); a.io(r.floor); a.io(r.actIndex); a.io(r.fightsThisAct);
   a.io(r.eliteQueue); a.io(r.normalQueue); a.io(r.weakQueue); a.io(r.bossId);
@@ -117,6 +118,7 @@ void ioRun(Archive& a, Run& r) {
   a.io(r.rarityOffset); a.io(r.potionRewardOdds);
   a.io(r.unknownMonsterOdds); a.io(r.unknownTreasureOdds); a.io(r.unknownShopOdds);
   a.io(r.eventQueue); a.io(r.visitedEvents);
+  if (version >= 4) a.io(r.secondBossId);
   a.io(r.ancientId);
   for (auto& s : r.sharedAncients) a.io(s);
   a.io(r.shopRemovalsUsed);
@@ -180,9 +182,11 @@ bool Run::load(const std::string& data) {
   for (std::string t; in >> t;) a.toks.push_back(t);
   // The seed comes first after the header: start that run, then overwrite it.
   if (a.toks.size() < 3 || a.toks[0] != "STS2SAVE") return false;
-  // Version 3 puts the character right after the seed; version 2 saves are Ironclad runs.
-  bool hasCharacter = a.toks[1] != "2" && a.toks.size() > 3;
-  start(std::strtoull(a.toks[2].c_str(), nullptr, 10), hasCharacter ? a.toks[3] : "Ironclad");
+  // Version 3 puts the character right after the seed, version 4 the ascension after that;
+  // version 2 saves are Ironclad runs at ascension 0.
+  int version = std::atoi(a.toks[1].c_str());
+  start(std::strtoull(a.toks[2].c_str(), nullptr, 10), version >= 3 && a.toks.size() > 3 ? a.toks[3] : "Ironclad",
+        version >= 4 && a.toks.size() > 4 ? std::atoi(a.toks[4].c_str()) : 0);
   ioRun(a, *this);
   if (!a.ok) return false;
   ancientPending = false;
