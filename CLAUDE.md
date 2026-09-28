@@ -147,6 +147,9 @@ scripts drift; delete the debug file afterwards.
   (`Monster::stun`), minions / secondary enemies, creatures that die without
   leaving (illusions revive), turn-end-in-hand cards, `shouldPlay` and
   `tryModifyPowerAmountReceived` (Artifact) hooks.
+- Powers: one class per power id. `Creature::get<P>()` finds powers by id and static_casts, so a second class
+  with the same id is undefined behaviour; shared powers (Vigor, *NextTurn) live in `powers.h`. The 3DS Makefile
+  flattens object names, so two .cpp files with the same basename anywhere under source/ break the 3DS link.
 - Relics: `Relic` + `RELIC_HEADER(Name, "KEY", Rarity)` with DynVars named like
   the C# vars (the UI formats descriptions from them). `relics.cpp` registers
   `relics_common/uncommon/rare.cpp`; only registered relics enter the grab bags
