@@ -67,8 +67,11 @@ class App {
   void drawGhosts();
 
   void startRun(bool resume = false);
+  void returnTitle();
   bool hasSave() const;
   bool hasSave_ = false;  // the title offers 继续
+  bool titleCharacter_ = false;  // title menu -> Ironclad selection
+  int titleSelection_ = 0;       // continue (when present) or new game
   Visual* visual(sts::Creature* c);
   void trigger(sts::Creature* c, const std::string& what, int amount);
   std::string idleAnim(const Visual& v) const;
@@ -83,6 +86,14 @@ class App {
   void drawRest(bool top);
   void drawUpgrade(bool top);
   void drawDeck(bool top);
+  enum class CardListMode { Deck, Draw, Discard, Exhaust };
+  std::vector<sts::Card*> listedCards();
+  void openCardList(CardListMode mode);
+  void drawDetail(bool top);
+  void updateDetail(const gfx::Input& in);
+  void drawSettings(bool top);
+  void updateSettings(const gfx::Input& in);
+  void saveSettings();
   void drawEnd(bool top, bool won);
   void drawRelicOffer(bool top);  // elite relic reward / treasure chest
   void drawRelics(bool top);      // owned relics: grid below, the picked one above
@@ -158,7 +169,16 @@ class App {
   float toastT_ = 0;
   std::vector<Hit> hits_;
   bool deckOpen_ = false;
+  CardListMode cardListMode_ = CardListMode::Deck;
+  sts::Card* detailCard_ = nullptr;
+  sts::Relic* detailRelic_ = nullptr;
+  bool detailUpgrade_ = false;
+  int detailKeyword_ = -1;  // -1 shows the card description; 0..N-1 shows one keyword
   bool relicsOpen_ = false;
+  bool settingsOpen_ = false;
+  bool abandonConfirm_ = false;
+  bool fastMode_ = false;
+  bool screenShake_ = true;
   bool mapView_ = false;  // map opened from another room (START): look only, red 返回 below
   bool devOpen_ = false;
   int devPage_ = 0;  // 0 actions, 1 relics, 2 cards, 3 encounters
@@ -173,7 +193,7 @@ class App {
   int scroll_ = 0;
   float mapScroll_ = 0;        // rows; see kMapBase in ui.cpp
   bool mapUserScroll_ = false;  // dragged by hand: stop auto-following the current row
-  struct MapTouch { bool down = false, dragged = false; int node = -1; float startX = 0, startY = 0, lastY = 0; } mapTouch_;
+  struct MapTouch { bool down = false, dragged = false; int node = -1; float startY = 0, lastY = 0; } mapTouch_;
   sts::Combat* lastCombat_ = nullptr;
   std::map<sts::Creature*, Visual> visuals_;
   std::map<sts::Creature*, std::pair<float, float>> centers_;  // top-screen body centres, refreshed each frame

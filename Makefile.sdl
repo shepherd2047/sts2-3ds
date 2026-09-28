@@ -1,24 +1,58 @@
-# Desktop preview build (macOS/Linux with SDL2).
+# Desktop preview build (macOS/Linux/Windows MSYS2 with SDL2).
+# Auto-parallelize across all available cores if -j is not passed
+MAKEFLAGS += -j$(shell sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 4)
+
 CXX ?= clang++
-CXXFLAGS := -std=c++20 -O2 -g -Wall -Wno-missing-field-initializers -Wno-unused-parameter $(shell sdl2-config --cflags)
-LDFLAGS := $(shell sdl2-config --libs)
+OPT ?= -O2
+
+BASE_CXXFLAGS := -std=c++20 $(OPT) -g -Wall -Wno-missing-field-initializers -Wno-unused-parameter -MMD -MP
+
+SDL_CFLAGS := $(shell sdl2-config --cflags 2>/dev/null)
+SDL_LDFLAGS := $(shell sdl2-config --libs 2>/dev/null)
+
 ifeq ($(OS),Windows_NT)
 # Windows (MSYS2 UCRT64): plain console main(), no SDL2main wrapper.
-CXXFLAGS := $(filter-out -Dmain=SDL_main,$(CXXFLAGS))
-LDFLAGS := $(filter-out -lSDL2main -mwindows,$(LDFLAGS))
+SDL_CFLAGS := $(filter-out -Dmain=SDL_main,$(SDL_CFLAGS))
+SDL_LDFLAGS := $(filter-out -lSDL2main -mwindows,$(SDL_LDFLAGS))
 endif
-CORE := $(wildcard source/core/*.cpp)
-SRC := $(CORE) source/spine/spine.cpp source/gfx/gfx_common.cpp source/platform_sdl/gfx_sdl.cpp source/ui/res.cpp source/ui/ui.cpp source/main.cpp
+
+CORE_SRC := $(wildcard source/core/*.cpp)
+EXTRA_PREVIEW_SRC := source/spine/spine.cpp source/gfx/gfx_common.cpp source/platform_sdl/gfx_sdl.cpp source/ui/res.cpp source/ui/ui.cpp source/main.cpp
+SIM_SRC := test/sim.cpp
+
+OBJ_DIR := build/obj
+
+CORE_OBJS := $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(CORE_SRC))
+PREVIEW_EXTRA_OBJS := $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(EXTRA_PREVIEW_SRC))
+SIM_EXTRA_OBJS := $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(SIM_SRC))
+
+ALL_OBJS := $(CORE_OBJS) $(PREVIEW_EXTRA_OBJS) $(SIM_EXTRA_OBJS)
+DEPS := $(ALL_OBJS:.o=.d)
 
 all: build/sts2-preview build/sim
 
-build/sts2-preview: $(SRC) $(wildcard source/*/*.h)
-	@mkdir -p build
-	$(CXX) $(CXXFLAGS) $(SRC) -o $@ $(LDFLAGS)
+# Core objects (shared between preview and sim, compiled ONCE)
+$(OBJ_DIR)/source/core/%.o: source/core/%.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(BASE_CXXFLAGS) -c $< -o $@
 
-build/sim: $(CORE) test/sim.cpp $(wildcard source/core/*.h)
+# Preview-specific objects (include SDL headers)
+$(OBJ_DIR)/source/%.o: source/%.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(BASE_CXXFLAGS) $(SDL_CFLAGS) -c $< -o $@
+
+# Sim-specific objects
+$(OBJ_DIR)/test/%.o: test/%.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(BASE_CXXFLAGS) -c $< -o $@
+
+build/sts2-preview: $(CORE_OBJS) $(PREVIEW_EXTRA_OBJS)
 	@mkdir -p build
-	$(CXX) -std=c++20 -O2 -g -Wno-missing-field-initializers $(CORE) test/sim.cpp -o $@
+	$(CXX) $(BASE_CXXFLAGS) $^ -o $@ $(SDL_LDFLAGS)
+
+build/sim: $(CORE_OBJS) $(SIM_EXTRA_OBJS)
+	@mkdir -p build
+	$(CXX) $(BASE_CXXFLAGS) $^ -o $@
 
 sim: build/sim
 	./build/sim 200
@@ -27,3 +61,5 @@ clean:
 	rm -rf build
 
 .PHONY: all sim clean
+
+-include $(DEPS)

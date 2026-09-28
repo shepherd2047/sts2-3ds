@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstdio>
 #include <ctime>
 #include <functional>
 
@@ -96,6 +97,18 @@ enum : int {
   ID_CONTINUE,
   ID_USE,
   ID_DISCARD,
+  ID_PILE_DRAW,
+  ID_PILE_DISCARD,
+  ID_PILE_EXHAUST,
+  ID_DETAIL,
+  ID_UPGRADE_PREVIEW,
+  ID_KEYWORD,
+  ID_FAST_MODE,
+  ID_SCREEN_SHAKE,
+  ID_ABANDON,
+  ID_ABANDON_CONFIRM,
+  ID_ABANDON_CANCEL,
+  ID_TITLE,
   ID_POTION0 = 900,  // + belt slot
   ID_TARGET0 = 100,   // + enemy index
   ID_HAND0 = 200,     // + hand index
@@ -172,6 +185,15 @@ bool App::init() {
   run_ = std::make_unique<Run>();
   autoplay_ = getenv("STS_AUTOPLAY") != nullptr;
   hasSave_ = hasSave();
+  std::string saved;
+  if (!getenv("STS_HIDDEN") && !getenv("STS_NO_SAVE") && gfx::readSave("settings.txt", saved)) {
+    int fast = 0, shake = 1;
+    if (std::sscanf(saved.c_str(), "v1 %d %d", &fast, &shake) == 2) {
+      fastMode_ = fast == 1;
+      screenShake_ = shake != 0;
+    }
+  }
+  Scheduler::get().speed = fastMode_ ? 1.75 : 1.0;
   return true;
 }
 
@@ -179,7 +201,13 @@ bool App::init() {
 // ends. Automated previews (STS_HIDDEN) and STS_NO_SAVE neither read nor write it.
 namespace {
 constexpr const char* kSaveName = "run.sav";
+constexpr const char* kSettingsName = "settings.txt";
 bool savesEnabled() { return !getenv("STS_HIDDEN") && !getenv("STS_NO_SAVE"); }
+}
+
+void App::saveSettings() {
+  if (savesEnabled())
+    gfx::writeSave(kSettingsName, "v1 " + num(fastMode_ ? 1 : 0) + " " + num(screenShake_ ? 1 : 0));
 }
 
 bool App::hasSave() const {
@@ -213,7 +241,42 @@ void App::startRun(bool resume) {
   mapSel_ = 0;
   mapScroll_ = 0;
   deckOpen_ = false;
+  cardListMode_ = CardListMode::Deck;
+  detailCard_ = nullptr;
+  detailRelic_ = nullptr;
+  detailUpgrade_ = false;
+  detailKeyword_ = -1;
   relicsOpen_ = false;
+  settingsOpen_ = false;
+  abandonConfirm_ = false;
+  titleCharacter_ = false;
+  titleSelection_ = 0;
+  R().releaseTexture("gfx/bg_menu.t3t");
+  R().releaseTexture("gfx/bg_character_ironclad.t3t");
+}
+
+void App::returnTitle() {
+  // Abandon can happen while Run::main is suspended on a UI signal. Destroy
+  // those coroutines before the Run and its cards/creatures they reference.
+  Scheduler::get().clear();
+  if (savesEnabled()) gfx::deleteSave(kSaveName);
+  visuals_.clear();
+  R().releaseSkeletons({});
+  run_ = std::make_unique<Run>();
+  lastCombat_ = nullptr;
+  centers_.clear();
+  flights_.clear();
+  poses_.clear();
+  ghosts_.clear();
+  mapTouch_ = {};
+  drag_ = {};
+  deckOpen_ = relicsOpen_ = settingsOpen_ = abandonConfirm_ = mapView_ = devOpen_ = false;
+  potionsOpen_ = false;
+  detailCard_ = nullptr;
+  detailRelic_ = nullptr;
+  titleCharacter_ = false;
+  titleSelection_ = 0;
+  hasSave_ = hasSave();
 }
 
 // ================================================================ creature animation
@@ -571,6 +634,95 @@ void App::drawCardGrid(const std::vector<Card*>& cards, int sel, float y0, float
   }
 }
 
+static std::vector<const char*> cardKeywordKeys(const Card* c) {
+  std::vector<const char*> keys;
+  if (!c) return keys;
+  if (c->has(kwUnplayable)) keys.push_back("UNPLAYABLE");
+  if (c->has(kwEthereal)) keys.push_back("ETHEREAL");
+  if (c->has(kwInnate)) keys.push_back("INNATE");
+  if (c->has(kwRetain)) keys.push_back("RETAIN");
+  if (c->has(kwExhaust)) keys.push_back("EXHAUST");
+  return keys;
+}
+
+void App::drawDetail(bool top) {
+  std::unique_ptr<Card> upgraded;
+  Card* card = detailCard_;
+  if (card && detailUpgrade_ && card->upgradable()) {
+    upgraded = card->clone();
+    upgraded->upgrade();
+    card = upgraded.get();
+  }
+  drawSceneBg(top, 0.85f);
+  if (top) {
+    if (card) {
+      drawCard(card, (kTop - 156) / 2.f, 10, 1.3f, false, true);
+      if (upgraded) R().text(kTop - 10, 8, "升级预览", ts(F12, col::green, RIGHT));
+    } else if (detailRelic_) {
+      drawRelicDetail(detailRelic_, 67);
+    }
+    return;
+  }
+  panel(12, 10, kBot - 24, 178);
+  std::string title = card ? cardTitle(card) : L("relics." + detailRelic_->locKey + ".title");
+  R().text(kBot / 2, 22, title, ts(F16, col::gold, CENTER, kBot - 40));
+  auto keywords = cardKeywordKeys(card);
+  std::string description = card ? describe(card) : describeRelic(detailRelic_);
+  if (detailKeyword_ >= 0 && detailKeyword_ < (int)keywords.size()) {
+    std::string key = "card_keywords." + std::string(keywords[detailKeyword_]);
+    description = "[gold]" + L(key + ".title") + "[/gold]" +
+                  "  " + num(detailKeyword_ + 1) + "/" + num((int)keywords.size()) +
+                  "\n\n" + L(key + ".description");
+  }
+  TextStyle desc = ts(F16, col::white, CENTER, kBot - 48);
+  float h = 0;
+  R().measure(description, desc, &h);
+  while (h > 128 && desc.scale > 0.65f) {
+    desc.scale *= 0.9f;
+    R().measure(description, desc, &h);
+  }
+  R().text(kBot / 2, 55, description, desc);
+  bool canUpgrade = detailCard_ && detailCard_->upgradable();
+  if (canUpgrade && !keywords.empty()) {
+    button(8, 199, 90, 34, "关闭", ID_BACK);
+    button(106, 199, 104, 34, detailUpgrade_ ? "原卡" : "升级预览", ID_UPGRADE_PREVIEW, true, detailUpgrade_);
+    button(218, 199, 94, 34, detailKeyword_ < 0 ? "关键词" :
+           detailKeyword_ + 1 < (int)keywords.size() ? "下个词" : "卡牌", ID_KEYWORD, true, detailKeyword_ >= 0);
+  } else if (canUpgrade) {
+    button(12, 199, 140, 34, "关闭", ID_BACK);
+    button(168, 199, 140, 34, detailUpgrade_ ? "原卡" : "升级预览", ID_UPGRADE_PREVIEW, true, detailUpgrade_);
+  } else if (!keywords.empty()) {
+    button(12, 199, 140, 34, "关闭", ID_BACK);
+    button(168, 199, 140, 34, detailKeyword_ < 0 ? "关键词" :
+           detailKeyword_ + 1 < (int)keywords.size() ? "下个词" : "卡牌", ID_KEYWORD, true, detailKeyword_ >= 0);
+  } else {
+    button(90, 199, 140, 34, "关闭", ID_BACK, true, true);
+  }
+}
+
+void App::updateDetail(const gfx::Input& in) {
+  int id = in.touchDown ? hitAt(in.tx, in.ty) : ID_NONE;
+  if ((in.down & gfx::BTN_B) || id == ID_BACK) {
+    detailCard_ = nullptr;
+    detailRelic_ = nullptr;
+    detailUpgrade_ = false;
+    detailKeyword_ = -1;
+    return;
+  }
+  if (detailCard_ && detailCard_->upgradable() && ((in.down & gfx::BTN_X) || id == ID_UPGRADE_PREVIEW)) {
+    detailUpgrade_ = !detailUpgrade_;
+    detailKeyword_ = -1;
+  }
+  if (detailCard_ && ((in.down & gfx::BTN_Y) || id == ID_KEYWORD)) {
+    std::unique_ptr<Card> upgraded;
+    Card* card = detailCard_;
+    if (detailUpgrade_) { upgraded = card->clone(); upgraded->upgrade(); card = upgraded.get(); }
+    auto keywords = cardKeywordKeys(card);
+    if (!keywords.empty()) detailKeyword_ = (detailKeyword_ + 1) % ((int)keywords.size() + 1);
+    if (detailKeyword_ == (int)keywords.size()) detailKeyword_ = -1;
+  }
+}
+
 int App::gridHit(const std::vector<Card*>&, float, float, int, int tx, int ty) {
   int id = hitAt(tx, ty);
   return id >= ID_GRID0 ? id - ID_GRID0 : -1;
@@ -579,13 +731,19 @@ int App::gridHit(const std::vector<Card*>&, float, float, int, int tx, int ty) {
 // ================================================================ frame
 
 void App::update(const gfx::Input& in, double dt) {
-  time_ += dt;
-  if (toastT_ > 0) toastT_ -= (float)dt;
-  for (auto& f : floats_) f.t += (float)dt;
+  double visualDt = dt * (fastMode_ ? 1.75 : 1.0);
+  time_ += visualDt;
+  if (toastT_ > 0) toastT_ -= (float)visualDt;
+  for (auto& f : floats_) f.t += (float)visualDt;
   floats_.erase(std::remove_if(floats_.begin(), floats_.end(), [](const Float& f) { return f.t > 1.2f; }), floats_.end());
 
   Screen scr = run_->screen;
   if (scr != lastScreen_) {
+    detailCard_ = nullptr;
+    detailRelic_ = nullptr;
+    detailUpgrade_ = false;
+    detailKeyword_ = -1;
+    if (cardListMode_ != CardListMode::Deck) { deckOpen_ = false; cardListMode_ = CardListMode::Deck; }
     sel_ = -1;
     scroll_ = 0;
     mapTouch_ = {};
@@ -612,13 +770,21 @@ void App::update(const gfx::Input& in, double dt) {
     target_ = 0;
   }
   consumeEvents();
+  if (run_->combat) {
+    auto decayShake = [&](Creature* c) {
+      if (c) c->shake = std::max(0.f, c->shake - (float)visualDt * 4.f);
+    };
+    decayShake(run_->player.get());
+    for (auto* enemy : run_->combat->enemies) decayShake(enemy);
+  }
   for (auto& [c, v] : visuals_) {
     if (!v.anim) continue;
-    v.anim->update((float)dt);
-    if (v.dying && v.anim->finished()) v.fade = std::max(0.f, v.fade - (float)dt * 2.f);
+    v.anim->update((float)visualDt);
+    if (v.dying && v.anim->finished()) v.fade = std::max(0.f, v.fade - (float)visualDt * 2.f);
   }
 
-  if (autoplay_) autoplay(dt);
+  if (autoplay_) autoplay(visualDt);
+  if (settingsOpen_) { updateSettings(in); return; }
   if ((in.down & gfx::BTN_SELECT) && scr != Screen::Title) {
     devOpen_ = !devOpen_;
     devPage_ = 0;
@@ -627,6 +793,7 @@ void App::update(const gfx::Input& in, double dt) {
     return;
   }
   if (devOpen_) { updateDev(in); return; }
+  if (detailCard_ || detailRelic_) { updateDetail(in); return; }
   if (run_->deckChoice.active) { updateDeckChoice(in); return; }
   // START opens the map for a look from any room (RGDSplus: map entry on the top bar).
   if ((in.down & gfx::BTN_START) && !mapView_ && scr != Screen::Title && scr != Screen::Map &&
@@ -640,6 +807,11 @@ void App::update(const gfx::Input& in, double dt) {
   if (relicsOpen_) { updateRelics(in); return; }
   if (deckOpen_) { updateDeck(in); return; }
   if (potionsOpen_) { updatePotions(in); return; }
+  if (scr == Screen::Map && (in.down & gfx::BTN_START)) {
+    settingsOpen_ = true;
+    abandonConfirm_ = false;
+    return;
+  }
   switch (scr) {
     case Screen::Title: updateTitle(in); break;
     case Screen::Map: updateMap(in); break;
@@ -718,7 +890,9 @@ void App::draw() {
   for (int pass = 0; pass < 2; ++pass) {
     bool top = pass == 0;
     gfx::screen(top ? gfx::TOP : gfx::BOTTOM, 0x0B0B12FF);
+    if (settingsOpen_) { drawSettings(top); continue; }
     if (devOpen_) { drawDev(top); continue; }
+    if (detailCard_ || detailRelic_) { drawDetail(top); continue; }
     if (run_->deckChoice.active) { drawDeckChoice(top); continue; }
     if (mapView_) { drawMap(top); continue; }
     if (relicsOpen_) { drawRelics(top); continue; }
@@ -835,35 +1009,54 @@ void App::autoplay(double dt) {
 // ================================================================ title
 
 void App::drawTitle(bool top) {
-  if (top) {
-    gfx::Texture* bg = R().texture(actTexture(*run_, "bg_"));
-    gfx::image(bg, 0, 0, kTop, kH, 0, 0, kTop, kH, 0x000000FF, 0.35f);
-    Sprite ic = R().sprite("creature/IRONCLAD");
-    spr(ic, 40, 205 - ic.ay, -1, -1);
-    TextStyle t = ts(F16, col::gold, CENTER);
-    t.scale = 2.f;
-    R().text(250, 60, "杀戮尖塔 2", t);
-    R().text(250, 110, "Nintendo 3DS 非官方移植", ts(F16, col::white, CENTER));
-    R().text(250, 132, "开发版 · 铁甲战士 · 三幕", ts(F12, col::gray, CENTER));
-    R().text(kTop - 4, kH - 16, "个人自制，不可分发", ts(F12, col::gray, RIGHT));
+  if (titleCharacter_) {
+    if (top) {
+      gfx::image(R().texture("gfx/bg_character_ironclad.t3t"), 0, 0, kTop, kH, 0, 0, kTop, kH);
+      gfx::rect(0, 0, kTop, 40, 0x000000A0);
+      R().text(14, 9, "铁甲战士", ts(F16, col::gold));
+      return;
+    }
+    gfx::image(R().texture("gfx/bg_menu.t3t"), 40, 240, kBot, kH, 0, 0, kBot, kH);
+    gfx::rect(0, 0, kBot, kH, 0x000000B0);
+    R().text(kBot / 2, 17, "选择角色", ts(F16, col::gold, CENTER));
+    panel(26, 51, 268, 75);
+    R().text(kBot / 2, 66, "铁甲战士", ts(F16, col::white, CENTER));
+    R().text(kBot / 2, 96, "燃烧之血 · 初始生命 80", ts(F12, col::gray, CENTER));
+    R().text(kBot / 2, 139, "其他角色尚未移植", ts(F12, col::gray, CENTER));
+    button(19, 179, 130, 43, "返回", ID_BACK);
+    button(171, 179, 130, 43, "开始", ID_START, true, true);
     return;
   }
-  gfx::rectGradient(0, 0, kBot, kH, 0x201810FF, 0x0B0B12FF);
-  if (hasSave_) {
-    button(80, 30, 160, 44, "继续", ID_CONTINUE, true, true);
-    button(80, 82, 160, 36, "新游戏", ID_START);
-  } else {
-    button(80, 60, 160, 44, "开始游戏", ID_START, true, true);
+  if (top) {
+    gfx::image(R().texture("gfx/bg_menu.t3t"), 0, 0, kTop, kH, 0, 0, kTop, kH);
+    return;
   }
-  R().text(kBot / 2, 130, "触摸屏：点选卡牌、目标和按钮", ts(F12, col::gray, CENTER));
-  R().text(kBot / 2, 148, "按键：←→选择  A确认  B取消  X结束回合", ts(F12, col::gray, CENTER));
-  R().text(kBot / 2, 166, "L/R切换手牌  Y查看牌组", ts(F12, col::gray, CENTER));
+  gfx::image(R().texture("gfx/bg_menu.t3t"), 40, 240, kBot, kH, 0, 0, kBot, kH);
+  gfx::rect(0, 0, kBot, kH, 0x00000082);
+  if (hasSave_) {
+    button(58, 49, 204, 50, "继续", ID_CONTINUE, true, titleSelection_ == 0);
+    button(58, 108, 204, 50, "新游戏", ID_START, true, titleSelection_ == 1);
+  } else {
+    button(58, 85, 204, 50, "新游戏", ID_START, true, true);
+  }
+  R().text(kBot / 2, 201, "↑↓选择 · A确认", ts(F12, col::white, CENTER));
 }
 
 void App::updateTitle(const gfx::Input& in) {
   int id = in.touchDown ? hitAt(in.tx, in.ty) : ID_NONE;
-  if (id == ID_CONTINUE || (hasSave_ && (in.down & gfx::BTN_A))) { startRun(true); return; }
-  if (id == ID_START || (in.down & (gfx::BTN_A | gfx::BTN_START))) startRun(false);
+  if (titleCharacter_) {
+    if (id == ID_BACK || (in.down & gfx::BTN_B)) { titleCharacter_ = false; return; }
+    if (id == ID_START || (in.down & (gfx::BTN_A | gfx::BTN_START))) startRun(false);
+    return;
+  }
+  if (hasSave_ && (in.down & (gfx::BTN_UP | gfx::BTN_DOWN))) titleSelection_ = 1 - titleSelection_;
+  if (id == ID_CONTINUE || ((in.down & gfx::BTN_A) && hasSave_ && titleSelection_ == 0)) {
+    startRun(true);
+    return;
+  }
+  if (id == ID_START || (in.down & gfx::BTN_START) || ((in.down & gfx::BTN_A) && (!hasSave_ || titleSelection_ == 1))) {
+    titleCharacter_ = true;
+  }
 }
 
 // ================================================================ top bar
@@ -1065,23 +1258,24 @@ void App::updateMap(const gfx::Input& in) {
     mapSel_ = (mapSel_ + ((in.down & gfx::BTN_LEFT) ? n - 1 : 1)) % n;
     mapUserScroll_ = false;
   }
-  if (choosing && (in.down & gfx::BTN_Y)) { deckOpen_ = true; sel_ = -1; scroll_ = 0; mapTouch_ = {}; return; }
+  if (choosing && (in.down & gfx::BTN_Y)) { openCardList(CardListMode::Deck); mapTouch_ = {}; return; }
   int pick = -1;
   if (choosing && (in.down & gfx::BTN_A)) pick = mapSel_;
   if (in.touchDown) {
     int hud = choosing ? hitAt(in.tx, in.ty) : ID_NONE;
-    if (hud == ID_DECK) { deckOpen_ = true; sel_ = -1; scroll_ = 0; mapTouch_ = {}; return; }
+    if (hud == ID_DECK) { openCardList(CardListMode::Deck); mapTouch_ = {}; return; }
     if (hud == ID_RELICS) { relicsOpen_ = true; sel_ = run_->relics.empty() ? -1 : 0; scroll_ = 0; mapTouch_ = {}; return; }
     if (hud == ID_DEVMENU) { devOpen_ = true; devPage_ = 0; sel_ = -1; scroll_ = 0; mapTouch_ = {}; return; }
     if (hud == ID_POTIONS) { potionsOpen_ = true; potionAim_ = false; potionSel_ = -1; mapTouch_ = {}; return; }
     mapTouch_ = {};
     mapTouch_.down = true;
-    mapTouch_.startX = in.tx;
     mapTouch_.startY = mapTouch_.lastY = in.ty;
     mapTouch_.node = mapNodeAt(in.tx, in.ty);
     if (mapTouch_.node >= 0) mapSel_ = mapTouch_.node;
   } else if (mapTouch_.down && in.touching) {
-    if (std::hypot(in.tx - mapTouch_.startX, in.ty - mapTouch_.startY) > kMapTapSlop) mapTouch_.dragged = true;
+    // Map scrolling is vertical, so horizontal stylus drift alone should not
+    // turn a node tap into a non-scrolling drag.
+    if (std::fabs(in.ty - mapTouch_.startY) > kMapTapSlop) mapTouch_.dragged = true;
     if (mapTouch_.dragged) {
       mapScroll_ = std::clamp(mapScroll_ + (in.ty - mapTouch_.lastY), kMapScrollMin, kMapScrollMax);
       mapUserScroll_ = true;
@@ -1117,7 +1311,7 @@ float App::enemyX(int i, int n) {
 
 void App::drawCreature(Creature* c, float x, float feetY, bool targeted) {
   Sprite s = R().sprite("creature/" + (c->isPlayer ? std::string("IRONCLAD") : c->name));
-  float dx = x;
+  float dx = x + (screenShake_ ? std::sin((float)time_ * 55.f + (c->isPlayer ? 0.f : 1.3f)) * c->shake * 3.f : 0.f);
   bool dying = c->dead();
   float flash = c->hitFlash;
   c->hitFlash = std::max(0.f, c->hitFlash - 0.08f);
@@ -1672,7 +1866,12 @@ void App::drawCombat(bool top) {
   for (auto& [c, p] : poses_) waiting += p.delay > 0;
   pile("ui/draw_pile", kDrawPileX, kDrawPileY, (int)cb->draw.size() + waiting);
   pile("ui/discard_pile", kDiscardX, kDiscardY, (int)cb->discard.size());
-  if (!cb->exhaust.empty()) R().text(kBot - 4, 200, "消耗 " + num((int)cb->exhaust.size()), ts(F12, col::gray, RIGHT));
+  hits_.push_back({0, 201, 34, 39, ID_PILE_DRAW});
+  hits_.push_back({kBot - 34.f, 201, 34, 39, ID_PILE_DISCARD});
+  if (!cb->exhaust.empty()) {
+    R().text(kBot - 38, 200, "消耗 " + num((int)cb->exhaust.size()), ts(F12, col::white, RIGHT));
+    hits_.push_back({kBot - 104.f, 196, 66, 24, ID_PILE_EXHAUST});
+  }
 
   auto flying = [&](Card* c) {
     for (auto& f : flights_) if (f.card == c) return true;
@@ -1739,9 +1938,10 @@ void App::drawCombat(bool top) {
 void App::updateCombat(const gfx::Input& in) {
   Combat* cb = run_->combat.get();
   if (!cb) return;
-  clock_ += (float)gfx::dt();
-  animateHand((float)gfx::dt());
-  for (auto& f : flights_) f.t += (float)gfx::dt();
+  float visualDt = (float)gfx::dt() * (fastMode_ ? 1.75f : 1.f);
+  clock_ += visualDt;
+  animateHand(visualDt);
+  for (auto& f : flights_) f.t += visualDt;
   flights_.erase(std::remove_if(flights_.begin(), flights_.end(), [](const Flight& f) { return f.t > 0.42f; }),
                  flights_.end());
   auto alive = cb->aliveEnemies();
@@ -1798,6 +1998,20 @@ void App::updateCombat(const gfx::Input& in) {
     return;
   }
 
+  if (in.touchDown) {
+    int id = hitAt(in.tx, in.ty);
+    CardListMode mode;
+    if (id == ID_PILE_DRAW) mode = CardListMode::Draw;
+    else if (id == ID_PILE_DISCARD) mode = CardListMode::Discard;
+    else if (id == ID_PILE_EXHAUST) mode = CardListMode::Exhaust;
+    else mode = CardListMode::Deck;
+    if (id == ID_PILE_DRAW || id == ID_PILE_DISCARD || id == ID_PILE_EXHAUST) {
+      openCardList(mode);
+      drag_ = {};
+      aiming_ = false;
+      return;
+    }
+  }
   bool canAct = cb->playerPhase && cb->actions.waiting();
   if (sel_ >= n) sel_ = -1;
   if (!canAct) {
@@ -1910,7 +2124,13 @@ void App::updateCombat(const gfx::Input& in) {
   }
   if (drag_.down && in.touchUp) {
     if (!drag_.moved) {
-      sel_ = sel_ == drag_.index ? -1 : drag_.index;  // tap: preview / hide
+      if (sel_ == drag_.index) {
+        detailCard_ = drag_.card;  // second tap: inspect without playing
+        detailUpgrade_ = false;
+        detailKeyword_ = -1;
+      } else {
+        sel_ = drag_.index;  // first tap: preview
+      }
     } else {
       bool edge = in.tx <= 2 || in.ty <= 2 || in.tx >= kBot - 3 || in.ty >= kH - 3;
       if (drag_.armed && !edge) play(drag_.card, drag_.target, drag_.x, drag_.y, kDragS);
@@ -1922,7 +2142,7 @@ void App::updateCombat(const gfx::Input& in) {
   // ---- buttons: L/R or ←→ choose a card, A to aim/play, ←→ choose an enemy, A confirm, B back.
   if (drag_.down) return;
   Card* selCard = sel_ >= 0 ? cb->hand[sel_] : nullptr;
-  if (in.down & gfx::BTN_Y) { deckOpen_ = true; sel_ = -1; aiming_ = false; return; }
+  if (in.down & gfx::BTN_Y) { openCardList(CardListMode::Deck); aiming_ = false; return; }
   if (in.down & gfx::BTN_X) { cb->actions.fire({PlayerAction::EndTurn}); sel_ = -1; aiming_ = false; return; }
   if (in.down & gfx::BTN_B) {
     if (aiming_) aiming_ = false;
@@ -1972,10 +2192,11 @@ void App::drawReward(bool top) {
   float gap = (kBot - 3 * cw) / 4;
   for (int i = 0; i < n; ++i) {
     float x = gap + i * (cw + gap), y = 28;
-    drawCard(r.rewardCards[i].get(), x, y, s, false, false, i == sel_);
+    drawCard(r.rewardCards[i].get(), x, y, s, false, true, i == sel_);
     hits_.push_back({x, y, cw, 169 * s, ID_REWARD0 + i});
   }
   button(10, 196, 110, 36, L("gameplay_ui.CHOOSE_CARD_SKIP_BUTTON"), ID_SKIP);
+  button(122, 196, 76, 36, "详情", ID_DETAIL, sel_ >= 0 && sel_ < n);
   button(kBot - 120, 196, 110, 36, "选择", ID_CONFIRM, sel_ >= 0 && sel_ < n, true);
 }
 
@@ -1995,6 +2216,7 @@ void App::updateReward(const gfx::Input& in) {
     }
     if (id == ID_CONFIRM && sel_ >= 0) r.rewardChoice.fire(sel_);
     if (id == ID_SKIP) r.rewardChoice.fire(-1);
+    if (id == ID_DETAIL && sel_ >= 0 && sel_ < n) { detailCard_ = r.rewardCards[sel_].get(); detailUpgrade_ = false; }
   }
 }
 
@@ -2119,36 +2341,86 @@ void App::updateUpgrade(const gfx::Input& in) {
 
 // ================================================================ deck view
 
-void App::drawDeck(bool top) {
+std::vector<Card*> App::listedCards() {
   std::vector<Card*> cards;
-  for (auto& c : run_->deck) cards.push_back(c.get());
+  if (cardListMode_ == CardListMode::Deck || !run_->combat) {
+    for (auto& c : run_->deck) cards.push_back(c.get());
+    return cards;
+  }
+  Combat& cb = *run_->combat;
+  const std::vector<Card*>& pile = cardListMode_ == CardListMode::Draw ? cb.draw
+                                   : cardListMode_ == CardListMode::Discard ? cb.discard : cb.exhaust;
+  cards.assign(pile.begin(), pile.end());
+  // The draw-pile page must not reveal its actual next-card order.
+  std::stable_sort(cards.begin(), cards.end(), [&](Card* a, Card* b) { return cardTitle(a) < cardTitle(b); });
+  return cards;
+}
+
+void App::openCardList(CardListMode mode) {
+  cardListMode_ = mode;
+  deckOpen_ = true;
+  sel_ = -1;
+  scroll_ = 0;
+}
+
+void App::drawDeck(bool top) {
+  std::vector<Card*> cards = listedCards();
+  const char* title = cardListMode_ == CardListMode::Deck ? "牌组" :
+                      cardListMode_ == CardListMode::Draw ? "抽牌堆" :
+                      cardListMode_ == CardListMode::Discard ? "弃牌堆" : "消耗堆";
   if (top) {
     drawSceneBg(true, 0.7f);
     drawTopBar();
     if (sel_ >= 0 && sel_ < (int)cards.size()) drawCard(cards[sel_], (kTop - 132) / 2, 34, 1.1f, false, true);
-    else R().text(kTop / 2, 100, "牌组（" + num((int)cards.size()) + " 张）", ts(F16, col::gold, CENTER));
+    else R().text(kTop / 2, 100, std::string(title) + "（" + num((int)cards.size()) + " 张）", ts(F16, col::gold, CENTER));
+    if (cardListMode_ == CardListMode::Draw && sel_ < 0)
+      R().text(kTop / 2, 211, "不显示实际抽牌顺序", ts(F12, col::gray, CENTER));
     return;
   }
   drawSceneBg(false, 0.65f);
   drawCardGrid(cards, sel_, 0, 196, scroll_);
   gfx::rect(0, 196, kBot, 44, 0x000000A0);
-  button(10, 200, 100, 34, "返回", ID_BACK);
-  button(kBot - 110, 200, 100, 34, "遗物", ID_RELICS);
+  if (cardListMode_ == CardListMode::Deck) {
+    button(10, 200, 100, 34, "返回", ID_BACK);
+    button(118, 200, 84, 34, "详情", ID_DETAIL, sel_ >= 0 && sel_ < (int)cards.size());
+    button(kBot - 110, 200, 100, 34, "遗物", ID_RELICS);
+  } else {
+    button(4, 200, 64, 34, "返回", ID_BACK);
+    button(72, 200, 76, 34, "抽牌", ID_PILE_DRAW, true, cardListMode_ == CardListMode::Draw);
+    button(154, 200, 76, 34, "弃牌", ID_PILE_DISCARD, true, cardListMode_ == CardListMode::Discard);
+    button(236, 200, 76, 34, "消耗", ID_PILE_EXHAUST, true, cardListMode_ == CardListMode::Exhaust);
+  }
 }
 
 void App::updateDeck(const gfx::Input& in) {
-  int m = (int)run_->deck.size();
+  std::vector<Card*> cards = listedCards();
+  int m = (int)cards.size();
+  if (cardListMode_ != CardListMode::Deck && (in.down & (gfx::BTN_L | gfx::BTN_R))) {
+    int mode = (int)cardListMode_ - (int)CardListMode::Draw;
+    mode = (mode + ((in.down & gfx::BTN_R) ? 1 : 2)) % 3;
+    openCardList((CardListMode)((int)CardListMode::Draw + mode));
+    return;
+  }
   if (in.down & gfx::BTN_RIGHT) sel_ = std::min(m - 1, sel_ + 1);
   if (in.down & gfx::BTN_LEFT) sel_ = std::max(0, sel_ - 1);
   if (in.down & gfx::BTN_DOWN) sel_ = std::min(m - 1, sel_ + 5);
   if (in.down & gfx::BTN_UP) sel_ = std::max(0, sel_ - 5);
   if (sel_ >= 0) scroll_ = std::max(0, sel_ / 5 - 1);
-  if (in.down & (gfx::BTN_B | gfx::BTN_Y)) { deckOpen_ = false; sel_ = -1; return; }
+  if (in.down & (gfx::BTN_B | gfx::BTN_Y)) { deckOpen_ = false; cardListMode_ = CardListMode::Deck; sel_ = -1; return; }
+  if ((in.down & gfx::BTN_A) && sel_ >= 0 && sel_ < m) { detailCard_ = cards[sel_]; detailUpgrade_ = false; return; }
   if (in.touchDown) {
     int id = hitAt(in.tx, in.ty);
-    if (id >= ID_GRID0) sel_ = id - ID_GRID0;
-    if (id == ID_BACK) { deckOpen_ = false; sel_ = -1; }
+    if (id >= ID_GRID0 && id < ID_GRID0 + m) {
+      int picked = id - ID_GRID0;
+      if (sel_ == picked) { detailCard_ = cards[picked]; detailUpgrade_ = false; return; }
+      sel_ = picked;
+    }
+    if (id == ID_DETAIL && sel_ >= 0 && sel_ < m) { detailCard_ = cards[sel_]; detailUpgrade_ = false; return; }
+    if (id == ID_BACK) { deckOpen_ = false; cardListMode_ = CardListMode::Deck; sel_ = -1; }
     if (id == ID_RELICS) { deckOpen_ = false; relicsOpen_ = true; sel_ = run_->relics.empty() ? -1 : 0; scroll_ = 0; }
+    if (id == ID_PILE_DRAW) openCardList(CardListMode::Draw);
+    if (id == ID_PILE_DISCARD) openCardList(CardListMode::Discard);
+    if (id == ID_PILE_EXHAUST) openCardList(CardListMode::Exhaust);
   }
 }
 
@@ -2476,6 +2748,8 @@ void App::drawShop(bool top) {
   bool canBuy = it && it->stocked() && r.shopPrice(*it) <= r.gold &&
                 (it->kind != ShopItem::PotionItem || r.hasOpenPotionSlot());
   button(10, 196, 100, 36, "离开", ID_BACK);
+  button(116, 196, 88, 36, "详情", ID_DETAIL,
+         it && it->stocked() && (it->kind == ShopItem::CardItem || it->kind == ShopItem::RelicItem));
   button(kBot - 110, 196, 100, 36, "购买", ID_CONFIRM, canBuy, true);
 }
 
@@ -2490,6 +2764,13 @@ void App::updateShop(const gfx::Input& in) {
   if (in.down & gfx::BTN_UP) sel_ = sel_ >= 5 ? std::min(4, sel_ - 5) : sel_;
   int id = in.touchDown ? hitAt(in.tx, in.ty) : ID_NONE;
   if (id >= ID_GRID0 && id < ID_GRID0 + n) sel_ = id - ID_GRID0;
+  if (id == ID_DETAIL && sel_ >= 0 && r.shop[sel_].stocked()) {
+    ShopItem& item = r.shop[sel_];
+    if (item.kind == ShopItem::CardItem) detailCard_ = item.card.get();
+    if (item.kind == ShopItem::RelicItem) detailRelic_ = item.relic.get();
+    detailUpgrade_ = false;
+    return;
+  }
   if ((in.down & gfx::BTN_A) || id == ID_CONFIRM) {
     if (sel_ < 0) return;
     int pick = sel_;
@@ -2524,6 +2805,7 @@ void App::drawRelics(bool top) {
   }
   gfx::rect(0, 196, kBot, 44, 0x000000A0);
   button(10, 200, 100, 34, "返回", ID_BACK);
+  button(118, 200, 84, 34, "详情", ID_DETAIL, sel_ >= 0 && sel_ < n);
   button(kBot - 110, 200, 100, 34, "牌组", ID_DECK);
 }
 
@@ -2536,11 +2818,17 @@ void App::updateRelics(const gfx::Input& in) {
   if (in.down & gfx::BTN_UP) sel_ = std::max(0, sel_ - 6);
   if (sel_ >= 0) scroll_ = std::max(0, sel_ / 6 - 2);
   if (in.down & gfx::BTN_B) { close(); return; }
+  if ((in.down & gfx::BTN_A) && sel_ >= 0 && sel_ < n) { detailRelic_ = run_->relics[sel_].get(); return; }
   if (in.touchDown) {
     int id = hitAt(in.tx, in.ty);
-    if (id >= ID_RELIC0 && id < ID_RELIC0 + n) sel_ = id - ID_RELIC0;
+    if (id >= ID_RELIC0 && id < ID_RELIC0 + n) {
+      int picked = id - ID_RELIC0;
+      if (sel_ == picked) { detailRelic_ = run_->relics[picked].get(); return; }
+      sel_ = picked;
+    }
+    if (id == ID_DETAIL && sel_ >= 0 && sel_ < n) { detailRelic_ = run_->relics[sel_].get(); return; }
     if (id == ID_BACK) close();
-    if (id == ID_DECK) { close(); deckOpen_ = true; }
+    if (id == ID_DECK) { close(); openCardList(CardListMode::Deck); }
   }
 }
 
@@ -2959,7 +3247,54 @@ void App::updateDev(const gfx::Input& in) {
   }
 }
 
-// ================================================================ end
+// ================================================================ settings and end
+
+void App::drawSettings(bool top) {
+  drawSceneBg(top, 0.8f);
+  if (top) {
+    panel(36, 26, kTop - 72, 185);
+    R().text(kTop / 2, 42, abandonConfirm_ ? "放弃本局？" : "设置", ts(F16, col::gold, CENTER, kTop - 96, 1.35f));
+    if (abandonConfirm_) {
+      R().text(kTop / 2, 105, "当前进度将被清除。", ts(F16, col::white, CENTER, kTop - 100));
+      R().text(kTop / 2, 141, "确认后返回主菜单。", ts(F12, col::gray, CENTER));
+    } else {
+      R().text(kTop / 2, 91, "快速模式会加快战斗与界面动画。", ts(F12, col::white, CENTER, kTop - 100));
+      R().text(kTop / 2, 122, "屏幕震动控制受击位移。", ts(F12, col::white, CENTER, kTop - 100));
+      R().text(kTop / 2, 156, "音频尚未接入。", ts(F12, col::gray, CENTER));
+    }
+    return;
+  }
+  if (abandonConfirm_) {
+    button(12, 92, 140, 42, "取消", ID_ABANDON_CANCEL);
+    button(168, 92, 140, 42, "确认放弃", ID_ABANDON_CONFIRM, true, true);
+    return;
+  }
+  button(18, 14, 284, 36, std::string("快速模式：") + (fastMode_ ? "开" : "关"), ID_FAST_MODE, true, fastMode_);
+  button(18, 58, 284, 36, std::string("屏幕震动：") + (screenShake_ ? "开" : "关"), ID_SCREEN_SHAKE, true, screenShake_);
+  button(18, 102, 284, 36, "音量：音频尚未接入", ID_NONE, false);
+  button(18, 150, 284, 34, "放弃本局", ID_ABANDON);
+  button(90, 202, 140, 32, "返回", ID_BACK);
+}
+
+void App::updateSettings(const gfx::Input& in) {
+  int id = in.touchDown ? hitAt(in.tx, in.ty) : ID_NONE;
+  if (abandonConfirm_) {
+    if ((in.down & gfx::BTN_B) || id == ID_ABANDON_CANCEL) { abandonConfirm_ = false; return; }
+    if ((in.down & gfx::BTN_A) || id == ID_ABANDON_CONFIRM) { returnTitle(); return; }
+    return;
+  }
+  if ((in.down & (gfx::BTN_B | gfx::BTN_START)) || id == ID_BACK) { settingsOpen_ = false; return; }
+  if ((in.down & gfx::BTN_X) || id == ID_FAST_MODE) {
+    fastMode_ = !fastMode_;
+    Scheduler::get().speed = fastMode_ ? 1.75 : 1.0;
+    saveSettings();
+  }
+  if ((in.down & gfx::BTN_Y) || id == ID_SCREEN_SHAKE) {
+    screenShake_ = !screenShake_;
+    saveSettings();
+  }
+  if (id == ID_ABANDON) abandonConfirm_ = true;
+}
 
 void App::drawEnd(bool top, bool won) {
   if (top) {
@@ -2968,17 +3303,31 @@ void App::drawEnd(bool top, bool won) {
     TextStyle t = ts(F16, won ? col::gold : col::red, CENTER);
     t.scale = 2.f;
     R().text(kTop / 2, 70, won ? L("game_over_screen.BANNER.trueWin") : L("game_over_screen.BANNER.lose0"), t);
-    std::string q = won ? "你击败了" + L("monsters.VANTOM.name") + "！" : L("game_over_screen.QUOTES.0" + num((int)(run_->seed % 10)));
+    std::string q = won ? "第三幕首领已被击败。" : L("game_over_screen.QUOTES.0" + num((int)(run_->seed % 10)));
     R().text(kTop / 2, 130, q, ts(F16, col::white, CENTER));
-    R().text(kTop / 2, 160, "到达第 " + num(run_->floor) + " 层", ts(F12, col::gray, CENTER));
+    R().text(kTop / 2, 169, "到达第 " + num(run_->floor) + " 层", ts(F12, col::gold, CENTER));
     return;
   }
   gfx::rectGradient(0, 0, kBot, kH, 0x201810FF, 0x0B0B12FF);
-  button(80, 90, 160, 44, "重新开始", ID_RESTART, true, true);
+  panel(12, 10, kBot - 24, 165);
+  R().text(kBot / 2, 20, "本局记录", ts(F16, col::gold, CENTER));
+  auto row = [&](float y, const std::string& label, const std::string& value) {
+    R().text(38, y, label, ts(F12, col::gray));
+    R().text(kBot - 38, y, value, ts(F12, col::white, RIGHT));
+  };
+  row(53, "进度", "第 " + num(run_->actIndex + 1) + " 幕 · 第 " + num(run_->floor) + " 层");
+  row(78, "生命", num(run_->player->hp) + "/" + num(run_->player->maxHp));
+  row(103, "金币", num(run_->gold));
+  row(128, "牌组", num((int)run_->deck.size()) + " 张");
+  row(153, "遗物", num((int)run_->relics.size()) + " 个");
+  button(12, 191, 140, 39, "主菜单", ID_TITLE);
+  button(168, 191, 140, 39, "再来一局", ID_RESTART, true, true);
 }
 
 void App::updateEnd(const gfx::Input& in) {
-  if ((in.touchDown && hitAt(in.tx, in.ty) == ID_RESTART) || (in.down & (gfx::BTN_A | gfx::BTN_START))) startRun();
+  int id = in.touchDown ? hitAt(in.tx, in.ty) : ID_NONE;
+  if ((in.down & gfx::BTN_B) || id == ID_TITLE) { returnTitle(); return; }
+  if ((in.down & (gfx::BTN_A | gfx::BTN_START)) || id == ID_RESTART) startRun();
 }
 
 }  // namespace ui

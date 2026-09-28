@@ -17,11 +17,14 @@ int main(int argc, char** argv) {
   int runs = argc > 1 ? atoi(argv[1]) : 50;
   bool verbose = argc > 2;
   int wins = 0, floorsTotal = 0;
-  for (int s = 1; s <= runs; ++s) {
+  int startSeed = getenv("SIM_SEED") ? atoi(getenv("SIM_SEED")) : 1;
+  int endSeed = getenv("SIM_SEED") ? startSeed : runs;
+  for (int s = startSeed; s <= endSeed; ++s) {
     std::vector<std::unique_ptr<Run>> keep;  // runs replaced by a load stay alive (their coroutines)
     keep.push_back(std::make_unique<Run>());
     Run* cur = keep.back().get();
     cur->start((uint64_t)s * 7919);
+    cur->freeMap = getenv("STS_FREE_MAP") != nullptr;
     // SIM_SAVELOAD=K: at floor K's map choice, save, load into a new run and carry on with it
     // (the result must match a run without SIM_SAVELOAD). Every save point also checks that
     // save -> load -> save gives the same text.
@@ -185,8 +188,10 @@ int main(int argc, char** argv) {
           break;
         case Screen::Rest:
           if (cur->restChoice.waiting()) {
-            // Heal when hurt, else smith; Lift/Dig when offered; leave once something was used.
-            int want = cur->player->hp < 60 ? 0 : 1;
+            // Heal when hurt or cannot smith, else smith; Lift/Dig when offered; leave once something was used.
+            bool canSmith = false;
+            for (auto& c : cur->deck) if (c->upgradable()) { canSmith = true; break; }
+            int want = (cur->player->hp < 60 || !canSmith) ? 0 : 1;
             if (want == 1) for (int o : cur->restOptions) if (o >= 2) want = o;  // extras only when not healing
             bool used = std::find(cur->restUsed.begin(), cur->restUsed.end(), want) != cur->restUsed.end();
             cur->restChoice.fire(used || !cur->restUsed.empty() ? -1 : want);

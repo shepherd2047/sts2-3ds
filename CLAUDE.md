@@ -93,6 +93,13 @@ python tools/compress_romfs.py  # romfs/ -> romfs_3ds/ (GPU texture formats), af
 make link                       # build + send to the 3DS over Wi-Fi (IP=... if needed)
 ```
 
+At the end of every conversation with the owner, push all ready project
+changes (do not create an empty commit when there are none), then rebuild the
+pushed revision in the ASCII-path copy and copy the new
+`~/dev/sts2-3ds-build/sts2-3ds.3dsx` to `~/Desktop/sts2-3ds.3dsx`. Verify the
+desktop copy matches the rebuilt file and report the push/build result. Keep
+that derived binary out of Git.
+
 Real 3DS: the owner's preferred loop is `make link` with the 3DS in Homebrew
 Launcher → Y (NetLoader). hbmenu writes the file to `sdmc:/3ds/` and runs it,
 so it stays installed. The 3DS SD card is also reachable over SMB1 as

@@ -147,8 +147,8 @@ struct SurroundedPower : Power {
   bool facingLeft = false;  // Direction.Right by default
   Dec modifyDamageMultiplicative(Creature* target, Dec, int, Creature* dealer, Card*) override {
     if (!dealer || target != owner) return 1;
-    if (!facingLeft && dealer->get<BackAttackLeftPower>()) return Dec(1.5);
-    if (facingLeft && dealer->get<BackAttackRightPower>()) return Dec(1.5);
+    if (!facingLeft && dealer->get<BackAttackLeftPower>()) return Dec::lit(1.5);
+    if (facingLeft && dealer->get<BackAttackRightPower>()) return Dec::lit(1.5);
     return 1;
   }
   Task<> beforeCardPlayed(const CardPlay& play) override {

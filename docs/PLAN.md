@@ -53,7 +53,7 @@ dependencies are `done`, do it, then update its status line here in the same com
 make -f Makefile.sdl                                   # preview + sim
 STS_ENCOUNTER=<EncounterId> SIM_FIGHTS=1 ./build/sim 4   # a fight, headless
 STS_ENCOUNTER=<EncounterId> SIM_ALLCARDS=1 ./build/sim 1 v   # verbose event log, 999 HP
-SIM_ALLCARDS=1 ./build/sim 20                          # whole runs must all say WIN
+SIM_ALLCARDS=1 ./build/sim 20                          # full-run smoke test; record outcomes and investigate hangs or changes
 STS_ROOM=Event STS_EVENT=<EventId> SIM_FIGHTS=1 ./build/sim 3   # an event, headless
 # preview screenshots (see CLAUDE.md for STS_SCRIPT syntax):
 STS_ENCOUNTER=<Id> STS_HIDDEN=1 STS_FIXED_STEP=1 STS_SEED=42 STS_SCRIPT="40:A,100:A" STS_SHOTS="400:build/x.bmp" ./build/sts2-preview.exe
@@ -64,6 +64,14 @@ PowerShell mangles quotes and pipes in `bash -lc '...'`: put commands in a `.sh`
 file and run it with bash.
 
 ## Status
+
+### Project checkpoint (2026-09-27)
+
+- Local `main` and `origin/main` match. Three pre-existing local edits are in progress: `Makefile.sdl`, `source/core/content_act2c.cpp`, and `test/sim.cpp`; keep them separate from the UI work.
+- A forced SDL build succeeds on macOS. A 3DS build also succeeds in the existing ASCII-path copy at `~/dev/sts2-3ds-build` with `/opt/devkitpro`; the `.3dsx` has not been run on hardware. `../sts2-decompiled/` is absent here; further faithful C# content translation needs that local source.
+- Preview screenshots checked: title, Neow, map, and combat (`build/pm-*.png`, ignored local artifacts). This is an entry-point smoke check, not U01-U33 acceptance.
+- `SIM_ALLCARDS=1 ./build/sim 20` completed without a hang but won 7/20. Win count alone is not a reliable regression gate; compare deterministic outcomes per seed and investigate unexpected changes or crashes.
+- Next: finish the U01-U33 page audit below. U02/U04 have a first preview implementation from the owner's game art. U13 combat piles and U25 card/relic detail have first preview implementations; the shop card detail was checked in SDL. U26 settings and U28 end summaries have first implementations. Finish remaining contexts and owner visual review. Package 19 requires a real New 3DS run. Package 14 remains later.
 
 | # | Package | Kind | Depends on | Status |
 |---|---|---|---|---|
@@ -87,9 +95,9 @@ file and run it with bash.
 | 13 | Texture compression (romfs is ~70 MB) | tools + 3DS gfx | – | done (`tools/compress_romfs.py` → `romfs_3ds/` ETC1A4/ETC1/RGBA4 + LZ11, 146 → 15 MB; make runs it; needs a real-hardware check, package 19) |
 | 14 | Other characters | big | 3 | later |
 | 15 | RGDSplus page audit (U01-U33) | UI | 3, 8, 9, 11a, 11b | todo |
-| 16 | Title / main menu / character select (U01-U04) | UI | – | todo |
-| 17 | Card and relic detail popups (U25), deck/pile views (U13) | UI | – | todo |
-| 18 | Settings + death/victory screens (U26, U28) | UI | 12 | todo |
+| 16 | Title / main menu / character select (U01-U04) | UI | – | in progress (native menu art and Ironclad selection previewed; profile, seed, ascension and hardware review remain) |
+| 17 | Card and relic detail popups (U25), deck/pile views (U13) | UI | – | in progress (combat pile tabs, card/relic modal, upgrade preview and card keyword pages; shop card detail checked; owner and hardware review remain) |
+| 18 | Settings + death/victory screens (U26, U28) | UI | 12 | in progress (map START settings, fast mode, shake switch, confirmed abandon, end stats and two return paths; victory and hardware review remain) |
 | 19 | Real-hardware performance pass | 3DS | 13 | todo |
 
 *parallel-safe* pairs: any two of 1, 2, 4a, 4b, 5, 6a, 7 (they only add files and
@@ -335,12 +343,38 @@ Replaces the current placeholder title screen.
 U25: tapping a card anywhere (reward, deck, shop) opens it large on the top screen
 with its keywords explained; controls (upgrade preview toggle, close) on the bottom.
 Same for relics. U13: in combat, tapping the draw/discard piles lists them on the
-bottom with the focused card on top.
+bottom with the focused card on top. First SDL pass: draw/discard/exhaust tabs,
+focused card, card/relic detail modal, upgrade preview and five card-keyword
+explanations from the localized text. Combat hand opens details on a second tap;
+the first tap previews it. Draw pile is sorted
+for display so its actual order is not revealed. Checked pile selection,
+upgrade toggle and return in SDL; relic detail, hand-card detail and reward-card
+detail previews also checked. A single screenshot of the keyword page is complete; repeated
+SDL readbacks in the same process intermittently omit layers, so use a fresh
+process for each reference capture until that preview-path issue is resolved.
+The incremental devkitARM build passes in the ASCII-path copy. Shop card detail
+opened without a purchase in SDL. Remaining source contexts, owner visual review
+and hardware remain.
 
 ## 18. Settings and end screens (U26, U28)
 
 Settings page (fast mode, screen shake, volume when audio exists, abandon run),
 opened with START on the map; death/victory screens with run stats, per U28.
+First SDL pass: fast mode scales scheduler and visual animation time, shake
+controls hit displacement, volume is disabled until audio exists, and abandon
+requires confirmation then cancels suspended coroutines before returning to the
+title. The settings page and abandon → title → new-run path were previewed.
+In an isolated SDL save directory, toggling speed and shake wrote `v1 1 0`;
+after relaunch the settings page displayed both saved values. The final
+incremental devkitARM build passed in the ASCII-path copy.
+The end summary shows act/floor, HP, gold, deck and relic counts with menu/restart
+buttons. A natural first-floor defeat reached and previewed the death page.
+The headless sim won a full three-act run with `SIM_ALLCARDS=1 SIM_SEED=1`.
+In an isolated SDL run, `STS_ACT=3 STS_ROOM=Boss` with a forced weak encounter
+reached Victory and rendered its summary; B returned to the title, after which
+autoplay began a fresh run. The restart button also began a fresh fight. The
+actual final-boss UI flow and hardware remain
+unverified. The latest 3DSX was opened in Azahar at 60 FPS on the map screen.
 
 ## 19. Real-hardware performance pass
 
@@ -351,3 +385,43 @@ fix hot spots, check memory over a full three-act run.
 
 Silent, Defect, Regent, Necrobinder: card pools, starter decks/relics, character
 select, energy orbs, orbs/Osty systems. Plan separately when acts 1-3 are complete.
+
+## U01-U33 page audit baseline (2026-09-27)
+
+This is a route/code inventory against `../rgds-ref/docs/R4_ALL_PAGES.zh-CN.md`, not visual or hardware acceptance. `partial` means the route exists but its RGDSplus page requirements have not all been verified. `missing` means no dedicated page exists. Preview smoke screenshots exist for title, Ironclad selection, Neow, map, and combat; the U02/U04 after images are `build/title-new.png` and `build/character-new.png` (ignored local artifacts). Keep package 15 `todo` until each applicable page has before/after screenshots, interaction checks, and the owner's review.
+
+| ID | Our route | Status | Next check or gap |
+| --- | --- | --- | --- |
+| U01 | Title | partial | Startup/logo and act transition presentation |
+| U02 | Title | partial | Native tower/logo art and continuous preview checked; new-game selection and continue/load checked in an isolated save directory; hardware review remains |
+| U03 | None | missing | Profile slots, naming, delete flow |
+| U04 | Title/Character | partial | Ironclad selection and back/start preview checked; seed, ascension and other characters remain |
+| U05 | None | missing | Custom run setup |
+| U06 | Event/Ancient | partial | All dialogue and choice phases; screenshot captured for Neow |
+| U07 | Map | partial | Vertical gesture threshold now matches vertical-only scrolling; physical drag/tap, legal-path selection, scroll limits, two-screen continuity and owner review remain |
+| U08 | Combat | partial | Full hand and late-act layouts |
+| U09 | Combat | partial | Targeting/cancel flows and physical touch feel |
+| U10 | Combat | partial | Animation and effect layers |
+| U11 | None | missing | Dedicated combat inspection view |
+| U12 | Potion overlay | partial | Use, discard, replace and targeting |
+| U13 | Deck/pile overlay | partial | Draw/discard/exhaust tabs and focused preview implemented in SDL; interaction/layout and hardware review remain |
+| U14 | DeckChoice overlay | partial | Multi-pick and forced choice input |
+| U15 | RestUpgrade/DeckChoice | partial | Upgrade, removal and transform preview flows |
+| U16 | DeckChoice overlay | partial | Choose-one card flow |
+| U17 | Reward | partial | Full reward list and continue flow |
+| U18 | Reward | partial | Select, skip and variable reward counts |
+| U19 | RelicOffer | partial | Relic detail, take/skip and chest variants |
+| U20 | Shop | partial | Card/relic/potion focus and purchase result |
+| U21 | Event | partial | Multi-option and special-event layout |
+| U22 | Rest | partial | Extra relic actions and confirm/leave |
+| U23 | RelicOffer | partial | Chest opening and variant flows |
+| U24 | Top bar/overlays | partial | Focus, opening and returning to source page |
+| U25 | Card/relic detail overlay | partial | Modal, upgrade preview and five card-keyword pages in SDL; shop card detail checked, remaining contexts and hardware review remain |
+| U26 | Settings overlay | partial | Map START page, speed/shake and confirmed abandon previewed; isolated SDL save/reload verified, hardware review remains |
+| U27 | None | missing | Tutorials, confirmation and error pages |
+| U28 | GameOver/Victory | partial | Stats and menu/restart added; natural defeat and debug-forced victory previewed; actual final-boss and hardware review remain |
+| U29 | None | missing | Compendium pages |
+| U30 | None | missing | Stats and run history |
+| U31 | None | missing | Credits and update notes |
+| U32 | None | n/a for offline milestone | Online/daily/leaderboard features require separate scope |
+| U33 | Placeholder | partial | Unknown room and error fallback |

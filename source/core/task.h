@@ -129,6 +129,13 @@ class Scheduler {
 
   double now() const { return now_; }
   bool idle() const { return timers_.empty() && ready_.empty(); }
+  // Called between frame updates when leaving a run. No suspended coroutine may
+  // keep pointers into the discarded Run after this.
+  void clear() {
+    timers_.clear();
+    ready_.clear();
+    roots_.clear();
+  }
   double speed = 1.0;
 
  private:

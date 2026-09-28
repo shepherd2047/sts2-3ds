@@ -154,6 +154,39 @@ def fit_height(img, h):
     return img.resize((max(1, round(img.width * h / img.height)), h), Image.LANCZOS)
 
 
+def bake_title_art(g, args):
+    """Build the two-screen menu from the game's main-menu and Ironclad Spine art."""
+    menu = Image.new('RGBA', (400, 480), (12, 13, 24, 255))
+    # The two skeletons share the same scene origin. A centre crop keeps the tower
+    # continuous through the 40 px side inset of the bottom screen.
+    for part, x in (('bottom', -525), ('top', -506)):
+        skel, atlas, load = g.spine(
+            f'animations/backgrounds/mainmenu/{part}/main_menu_{part}_skel_data.tres')
+        layer, _ = spine_render.render(skel, atlas, load, scale=0.15, animation='animation')
+        layer = layer.resize((round(layer.width * 1.25), round(layer.height * 1.25)), Image.LANCZOS)
+        menu.alpha_composite(layer, (x, 0))
+    skel, atlas, load = g.spine('animations/backgrounds/mainmenu/logo/main_menu_logo_skel_data.tres')
+    logo, _ = spine_render.render(skel, atlas, load, scale=0.15, animation='animation')
+    logo.thumbnail((225, 140), Image.LANCZOS)
+    menu.alpha_composite(logo, ((400 - logo.width) // 2, 20))
+    canvas = Image.new('RGBA', (512, 512), (0, 0, 0, 255))
+    canvas.paste(menu, (0, 0))
+    write_t3t(os.path.join(OUT, 'gfx', 'bg_menu.t3t'), canvas)
+
+    skel, atlas, load = g.spine('animations/character_select/ironclad/characterselect_ironclad_skel_data.tres')
+    character, _ = spine_render.render(skel, atlas, load, scale=0.11, animation='animation')
+    crop_w = round(character.height * 400 / 240)
+    character = character.crop(((character.width - crop_w) // 2, 0,
+                                (character.width + crop_w) // 2, character.height))
+    character = character.resize((400, 240), Image.LANCZOS)
+    canvas = Image.new('RGBA', (512, 256), (0, 0, 0, 255))
+    canvas.paste(character, (0, 0))
+    write_t3t(os.path.join(OUT, 'gfx', 'bg_character_ironclad.t3t'), canvas)
+    if args.preview:
+        menu.save(os.path.join(ROOT, 'build', 'preview_bg_menu.png'))
+        character.save(os.path.join(ROOT, 'build', 'preview_bg_character_ironclad.png'))
+
+
 # ---------------------------------------------------------------- sources
 
 class Assets:
@@ -441,6 +474,7 @@ def build(args):
     print(f'  {len(packer.entries)} sprites in {len(packer.pages)} page(s)')
 
     print('backgrounds')
+    bake_title_art(g, args)
     # Per act (ActModel.FilePathIdentifier): gfx/bg_<act>.t3t (room) and gfx/bg_map_<act>.t3t.
     for act in ('overgrowth', 'hive', 'glory'):
         # Combat room: all layers composited (StS2 layers are full-frame images).
