@@ -356,19 +356,57 @@ struct PaelsBlood : Relic {
 struct PaelsTooth : Relic {
   RELIC_HEADER(PaelsTooth, "PAELS_TOOTH", Ancient) addVar("Cards", 5); }
   std::vector<std::shared_ptr<Card>> stored;  // shared: relics are copied when shown as options
-  void persist(Archive& a) override {  // the stored cards as id + upgrade level
-    std::vector<std::string> ids;
-    std::vector<int> levels;
-    for (auto& c : stored) { ids.push_back(c->id); levels.push_back(c->upgradeLevel); }
-    a.io(ids);
-    a.io(levels);
-    if (!a.reading) return;
-    stored.clear();
-    for (size_t i = 0; i < ids.size(); ++i) {
-      auto c = db::card(ids[i]);
-      if (!c) continue;
-      for (int k = 0; i < levels.size() && k < levels[i]; ++k) c->upgrade();
-      stored.push_back(std::shared_ptr<Card>(c.release()));
+  // SerializableCards ([SavedProperty]): each stored card in full (id, upgrade, keywords, cost,
+  // vars, enchantment), the same fidelity as CardModel.ToSerializable() / a deck card's own save.
+  void persist(Archive& a) override {
+    int n = (int)stored.size();
+    a.io(n);
+    if (a.reading) stored.assign((size_t)std::max(0, n), nullptr);
+    for (int i = 0; i < n; ++i) {
+      Card* sc = stored[i].get();
+      std::string id = sc ? sc->id : "";
+      int level = sc ? sc->upgradeLevel : 0, keywords = sc ? sc->keywords : 0, cost = sc ? sc->cost : 0;
+      std::vector<std::string> names;
+      std::vector<int64_t> values;
+      if (sc) for (auto& v : sc->vars) { names.push_back(v.name); values.push_back(v.base.raw); }
+      a.io(id);
+      a.io(level);
+      a.io(keywords);
+      a.io(cost);
+      a.io(names);
+      a.io(values);
+      std::string enchId = sc && sc->enchantment ? sc->enchantment->id : "";
+      int enchAmount = sc && sc->enchantment ? sc->enchantment->amount : 0;
+      int enchStatus = sc && sc->enchantment ? (int)sc->enchantment->status : 0;
+      std::vector<std::string> enchNames;
+      std::vector<int64_t> enchValues;
+      if (sc && sc->enchantment) for (auto& v : sc->enchantment->vars) { enchNames.push_back(v.name); enchValues.push_back(v.base.raw); }
+      a.io(enchId);
+      if (!enchId.empty()) {
+        a.io(enchAmount);
+        a.io(enchStatus);
+        a.io(enchNames);
+        a.io(enchValues);
+      }
+      if (!a.reading) continue;
+      auto c = db::card(id);
+      if (!c) { a.ok = false; return; }
+      for (int k = 0; k < level; ++k) c->upgrade();
+      c->keywords = keywords;
+      c->cost = cost;
+      for (size_t j = 0; j < names.size() && j < values.size(); ++j)
+        if (auto* v = c->var(names[j].c_str())) v->base = Dec::fromRaw(values[j]);
+      if (!enchId.empty()) {
+        auto e = db::enchantment(enchId);
+        if (!e) { a.ok = false; return; }
+        e->card = c.get();
+        e->amount = enchAmount;
+        e->status = (EnchantStatus)enchStatus;
+        for (size_t j = 0; j < enchNames.size() && j < enchValues.size(); ++j)
+          if (auto* v = e->var(enchNames[j].c_str())) v->base = Dec::fromRaw(enchValues[j]);
+        c->enchantment.p = std::move(e);
+      }
+      stored[i] = std::shared_ptr<Card>(c.release());
     }
   }
   bool showCounter() const override { return !stored.empty(); }
