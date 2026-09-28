@@ -54,10 +54,7 @@ Task<> doomKill(Combat& c, std::vector<Creature*> creatures);
 
 // SoulboundPower (SoulboundPower.cs): whenever a card its applier generated enters combat, also
 // add `Amount` Soul cards to a random spot in the draw pile.
-// PORT NOTE: the C# only counts cards whose `creator == Applier` (so a monster's Wound/Dazed
-// landing in the player's hand doesn't retrigger it); approximated here by excluding
-// Status/Curse cards and requiring the applier to be the player, since this build has no
-// multiplayer creator to compare against.
+// The C#'s `creator == Applier` check reads Card::createdByPlayer (false for monster-added cards).
 struct SoulboundPower : Power {
   POWER_HEADER(SoulboundPower, "SOULBOUND_POWER")
   bool isAddingSoul = false;

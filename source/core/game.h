@@ -474,6 +474,9 @@ struct Card : Model {
   // CardModel.GetEnchantedReplayCount: extra plays from BaseReplayCount and the enchantment.
   // CardModel.HasSingleTurnRetain / HasSingleTurnSly: set by effects, cleared at the end of the turn.
   bool singleTurnRetain = false, singleTurnSly = false;
+  // CardPileCmd.AddGeneratedCardToCombat's `creator`: false for cards a monster adds (creator null);
+  // AfterCardGeneratedForCombat listeners that check `creator == Owner` read it (Regalite).
+  bool createdByPlayer = true;
   // CardModel.IsRemovable / IsTransformable: Eternal cards cannot leave the deck (removal, transform).
   bool isRemovable() const { return !has(kwEternal); }
   bool isTransformable() const { return isRemovable(); }

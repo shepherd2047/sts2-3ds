@@ -21,6 +21,7 @@ Intent kindIntent(Intent::Kind k, int count = 0) { Intent i; i.kind = k; i.count
 // CardPileCmd.AddGeneratedCardToCombat(card, PileType.Draw, null, CardPilePosition.Random).
 Task<> addToDrawRandom(Combat& c, const char* cardId) {
   Card* card = c.addCard(db::card(cardId));
+  card->createdByPlayer = false;  // creator null
   c.removeFromPiles(card);
   int at = c.rng("Shuffle").nextInt((int)c.draw.size() + 1);
   c.draw.insert(c.draw.begin() + at, card);
@@ -446,7 +447,11 @@ struct TheInsatiable : Monster {
       (void)t;
       for (int i = 0; i < 6; ++i) {
         if (i < 3) co_await addToDrawRandom(*combat, "FranticEscape");
-        else co_await cmd::addGeneratedCard(*combat, db::card("FranticEscape"), Pile::Discard);
+        else {
+          auto fe = db::card("FranticEscape");
+          fe->createdByPlayer = false;  // creator null
+          co_await cmd::addGeneratedCard(*combat, std::move(fe), Pile::Discard);
+        }
       }
     }
   }

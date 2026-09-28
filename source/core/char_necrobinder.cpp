@@ -117,7 +117,7 @@ Task<Card*> addSoulToDrawPileRandom(Combat& c) {
 
 Task<> SoulboundPower::afterCardEnteredCombat(Card* card) {
   if (isAddingSoul || !owner || !owner->combat) co_return;
-  if (card->id == "Soul" || card->rarity == Rarity::Status || card->rarity == Rarity::Curse) co_return;
+  if (card->id == "Soul" || !card->createdByPlayer) co_return;  // creator == Applier
   if (applier != owner->combat->player) co_return;
   isAddingSoul = true;
   for (int i = 0; i < amount; ++i) co_await addSoulToDrawPileRandom(*owner->combat);

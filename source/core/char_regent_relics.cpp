@@ -117,8 +117,8 @@ struct Regalite : Relic {
   Task<> afterCombatEnd() override { usedThisTurn = false; co_return; }
   // cmd::addGeneratedCard fires afterCardEnteredCombat only for generated cards (Forge, Discovery,
   // Shiv, ...), matching Hook.AfterCardGeneratedForCombat here (no separate hook needed).
-  Task<> afterCardEnteredCombat(Card*) override {
-    if (usedThisTurn) co_return;
+  Task<> afterCardEnteredCombat(Card* card) override {
+    if (usedThisTurn || !card->createdByPlayer) co_return;  // creator == Owner
     usedThisTurn = true;
     doFlash();
     co_await cmd::gainBlock(owner(), val("Block"), kUnpowered, nullptr);

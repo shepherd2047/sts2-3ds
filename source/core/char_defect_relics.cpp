@@ -86,6 +86,8 @@ struct PowerCell : Relic {
     doFlash();
     std::vector<Card*> free;
     for (Card* c : combat->draw) if (!c->costsX && c->costWithLocalMods() == 0) free.push_back(c);
+    // StableShuffle: sort, then Fisher-Yates (as cmd::shuffle).
+    std::stable_sort(free.begin(), free.end(), [](Card* a, Card* b) { return a->id < b->id; });
     combat->rng("CombatCardSelection").shuffle(free);
     int n = std::min((int)free.size(), val("Cards").toInt());
     for (int i = 0; i < n; ++i) co_await cmd::moveCard(*combat, free[(size_t)i], Pile::Hand);
