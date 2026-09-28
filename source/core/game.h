@@ -76,7 +76,11 @@ struct Model {
   virtual Dec modifyDamageMultiplicative(Creature*, Dec, int, Creature*, Card*) { return 1; }
   virtual Dec modifyBlockAdditive(Creature*, Dec, int, Card*) { return 0; }
   virtual Dec modifyBlockMultiplicative(Creature*, Dec, int, Card*) { return 1; }
+  virtual Dec modifyHpLostBeforeOsty(Creature*, Dec amount, int, Creature*, Card*) { return amount; }
   virtual Dec modifyHpLostAfterOsty(Creature*, Dec amount, int, Creature*, Card*) { return amount; }
+  // Hook.ModifyUnblockedDamageTarget: redirect unblocked damage to a different creature
+  // (DieForYouPower redirects a powered hit meant for the player onto Osty).
+  virtual Creature* modifyUnblockedDamageTarget(Creature* target, Dec /*unblocked*/, int /*props*/, Creature* /*dealer*/) { return target; }
   virtual Dec modifyHandDraw(Dec amount) { return amount; }
 
   virtual Task<> beforeCombatStart() { return {}; }
@@ -152,6 +156,9 @@ struct Model {
   virtual Task<> beforeFlush() { return {}; }                   // player turn ends, before the hand is discarded
   virtual void modifyShuffleOrder(std::vector<Card*>& /*cards*/, bool /*isInitialShuffle*/) {}  // index 0 = top
   virtual Task<> afterCardDiscarded(Card*) { return {}; }  // Hook.AfterCardDiscarded (CardCmd.Discard only, not the end-of-turn flush)
+  // Added for the Necrobinder (X4.0): DoomPower.DoomKill / OstyCmd.Summon.
+  virtual Task<> afterDiedToDoom(const std::vector<Creature*>&) { return {}; }
+  virtual Task<> afterOstyRevived(Creature*) { return {}; }
 };
 
 // ---------------------------------------------------------------- saves
@@ -564,6 +571,9 @@ struct Creature {
   bool isPlayer = false;
   Combat* combat = nullptr;
   bool removed = false;  // gone from the room after dying
+  // Creature.PetOwner: the player this creature is a pet of (Osty). Block for a pet's own
+  // damage is taken from its owner (CreatureCmd.Damage); see DieForYouPower (char_necrobinder.h).
+  Creature* petOwner = nullptr;
 
   // UI state
   float hitFlash = 0;
@@ -694,6 +704,10 @@ struct Combat {
   Creature* player = nullptr;
   std::vector<Creature*> enemies;
   std::vector<std::unique_ptr<Creature>> ownedEnemies;
+  // The Necrobinder's Osty (X4.0, char_necrobinder.h): a single player-side creature, not in
+  // `enemies`. Non-null once summoned this combat, even while dead (ready for revival).
+  Creature* osty = nullptr;
+  std::unique_ptr<Creature> ownedOsty;
   std::vector<std::unique_ptr<Card>> cardStore;
   std::vector<std::unique_ptr<Power>> graveyard;  // removed powers, freed with the combat
   std::vector<std::unique_ptr<Enchantment>> enchantGraveyard;  // cleared enchantments (listener snapshots may still hold them)

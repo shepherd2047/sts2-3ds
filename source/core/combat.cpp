@@ -216,6 +216,7 @@ std::vector<Model*> Combat::listeners() {
   if (ending) return out;
   out.reserve(64);
   for (auto& p : player->powers) out.push_back(p.get());
+  if (osty && !osty->removed) for (auto& p : osty->powers) out.push_back(p.get());
   for (auto& r : run->relics) out.push_back(r.get());
   for (Card* c : allCards()) {
     out.push_back(c);
@@ -291,8 +292,12 @@ Task<std::vector<DamageResult>> damage(Creature* target, Dec amount, int props, 
   co_return co_await damage(std::vector<Creature*>{target}, amount, props, dealer, src);
 }
 
-// CreatureCmd.Damage (no pets/Osty in this build, so unblocked damage always
-// lands on the original target).
+// CreatureCmd.Damage. Block is taken from a pet's owner (Creature::petOwner), not the pet
+// itself; the unblocked amount runs the BeforeOsty hp-loss phase, is then possibly redirected
+// to a different creature (Hook.ModifyUnblockedDamageTarget -- DieForYouPower sends a powered
+// hit meant for the player to Osty instead), then the AfterOsty phase. If the damage was
+// redirected, the redirected creature's overkill (e.g. Osty dying to a bigger hit than its HP)
+// spills over onto the original target as its own AfterOsty-phased hit, exactly as the C# does.
 Task<std::vector<DamageResult>> damage(std::vector<Creature*> targets, Dec amount, int props, Creature* dealer, Card* src) {
   std::vector<DamageResult> results;
   if (targets.empty()) co_return results;
@@ -301,15 +306,9 @@ Task<std::vector<DamageResult>> damage(std::vector<Creature*> targets, Dec amoun
     co_return results;
   }
   Combat& c = *targets[0]->combat;
-  for (Creature* target : targets) {
-    if (target->dead()) continue;
-    Dec modified = c.modifyDamage(target, dealer, amount, props, src);
-    Dec blocked = (props & kUnblockable) ? Dec(0) : dmin(Dec(target->block), modified);
-    target->block -= blocked.toInt();
-    Dec unblocked = dmax(modified - blocked, 0);
-    for (Model* m : c.listeners()) unblocked = m->modifyHpLostAfterOsty(target, unblocked, props, dealer, src);
 
-    // Creature.LoseHpInternal
+  // Creature.LoseHpInternal
+  auto loseHpInternal = [&](Creature* target, Dec unblocked, int blockedAmt, bool blockBroken, bool fullyBlocked) {
     DamageResult r;
     r.receiver = target;
     r.props = props;
@@ -324,17 +323,54 @@ Task<std::vector<DamageResult>> damage(std::vector<Creature*> targets, Dec amoun
     r.unblocked = saved ? before : before - target->hp;
     r.killed = killed;
     r.overkill = killed ? std::max(n - before, 0) : 0;
-    r.blocked = blocked.toInt();
-    r.blockBroken = target->block <= 0 && blocked > Dec(0);
-    r.fullyBlocked = !(props & kUnblockable) && (blocked > Dec(0) || target->block > 0) && unblocked.toInt() == 0;
-
+    r.blocked = blockedAmt;
+    r.blockBroken = blockBroken;
+    r.fullyBlocked = fullyBlocked;
+    return r;
+  };
+  auto pushVisual = [&](const DamageResult& r, Creature* target, Dec modified) {
     if (r.fullyBlocked) {
       c.push({VisualEvent::Blocked, target, 0});
     } else if (r.unblocked + r.overkill > 0 || modified == Dec(0)) {
       c.push({VisualEvent::Damage, target, r.unblocked});
       if (r.unblocked > 0 && target != dealer) { target->hitFlash = 1.f; target->shake = 1.f; }
     }
+  };
+
+  for (Creature* originalTarget : targets) {
+    if (originalTarget->dead()) continue;
+    Dec modified = c.modifyDamage(originalTarget, dealer, amount, props, src);
+    Creature* blockOwner = originalTarget->petOwner ? originalTarget->petOwner : originalTarget;
+    Dec blocked = (props & kUnblockable) ? Dec(0) : dmin(Dec(blockOwner->block), modified);
+    blockOwner->block -= blocked.toInt();
+    Dec unblocked = dmax(modified - blocked, 0);
+    for (Model* m : c.listeners()) unblocked = m->modifyHpLostBeforeOsty(originalTarget, unblocked, props, dealer, src);
+    Creature* redirected = originalTarget;
+    for (Model* m : c.listeners()) redirected = m->modifyUnblockedDamageTarget(redirected, unblocked, props, dealer);
+    for (Model* m : c.listeners()) unblocked = m->modifyHpLostAfterOsty(redirected, unblocked, props, dealer, src);
+
+    bool wasBlockBroken = originalTarget->block <= 0 && blocked > Dec(0);
+    bool wasFullyBlocked = !(props & kUnblockable) && (blocked > Dec(0) || originalTarget->block > 0) && unblocked.toInt() == 0;
+
+    DamageResult r = loseHpInternal(redirected, unblocked, blocked.toInt(), wasBlockBroken, wasFullyBlocked);
+    pushVisual(r, redirected, modified);
     results.push_back(r);
+    if (redirected != originalTarget) {
+      Dec overflow = Dec(r.overkill);
+      for (Model* m : c.listeners()) overflow = m->modifyHpLostAfterOsty(originalTarget, overflow, props, dealer, src);
+      DamageResult r2;
+      if (overflow > Dec(0)) {
+        r2 = loseHpInternal(originalTarget, overflow, blocked.toInt(), wasBlockBroken, wasFullyBlocked);
+      } else {
+        r2.receiver = originalTarget;
+        r2.props = props;
+        r2.blocked = blocked.toInt();
+        r2.blockBroken = wasBlockBroken;
+        r2.fullyBlocked = wasFullyBlocked;
+      }
+      pushVisual(r2, originalTarget, modified);
+      results.push_back(r2);
+    }
   }
 
   for (auto& r : results)
