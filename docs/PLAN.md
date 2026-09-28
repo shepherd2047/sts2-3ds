@@ -312,10 +312,10 @@ and `Models.Powers\`.
 | id | Character | Step 0 systems | Status |
 |---|---|---|---|
 | X0 | All | Character plumbing (see Engine lane order #1) | done (engine), accepted 2026-09-28 |
-| X1.0-X1.5 | Silent | Shiv tokens, Poison, discard triggers (Sly), Retain, Accuracy-style powers | X1.0 done (engine), accepted 2026-09-28; X1.1 done (subagent), accepted 2026-09-28; X1.2-X1.5 todo |
-| X2.0-X2.5 | Defect | Orbs (Lightning, Frost, Dark, Plasma, Glass), channel/evoke, Focus, orb slots and their rendering on the top screen | X2.0 done (subagent), accepted 2026-09-28; X2.1 done (subagent), accepted 2026-09-28; X2.2-X2.5 todo |
-| X3.0-X3.5 | Regent | Stars (second resource with a HUD counter), Forge and Sovereign Blade, summons | X3.0 done (subagent), accepted 2026-09-28; X3.1 done (subagent), accepted 2026-09-28; X3.2-X3.5 todo |
-| X4.0-X4.5 | Necrobinder | Osty (companion creature with its own HP, targeting, death), Doom, Souls | X4.0 done (subagent), accepted 2026-09-28; X4.1 done (subagent), accepted 2026-09-28; X4.2-X4.5 todo |
+| X1.0-X1.5 | Silent | Shiv tokens, Poison, discard triggers (Sly), Retain, Accuracy-style powers | X1.0 done (engine), accepted 2026-09-28; X1.1 done (subagent), accepted 2026-09-28; X1.2 done (subagent), accepted 2026-09-28; X1.3a-X1.5 todo |
+| X2.0-X2.5 | Defect | Orbs (Lightning, Frost, Dark, Plasma, Glass), channel/evoke, Focus, orb slots and their rendering on the top screen | X2.0 done (subagent), accepted 2026-09-28; X2.1 done (subagent), accepted 2026-09-28; X2.2 done (subagent), accepted 2026-09-28; X2.3a-X2.5 todo |
+| X3.0-X3.5 | Regent | Stars (second resource with a HUD counter), Forge and Sovereign Blade, summons | X3.0 done (subagent), accepted 2026-09-28; X3.1 done (subagent), accepted 2026-09-28; X3.2 done (subagent), accepted 2026-09-28; X3.3a-X3.5 todo |
+| X4.0-X4.5 | Necrobinder | Osty (companion creature with its own HP, targeting, death), Doom, Souls | X4.0 done (subagent), accepted 2026-09-28; X4.1 done (subagent), accepted 2026-09-28; X4.2 done (subagent), accepted 2026-09-28; X4.3a-X4.5 todo |
 | X6 | All characters | ColorfulPhilosophers, cross-character Orobas options, per-character Ancient dialogue lines, Random character, per-character act-transition quotes | todo |
 
 That is 7 packages per character (X*.0, .1, .2, .3a, .3b, .4, .5), X1-X4 in order. X6
@@ -401,7 +401,7 @@ their `clone()` must call `adoptEnchantment()`.
 
 | id | Package | Kind | Needs | Status |
 |---|---|---|---|---|
-| Y1 | Settings store `settings.sav` + logic: fast mode, screen shake, BGM/SFX/ambience volume, language, run timer, text effects, long-press confirm, common tooltips, hand card count, reset tutorials, delete data | engine | – | partial (fast mode, shake, abandon saved) |
+| Y1 | Settings store `settings.sav` + logic: fast mode, screen shake, BGM/SFX/ambience volume, language, run timer, text effects, long-press confirm, common tooltips, hand card count, reset tutorials, delete data | engine | – | done (subagent), accepted 2026-09-28: `settings_store.h/.cpp` (C# SettingsSave + PrefsSave merged into settings.sav), loaded in App::init; volumes not wired to audio yet (U track), no settings screen yet (S21) |
 | Y2 | Pause menu (START during a run): resume, settings, deck, compendium, save & quit, abandon run (with confirm) | UI | Y1, F3 | todo |
 | Y3 | Languages: bake English + 简体中文 loc and fonts, switch at runtime | tools + UI | Y1 | todo |
 | Y4 | Profiles: 3 slots on SD, rename and delete; the run save and progress files are per profile | engine | M1 | todo |
