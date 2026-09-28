@@ -593,6 +593,7 @@ std::map<std::string, CardFactory>& cardReg() { static std::map<std::string, Car
 std::map<std::string, PowerFactory>& powerReg() { static std::map<std::string, PowerFactory> m; return m; }
 std::map<std::string, Encounter>& encounterReg() { static std::map<std::string, Encounter> m; return m; }
 std::map<std::string, RelicFactoryFn>& relicReg() { static std::map<std::string, RelicFactoryFn> m; return m; }
+std::map<std::string, OrbFactory>& orbReg() { static std::map<std::string, OrbFactory> m; return m; }
 
 template <class C> void regCard() { cardReg()[C().id] = [] { return std::unique_ptr<Card>(new C()); }; }
 template <class P> void regPower() { powerReg()[P::kId] = [] { return std::unique_ptr<Power>(new P()); }; }
@@ -631,6 +632,7 @@ void registerAncientsLater(); // ancients_later.cpp: acts 2-3 and Darv
 void registerPotions();      // potions.cpp
 void registerEnchantments(); // enchantments.cpp
 void registerSilent();       // char_silent.cpp
+void registerDefect();       // char_defect.cpp
 
 namespace db {
 
@@ -638,6 +640,7 @@ void registerCard(const std::string& id, CardFactory f) { cardReg()[id] = f; }
 void registerPower(const std::string& id, PowerFactory f) { powerReg()[id] = f; }
 void registerRelic(const std::string& id, RelicFactoryFn f) { relicReg()[id] = f; }
 bool relicRegistered(const std::string& id) { return relicReg().count(id) > 0; }
+void registerOrb(const std::string& id, OrbFactory f) { orbReg()[id] = f; }
 
 const std::vector<std::string>& sharedRelicPool() {
   static const std::vector<std::string> pool = {"Akabeko", "AmethystAubergine", "Anchor", "ArtOfWar", "BagOfMarbles", "BagOfPreparation", "BeatingRemnant", "Bellows", "BeltBuckle", "BloodVial", "BookOfFiveRings", "BowlerHat", "Bread", "BronzeScales", "BurningSticks", "Candelabra", "CaptainsWheel", "Cauldron", "CentennialPuzzle", "Chandelier", "ChemicalX", "CloakClasp", "DingyRug", "DollysMirror", "DragonFruit", "EternalFeather", "FestivePopper", "FresnelLens", "FrozenEgg", "GamblingChip", "GamePiece", "GhostSeed", "Girya", "GnarledHammer", "Gorget", "GremlinHorn", "HappyFlower", "HornCleat", "IceCream", "IntimidatingHelmet", "JossPaper", "JuzuBracelet", "Kifuda", "Kunai", "Kusarigama", "Lantern", "LastingCandy", "LavaLamp", "LeesWaffle", "LetterOpener", "LizardTail", "LoomingFruit", "LuckyFysh", "Mango", "MealTicket", "MeatOnTheBone", "MembershipCard", "MercuryHourglass", "MiniatureCannon", "MiniatureTent", "MoltenEgg", "MummifiedHand", "MysticLighter", "Nunchaku", "OddlySmoothStone", "OldCoin", "Orichalcum", "OrnamentalFan", "Orrery", "Pantograph", "ParryingShield", "Pear", "PenNib", "Pendulum", "Permafrost", "PetrifiedToad", "Planisphere", "Pocketwatch", "PotionBelt", "PrayerWheel", "PunchDagger", "RainbowRing", "RazorTooth", "RedMask", "RegalPillow", "ReptileTrinket", "RingingTriangle", "RippleBasin", "RoyalStamp", "ScreamingFlagon", "Shovel", "Shuriken", "SlingOfCourage", "SparklingRouge", "StoneCalendar", "StoneCracker", "Strawberry", "StrikeDummy", "SturdyClamp", "TheAbacus", "TheCourier", "TinyMailbox", "Toolbox", "ToxicEgg", "TungstenRod", "TuningFork", "UnceasingTop", "UnsettlingLamp", "Vajra", "Vambrace", "VenerableTeaSet", "VeryHotCocoa", "VexingPuzzlebox", "WarPaint", "Whetstone", "WhiteBeastStatue", "WhiteStar", "WingCharm"};
@@ -727,6 +730,7 @@ void init() {
   registerRelic("Circlet", [] { return std::unique_ptr<Relic>(new Circlet()); });
   registerEnchantments();
   registerSilent();
+  registerDefect();
   registerRelics();
   registerEvents();
   registerAncients();
@@ -745,6 +749,15 @@ std::unique_ptr<Power> power(const std::string& id) {
 const Encounter* encounter(const std::string& id) {
   auto it = encounterReg().find(id);
   return it == encounterReg().end() ? nullptr : &it->second;
+}
+std::unique_ptr<Orb> orb(const std::string& id) {
+  auto it = orbReg().find(id);
+  return it == orbReg().end() ? nullptr : it->second();
+}
+std::unique_ptr<Orb> randomOrb(Rng& rng) {
+  // OrbModel.GetRandomOrb: uniform among the 5 orbs, in ModelDb registration order.
+  static const std::vector<std::string> ids = {"LightningOrb", "FrostOrb", "DarkOrb", "PlasmaOrb", "GlassOrb"};
+  return orb(rng.nextItem(ids));
 }
 std::unique_ptr<Relic> relic(const std::string& id) {
   auto it = relicReg().find(id);

@@ -24,6 +24,7 @@ struct Power;
 struct Card;
 struct Monster;
 struct Relic;
+struct Orb;
 struct Combat;
 struct Run;
 
@@ -152,6 +153,13 @@ struct Model {
   virtual Task<> beforeFlush() { return {}; }                   // player turn ends, before the hand is discarded
   virtual void modifyShuffleOrder(std::vector<Card*>& /*cards*/, bool /*isInitialShuffle*/) {}  // index 0 = top
   virtual Task<> afterCardDiscarded(Card*) { return {}; }  // Hook.AfterCardDiscarded (CardCmd.Discard only, not the end-of-turn flush)
+
+  // Added for the Defect's orbs (X2.0; Hook.* of the same names).
+  virtual Dec modifyOrbValue(Orb*, Dec value) { return value; }  // FocusPower
+  virtual int modifyOrbPassiveTriggerCount(Orb*, int count) { return count; }
+  virtual Task<> afterModifyingOrbPassiveTriggerCount(Orb*) { return {}; }
+  virtual Task<> afterOrbChanneled(Orb*) { return {}; }
+  virtual Task<> afterOrbEvoked(Orb*, const std::vector<Creature*>& /*targets*/) { return {}; }
 };
 
 // ---------------------------------------------------------------- saves
@@ -254,6 +262,36 @@ struct Power : Model {
 };
 
 using PowerFactory = std::unique_ptr<Power> (*)();
+
+// ---------------------------------------------------------------- orbs
+
+// OrbModel (Models.Orbs): a Defect orb living in Combat::orbQueue. Orbs are combat-only and,
+// since this port is single-player, always owned by the player (the C#'s multiplayer
+// "other players" branches, e.g. HibernatePower sharing Frost's block, are dropped).
+// Subclasses (LightningOrb, FrostOrb, DarkOrb, PlasmaOrb, GlassOrb) are in char_defect.h.
+struct Orb : Model {
+  std::string id;      // class name, e.g. "LightningOrb"
+  std::string locKey;  // e.g. "LIGHTNING_ORB"
+  Creature* owner = nullptr;
+  bool removedFromQueue = false;  // OrbModel.HasBeenRemovedFromState
+
+  virtual Dec passiveVal() = 0;
+  virtual Dec evokeVal() = 0;
+  // Exactly one of these calls triggerPassive() for a given orb type (Lightning/Frost/Dark/Glass
+  // at the end of the player's turn, Plasma at the start).
+  virtual Task<> beforeTurnEndOrbTrigger() { return {}; }
+  virtual Task<> afterTurnStartOrbTrigger() { return {}; }
+  // OrbModel.Passive: the raw effect, no ModifyOrbPassiveTriggerCount. Normally reached only
+  // through triggerPassive(); `target` is unused by every orb in this pool (always null in the
+  // C#'s own turn-trigger calls) but kept for OrbCmd::orbPassive callers.
+  virtual Task<> passive(Creature* target) { return {}; }
+  virtual Task<std::vector<Creature*>> evoke() = 0;
+
+  Task<> triggerPassive(Creature* target);  // OrbModel.TriggerPassive (defined in combat.cpp: needs Combat)
+};
+using OrbFactory = std::unique_ptr<Orb> (*)();
+
+#define ORB_HEADER(Name, Key) static constexpr const char* kId = #Name; Name() { id = #Name; locKey = Key; }
 
 // ---------------------------------------------------------------- cards
 
@@ -709,6 +747,10 @@ struct Combat {
   }
 
   int energy = 0, maxEnergy = 3;
+  // The Defect's orb queue (Entities.Players.PlayerCombatState.OrbQueue): capacity comes from
+  // Character::orbSlots (Run::fight); OrbQueue.maxCapacity = 10.
+  std::vector<std::unique_ptr<Orb>> orbQueue;
+  int orbCapacity = 0;
   int turnNumber = 1, roundNumber = 1;
   int cardsPlayedThisTurn = 0;  // CombatHistory.CardPlaysStarted this turn (player)
   Side currentSide = Side::Player;
@@ -736,6 +778,8 @@ struct Combat {
   std::vector<Model*> listeners();
   Dec modifyDamage(Creature* target, Creature* dealer, Dec dmg, int props, Card* src);
   Dec modifyBlock(Creature* target, Dec block, int props, Card* src);
+  Dec modifyOrbValue(Orb* orb, Dec amount);                      // Hook.ModifyOrbValue
+  int modifyOrbPassiveTriggerCount(Orb* orb, int count);         // Hook.ModifyOrbPassiveTriggerCount
 
   // flow (CombatManager)
   Task<> startTurn();
@@ -799,6 +843,18 @@ Task<Creature*> addMonster(Combat& c, std::unique_ptr<Monster> m);
 // same stackable enchantment again adds to its amount. CardCmd.ClearEnchantment.
 Enchantment* enchant(Card* card, std::unique_ptr<Enchantment> e, int amount);
 void clearEnchantment(Card* card);
+
+// OrbCmd (X2.0): channel/evoke and orb slots. `channelOrb` takes ownership of a freshly made
+// orb (e.g. `cmd::channelOrb(*combat, std::make_unique<LightningOrb>())`), evicting the oldest
+// queued orb first if the queue is already full.
+Task<> addOrbSlots(Combat& c, int amount);                       // OrbCmd.AddSlots
+void removeOrbSlots(Combat& c, int amount);                      // OrbCmd.RemoveSlots
+Task<> channelOrb(Combat& c, std::unique_ptr<Orb> orb);          // OrbCmd.Channel
+Task<> evokeNextOrb(Combat& c, bool dequeue = true);             // OrbCmd.EvokeNext
+Task<> evokeLastOrb(Combat& c, bool dequeue = true);             // OrbCmd.EvokeLast
+// OrbCmd.Passive: `countAffectedByHooks` = true runs it through ModifyOrbPassiveTriggerCount
+// (Orb::triggerPassive) instead of the raw Orb::passive.
+Task<> orbPassive(Combat& c, Orb* orb, Creature* target = nullptr, bool countAffectedByHooks = false);
 
 // Attack builder (AttackCommand), covering the targeting modes in this build.
 struct Attack {
@@ -1131,6 +1187,10 @@ std::vector<std::string> potionPool(const std::string& characterId);
 // Ironclad-only shortcuts, kept for old callers: prefer the character versions above.
 const std::vector<std::string>& ironcladPool();
 std::vector<std::string> ironcladCards(std::function<bool(const Card&)> filter);
+// Orbs (char_defect.cpp registers Lightning/Frost/Dark/Plasma/Glass).
+void registerOrb(const std::string& id, OrbFactory f);
+std::unique_ptr<Orb> orb(const std::string& id);
+std::unique_ptr<Orb> randomOrb(Rng& rng);  // OrbModel.GetRandomOrb: uniform among the 5 orbs
 }  // namespace db
 
 template <class P> Task<> applyPower(Creature* target, Dec amount, Creature* applier, Card* src, bool silent) {

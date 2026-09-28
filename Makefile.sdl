@@ -19,7 +19,7 @@ endif
 CORE_SRC := $(wildcard source/core/*.cpp)
 EXTRA_PREVIEW_SRC := source/spine/spine.cpp source/gfx/gfx_common.cpp source/platform_sdl/gfx_sdl.cpp $(wildcard source/ui/*.cpp) $(wildcard source/ui/*/*.cpp) source/main.cpp
 SIM_SRC := test/sim.cpp
-TEST_SRC := test/enchant_test.cpp test/character_test.cpp test/silent_test.cpp
+TEST_SRC := test/enchant_test.cpp test/character_test.cpp test/silent_test.cpp test/defect_test.cpp
 
 OBJ_DIR := build/obj
 
@@ -69,13 +69,18 @@ build/silent_test: $(CORE_OBJS) $(OBJ_DIR)/test/silent_test.o
 	@mkdir -p build
 	$(CXX) $(BASE_CXXFLAGS) $^ -o $@
 
+build/defect_test: $(CORE_OBJS) $(OBJ_DIR)/test/defect_test.o
+	@mkdir -p build
+	$(CXX) $(BASE_CXXFLAGS) $^ -o $@
+
 sim: build/sim
 	./build/sim 200
 
-check: build/enchant_test build/character_test build/silent_test
+check: build/enchant_test build/character_test build/silent_test build/defect_test
 	./build/enchant_test
 	./build/character_test
 	./build/silent_test
+	./build/defect_test
 
 clean:
 	rm -rf build

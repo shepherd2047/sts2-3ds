@@ -253,6 +253,29 @@ Dec Combat::modifyBlock(Creature* target, Dec block, int props, Card* src) {
   return block;
 }
 
+Dec Combat::modifyOrbValue(Orb* orb, Dec amount) {
+  for (Model* m : listeners()) amount = m->modifyOrbValue(orb, amount);
+  return amount;
+}
+
+int Combat::modifyOrbPassiveTriggerCount(Orb* orb, int count) {
+  for (Model* m : listeners()) count = m->modifyOrbPassiveTriggerCount(orb, count);
+  return count;
+}
+
+// OrbModel.TriggerPassive.
+Task<> Orb::triggerPassive(Creature* target) {
+  if (!owner || !owner->combat) co_return;
+  Combat* c = owner->combat;
+  int triggerCount = c->modifyOrbPassiveTriggerCount(this, 1);
+  for (Model* m : c->listeners()) co_await m->afterModifyingOrbPassiveTriggerCount(this);
+  for (int i = 0; i < triggerCount; ++i) {
+    co_await passive(target);
+    // PORT NOTE: CustomScaledWait(0.1, 0.25) collapses to a fixed wait (single player: always "IsMe").
+    co_await scaledWait(0.1, 0.25);
+  }
+}
+
 int Combat::energyCost(Card* c) {
   if (c->cost < 0 || c->costsX) return c->cost;
   int cost = c->costWithLocalMods();
@@ -576,6 +599,72 @@ Task<> loseBlock(Creature* target, Dec amount) {
   target->block = std::max(0, target->block - amount.toInt());
 }
 
+// OrbCmd.AddSlots / RemoveSlots.
+Task<> addOrbSlots(Combat& c, int amount) {
+  if (c.over || c.ending) co_return;
+  amount = std::min(10 - c.orbCapacity, amount);  // OrbQueue.maxCapacity = 10
+  c.orbCapacity += amount;
+  co_return;
+}
+
+void removeOrbSlots(Combat& c, int amount) {
+  if (c.over || c.ending) return;
+  amount = std::min(c.orbCapacity, amount);
+  c.orbCapacity = std::max(0, c.orbCapacity - amount);
+  // OrbQueue.RemoveCapacity: excess orbs are dropped from the back (no AfterOrbEvoked/RemoveInternal).
+  while ((int)c.orbQueue.size() > c.orbCapacity) c.orbQueue.pop_back();
+}
+
+// OrbCmd.Evoke (private in the C#; shared by evokeNextOrb/evokeLastOrb below).
+static Task<> evokeOrbInternal(Combat& c, Orb* orbPtr, bool dequeue) {
+  if (c.over || c.ending) co_return;
+  if (c.orbQueue.empty()) co_return;
+  std::unique_ptr<Orb> holder;  // keeps `orbPtr` alive across the awaits below when dequeued
+  bool removed = false;
+  if (dequeue) {
+    auto it = std::find_if(c.orbQueue.begin(), c.orbQueue.end(), [&](auto& p) { return p.get() == orbPtr; });
+    if (it != c.orbQueue.end()) { holder = std::move(*it); c.orbQueue.erase(it); removed = true; }
+  }
+  std::vector<Creature*> targets = co_await orbPtr->evoke();
+  if (orbPtr->owner && orbPtr->owner->combat) {  // still in combat (CombatState != null)
+    for (Model* m : c.listeners()) co_await m->afterOrbEvoked(orbPtr, targets);
+    if (removed) orbPtr->removedFromQueue = true;
+  }
+}
+
+Task<> evokeNextOrb(Combat& c, bool dequeue) {
+  if (c.orbQueue.empty()) co_return;
+  co_await evokeOrbInternal(c, c.orbQueue.front().get(), dequeue);
+}
+
+Task<> evokeLastOrb(Combat& c, bool dequeue) {
+  if (c.orbQueue.empty()) co_return;
+  co_await evokeOrbInternal(c, c.orbQueue.back().get(), dequeue);
+}
+
+// OrbCmd.Channel(orb, player): `orb` is a freshly made, not-yet-owned instance.
+Task<> channelOrb(Combat& c, std::unique_ptr<Orb> orb) {
+  if (c.over || c.ending) co_return;
+  // A character with no base orb slots (e.g. a relic granting one orb to a non-Defect) gets a
+  // slot the first time it channels one.
+  if (c.run->character().orbSlots == 0 && c.orbCapacity == 0) co_await addOrbSlots(c, 1);
+  orb->owner = c.player;
+  if ((int)c.orbQueue.size() >= c.orbCapacity) co_await evokeNextOrb(c);
+  if (c.orbCapacity == 0) co_return;  // OrbQueue.TryEnqueue: Capacity == 0 -> false, nothing else happens
+  Orb* raw = orb.get();
+  c.orbQueue.push_back(std::move(orb));
+  // PORT NOTE: CustomScaledWait(0.1, 0.25) collapses to a fixed wait (single player: always "IsMe").
+  co_await scaledWait(0.1, 0.25);
+  for (Model* m : c.listeners()) co_await m->afterOrbChanneled(raw);
+}
+
+// OrbCmd.Passive.
+Task<> orbPassive(Combat& c, Orb* orb, Creature* target, bool countAffectedByHooks) {
+  if (c.over || c.ending) co_return;
+  if (countAffectedByHooks) co_await orb->triggerPassive(target);
+  else co_await orb->passive(target);
+}
+
 Task<> gainEnergy(Combat& c, int amount) {
   c.energy = std::max(0, c.energy + amount);
   co_await wait(0.1);
@@ -785,6 +874,14 @@ Task<> Combat::startTurn() {
   for (Model* m : listeners()) co_await m->afterSideTurnStart(currentSide, starting);
 
   if (currentSide == Side::Player) {
+    // PlayerCombatState.OrbQueue.AfterTurnStart (Plasma's energy passive). Snapshot the queue
+    // first, as the C# does (`Orbs.ToList()`), and bail if the combat ends mid-loop.
+    std::vector<Orb*> orbSnapshot;
+    for (auto& o : orbQueue) orbSnapshot.push_back(o.get());
+    for (Orb* o : orbSnapshot) {
+      if (over || ending) break;
+      co_await o->afterTurnStartOrbTrigger();
+    }
     co_await checkWinCondition();
     // CombatManager.RunAutoPrePlayPhase: Hook.AfterAutoPrePlayPhaseEntered (Imbued auto-plays).
     if (!over) for (Model* m : listeners()) co_await m->afterAutoPrePlayPhaseEntered();
@@ -846,6 +943,15 @@ Task<> Combat::endPlayerTurnPhaseOne() {
   for (Model* m : listeners()) co_await m->afterAutoPostPlayPhaseEntered();
   for (Model* m : listeners()) co_await m->beforeSideTurnEndEarly(Side::Player, ps);
   for (Model* m : listeners()) co_await m->beforeSideTurnEnd(Side::Player, ps);
+  // DoTurnEnd: PlayerCombatState.OrbQueue.BeforeTurnEnd first (Lightning/Frost/Dark/Glass passives).
+  {
+    std::vector<Orb*> orbSnapshot;
+    for (auto& o : orbQueue) orbSnapshot.push_back(o.get());
+    for (Orb* o : orbSnapshot) {
+      if (over || ending) break;
+      co_await o->beforeTurnEndOrbTrigger();
+    }
+  }
   if (co_await checkWinCondition()) co_return;
   // DoTurnEnd: ethereal cards exhaust, then turn-end-in-hand cards resolve one by one
   // (through the play pile) and go to the bottom of the discard, or exhaust if ethereal.
