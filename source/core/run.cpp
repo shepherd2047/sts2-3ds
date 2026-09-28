@@ -531,6 +531,7 @@ Task<bool> Run::fight(const std::string& encounterId) {
   c.isElite = enc->room == RoomType::Elite;
   c.player = player.get();
   c.maxEnergy = character().maxEnergy;  // CharacterModel.MaxEnergy
+  c.orbCapacity = character().orbSlots;  // PlayerCombatState(player): OrbQueue.AddCapacity(BaseOrbSlotCount)
   player->combat = &c;
   player->block = 0;
   player->powers.clear();
