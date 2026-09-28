@@ -22,13 +22,13 @@ Intent attackIntent(int dmg, int hits = 1) { Intent i; i.kind = Intent::Attack; 
 Intent kindIntent(Intent::Kind k) { Intent i; i.kind = k; return i; }
 
 // CardFactory.CreateForReward(owner, 1, options) with a card filter (ForNonCombatWithDefaultOdds):
-// roll the rarity like a monster-room card reward, then pick a random Ironclad card of that
+// roll the rarity like a monster-room card reward, then pick a random card of the character's pool of that
 // rarity passing the filter; if there is none, any reward-rarity card passing it.
 std::unique_ptr<Card> rewardCardWhere(Run& r, std::function<bool(const Card&)> filter) {
   Rarity want = r.rollRarity(RoomType::Monster);
-  auto pool = db::ironcladCards([&](const Card& c) { return c.rarity == want && filter(c); });
+  auto pool = db::characterCards(r.characterId, [&](const Card& c) { return c.rarity == want && filter(c); });
   if (pool.empty())
-    pool = db::ironcladCards([&](const Card& c) {
+    pool = db::characterCards(r.characterId, [&](const Card& c) {
       return (c.rarity == Rarity::Common || c.rarity == Rarity::Uncommon || c.rarity == Rarity::Rare) && filter(c);
     });
   if (pool.empty()) return nullptr;
@@ -88,7 +88,7 @@ struct Metamorphosis : IroncladT<Metamorphosis> {
     addVar("Cards", 3);
   }
   Task<> onPlay(CardPlay&) override {
-    auto pool = db::ironcladCards([](const Card& c) {
+    auto pool = db::characterCards(combat->run->characterId, [](const Card& c) {
       return c.type == CardType::Attack &&
              (c.rarity == Rarity::Basic || c.rarity == Rarity::Common || c.rarity == Rarity::Uncommon || c.rarity == Rarity::Rare);
     });

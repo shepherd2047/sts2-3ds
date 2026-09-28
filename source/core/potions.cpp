@@ -175,7 +175,7 @@ struct PotionBase : Potion {
   // CardFactory.GetDistinctForCombat (the character's pool, no Basic/Ancient) +
   // CardSelectCmd.FromChooseACardScreen(canSkip) + SetToFreeThisTurn -> hand.
   Task<> chooseGenerated(CardType type) {
-    auto ids = db::ironcladCards([&](const Card& k) { return k.type == type && k.rarity != Rarity::Basic && k.rarity != Rarity::Ancient; });
+    auto ids = db::characterCards(c().run->characterId, [&](const Card& k) { return k.type == type && k.rarity != Rarity::Basic && k.rarity != Rarity::Ancient; });
     c().rng("CombatCardGeneration").shuffle(ids);  // TakeRandom(3)
     std::vector<std::unique_ptr<Card>> made;
     std::vector<Card*> opts;
@@ -401,7 +401,7 @@ struct OrobicAcid : PotionBase {
   POTION_HEADER(OrobicAcid, "OROBIC_ACID", Rare, CombatOnly, Self) }
   Task<> onUse(Creature*) override {
     for (CardType type : {CardType::Attack, CardType::Skill, CardType::Power}) {
-      auto ids = db::ironcladCards([&](const Card& k) { return k.type == type && k.rarity != Rarity::Basic && k.rarity != Rarity::Ancient; });
+      auto ids = db::characterCards(c().run->characterId, [&](const Card& k) { return k.type == type && k.rarity != Rarity::Basic && k.rarity != Rarity::Ancient; });
       if (ids.empty()) continue;
       auto k = db::card(c().rng("CombatCardGeneration").nextItem(ids));
       if (!k) continue;
@@ -534,10 +534,9 @@ std::unique_ptr<Potion> potion(const std::string& id) {
   auto it = potionReg().find(id);
   return it == potionReg().end() ? nullptr : it->second();
 }
-// IroncladPotionPool (Ironclad4Epoch.Potions) then SharedPotionPool, in the game's order.
-const std::vector<std::string>& potionPool() {
-  static const std::vector<std::string> v = {
-      "BloodPotion", "SoldiersStew", "Ashwater",
+// The character's potions (<Character>4Epoch.Potions) then SharedPotionPool, in the game's order.
+std::vector<std::string> potionPool(const std::string& characterId) {
+  static const std::vector<std::string> shared = {
       "AttackPotion", "BeetleJuice", "BlessingOfTheForge", "BlockPotion", "BottledPotential", "Clarity",
       "ColorlessPotion", "CureAll", "DexterityPotion", "DistilledChaos", "DropletOfPrecognition", "Duplicator",
       "EnergyPotion", "EntropicBrew", "ExplosiveAmpoule", "FairyInABottle", "FirePotion", "FlexPotion", "Fortifier",
@@ -546,6 +545,12 @@ const std::vector<std::string>& potionPool() {
       "PowerPotion", "RadiantTincture", "RegenPotion", "ShacklingPotion", "ShipInABottle", "SkillPotion",
       "SneckoOil", "SpeedPotion", "StableSerum", "StrengthPotion", "SwiftPotion", "TouchOfInsanity",
       "VulnerablePotion", "WeakPotion"};
+  std::vector<std::string> v = character(characterId).potions;
+  v.insert(v.end(), shared.begin(), shared.end());
+  return v;
+}
+const std::vector<std::string>& potionPool() {
+  static const std::vector<std::string> v = potionPool("Ironclad");
   return v;
 }
 }  // namespace db
@@ -671,7 +676,7 @@ Task<> Run::usePotion(int slot, Creature* target) {
 // then a random registered potion of that rarity (Ironclad + shared pools) not yet picked.
 std::vector<std::unique_ptr<Potion>> Run::randomPotions(int count, Rng& r) {
   std::vector<std::string> options;
-  for (auto& id : db::potionPool()) if (db::potion(id)) options.push_back(id);
+  for (auto& id : db::potionPool(characterId)) if (db::potion(id)) options.push_back(id);
   std::vector<std::unique_ptr<Potion>> out;
   for (int i = 0; i < count; ++i) {
     float roll = r.nextFloat();
@@ -693,7 +698,7 @@ std::unique_ptr<Potion> Run::randomPotion(Rng& r, bool forCombat) {
   float roll = r.nextFloat();
   PotionRarity rarity = roll <= 0.1f ? PotionRarity::Rare : roll <= 0.35f ? PotionRarity::Uncommon : PotionRarity::Common;
   std::vector<std::string> ids;
-  for (auto& id : db::potionPool()) {
+  for (auto& id : db::potionPool(characterId)) {
     auto p = db::potion(id);
     if (p && p->rarity == rarity && p->canBeGeneratedInCombat()) ids.push_back(id);
   }

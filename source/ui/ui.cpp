@@ -226,12 +226,13 @@ void App::startRun(bool resume) {
   if (!loaded) {
     if (savesEnabled()) gfx::deleteSave(kSaveName);
     const char* seed = getenv("STS_SEED");
-    run_->start(seed ? (uint64_t)atoll(seed) : (uint64_t)time(nullptr));
+    const char* character = getenv("STS_CHAR");  // debug: STS_CHAR=Silent (the character select is S04)
+    run_->start(seed ? (uint64_t)atoll(seed) : (uint64_t)time(nullptr), character ? character : "Ironclad");
   }
   if (savesEnabled()) run_->onSavePoint = [](Run& r) { gfx::writeSave(kSaveName, r.save()); };
   if (getenv("STS_ALLCARDS")) {  // debug: every pool card in the deck
     run_->deck.clear();
-    for (auto& id : db::ironcladPool())
+    for (auto& id : run_->character().cardPool)
       if (auto c = db::card(id)) run_->deck.push_back(std::move(c));
   }
   Scheduler::get().spawn(run_->main());
@@ -283,11 +284,18 @@ void App::returnTitle() {
 
 std::string App::idleAnim(const Visual& v) const { return v.puffed ? "idle_loop_puffed" : "idle_loop"; }
 
+// The player's art id (Spine skeleton and portrait sprite): the run's character. Until that
+// character's art is baked (X*.5) the Ironclad's stands in.
+static std::string playerArt(Run* r) {
+  std::string key = r ? r->character().key : std::string("IRONCLAD");
+  return R().sprite("creature/" + key) ? key : std::string("IRONCLAD");
+}
+
 App::Visual* App::visual(Creature* c) {
   auto it = visuals_.find(c);
   if (it != visuals_.end()) return it->second.skel ? &it->second : nullptr;
   Visual& v = visuals_[c];
-  v.key = c->isPlayer ? "IRONCLAD" : c->name;
+  v.key = c->isPlayer ? playerArt(run_.get()) : c->name;
   v.data = R().skeleton(v.key);
   if (!v.data) return nullptr;
   v.skel = std::make_unique<spine::Skeleton>(v.data);
@@ -783,7 +791,7 @@ void App::update(const gfx::Input& in, double dt) {
     visuals_.clear();
     // Only the player stays cached across fights; each monster's Spine pages
     // are a few MB of linear memory on the 3DS.
-    R().releaseSkeletons({"IRONCLAD"});
+    R().releaseSkeletons({playerArt(run_.get())});
     centers_.clear();
     flights_.clear();
     poses_.clear();
@@ -1335,7 +1343,7 @@ float App::enemyX(int i, int n) {
 }
 
 void App::drawCreature(Creature* c, float x, float feetY, bool targeted) {
-  Sprite s = R().sprite("creature/" + (c->isPlayer ? std::string("IRONCLAD") : c->name));
+  Sprite s = R().sprite("creature/" + (c->isPlayer ? playerArt(run_.get()) : c->name));
   float dx = x + (screenShake_ ? std::sin((float)time_ * 55.f + (c->isPlayer ? 0.f : 1.3f)) * c->shake * 3.f : 0.f);
   bool dying = c->dead();
   float flash = c->hitFlash;
@@ -1786,7 +1794,7 @@ void App::drawCombat(bool top) {
     gfx::rectGradient(0, 150, kTop, 90, 0x00000000, 0x00000060);
     const float feet = 170;  // ~70% down the screen, the room's floor line (RGDSplus/native)
     auto center = [&](Creature* c, float x) {
-      Sprite s = R().sprite("creature/" + (c->isPlayer ? std::string("IRONCLAD") : c->name));
+      Sprite s = R().sprite("creature/" + (c->isPlayer ? playerArt(run_.get()) : c->name));
       centers_[c] = {x, s ? feet - s.ay + s.h / 2.f : feet - 30};
     };
     center(cb->player, 95);
@@ -2255,7 +2263,7 @@ void App::drawRest(bool top) {
     gfx::image(bg, 0, 0, kTop, kH, 0, 0, kTop, kH, 0x100400FF, 0.6f);
     gfx::circle(200, 200, 40, 0xFF802040);
     gfx::circle(200, 204, 22, 0xFFB04060);
-    Sprite ic = R().sprite("creature/IRONCLAD");
+    Sprite ic = R().sprite("creature/" + playerArt(run_.get()));
     spr(ic, 120 - ic.ax, 206 - ic.ay);
     TextStyle t = ts(F16, col::gold, CENTER);
     t.scale = 1.4f;
@@ -3109,9 +3117,9 @@ void App::drawDev(bool top) {
   Run& r = *run_;
   if (devRelics_.empty()) {
     std::vector<std::string> ids = db::sharedRelicPool();
-    for (auto& id : db::ironcladRelicPool()) ids.push_back(id);
+    for (auto& id : run_->character().relicPool) ids.push_back(id);
     for (auto& id : ids) if (auto rel = db::relic(id)) { rel->run = run_.get(); devRelics_.push_back(std::move(rel)); }
-    for (auto& id : db::ironcladPool()) if (auto c = db::card(id)) devCards_.push_back(std::move(c));
+    for (auto& id : run_->character().cardPool) if (auto c = db::card(id)) devCards_.push_back(std::move(c));
     for (auto& a : db::acts())
       for (auto* list : {&a.weak, &a.normal, &a.elites, &a.bosses})
         for (auto& id : *list) if (db::encounter(id)) devEncounters_.push_back(id);

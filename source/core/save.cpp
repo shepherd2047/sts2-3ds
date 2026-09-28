@@ -11,7 +11,7 @@ namespace sts {
 
 namespace {
 
-constexpr int kSaveVersion = 2;  // 2: card enchantments
+constexpr int kSaveVersion = 3;  // 2: card enchantments, 3: character id (2 loads as the Ironclad)
 
 void ioCard(Archive& a, std::unique_ptr<Card>& c) {
   std::string id = c ? c->id : "";
@@ -107,8 +107,9 @@ void ioRun(Archive& a, Run& r) {
   a.tag("STS2SAVE");
   int version = kSaveVersion;
   a.io(version);
-  if (version != kSaveVersion) { a.ok = false; return; }
+  if (version != kSaveVersion && version != 2) { a.ok = false; return; }
   a.io(r.seed);
+  if (version >= 3) a.io(r.characterId);
   a.io(r.player->hp); a.io(r.player->maxHp);
   a.io(r.gold); a.io(r.floor); a.io(r.actIndex); a.io(r.fightsThisAct);
   a.io(r.eliteQueue); a.io(r.normalQueue); a.io(r.weakQueue); a.io(r.bossId);
@@ -179,7 +180,9 @@ bool Run::load(const std::string& data) {
   for (std::string t; in >> t;) a.toks.push_back(t);
   // The seed comes first after the header: start that run, then overwrite it.
   if (a.toks.size() < 3 || a.toks[0] != "STS2SAVE") return false;
-  start(std::strtoull(a.toks[2].c_str(), nullptr, 10));
+  // Version 3 puts the character right after the seed; version 2 saves are Ironclad runs.
+  bool hasCharacter = a.toks[1] != "2" && a.toks.size() > 3;
+  start(std::strtoull(a.toks[2].c_str(), nullptr, 10), hasCharacter ? a.toks[3] : "Ironclad");
   ioRun(a, *this);
   if (!a.ok) return false;
   ancientPending = false;

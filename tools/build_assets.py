@@ -576,7 +576,7 @@ def build(args):
     for t in ('card_keywords', 'gameplay_ui', 'rest_site_ui', 'card_reward_ui', 'map', 'combat_messages',
               'card_selection', 'intents', 'game_over_screen', 'characters'):
         take(t, (lambda k: not k.startswith(('DAILY', 'DISCOVERY'))) if t == 'game_over_screen'
-             else (lambda k: k.startswith('IRONCLAD')) if t == 'characters' else (lambda k: True))
+             else (lambda k: k.split('.')[0] in ('IRONCLAD', 'SILENT', 'DEFECT', 'REGENT', 'NECROBINDER')) if t == 'characters' else (lambda k: True))
     with open(os.path.join(OUT, 'loc.txt'), 'w', encoding='utf-8', newline='\n') as f:
         for k in sorted(strings):
             v = strings[k].replace('\\', '\\\\').replace('\n', '\\n').replace('\t', ' ')

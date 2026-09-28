@@ -72,7 +72,7 @@ void fillCard(Run& r, ShopItem& it) {
   std::vector<std::string> onShelf;
   for (auto& s : r.shop) if (s.card) onShelf.push_back(s.card->id);
   auto ofRarity = [&](Rarity want) {
-    return db::ironcladCards([&](const Card& c) {
+    return db::characterCards(r.characterId, [&](const Card& c) {
       return c.type == it.cardType && c.rarity == want &&
              std::find(onShelf.begin(), onShelf.end(), c.id) == onShelf.end();
     });

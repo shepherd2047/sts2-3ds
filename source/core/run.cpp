@@ -30,7 +30,7 @@ bool Run::hasRelic(const std::string& id) const {
   return false;
 }
 
-// RunManager: the shared bag (shared pool) then the player's bag (shared + Ironclad
+// RunManager: the shared bag (shared pool) then the player's bag (shared + the character's
 // pools), both from the UpFront stream; each rarity deque is shuffled once.
 // PORT NOTE: C# shuffles the deques in dictionary insertion order; here in rarity order.
 void Run::populateRelicBags() {
@@ -49,7 +49,7 @@ void Run::populateRelicBags() {
   };
   fill(sharedRelicBag, db::sharedRelicPool());
   std::vector<std::string> all = db::sharedRelicPool();
-  for (auto& id : db::ironcladRelicPool()) all.push_back(id);
+  for (auto& id : character().relicPool) all.push_back(id);
   fill(relicBag, all);
   for (auto& rel : relics) {  // owned relics never drop again
     for (auto& [k, v] : relicBag) v.erase(std::remove(v.begin(), v.end(), rel->id), v.end());
@@ -189,7 +189,7 @@ Card* Run::transformCard(Card* c, std::unique_ptr<Card> into) {
 // CardFactory transform: a random card of the character's pool (Common/Uncommon/Rare),
 // never the card itself. PORT NOTE: C# also weights by rarity odds; this picks uniformly.
 std::unique_ptr<Card> Run::randomTransformFor(Card* c, Rng& rr) {
-  auto pool = db::ironcladCards([&](const Card& x) {
+  auto pool = db::characterCards(characterId, [&](const Card& x) {
     return x.id != c->id && (x.rarity == Rarity::Common || x.rarity == Rarity::Uncommon || x.rarity == Rarity::Rare);
   });
   if (pool.empty()) return nullptr;
@@ -289,23 +289,30 @@ Task<> Run::gainGold(int amount) {
   for (Model* m : listeners()) co_await m->afterGoldGained(n);
 }
 
-void Run::start(uint64_t s) {
+void Run::start(uint64_t s, const std::string& charId) {
   db::init();
   seed = s;
+  characterId = db::character(charId).id;  // unknown ids fall back to the Ironclad
+  const Character& ch = character();
   rngs.clear();
   player = std::make_unique<Creature>();
   player->isPlayer = true;
   player->side = Side::Player;
-  player->name = "IRONCLAD";
-  player->hp = player->maxHp = 80;  // Ironclad.StartingHp
-  gold = 99;
+  player->name = ch.key;
+  player->hp = player->maxHp = ch.startingHp;
+  gold = ch.startingGold;
   floor = 0;
   deck.clear();
-  for (auto& id : db::ironcladStarterDeck()) deck.push_back(db::card(id));
+  // PORT NOTE: cards / relics of a character that is not ported yet are skipped, so its run
+  // starts with what exists (db::characterPlayable says whether it is complete).
+  for (auto& id : ch.starterDeck) if (auto c = db::card(id)) deck.push_back(std::move(c));
   relics.clear();
-  auto bb = db::relic("BurningBlood");
-  bb->run = this;
-  relics.push_back(std::move(bb));
+  for (auto& id : ch.startingRelics) {
+    auto rel = db::relic(id);
+    if (!rel) continue;
+    rel->run = this;
+    relics.push_back(std::move(rel));
+  }
   populateRelicBags();
   visitedEvents.clear();
   died = false;
@@ -498,11 +505,11 @@ std::vector<std::unique_ptr<Card>> Run::cardReward(RoomType room, int count) {
   std::vector<std::string> taken;
   for (int i = 0; i < count; ++i) {
     Rarity want = rollRarity(room);
-    auto pool = db::ironcladCards([&](const Card& c) { return c.rarity == want; });
+    auto pool = db::characterCards(characterId, [&](const Card& c) { return c.rarity == want; });
     pool.erase(std::remove_if(pool.begin(), pool.end(), [&](const std::string& id) {
       return std::find(taken.begin(), taken.end(), id) != taken.end();
     }), pool.end());
-    if (pool.empty()) pool = db::ironcladCards([&](const Card& c) {
+    if (pool.empty()) pool = db::characterCards(characterId, [&](const Card& c) {
       return (c.rarity == Rarity::Common || c.rarity == Rarity::Uncommon || c.rarity == Rarity::Rare) &&
              std::find(taken.begin(), taken.end(), c.id) == taken.end();
     });
@@ -523,6 +530,7 @@ Task<bool> Run::fight(const std::string& encounterId) {
   c.isBoss = enc->room == RoomType::Boss;
   c.isElite = enc->room == RoomType::Elite;
   c.player = player.get();
+  c.maxEnergy = character().maxEnergy;  // CharacterModel.MaxEnergy
   player->combat = &c;
   player->block = 0;
   player->powers.clear();

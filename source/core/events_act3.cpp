@@ -298,7 +298,7 @@ struct MadScience : IroncladT<MadScience> {
         co_await drawCards(val("WisdomCards"));
         break;
       case kChaos: {
-        const auto& pool = db::ironcladPool();
+        const auto& pool = combat->run->character().cardPool;
         auto card = db::card(combat->run->rng("CombatCardGeneration").nextItem(pool));
         card->setThisTurn(0);
         co_await cmd::addGeneratedCard(*combat, std::move(card), Pile::Hand);

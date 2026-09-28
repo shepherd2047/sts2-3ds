@@ -284,7 +284,7 @@ and `Models.Powers\`.
 
 | id | Character | Step 0 systems | Status |
 |---|---|---|---|
-| X0 | All | Character plumbing (see Engine lane order #1) | in progress (engine) |
+| X0 | All | Character plumbing (see Engine lane order #1) | done (engine) |
 | X1.0-X1.5 | Silent | Shiv tokens, Poison, discard triggers (Sly), Retain, Accuracy-style powers | todo |
 | X2.0-X2.5 | Defect | Orbs (Lightning, Frost, Dark, Plasma, Glass), channel/evoke, Focus, orb slots and their rendering on the top screen | todo |
 | X3.0-X3.5 | Regent | Stars (second resource with a HUD counter), Forge and Sovereign Blade, summons | todo |
@@ -294,6 +294,30 @@ and `Models.Powers\`.
 That is 7 packages per character (X*.0, .1, .2, .3a, .3b, .4, .5), X1-X4 in order. X6
 needs X1-X4. Every character needs track F done first, so their cards are drawn
 with the new renderer.
+
+**X0 notes (character plumbing, done).** `Character` (game.h) is one row per playable character
+(HP, gold, energy, orb slots, starter deck, starting relic, card / relic / potion pools in the C# order,
+multiplayer-only cards); the rows are generated into `source/core/characters.inc` by
+`tools/gen_characters.py` from the decompiled C# (rerun it after a decompiler update). `Run::start(seed,
+characterId)` reads it; `Run::characterId` / `Run::character()` replace every Ironclad assumption:
+- pools: `db::characterCards(run.characterId, filter)` (pool order, no multiplayer-only cards, only
+  registered cards), `db::potionPool(characterId)`, `run.character().cardPool / relicPool`; the old
+  `db::ironcladCards / ironcladPool / ironcladRelicPool / ironcladStarterDeck` are Ironclad-only shortcuts, do not use
+  them in new code. Reward, transform, shop, Neow / Ancient, events, potions and relics already go through the
+  character. LargeCapsule adds the character's Basic Strike and Defend;
+- loc keys use `Character::key` (`NEOW.talk.<KEY>.0-0.ancient`, `characters.<KEY>.aromaPrinciple`); `build_assets`
+  now bakes the `characters` table for all five;
+- combat: `Combat::maxEnergy` comes from the character. **Not wired yet (X1.0-X4.0 do it):** `orbSlots`,
+  `alwaysShowStars`, energy orb colour, card frame colour (`energyColor`, `cardFrame` are in the table for F5);
+- UI: the player's Spine and portrait use `Character::key` and fall back to the Ironclad's art until that
+  character's art is baked (X*.5); `STS_CHAR=Silent` picks the character in the preview (the select screen
+  is S04); `SIM_CHAR=Silent ./build/sim N` does the same headless. A character whose cards are not registered
+  yet starts with the cards that exist (`db::characterPlayable(id)` tells whether it is complete);
+- saves: version 3 stores the character right after the seed; version 2 saves load as Ironclad runs;
+- tests: `make -f Makefile.sdl check` now also runs `test/character_test.cpp`.
+A new character's per-character systems go in `source/core/char_<name>.cpp` (a hook in a core file only when
+it cannot be avoided). New card base classes must set the card frame / pool the same way `IroncladT` does and
+their `clone()` must call `adoptEnchantment()`.
 
 ### Track M: meta and progression
 

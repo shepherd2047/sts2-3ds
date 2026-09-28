@@ -179,7 +179,7 @@ struct RoomFullOfCheese : Event {
   }
   Task<> gorge() {
     // CardCreationOptions.ForNonCombatWithUniformOdds(Common, NoRarityModification), 8 distinct cards.
-    auto pool = db::ironcladCards([](const Card& c) { return c.rarity == Rarity::Common; });
+    auto pool = db::characterCards(run->characterId, [](const Card& c) { return c.rarity == Rarity::Common; });
     std::vector<std::unique_ptr<Card>> cards;
     for (int i = 0; i < 8 && !pool.empty(); ++i) {
       size_t k = (size_t)rng().nextInt((int)pool.size());

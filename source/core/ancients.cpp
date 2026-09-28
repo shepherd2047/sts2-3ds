@@ -15,7 +15,7 @@ template <class R> void regRelic() { db::registerRelic(R::kId, [] { return std::
 
 // CardFactory.CreateForReward with uniform odds over one rarity: `count` distinct cards.
 std::vector<std::unique_ptr<Card>> distinctCards(Run& r, Rarity rarity, int count, Rng& rng) {
-  auto pool = db::ironcladCards([&](const Card& c) { return c.rarity == rarity; });
+  auto pool = db::characterCards(r.characterId, [&](const Card& c) { return c.rarity == rarity; });
   std::vector<std::unique_ptr<Card>> out;
   for (int i = 0; i < count && !pool.empty(); ++i) {
     std::string id = rng.nextItem(pool);
@@ -267,8 +267,12 @@ struct LargeCapsule : Relic {
   Task<> afterObtained() override {
     for (int i = 0; i < val("Relics").toInt(); ++i)  // RelicFactory.PullNextRelicFromFront
       co_await run->obtainRelic(run->pullRelicFromFront(run->relicBag, run->rollRelicRarity(run->rng("Rewards"))));
-    run->addCardToDeck(db::card("StrikeIronclad"));
-    run->addCardToDeck(db::card("DefendIronclad"));
+    // GetStrikeForCharacter / GetDefendForCharacter: the character's first Basic Strike / Defend.
+    for (int tag : {tagStrike, tagDefend})
+      for (auto& id : run->character().cardPool) {
+        auto c = db::card(id);
+        if (c && c->rarity == Rarity::Basic && (c->tags & tag)) { run->addCardToDeck(std::move(c)); break; }
+      }
   }
 };
 
@@ -369,8 +373,8 @@ struct Neow : Event {
   }
   std::vector<EventOption> initialOptions() override {
     ancient = true;
-    // DefineDialogues: the Ironclad's first-visit line (no profile, so always visit 0).
-    dialogue = {"NEOW.talk.IRONCLAD.0-0.ancient"};
+    // DefineDialogues: the character's first-visit line (no profile, so always visit 0).
+    dialogue = {"NEOW.talk." + run->character().key + ".0-0.ancient"};
     // GenerateInitialOptions (no run modifiers).
     std::vector<std::string> curses;
     for (auto& id : kCurse) if (allowedAtNeow(id)) curses.push_back(id);

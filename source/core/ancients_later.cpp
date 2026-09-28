@@ -39,8 +39,8 @@ Task<> addToDrawRandom(Combat& c, std::unique_ptr<Card> card) {
 }
 
 // Pool cards for combat generation (CardFactory.FilterForCombat): not Basic / Ancient.
-std::vector<std::string> combatPool(std::function<bool(const Card&)> f) {
-  return db::ironcladCards([&](const Card& c) { return c.rarity != Rarity::Basic && c.rarity != Rarity::Ancient && f(c); });
+std::vector<std::string> combatPool(Run& r, std::function<bool(const Card&)> f) {
+  return db::characterCards(r.characterId, [&](const Card& c) { return c.rarity != Rarity::Basic && c.rarity != Rarity::Ancient && f(c); });
 }
 
 }  // namespace
@@ -237,7 +237,7 @@ struct GlassEye : Relic {
   RELIC_HEADER(GlassEye, "GLASS_EYE", Ancient) }
   Task<> afterObtained() override {
     for (Rarity rar : {Rarity::Common, Rarity::Common, Rarity::Uncommon, Rarity::Uncommon, Rarity::Rare}) {
-      auto pool = db::ironcladCards([&](const Card& c) { return c.rarity == rar; });
+      auto pool = db::characterCards(run->characterId, [&](const Card& c) { return c.rarity == rar; });
       std::vector<std::unique_ptr<Card>> cards;
       for (int i = 0; i < 3 && !pool.empty(); ++i) {
         std::string id = run->rng("Rewards").nextItem(pool);
@@ -543,7 +543,7 @@ struct Crossbow : Relic {
   RELIC_HEADER(Crossbow, "CROSSBOW", Ancient) }
   Task<> afterSideTurnStart(Side, const std::vector<Creature*>& participants) override {
     if (!combat || !contains(participants, owner())) co_return;
-    auto ids = combatPool([](const Card& c) { return c.type == CardType::Attack; });
+    auto ids = combatPool(*run, [](const Card& c) { return c.type == CardType::Attack; });
     if (ids.empty()) co_return;
     doFlash();
     auto card = db::card(combat->rng("CombatCardGeneration").nextItem(ids));
@@ -671,7 +671,7 @@ struct ChoicesParadox : Relic {
   RELIC_HEADER(ChoicesParadox, "CHOICES_PARADOX", Ancient) addVar("Cards", 5); }
   Task<> afterPlayerTurnStart() override {
     if (!combat || combat->turnNumber != 1) co_return;
-    auto ids = combatPool([](const Card&) { return true; });
+    auto ids = combatPool(*run, [](const Card&) { return true; });
     combat->rng("CombatCardGeneration").shuffle(ids);
     std::vector<std::unique_ptr<Card>> made;
     std::vector<Card*> opts;
@@ -850,7 +850,7 @@ struct DustyTome : Relic {
   std::string card;
   void persist(Archive& a) override { a.io(card); }
   void setup(Run& r) {
-    auto ids = db::ironcladCards([](const Card& c) { return c.rarity == Rarity::Ancient && c.id != "Break"; });
+    auto ids = db::characterCards(r.characterId, [](const Card& c) { return c.rarity == Rarity::Ancient && c.id != "Break"; });
     if (!ids.empty()) card = r.rng("Rewards").nextItem(ids);
   }
   Task<> afterObtained() override {
@@ -866,12 +866,12 @@ struct DustyTome : Relic {
 
 namespace {
 
-// AncientEventModel: the Ironclad's first-visit dialogue (the UI drops lines without loc
+// AncientEventModel: the character's first-visit dialogue (the UI drops lines without loc
 // text), and RelicOption (take the relic, then Done). Only registered relics are offered.
 struct AncientBase : Event {
   void talk() {
     ancient = true;
-    std::string k = locKey + ".talk.IRONCLAD.0-";
+    std::string k = locKey + ".talk." + run->character().key + ".0-";
     dialogue = {k + "0.ancient", k + "1.char", k + "1.ancient", k + "2.char", k + "2.ancient"};
   }
   static bool ok(const std::string& id) { return db::relicRegistered(id); }

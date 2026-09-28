@@ -642,31 +642,12 @@ const std::vector<std::string>& sharedRelicPool() {
   static const std::vector<std::string> pool = {"Akabeko", "AmethystAubergine", "Anchor", "ArtOfWar", "BagOfMarbles", "BagOfPreparation", "BeatingRemnant", "Bellows", "BeltBuckle", "BloodVial", "BookOfFiveRings", "BowlerHat", "Bread", "BronzeScales", "BurningSticks", "Candelabra", "CaptainsWheel", "Cauldron", "CentennialPuzzle", "Chandelier", "ChemicalX", "CloakClasp", "DingyRug", "DollysMirror", "DragonFruit", "EternalFeather", "FestivePopper", "FresnelLens", "FrozenEgg", "GamblingChip", "GamePiece", "GhostSeed", "Girya", "GnarledHammer", "Gorget", "GremlinHorn", "HappyFlower", "HornCleat", "IceCream", "IntimidatingHelmet", "JossPaper", "JuzuBracelet", "Kifuda", "Kunai", "Kusarigama", "Lantern", "LastingCandy", "LavaLamp", "LeesWaffle", "LetterOpener", "LizardTail", "LoomingFruit", "LuckyFysh", "Mango", "MealTicket", "MeatOnTheBone", "MembershipCard", "MercuryHourglass", "MiniatureCannon", "MiniatureTent", "MoltenEgg", "MummifiedHand", "MysticLighter", "Nunchaku", "OddlySmoothStone", "OldCoin", "Orichalcum", "OrnamentalFan", "Orrery", "Pantograph", "ParryingShield", "Pear", "PenNib", "Pendulum", "Permafrost", "PetrifiedToad", "Planisphere", "Pocketwatch", "PotionBelt", "PrayerWheel", "PunchDagger", "RainbowRing", "RazorTooth", "RedMask", "RegalPillow", "ReptileTrinket", "RingingTriangle", "RippleBasin", "RoyalStamp", "ScreamingFlagon", "Shovel", "Shuriken", "SlingOfCourage", "SparklingRouge", "StoneCalendar", "StoneCracker", "Strawberry", "StrikeDummy", "SturdyClamp", "TheAbacus", "TheCourier", "TinyMailbox", "Toolbox", "ToxicEgg", "TungstenRod", "TuningFork", "UnceasingTop", "UnsettlingLamp", "Vajra", "Vambrace", "VenerableTeaSet", "VeryHotCocoa", "VexingPuzzlebox", "WarPaint", "Whetstone", "WhiteBeastStatue", "WhiteStar", "WingCharm"};
   return pool;
 }
-const std::vector<std::string>& ironcladRelicPool() {
-  static const std::vector<std::string> pool = {"Brimstone", "BurningBlood", "CharonsAshes", "DemonTongue", "PaperPhrog", "RedSkull", "RuinedHelmet", "SelfFormingClay"};
-  return pool;
-}
 void registerEncounter(const std::string& id, RoomType room, bool weak,
                         std::function<std::vector<std::unique_ptr<Monster>>(Rng&)> gen) {
   regEncounter(id, room, weak, std::move(gen));
 }
 
-const std::vector<std::string>& ironcladPool() {
-  static const std::vector<std::string> pool = {"Aggression", "Anger", "Armaments", "AshenStrike", "Barricade", "Bash", "BattleTrance", "Blaze", "BloodWall", "Bloodletting", "Bludgeon", "BodySlam", "Brand", "Break", "Breakthrough", "Bully", "BurningPact", "Cascade", "Cinder", "Colossus", "Conflagration", "Corruption", "CrimsonMantle", "Cruelty", "DarkEmbrace", "DefendIronclad", "DemonForm", "DemonicShield", "Dismantle", "Dominate", "DrumOfBattle", "EvilEye", "ExpectAFight", "Feed", "FeelNoPain", "FiendFire", "FightMe", "FlameBarrier", "ForgottenRitual", "Havoc", "Headbutt", "Hellraiser", "Hemokinesis", "HowlFromBeyond", "Impervious", "InfernalBlade", "Inferno", "Inflame", "IronWave", "Juggernaut", "Juggling", "Mangle", "Midnight", "MoltenFist", "NotYet", "Offering", "OneTwoPunch", "Outrage", "PactsEnd", "PerfectedStrike", "Pillage", "PommelStrike", "PrimalForce", "Pyre", "Rage", "Rampage", "Rupture", "SecondWind", "SetupStrike", "ShrugItOff", "Spite", "Stampede", "Stoke", "Stomp", "StoneArmor", "StrikeIronclad", "SwordBoomerang", "Tank", "Taunt", "TearAsunder", "Thrash", "Thunderclap", "Tremble", "TrueGrit", "TwinStrike", "Unmovable", "Unrelenting", "Uppercut", "Vicious", "Whirlwind"};
-  return pool;
-}
 
-std::vector<std::string> ironcladCards(std::function<bool(const Card&)> filter) {
-  // CardFactory.FilterForPlayerCount: MultiplayerOnly cards never appear in single player.
-  static const std::vector<std::string> multiplayerOnly = {"Blaze", "DemonicShield", "Midnight", "Outrage", "Tank"};
-  std::vector<std::string> out;
-  for (auto& id : ironcladPool()) {
-    if (std::find(multiplayerOnly.begin(), multiplayerOnly.end(), id) != multiplayerOnly.end()) continue;
-    auto c = card(id);
-    if (c && filter(*c)) out.push_back(id);
-  }
-  return out;
-}
 
 void init() {
   static bool done = false;
@@ -768,10 +749,6 @@ std::unique_ptr<Relic> relic(const std::string& id) {
   return it == relicReg().end() ? nullptr : it->second();
 }
 
-std::vector<std::string> ironcladStarterDeck() {
-  return {"StrikeIronclad", "StrikeIronclad", "StrikeIronclad", "StrikeIronclad", "StrikeIronclad",
-          "DefendIronclad", "DefendIronclad", "DefendIronclad", "DefendIronclad", "Bash"};
-}
 std::vector<std::string> ironcladRewardPool() {
   return {"Anger", "TwinStrike", "SwordBoomerang", "Breakthrough", "Headbutt", "Thunderclap",
           "BodySlam", "IronWave", "PommelStrike", "Cinder", "SetupStrike", "MoltenFist",

@@ -130,7 +130,7 @@ struct SwordOfStone : Relic {
 // AromaOfChaos.cs: transform a card into a random one, or upgrade one.
 struct AromaOfChaos : Event {
   EVENT_HEADER(AromaOfChaos, "AROMA_OF_CHAOS")
-  void calculateVars() override { setStr("AromaPrinciple", "characters.IRONCLAD.aromaPrinciple"); }
+  void calculateVars() override { setStr("AromaPrinciple", "characters." + run->character().key + ".aromaPrinciple"); }
   std::vector<EventOption> initialOptions() override {
     return {option("INITIAL", "LET_GO", [this] { return letGo(); }),
             option("INITIAL", "MAINTAIN_CONTROL", [this] { return maintainControl(); })};

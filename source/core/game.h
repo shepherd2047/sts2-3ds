@@ -195,6 +195,28 @@ struct Archive {
   }
 };
 
+// ---------------------------------------------------------------- characters
+
+// CharacterModel (Models.Characters) + its card / relic pools and the potions of its
+// <Character>4Epoch. The table is generated (characters.inc). Everything that used to assume
+// the Ironclad reads the run's character instead: Run::characterId / Run::character().
+// A character's own mechanics (Poison, orbs, stars, Osty) live in source/core/char_<name>.cpp.
+struct Character {
+  std::string id;    // class name: Ironclad, Silent, Defect, Regent, Necrobinder
+  std::string key;   // upper case: loc keys (characters.IRONCLAD.*), Spine / sprite id, Neow lines
+  int startingHp = 0, startingGold = 99;
+  int maxEnergy = 3;     // CharacterModel.MaxEnergy
+  int orbSlots = 0;      // BaseOrbSlotCount (Defect: 3)
+  bool alwaysShowStars = false;  // ShouldAlwaysShowStarCounter (Regent)
+  std::string energyColor;  // CardPool.EnergyColorName ("ironclad", ...)
+  std::string cardFrame;    // CardPool.CardFrameMaterialPath ("card_frame_red", ...)
+  std::vector<std::string> starterDeck, startingRelics;
+  std::vector<std::string> cardPool;  // in the C# pool order (registered or not); reward RNG depends on it
+  std::vector<std::string> relicPool;
+  std::vector<std::string> potions;   // the character's potions; Run rolls them before the shared pool
+  std::vector<std::string> multiplayerOnly;  // dropped in single player (CardFactory.FilterForPlayerCount)
+};
+
 // ---------------------------------------------------------------- powers
 
 struct Power : Model {
@@ -890,6 +912,8 @@ struct ShopItem {
 
 struct Run {
   uint64_t seed = 1;
+  std::string characterId = "Ironclad";  // Player.Character: db::character(characterId)
+  const Character& character() const;
   std::unique_ptr<Creature> player;
   std::vector<std::unique_ptr<Card>> deck;
   std::vector<std::unique_ptr<Relic>> relics;
@@ -1007,7 +1031,7 @@ struct Run {
     if (!r) r = std::make_unique<Rng>(seed, stream);
     return *r;
   }
-  void start(uint64_t seed);
+  void start(uint64_t seed, const std::string& characterId = "Ironclad");
   void enterAct(int index);        // RunManager.EnterAct: new map, encounters and events
   const db::ActDef& act() const;
   void generateMap();
@@ -1043,7 +1067,7 @@ std::unique_ptr<Relic> relic(const std::string& id);
 std::unique_ptr<Potion> potion(const std::string& id);
 void registerPotion(const std::string& id, PotionFactoryFn f);
 // IroncladPotionPool + SharedPotionPool ids in the game's order (registered or not).
-const std::vector<std::string>& potionPool();
+const std::vector<std::string>& potionPool();  // = potionPool("Ironclad")
 std::vector<std::string> ironcladRewardPool();
 std::vector<std::string> ironcladStarterDeck();
 // acts.cpp: Overgrowth, Hive, Glory with their encounter and event ids as in the C#.
@@ -1075,9 +1099,18 @@ const std::vector<std::string>& sharedRelicPool();
 const std::vector<std::string>& ironcladRelicPool();
 bool relicRegistered(const std::string& id);
 void registerEncounter(const std::string& id, RoomType room, bool weak, std::function<std::vector<std::unique_ptr<Monster>>(Rng&)> gen);
-// Every card in IroncladCardPool, in the pool's order (registered or not).
+// Characters (characters.cpp). `character` falls back to the Ironclad for an unknown id.
+const Character& character(const std::string& id);
+const std::vector<std::string>& characterIds();  // playable characters in the game's order
+// True when the character's starter deck and starting relic are all registered (ported).
+bool characterPlayable(const std::string& id);
+// Registered cards of the character's pool matching a filter, in pool order, without the
+// multiplayer-only cards: e.g. for "add a random Attack". Pass the run's characterId.
+std::vector<std::string> characterCards(const std::string& characterId, std::function<bool(const Card&)> filter);
+// The character's potions, then the shared pool (registered or not).
+std::vector<std::string> potionPool(const std::string& characterId);
+// Ironclad-only shortcuts, kept for old callers: prefer the character versions above.
 const std::vector<std::string>& ironcladPool();
-// Registered pool cards matching a filter, e.g. for "add a random Attack".
 std::vector<std::string> ironcladCards(std::function<bool(const Card&)> filter);
 }  // namespace db
 

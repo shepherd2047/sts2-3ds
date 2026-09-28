@@ -19,7 +19,7 @@ endif
 CORE_SRC := $(wildcard source/core/*.cpp)
 EXTRA_PREVIEW_SRC := source/spine/spine.cpp source/gfx/gfx_common.cpp source/platform_sdl/gfx_sdl.cpp source/ui/res.cpp source/ui/ui.cpp source/main.cpp
 SIM_SRC := test/sim.cpp
-TEST_SRC := test/enchant_test.cpp
+TEST_SRC := test/enchant_test.cpp test/character_test.cpp
 
 OBJ_DIR := build/obj
 
@@ -56,16 +56,21 @@ build/sim: $(CORE_OBJS) $(SIM_EXTRA_OBJS)
 	@mkdir -p build
 	$(CXX) $(BASE_CXXFLAGS) $^ -o $@
 
-# Engine unit checks (enchantments): not part of `all`.
-build/enchant_test: $(CORE_OBJS) $(TEST_EXTRA_OBJS)
+# Engine unit checks (enchantments, characters): not part of `all`.
+build/enchant_test: $(CORE_OBJS) $(OBJ_DIR)/test/enchant_test.o
+	@mkdir -p build
+	$(CXX) $(BASE_CXXFLAGS) $^ -o $@
+
+build/character_test: $(CORE_OBJS) $(OBJ_DIR)/test/character_test.o
 	@mkdir -p build
 	$(CXX) $(BASE_CXXFLAGS) $^ -o $@
 
 sim: build/sim
 	./build/sim 200
 
-check: build/enchant_test
+check: build/enchant_test build/character_test
 	./build/enchant_test
+	./build/character_test
 
 clean:
 	rm -rf build

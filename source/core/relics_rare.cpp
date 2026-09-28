@@ -403,14 +403,14 @@ struct GamblingChip : Relic {
 // hooks to double the first debuff a card applies to an enemy.
 
 // ---- VexingPuzzlebox: on turn 1, add a random Ironclad card to hand, free this turn. ----
-// PORT NOTE: picks from the whole Ironclad pool rather than the player's unlocked pool
+// PORT NOTE: picks from the whole character pool rather than the player's unlocked pool
 // (no unlock system in this build).
 struct VexingPuzzlebox : Relic {
   RELIC_HEADER(VexingPuzzlebox, "VEXING_PUZZLEBOX", Rare) }
   Task<> afterPlayerTurnStart() override {
     if (!combat || combat->turnNumber != 1) co_return;
     doFlash();
-    auto ids = db::ironcladCards([](const Card&) { return true; });
+    auto ids = db::characterCards(combat->run->characterId, [](const Card&) { return true; });
     if (ids.empty()) co_return;
     const std::string& id = combat->rng("CombatCardGeneration").nextItem(ids);
     auto card = db::card(id);

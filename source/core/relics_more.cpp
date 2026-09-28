@@ -233,7 +233,7 @@ struct LastingCandy : Relic {
   Task<> afterCombatVictory() override { ++combatRewardsSeen; return {}; }
   void modifyCardReward(std::vector<std::unique_ptr<Card>>& cards, RoomType room, bool late) override {
     if (late || !isCombatRoom(room) || combatRewardsSeen % 2 != 0) return;
-    auto ids = db::ironcladCards([&](const Card& c) {
+    auto ids = db::characterCards(run->characterId, [&](const Card& c) {
       if (c.type != CardType::Power || c.rarity == Rarity::Basic || c.rarity == Rarity::Ancient) return false;
       for (auto& o : cards) if (o && o->id == c.id) return false;
       return true;

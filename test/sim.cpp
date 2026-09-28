@@ -23,7 +23,7 @@ int main(int argc, char** argv) {
     std::vector<std::unique_ptr<Run>> keep;  // runs replaced by a load stay alive (their coroutines)
     keep.push_back(std::make_unique<Run>());
     Run* cur = keep.back().get();
-    cur->start((uint64_t)s * 7919);
+    cur->start((uint64_t)s * 7919, getenv("SIM_CHAR") ? getenv("SIM_CHAR") : "Ironclad");  // SIM_CHAR=Silent
     cur->freeMap = getenv("STS_FREE_MAP") != nullptr;
     // SIM_SAVELOAD=K: at floor K's map choice, save, load into a new run and carry on with it
     // (the result must match a run without SIM_SAVELOAD). Every save point also checks that
@@ -39,7 +39,7 @@ int main(int argc, char** argv) {
     if (getenv("SIM_SAVELOAD")) cur->onSavePoint = hook;
     if (getenv("SIM_ALLCARDS")) {
       // Every pool card, plain and upgraded, so each one actually gets played.
-      for (auto& id : db::ironcladPool()) {
+      for (auto& id : db::character(cur->characterId).cardPool) {
         if (auto c = db::card(id)) cur->deck.push_back(std::move(c));
         if (auto c = db::card(id)) { c->upgrade(); cur->deck.push_back(std::move(c)); }
       }
@@ -69,7 +69,7 @@ int main(int argc, char** argv) {
           a = b + 1;
         }
       }
-      for (const auto* pool : {&db::sharedRelicPool(), &db::ironcladRelicPool(), (const std::vector<std::string>*)&named})
+      for (const auto* pool : {&db::sharedRelicPool(), &db::character(cur->characterId).relicPool, (const std::vector<std::string>*)&named})
         for (auto& id : *pool) {
           if (!db::relicRegistered(id) || cur->hasRelic(id)) continue;
           std::string only = getenv("SIM_ALLRELICS");  // "1" = all, else a comma list
@@ -133,7 +133,7 @@ int main(int argc, char** argv) {
             // SIM_ALLPOTIONS=1: every fight starts with the next three pool potions.
             if (getenv("SIM_ALLPOTIONS"))
               for (auto& slot : cur->potions) {
-                auto& pool = db::potionPool();
+                auto pool = db::potionPool(cur->characterId);
                 for (size_t k = 0; k < pool.size() && !slot; ++k) {
                   slot = db::potion(pool[potionCursor++ % pool.size()]);
                   if (slot) slot->run = cur;
