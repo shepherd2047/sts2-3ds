@@ -210,6 +210,11 @@ class App {
   float clock_ = 0;         // seconds, drives pulsing UI      // NTargetingArrow head rotation carried between frames
   bool autoplay_ = false;
   double autoT_ = 0;
+
+  // F6 motion: a screen change fades through black for style::kFade seconds; the top bar's
+  // gold/HP numbers tick towards their real value instead of snapping.
+  float transitionT_ = 0;  // 1 = just changed (opaque black), 0 = settled
+  float shownGold_ = -1, shownHp_ = -1;  // -1 = not yet initialised (first frame snaps)
 };
 
 }  // namespace ui

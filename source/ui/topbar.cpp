@@ -8,8 +8,11 @@ namespace ui {
 void App::drawTopBar() {
   gfx::rect(0, 0, kTop, 18, 0x000000A0);
   Creature* p = run_->player.get();
-  R().text(4, 2, "生命 " + num(p->hp) + "/" + num(p->maxHp), ts(F12, col::red));
-  R().text(84, 2, "金币 " + num(run_->gold), ts(F12, col::gold));
+  // F6: the shown numbers tick towards the real value instead of snapping (App::update).
+  int shownHp = shownHp_ >= 0 ? (int)std::lround(shownHp_) : p->hp;
+  int shownGold = shownGold_ >= 0 ? (int)std::lround(shownGold_) : run_->gold;
+  R().text(4, 2, "生命 " + num(shownHp) + "/" + num(p->maxHp), ts(F12, col::red));
+  R().text(84, 2, "金币 " + num(shownGold), ts(F12, col::gold));
   R().text(148, 2, "第 " + num(run_->floor) + " 层", ts(F12, col::white));
   R().text(198, 2, "牌组 " + num((int)run_->deck.size()), ts(F12, col::white));
   // Potion belt (TopBar.PotionContainer), after the deck count.

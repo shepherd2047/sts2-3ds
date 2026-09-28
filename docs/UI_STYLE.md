@@ -205,3 +205,17 @@ enchantment, `missing_enchantment.png` fallback).
 Also fixed while touching card/event text: a plain `{Name:a|b}` conditional on a flag this port
 doesn't model (`IsMultiplayer`, per-card extra args like MadScience's riders) now defaults to
 false and picks the empty/second alt, instead of printing "?" for the whole clause.
+
+## Motion (F6)
+
+New this package: a `style::kFade`-second fade through black on every `run_->screen` change
+(`App::transitionT_`, drawn in `App::draw` after the screen's own content, both screens) and the
+top bar's HP/gold numbers easing towards their real value (`App::shownGold_/shownHp_`,
+exponential approach over `style::kTick`, reset to snap on `startRun`). Everything else the
+package lists was already in place from earlier work and needed no new code: card draw/discard/
+exhaust flights and the fanned-hand animation (`animateHand`/`drawGhosts`/`startFlight`/
+`drawFlights`, `source/ui/screens/combat_hand.cpp`), damage/block/heal floating numbers
+(`App::Float`, `trigger()`), relic flash (`Relic::flash`, `drawRelicIcon`), and per-creature hit
+shake gated by the `screenShake_` setting (`combat_scene.cpp`). Button press feedback exists in
+the new widget kit (F3, `states[id].press`); the still-unmigrated screens' `App::button` gets it
+when their S package moves them onto the kit.

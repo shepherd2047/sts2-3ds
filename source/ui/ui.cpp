@@ -78,6 +78,7 @@ void App::startRun(bool resume) {
   Scheduler::get().spawn(run_->main());
   floats_.clear();
   visuals_.clear();
+  shownGold_ = shownHp_ = -1;  // F6: snap the top bar's ticking counters to the new run
   sel_ = -1;
   mapSel_ = 0;
   mapScroll_ = 0;
@@ -125,12 +126,25 @@ void App::returnTitle() {
 void App::update(const gfx::Input& in, double dt) {
   double visualDt = dt * (fastMode_ ? 1.75 : 1.0);
   time_ += visualDt;
+  if (transitionT_ > 0) transitionT_ = std::max(0.f, transitionT_ - (float)visualDt / style::kFade);
+  // Gold/HP counters (F6): ease towards the real value instead of snapping.
+  {
+    float goldNow = (float)run_->gold, hpNow = run_->player ? (float)std::max(0, run_->player->hp) : shownHp_;
+    if (shownGold_ < 0) shownGold_ = goldNow;
+    if (shownHp_ < 0) shownHp_ = hpNow;
+    float k = 1.f - std::exp(-(float)visualDt / style::kTick);
+    shownGold_ += (goldNow - shownGold_) * k;
+    shownHp_ += (hpNow - shownHp_) * k;
+    if (std::abs(shownGold_ - goldNow) < 0.5f) shownGold_ = goldNow;
+    if (std::abs(shownHp_ - hpNow) < 0.5f) shownHp_ = hpNow;
+  }
   if (toastT_ > 0) toastT_ -= (float)visualDt;
   for (auto& f : floats_) f.t += (float)visualDt;
   floats_.erase(std::remove_if(floats_.begin(), floats_.end(), [](const Float& f) { return f.t > 1.2f; }), floats_.end());
 
   Screen scr = run_->screen;
   if (scr != lastScreen_) {
+    transitionT_ = 1.f;  // F6: fade through black on every screen change
     detailCard_ = nullptr;
     detailRelic_ = nullptr;
     detailUpgrade_ = false;
@@ -316,6 +330,8 @@ void App::draw() {
         break;
       default: break;
     }
+    // F6: fade through black on a screen change (style::kFade seconds).
+    if (transitionT_ > 0) gfx::rect(0, 0, top ? kTop : kBot, kH, 0x000000FF & (0xFFFFFF00 | (uint32_t)(transitionT_ * 255)));
     if (!top && toastT_ > 0) {
       float a = std::min(1.f, toastT_ * 3);
       float w = R().measure(toast_, ts(F12)) + 16;
