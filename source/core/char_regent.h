@@ -42,6 +42,19 @@ struct ParryPower : Power {
   POWER_HEADER(ParryPower, "PARRY_POWER")
 };
 
+// DrawCardsNextTurnPower: modifies the next hand draw by Amount, then removes itself once that
+// draw has happened (AfterSideTurnStart, after AmountOnTurnStart has been captured). Shared by
+// two X3.2 cards (Glow, GuidingStar); mirrors the private copy already in ancients_later.cpp
+// (an Ancient uses the same power) since this engine keeps per-package local power definitions
+// rather than a single shared one.
+struct DrawCardsNextTurnPower : Power {
+  POWER_HEADER(DrawCardsNextTurnPower, "DRAW_CARDS_NEXT_TURN_POWER")
+  Dec modifyHandDraw(Dec count) override { return amountOnTurnStart == 0 ? count : count + Dec(amount); }
+  Task<> afterSideTurnStart(Side, const std::vector<Creature*>& participants) override {
+    if (contains(participants, owner) && amountOnTurnStart != 0) co_await cmd::removePower(this);
+  }
+};
+
 // ForgeCmd.Forge: adds a Sovereign Blade to the player's hand if none of theirs is
 // un-Exhausted, then adds `amount` damage to every Sovereign Blade they have (including
 // exhausted ones). Returns the un-Exhausted blades; Hook.AfterForge fires after.
