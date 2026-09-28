@@ -15,6 +15,7 @@ struct Sprite {
   gfx::Texture* tex = nullptr;
   float x = 0, y = 0, w = 0, h = 0;
   int ax = 0, ay = 0;  // anchor (creature feet), in sprite pixels
+  int nl = 0, nt = 0, nr = 0, nb = 0;  // 9-slice margins (0: not a 9-slice)
   explicit operator bool() const { return tex != nullptr; }
 };
 
@@ -48,6 +49,8 @@ class Res {
  public:
   bool load();
   Sprite sprite(const std::string& name) const;
+  // Names of all atlas sprites that start with prefix, sorted (asset gallery, tests).
+  std::vector<std::string> spriteNames(const std::string& prefix) const;
   gfx::Texture* texture(const std::string& path);
   void releaseTexture(const std::string& path);  // frees a texture loaded by texture()
   // romfs/spine/KEY.*; null if missing or unreadable.

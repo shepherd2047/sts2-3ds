@@ -343,6 +343,143 @@ def bake_ancient(g, anc, args):
         canvas.save(os.path.join(ROOT, 'build', f'preview_bg_{anc}.png'))
 
 
+# ---------------------------------------------------------------- UI kit art (F1)
+
+NINE = []  # (name, l, t, r, b): 9-slice margins in baked pixels, written to gfx/nine.txt
+UI_ATLAS = 'images/atlases/ui_atlas.sprites/'
+
+
+def add_ui_art(g, a, packer, known):
+    """Buttons, panels, top bar, controls, reward / rest icons, character orbs and icons.
+    Names are ui/<name>; sizes are chosen for the 400x240 / 320x240 screens (docs/UI_STYLE.md)."""
+    def src(path):
+        if path.endswith('.tres'):
+            return a.sprite(UI_ATLAS + path)
+        return g.image('images/' + path)
+
+    def put(name, path, size, nine=None):
+        if name in known:
+            return
+        try:
+            img = src(path)
+        except Exception as e:  # a missing source must not break the whole build
+            print('  ui art missing', name, path, e)
+            return
+        packer.add(name, fit(img, size))
+        known.add(name)
+        if nine:
+            NINE.append((name,) + tuple(nine))
+
+    # Buttons
+    put('ui/btn_proceed', 'proceed_button.tres', (84, 39))
+    put('ui/btn_confirm', 'confirm_button.tres', (66, 34))
+    put('ui/btn_back', 'back_button.tres', (66, 34))
+    put('ui/btn_ok_s', 'popup_confirm_button.tres', (64, 28))
+    put('ui/btn_cancel_s', 'popup_cancel_button.tres', (64, 28))
+    put('ui/btn_peek', 'peek_button.tres', (40, 29))
+    put('ui/btn_skip', 'ui/reward_screen/reward_skip_button.png', (110, 27))
+    put('ui/btn_row', 'ui/reward_screen/reward_item_button.png', (168, 36), (12, 12, 12, 12))
+    put('ui/btn_event', 'packed/common_ui/event_button.png', (142, 44), (14, 14, 14, 14))
+    put('ui/btn_event_outline', 'packed/common_ui/event_button_outline.png', (142, 45), (14, 14, 14, 14))
+    put('ui/btn_ancient', 'packed/common_ui/ancient_event_option_button.png', (48, 48), (14, 14, 14, 14))
+    put('ui/btn_ancient_outline', 'packed/common_ui/ancient_event_option_button_outline.png', (48, 48), (14, 14, 14, 14))
+    put('ui/btn_compendium', 'packed/common_ui/submenu_compendium_button.png', (93, 66))
+    put('ui/btn_delete', 'packed/main_menu/delete_button.png', (32, 32))
+    put('ui/end_turn_glow', 'packed/combat_ui/end_turn_button_glow.png', (84, 42))
+    put('ui/exhaust_pile', 'packed/combat_ui/exhaust_pile.png', (30, 30))
+    put('ui/pile_count', 'packed/combat_ui/pile_button_count.png', (24, 20))
+    # Panels, frames, banners
+    put('ui/panel_popup', 'popup_vertical.tres', (143, 163), (14, 14, 14, 14))
+    put('ui/panel_reward', 'ui/reward_screen/reward_panel.png', (169, 215), (14, 14, 14, 14))
+    put('ui/panel_submenu', 'packed/common_ui/submenu_panel.png', (82, 176), (16, 16, 16, 16))
+    put('ui/panel_submenu_short', 'packed/common_ui/submenu_panel_short.png', (98, 132), (16, 16, 16, 16))
+    put('ui/panel_legend', 'map/map_legend.tres', (92, 128), (12, 12, 12, 12))
+    put('ui/hover_tip', 'ui/hover_tip.png', (160, 48), (14, 14, 14, 14))
+    put('ui/nine_dialogue', 'ui/dialogue_nine_patch.png', (57, 41), (12, 12, 12, 12))
+    put('ui/nine_tiny', 'ui/tiny_nine_patch.png', (24, 24), (7, 7, 7, 7))
+    put('ui/nine_keyboard', 'ui/keyboard_icon_ninepatch.png', (48, 48), (14, 14, 14, 14))
+    put('ui/nameplate', 'ui/combat/combat_nameplate_background.png', (100, 26), (10, 10, 10, 10))
+    put('ui/dialogue_tail', 'ui/dialogue_tail.png', (18, 20))
+    put('ui/thought_tail', 'ui/thought_tail.png', (18, 20))
+    put('ui/reward_banner', 'ui/reward_screen/reward_banner.png', (300, 54))
+    put('ui/reward_chain', 'ui/reward_screen/reward_chain.png', (32, 32))
+    # Tabs, arrows, controls
+    put('ui/tab_selected', 'settings_tab_selected.tres', (101, 34), (16, 12, 16, 12))
+    put('ui/tab_stroke', 'settings_tab_stroke.tres', (103, 36), (16, 12, 16, 12))
+    put('ui/tab_bar', 'ui/color_tab_bar.png', (128, 6))
+    put('ui/arrow_left', 'settings_tiny_left_arrow.tres', (24, 26))
+    put('ui/arrow_right', 'settings_tiny_right_arrow.tres', (24, 26))
+    put('ui/sort_desc', 'sort_descending.tres', (22, 16))
+    put('ui/little_arrow', 'packed/common_ui/little_arrow.png', (16, 16))
+    put('ui/notify_dot', 'packed/common_ui/notification_dot2.png', (16, 16))
+    put('ui/checkbox_on', 'checkbox_ticked.tres', (32, 32))
+    put('ui/checkbox_off', 'checkbox_unticked.tres', (32, 32))
+    put('ui/scroll_track', 'small_scrollbar_track_center.tres', (8, 8))
+    put('ui/scroll_edge', 'small_scrollbar_track_edge.tres', (8, 8))
+    put('ui/scroll_thumb', 'small_scrollbar_train.tres', (8, 15), (3, 4, 3, 4))
+    put('ui/locked_card', 'packed/common_ui/locked_card.png', (63, 48))
+    put('ui/locked_model', 'packed/common_ui/locked_model.png', (32, 32))
+    put('ui/hp_bg', 'ui/combat/health_bar_bg.png', (10, 8), (3, 3, 3, 3))
+    put('ui/hp_fill', 'ui/combat/health_bar_fill.png', (8, 8), (3, 3, 3, 3))
+    put('ui/hp_stroke', 'ui/combat/health_bar_stroke.png', (11, 8), (3, 3, 3, 3))
+    put('ui/infinity_hp', 'ui/combat/combat_infinity_hp.png', (50, 28))
+    # Top bar: the strip, stat icons and the three icon buttons
+    put('ui/top_bar', 'top_bar/top_bar.tres', (512, 20))
+    for nm, sz in (('floor', (18, 17)), ('gold', (18, 17)), ('heart', (20, 17)), ('deck', (25, 22)), ('map', (25, 23)),
+                   ('settings', (25, 24)), ('timer', (18, 17)), ('ascension', (19, 28)), ('char_backdrop', (20, 19))):
+        put('ui/tb_' + nm, f'top_bar/top_bar_{nm}.tres' if nm != 'timer' else 'top_bar/timer_icon.tres', sz)
+    for nm, sz in (('deck', (32, 28)), ('map', (32, 29)), ('settings', (32, 31))):
+        put('ui/btn_' + nm, f'top_bar/top_bar_{nm}.tres', sz)
+    # Reward and rest-site icons
+    for nm in ('card', 'card_removal', 'money', 'rare', 'shared_relic', 'special_card', 'uncommon'):
+        put('ui/reward_' + nm, f'ui/reward_screen/reward_icon_{nm}.png', (32, 32))
+    for nm in ('clone', 'cook', 'dig', 'hatch', 'heal', 'kindle', 'lift', 'mend', 'smith', 'toke'):
+        put('ui/rest_' + nm, f'ui/rest_site/option_{nm}.png', (64, 42))
+    for i in (1, 2, 3):
+        put(f'ui/profile_{i}', f'ui/profile/profile_icon_{i}.png', (36, 36))
+    # Characters: top-bar / select icons, cost gems, energy orbs (layers composited)
+    chars = ('ironclad', 'silent', 'defect', 'regent', 'necrobinder')
+    for c in chars + ('random_character',):
+        put('ui/char_' + c.replace('_character', ''), f'ui/top_panel/character_icon_{c}.png', (24, 24))
+    for c in chars[1:]:
+        put('card/energy_' + c, f'card/energy_{c}.tres', (28, 28))
+        prefix = f'images/ui/combat/energy_counters/{c}/{c}_orb_layer_'
+        layers = sorted(k for k in g.pck.files if k.startswith(prefix) and k.endswith('.png.import'))
+        orb = None
+        for k in layers:
+            layer = g.image(k[:-len('.import')])
+            orb = layer if orb is None else Image.alpha_composite(orb, layer.resize(orb.size))
+        if orb is not None and f'ui/energy_orb_{c}' not in known:
+            packer.add(f'ui/energy_orb_{c}', fit(orb, (44, 44)))
+            known.add(f'ui/energy_orb_{c}')
+    put('ui/star', 'ui/combat/energy_star.png', (24, 24))
+    for o in ('dark', 'empty', 'frost', 'glass', 'lightning', 'plasma'):
+        put('orb/' + o, f'orbs/{o}_orb.png', (32, 32))
+    # Intents not used by the ported monsters yet
+    for nm in ('card_debuff', 'death_blow', 'hidden', 'status_card'):
+        put('intent/' + nm, f'packed/intents/intent_{nm}.png', (30, 30))
+    # Every power icon (the ported ones are already in as power/<KEY>)
+    stems = set()
+    for k in g.pck.files:
+        if k.startswith('images/powers/') and k.endswith('.png.import') and '/beta/' not in k:
+            stems.add(k[len('images/powers/'):-len('.png.import')])
+        if k.startswith('images/atlases/power_atlas.sprites/') and k.endswith('.tres'):
+            stems.add(k[len('images/atlases/power_atlas.sprites/'):-len('.tres')])
+    for stem in sorted(stems):
+        name = 'power/' + stem.upper()
+        if name in known or '/' in stem:
+            continue
+        try:
+            if f'images/powers/{stem}.png.import' in g.pck.files:
+                img = g.image(f'images/powers/{stem}.png')
+            else:
+                img = a.sprite(f'images/atlases/power_atlas.sprites/{stem}.tres')
+            packer.add(name, fit(img, (24, 24)))
+            known.add(name)
+        except Exception as e:
+            print('  power icon skipped', stem, e)
+
+
 def build(args):
     global CARDS, POWERS, MONSTERS, RELICS, EVENTS, POTIONS, ENCHANTMENTS
     CARDS = sorted(set(CARDS_FIXED) | set(keys_from_source('CARD_HEADER')))
@@ -457,6 +594,7 @@ def build(args):
                       ('AeonglassBoss', 'images/map/placeholder/aeonglass_boss_icon.png'),
                       ('TestSubjectBoss', 'images/map/placeholder/test_subject_boss_icon.png')):
         packer.add('map/boss_' + enc, fit_height(g.image(path), 64))
+    add_ui_art(g, a, packer, {e[0] for e in packer.entries})
     select = g.image('images/packed/character_select/char_select_ironclad.png')
     packer.add('ui/ironclad_select', fit_height(select, 120))
     icon = Image.new('RGBA', (48, 48), (40, 10, 10, 255))
@@ -467,6 +605,9 @@ def build(args):
     with open(os.path.join(OUT, 'gfx', 'atlas.txt'), 'w', newline='\n') as f:
         for (name, page, x, y, w, h, ax, ay) in packer.entries:
             f.write(f'{name} {page} {x} {y} {w} {h} {ax} {ay}\n')
+    with open(os.path.join(OUT, 'gfx', 'nine.txt'), 'w', newline='\n') as f:
+        for row in NINE:
+            f.write(' '.join(str(v) for v in row) + '\n')
     for i, page in enumerate(packer.pages):
         img = shrink_page(page['img']) if i == len(packer.pages) - 1 else page['img']
         write_t3t(os.path.join(OUT, 'gfx', f'atlas_{i}.t3t'), img)

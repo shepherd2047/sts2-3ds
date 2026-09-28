@@ -37,6 +37,16 @@ bool Res::load() {
       sprites_[name] = s;
     }
   }
+  // 9-slice margins (gfx/nine.txt: name left top right bottom, in baked pixels).
+  if (gfx::readFile("gfx/nine.txt", data)) {
+    std::istringstream in(data);
+    std::string name;
+    int l, t, r, b;
+    while (in >> name >> l >> t >> r >> b) {
+      auto it = sprites_.find(name);
+      if (it != sprites_.end()) { it->second.nl = l; it->second.nt = t; it->second.nr = r; it->second.nb = b; }
+    }
+  }
 
   // One glyph page per size (font_<index>.t3t).
   for (int i = 0; i < 2; ++i) fontTex_[i] = gfx::loadTexture("font/font_" + std::to_string(i) + ".t3t");
@@ -90,6 +100,13 @@ bool Res::load() {
 Sprite Res::sprite(const std::string& name) const {
   auto it = sprites_.find(name);
   return it == sprites_.end() ? Sprite{} : it->second;
+}
+
+std::vector<std::string> Res::spriteNames(const std::string& prefix) const {
+  std::vector<std::string> out;
+  for (auto& kv : sprites_) if (kv.first.compare(0, prefix.size(), prefix) == 0) out.push_back(kv.first);
+  std::sort(out.begin(), out.end());
+  return out;
 }
 
 gfx::Texture* Res::texture(const std::string& path) {

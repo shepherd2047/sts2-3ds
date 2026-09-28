@@ -1,7 +1,9 @@
 // F0 style mock-ups: three screens drawn only from style.h tokens, so the guide in
 // docs/UI_STYLE.md can be judged on screen (STS_MOCK=1 reward list, 2 combat, 3 event).
 // F3's widget kit replaces the helpers below; the numbers stay.
+#include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <cstdio>
 #include <string>
 
@@ -210,8 +212,40 @@ void mockEvent(bool top) {
 
 }  // namespace
 
+// ---------------------------------------------------------------- 4: sprite gallery
+// Every atlas sprite whose name starts with STS_MOCK_PREFIX (default "ui/"), 1:1, with its
+// name; STS_MOCK_PAGE picks the page (top screen first, then bottom). Checks F1 art.
+void mockGallery(bool top) {
+  const char* pf = getenv("STS_MOCK_PREFIX");
+  const char* pg = getenv("STS_MOCK_PAGE");
+  std::string prefix = pf ? pf : "ui/";
+  int page = pg ? atoi(pg) : 0;
+  auto names = R().spriteNames(prefix);
+  const float W = top ? kTop : kBot;
+  gfx::rect(0, 0, W, kH, 0x3C4650FF);
+  // Lay out the whole list, page by page (top screen then bottom = one page).
+  float x = 4, y = 4, rowH = 0;
+  int scr = 0, idx = 0;
+  int target = page * 2 + (top ? 0 : 1);
+  for (auto& n : names) {
+    Sprite s = R().sprite(n);
+    float w = std::max(s.w, 44.f) + 4, h = s.h + 12;
+    float sw = scr % 2 == 0 ? kTop : kBot;
+    if (x + w > sw - 4) { x = 4; y += rowH + 3; rowH = 0; }
+    if (y + h > kH - 2) { ++scr; x = 4; y = 4; rowH = 0; sw = scr % 2 == 0 ? kTop : kBot; }
+    if (scr == target) {
+      spr(s, x, y);
+      R().text(x, y + s.h, n.substr(prefix.size()), ts(F12, col::white, LEFT, 0, 0.55f));
+    }
+    x += w;
+    rowH = std::max(rowH, h);
+    ++idx;
+  }
+}
+
 void drawStyleMock(int which, bool top) {
   switch (which) {
+    case 4: mockGallery(top); break;
     case 1: mockReward(top); break;
     case 2: mockCombat(top); break;
     default: mockEvent(top); break;

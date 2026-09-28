@@ -12,11 +12,15 @@ mock-ups (`STS_MOCK=1|2|3`, `source/ui/style_mock.cpp`) show them on screen: 1 r
 - Outer margin **8 px**, gap between controls **4 px** (8 between groups). Text never touches an edge.
 - Bottom **action bar**: buttons 34 px tall, top at y = 198. Primary (confirm, proceed) at the right,
   secondary (details, back, deck) at the left, at most three buttons. Back is always bottom-left.
-- Top **status bar**: 20 px, black at 72 %, brass line under it. Fields left to right: HP (red), gold,
+  **Combat exception:** the combat bottom screen keeps the owner's measured RGDSplus layout (CLAUDE.md):
+  the hand is centred with card text visible, energy on the left and 结束 on the right just below the
+  hand, the piles (and potions) in the corners, no status strip. It has more than three controls; each
+  is still at least 32 px to touch and none overlaps a card's text.
+- Top **status bar**: 20 px, black at 72 %, teal line under it. Fields left to right: HP (red), gold,
   floor, deck, potion belt, relic strip (right, scrolls). It is drawn by S19 and shared by every room.
-- Screen title: F16 at 1.25x (about 20 px), gold, with a 2 px brass line under it. Only one title per
+- Screen title: F16 at 1.25x (about 20 px), gold, with a 2 px teal line under it. Only one title per
   screen, on the top screen except for pure list pages.
-- Panels: fill `kPanel`, 1 px brass border, a faint 1 px highlight inside the top edge. Square
+- Panels: fill `kPanel`, 1 px teal border, a faint 1 px highlight inside the top edge. Square
   corners (the art is plated).
 - Scrims: a scene background under a page is dimmed with `kScrim`-family black: 0.25 (combat top),
   0.4-0.55 (pages), 0.6 (placeholders).
@@ -60,23 +64,31 @@ Max line length on the bottom screen is 300 px, on the top 380 px.
 
 ## Palette (`style.h` and `res.h col::`)
 
+Sampled from the game's own plates (F1): slate-teal panels, red ribbon for the main action,
+blue ribbon for OK, gold only for text and the focus ring.
+
 | Token | Value | Use |
 |---|---|---|
 | `kClear` | 0B0B12 | screen clear |
-| `kPanel` / `kPanelEdge` / `kPanelHi` | 17131C / 8A6D3B / C9A55C | panel fill, border, title underline |
-| `kPlate` / `kPlateHover` / `kPlatePress` / `kPlateOff` | 4A3626 / 62462D / 2E2118 / 262626 | button states |
-| `kPrimary` | 8A5A20 | the one main action on a screen |
-| `kDanger` | 7A2A2A | abandon, delete, remove |
-| `kEdge` / `kEdgeOff` | B89A60 / 555555 | button border |
+| `kPanel` / `kPanelEdge` / `kPanelHi` | 22323B / 4F8790 / 8FC1C8 | panel fill, border, title underline |
+| `kPlate` / `kPlateHover` / `kPlatePress` / `kPlateOff` | 2E4A57 / 3B6272 / 203641 / 262A2C | button states |
+| `kPrimary` | 872420 | the one main action on a screen (red ribbon: proceed, end turn) |
+| `kOk` | 36567D | blue OK ribbon in popups |
+| `kDanger` | 821F16 | abandon, delete, remove (always behind a confirm) |
+| `kEdge` / `kEdgeOff` | 6FA6AE / 555555 | button border |
 | `kFocus` | FFD870 | focus ring, selected outline |
 | `col::white` (cream) / `gold` / `blue` / `green` / `red` / `purple` / `gray` | FFF6E2 / EFC851 / 87CEEB / 7FFF00 / FF6563 / EE82EE / 9A9A9A | text |
 
-Once F1 lands, the game's own plates (proceed, confirm, cancel, reward rows, top bar) replace the
-flat fills; the layout, states and colours above stay, and the flat versions remain the fallback.
+The flat fills are the fallback; the widget kit (F3) draws the game's own art: `ui/btn_proceed`
+(primary), `ui/btn_confirm` and `ui/btn_row` (secondary, list rows), `ui/btn_ok_s` / `btn_cancel_s`
+(popups), `ui/btn_event` (event options), `ui/panel_*` and `ui/hover_tip` (panels, tooltips),
+`ui/top_bar` and `ui/tb_*` (status bar), `ui/tab_*`, `ui/checkbox_*`, `ui/scroll_*`. Every baked
+sprite and its 9-slice margins (`gfx/nine.txt`) can be browsed with `STS_MOCK=4` (`STS_MOCK_PAGE=n`,
+`STS_MOCK_PREFIX=power/`).
 
 ## Button families
 
-1. **Primary**: gold-brown plate, one per screen (Proceed, Confirm, End turn, Start).
+1. **Primary**: red-ribbon plate, one per screen (Proceed, Confirm, End turn, Start).
 2. **Secondary**: brown plate (Details, Deck, Back, Skip).
 3. **Danger**: red plate, always behind a confirm modal.
 4. **Icon button**: 32 x 32, art only (piles, potion, deck, map, settings); a 4 px hit padding.
@@ -84,7 +96,7 @@ flat fills; the layout, states and colours above stay, and the flat versions rem
    ("已领取", rarity). Used by rewards, shop lists, settings, run history.
 6. **Option button**: full-width 44 px with a centred F16 label, used by events and Ancients; a locked one
    is drawn as disabled with the reason on a red line under it.
-7. **Tab**: 32 px tall, selected tab has a brass underline and a lighter plate; L/R switch.
+7. **Tab**: 32 px tall, selected tab has a teal underline and a lighter plate; L/R switch.
 8. **Toggle / checkbox**: 32 x 32 hit box, tick art from `checkbox_*`; **slider**: 32 px tall track, 16 px knob,
    D-pad left/right steps by 10 %.
 

@@ -8,16 +8,17 @@ namespace ui::style {
 // ---- palette -------------------------------------------------------------------------
 constexpr uint32_t kClear = 0x0B0B12FF;       // screen clear colour
 constexpr uint32_t kScrim = 0x000000A0;       // dark overlay on a scene background
-constexpr uint32_t kPanel = 0x17131CEC;       // panel fill
-constexpr uint32_t kPanelEdge = 0x8A6D3BFF;   // panel border (brass)
-constexpr uint32_t kPanelHi = 0xC9A55CFF;     // panel highlight line / title underline
-constexpr uint32_t kPlate = 0x4A3626F0;       // button, normal
-constexpr uint32_t kPlateHover = 0x62462DF0;  // button, focused or hovered
-constexpr uint32_t kPlatePress = 0x2E2118F0;  // button, pressed
-constexpr uint32_t kPlateOff = 0x262626E0;    // button, disabled
-constexpr uint32_t kPrimary = 0x8A5A20F0;     // the one main action on a screen (gold-brown)
-constexpr uint32_t kDanger = 0x7A2A2AF0;      // destructive action (abandon, delete)
-constexpr uint32_t kEdge = 0xB89A60FF;        // button border
+constexpr uint32_t kPanel = 0x22323BEC;       // panel fill (the game's slate: hover_tip / reward panel)
+constexpr uint32_t kPanelEdge = 0x4F8790FF;   // panel border (teal)
+constexpr uint32_t kPanelHi = 0x8FC1C8FF;     // panel highlight line / title underline
+constexpr uint32_t kPlate = 0x2E4A57F0;       // button, normal (confirm_button teal-slate)
+constexpr uint32_t kPlateHover = 0x3B6272F0;  // button, focused or hovered
+constexpr uint32_t kPlatePress = 0x203641F0;  // button, pressed
+constexpr uint32_t kPlateOff = 0x262A2CE0;    // button, disabled
+constexpr uint32_t kPrimary = 0x872420F0;     // the one main action on a screen (red ribbon: proceed, end turn)
+constexpr uint32_t kOk = 0x36567DF0;          // blue confirm ribbon (popup confirm)
+constexpr uint32_t kDanger = 0x821F16F0;      // destructive action (abandon, delete): same red, plus a confirm
+constexpr uint32_t kEdge = 0x6FA6AEFF;        // button border
 constexpr uint32_t kEdgeOff = 0x555555FF;     // disabled border
 constexpr uint32_t kFocus = 0xFFD870FF;       // focus ring / selected outline
 constexpr uint32_t kSelectedFill = 0xFFD87028;  // selected row tint
