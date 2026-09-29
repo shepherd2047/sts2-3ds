@@ -636,6 +636,7 @@ int main() {
     f.toHand(s);
     f.play(s, e);
     CHECK(e->power("StranglePower") != nullptr);
+  }
   {  // X1.4 Envenom: unblocked attack damage adds Poison; blocked damage does not
     Fight f("Silent");
     Creature* e = f.enemy();

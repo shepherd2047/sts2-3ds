@@ -586,6 +586,8 @@ int main() {
     CHECK(f.c->player->block == b);
     f.play(fresh(f, "Terraforming"), nullptr);
     CHECK(f.c->player->powerAmount<VigorPower>() == 7);
+  }
+
   // ---- X3.4: rare cards
   {  // BeatIntoShape: Forge 5 + 5 per powered hit on the target this turn (not counting its own).
     Fight f;
