@@ -773,6 +773,122 @@ int main() {
     CHECK(std::find(f.c->hand.begin(), f.c->hand.end(), z) == f.c->hand.end());
   }
 
+  {  // X2.4 HelixDrill: one hit per energy spent this turn; Voltaic: one Lightning per one channeled so far.
+    Fight f;
+    Card* z = f.c->addCard(db::card("Zap"));
+    f.toHand(z);
+    f.play(z);
+    Card* d = f.c->addCard(db::card("DefendDefect"));
+    f.toHand(d);
+    f.play(d);
+    CHECK(f.c->energySpentThisTurn == 2);
+    Card* hd = f.c->addCard(db::card("HelixDrill"));
+    f.toHand(hd);
+    int hp = f.enemy()->hp;
+    f.play(hd, f.enemy());
+    CHECK(hp - f.enemy()->hp == 3 * 2);
+    int n0 = f.c->lightningOrbsChanneled;  // the Zap plus whatever the starter relic channeled
+    CHECK(n0 >= 1);
+    Card* v = f.c->addCard(db::card("Voltaic"));
+    f.toHand(v);
+    f.play(v);
+    CHECK(f.c->lightningOrbsChanneled == 2 * n0);
+  }
+  {  // EchoForm doubles the first card each turn (EchoForm itself counts as the first this turn).
+    Fight f;
+    runTask(cmd::applyPower(db::power("EchoFormPower"), f.c->player, 1, f.c->player, nullptr));
+    Card* s = f.c->addCard(db::card("StrikeDefect"));
+    f.toHand(s);
+    int hp = f.enemy()->hp;
+    f.play(s, f.enemy());
+    CHECK(hp - f.enemy()->hp == 12);
+    Card* s2 = f.c->addCard(db::card("StrikeDefect"));
+    f.toHand(s2);
+    hp = f.enemy()->hp;
+    f.play(s2, f.enemy());
+    CHECK(hp - f.enemy()->hp == 6);
+  }
+  {  // GeneticAlgorithm grows on the copy and on its deck version; Buffer absorbs a hit.
+    Fight f;
+    auto deckCard = db::card("GeneticAlgorithm");
+    Card* ga = f.c->addCard(db::card("GeneticAlgorithm"));
+    ga->deckVersion.p = deckCard.get();
+    f.toHand(ga);
+    int blk = f.c->player->block;
+    f.play(ga);
+    CHECK(f.c->player->block - blk == 1);
+    CHECK(deckCard->val("Block").toInt() == 4 && ga->val("Block").toInt() == 4);
+    Card* bf = f.c->addCard(db::card("Buffer"));
+    f.toHand(bf);
+    f.play(bf);
+    int buffers = 0;
+    for (auto& p : f.c->player->powers) if (p->id == "BufferPower") buffers += p->amount;
+    CHECK(buffers == 1);
+  }
+  {  // Reboot: hand to the draw pile, draw 4; Shatter: hit all, evoke each orb twice; AllForOne.
+    Fight f;
+    Card* rb = f.c->addCard(db::card("Reboot"));
+    f.toHand(rb);
+    f.play(rb);
+    CHECK((int)f.c->hand.size() == 4);
+    Fight g;
+    runTask(cmd::channelOrb(*g.c, std::make_unique<LightningOrb>()));
+    runTask(cmd::channelOrb(*g.c, std::make_unique<FrostOrb>()));
+    Card* sh = g.c->addCard(db::card("Shatter"));
+    g.toHand(sh);
+    int hp = g.enemyHpSum();
+    g.play(sh);
+    CHECK(g.c->orbQueue.empty());
+    CHECK(hp - g.enemyHpSum() == 14 + 16);
+    Fight h;
+    Card* ftl = h.c->addCard(db::card("Ftl"));
+    Card* zp = h.c->addCard(db::card("Zap"));
+    h.c->removeFromPiles(ftl);
+    h.c->removeFromPiles(zp);
+    h.c->discard.push_back(ftl);
+    h.c->discard.push_back(zp);
+    Card* afo = h.c->addCard(db::card("AllForOne"));
+    h.toHand(afo);
+    h.play(afo, h.enemy());
+    CHECK(std::find(h.c->hand.begin(), h.c->hand.end(), ftl) != h.c->hand.end());
+    CHECK(std::find(h.c->discard.begin(), h.c->discard.end(), zp) != h.c->discard.end());
+  }
+  {  // Hyperbeam's Focus loss ends with the turn; TrashToTreasure channels on a self-made Status;
+     // FlakCannon hits once per Status and exhausts them; Modded costs 1 more afterwards.
+    Fight f;
+    Card* hb = f.c->addCard(db::card("Hyperbeam"));
+    f.toHand(hb);
+    f.play(hb);
+    CHECK(f.c->player->powerAmount<FocusPower>() == -3);
+    f.endTurn();
+    CHECK(f.c->player->powerAmount<FocusPower>() == 0);
+    Fight g;
+    Card* tt = g.c->addCard(db::card("TrashToTreasure"));
+    g.toHand(tt);
+    g.play(tt);
+    Card* oc = g.c->addCard(db::card("Overclock"));
+    g.toHand(oc);
+    g.play(oc);
+    CHECK(g.c->orbQueue.size() == 1);
+    Fight h;
+    runTask(cmd::addStatusCards(*h.c, "Wound", Pile::Hand, 2, true));
+    runTask(cmd::addStatusCards(*h.c, "Wound", Pile::Discard, 1, true));
+    Card* fc = h.c->addCard(db::card("FlakCannon"));
+    h.toHand(fc);
+    int hp = h.enemyHpSum();
+    h.play(fc);
+    CHECK(hp - h.enemyHpSum() == 8 * 3);
+    int wounds = 0;
+    for (Card* k : h.c->exhaust) if (k->id == "Wound") ++wounds;
+    CHECK(wounds == 3);
+    Fight m;
+    Card* md = m.c->addCard(db::card("Modded"));
+    m.toHand(md);
+    int cap = m.c->orbCapacity;
+    m.play(md);
+    CHECK(m.c->orbCapacity == cap + 1 && m.c->energyCost(md) == 1);
+  }
+
   printf("%d checks, %d failed\n", checks, failures);
   return failures ? 1 : 0;
 }
