@@ -1182,6 +1182,7 @@ Task<> Combat::playCard(Card* card, Creature* target, bool autoPlay, bool forceE
       for (Model* m : listeners()) co_await m->afterCardPlayed(cp);
     if (card->type == CardType::Skill) ++skillsFinishedThisTurn;  // CardPlayFinishedEntry (LunarBlast)
     if (card->type == CardType::Attack) ++attackPlaysFinishedThisTurn;
+    if (card->has(kwEthereal)) ++etherealPlaysFinished;  // BansheesCry
   }
   card->clearCostMods(Card::kWhenPlayed);  // AfterCardPlayedCleanup
 

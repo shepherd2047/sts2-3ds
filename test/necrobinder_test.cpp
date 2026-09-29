@@ -755,6 +755,99 @@ int main() {
     CHECK(f.c->discard.empty() && std::find(f.c->hand.begin(), f.c->hand.end(), d1) != f.c->hand.end());
   }
 
+  {  // X4.4 rares. Hang: 10, then Hang 2; second Hang hits for 10 * 2 and doubles to 4.
+    Fight f("Necrobinder");
+    auto give = [&](const char* id) { Card* k = f.c->addCard(db::card(id)); f.c->hand.push_back(k); return k; };
+    int hp0 = f.enemy(0)->hp;
+    f.play(give("Hang"), f.enemy(0));
+    CHECK(hp0 - f.enemy(0)->hp == 10 && f.enemy(0)->power("HangPower")->amount == 2);
+    hp0 = f.enemy(0)->hp;
+    f.play(give("Hang"), f.enemy(0));
+    CHECK(hp0 - f.enemy(0)->hp == 20 && f.enemy(0)->power("HangPower")->amount == 4);
+    // Oblivion: a card played afterwards gives the enemy Doom equal to the amount (not itself).
+    f.play(give("Oblivion"), f.enemy(1));
+    CHECK(f.enemy(1)->power("OblivionPower")->amount == 3 && f.enemy(1)->power("DoomPower") == nullptr);
+    f.play(give("Undeath"), nullptr);
+    CHECK(f.enemy(1)->power("DoomPower") && f.enemy(1)->power("DoomPower")->amount == 3);
+    // TimesUp: 1 damage per Doom. Misery copies the Doom (a debuff) onto the other enemy.
+    hp0 = f.enemy(1)->hp;
+    f.play(give("TimesUp"), f.enemy(1));
+    CHECK(hp0 - f.enemy(1)->hp == 3);
+    int hp1 = f.enemy(1)->hp;
+    f.play(give("Misery"), f.enemy(0));
+    CHECK(hp1 == f.enemy(1)->hp);
+    CHECK(f.enemy(1)->power("HangPower") && f.enemy(1)->power("HangPower")->amount == 4);
+    // Undeath: block and a copy in the discard pile. Sacrifice: 3 x Osty max HP block, Osty dies.
+    size_t disc0 = f.c->discard.size();
+    int b0 = f.c->player->block;
+    f.play(give("Undeath"), nullptr);
+    CHECK(f.c->player->block - b0 == 7 && f.c->discard.size() == disc0 + 2);
+    int maxHp = f.c->osty->maxHp;
+    b0 = f.c->player->block;
+    f.play(give("Sacrifice"), nullptr);
+    CHECK(f.c->player->block - b0 == maxHp * 3 && f.c->osty->dead());
+  }
+  {  // EndOfDays: Doom then kill all; SharedFate; SoulStorm counts exhausted Souls; Seance transforms.
+    Fight f("Necrobinder");
+    auto give = [&](const char* id) { Card* k = f.c->addCard(db::card(id)); f.c->hand.push_back(k); return k; };
+    f.play(give("SharedFate"), f.enemy(0));
+    CHECK(f.c->player->powerAmount<StrengthPower>() == -2 && f.enemy(0)->powerAmount<StrengthPower>() == -2);
+    f.c->exhaust.push_back(f.c->addCard(db::card("Soul")));
+    f.c->exhaust.push_back(f.c->addCard(db::card("Soul")));
+    int hp0 = f.enemy(0)->hp;
+    f.play(give("SoulStorm"), f.enemy(0));
+    CHECK(hp0 - f.enemy(0)->hp == 9 + 4 * 2 - 2);  // minus the -2 Strength from SharedFate
+    size_t draw0 = f.c->draw.size();
+    Card* top = f.c->draw[0];
+    f.playPick(give("Seance"), nullptr, 0);
+    CHECK(f.c->draw.size() == draw0 && f.c->draw[0] != top && f.c->draw[0]->id == "Soul");
+    for (Creature* e : f.c->enemies) e->hp = e->maxHp = 20;
+    f.play(give("EndOfDays"), nullptr);
+    CHECK(f.c->over || (f.enemy(0)->dead() && f.enemy(1)->dead()));
+  }
+  {  // TheScythe grows (and its deck version), Squeeze, Eradicate (X hits), ReaperForm doom, Demesne.
+    Fight f("Necrobinder");
+    auto give = [&](const char* id) { Card* k = f.c->addCard(db::card(id)); f.c->hand.push_back(k); return k; };
+    Card* s = give("TheScythe");
+    int hp0 = f.enemy(0)->hp;
+    f.play(s, f.enemy(0));
+    CHECK(hp0 - f.enemy(0)->hp == 13 && s->val("Damage") == Dec(18));
+    hp0 = f.enemy(0)->hp;
+    f.play(give("Eradicate"), f.enemy(0));  // 10 energy -> 10 hits of 11
+    CHECK(hp0 - f.enemy(0)->hp == 11 * 10);
+    f.play(give("ReaperForm"), nullptr);
+    hp0 = f.enemy(0)->hp;
+    f.play(give("Hang"), f.enemy(0));
+    CHECK(f.enemy(0)->power("DoomPower") && f.enemy(0)->power("DoomPower")->amount == 10);
+    Card* sq = give("Squeeze");
+    give("SweepingGaze");
+    hp0 = f.enemy(0)->hp;
+    int osty = f.c->osty->hp;
+    (void)osty;
+    f.play(sq, f.enemy(0));
+    CHECK(hp0 - f.enemy(0)->hp >= 30);  // 25 + 5 per other Osty attack in piles (+ Doom from ReaperForm applies later)
+    f.play(give("Demesne"), nullptr);
+    f.endTurn();
+    CHECK(f.c->maxEnergyNow() == 4 && f.c->hand.size() >= 6);
+  }
+  {  // BansheesCry gets cheaper by 2 per Ethereal play; DevourLife summons on Soul; Transfigure.
+    Fight f("Necrobinder");
+    auto give = [&](const char* id) { Card* k = f.c->addCard(db::card(id)); f.c->hand.push_back(k); return k; };
+    Card* b = give("BansheesCry");
+    CHECK(f.c->energyCost(b) == 9);
+    Card* se = give("Seance");
+    f.playPick(se, nullptr, 0);
+    CHECK(f.c->energyCost(b) == 7);
+    f.play(give("DevourLife"), nullptr);
+    int max0 = f.c->osty->maxHp;
+    f.play(give("Soul"), nullptr);
+    CHECK(f.c->osty->maxHp == max0 + 1);
+    Card* tf = give("Transfigure");
+    Card* victim = give("StrikeNecrobinder");
+    f.playPick(tf, nullptr, (int)(std::find(f.c->hand.begin(), f.c->hand.end(), victim) - f.c->hand.begin()) - 1);  // Transfigure itself has left the hand
+    CHECK(f.c->energyCost(victim) == 2 && victim->baseReplayCount == 1);
+  }
+  printf("%d checks, %d failed\n", checks, failures);
   printf("%d checks, %d failed\n", checks, failures);
   return failures ? 1 : 0;
 }

@@ -802,6 +802,7 @@ struct Combat {
   int turnNumber = 1, roundNumber = 1;
   int cardsPlayedThisTurn = 0;  // CombatHistory.CardPlaysStarted this turn (player)
   int skillsFinishedThisTurn = 0;  // CardPlaysFinished of Skills this turn (LunarBlast, X3.3a)
+  int etherealPlaysFinished = 0;  // CardPlaysFinished with WasEthereal, whole combat (BansheesCry, X4.4)
   int attackPlaysFinishedThisTurn = 0;  // CombatHistory.CardPlaysFinished this turn: Attack plays (Finisher, X1.3a)
   Side currentSide = Side::Player;
   bool inProgress = false, ending = false, over = false, won = false;
