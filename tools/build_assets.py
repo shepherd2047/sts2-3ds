@@ -563,6 +563,142 @@ def bake_crystal_sphere(g, packer, args):
     packer.add('crystal/icon_small', fit(g.image(d + 'small_divination_icon.png'), (26, 26)))
 
 
+# ---------------------------------------------------------------- S18 rest site
+
+def _tscn(text):
+    """(ext_resource id -> res path, [(node attrs, node props)]) of a .tscn."""
+    ext = {m.group(2): m.group(1) for m in re.finditer(r'\[ext_resource[^\]]*path="res://([^"]+)"[^\]]*id="([^"]+)"', text)}
+    nodes = []
+    for m in re.finditer(r'\[node ([^\]]*)\]\n((?:(?!\n\[).)*)', text, re.S):
+        attrs = dict(re.findall(r'(\w+)="([^"]*)"', m.group(1)))
+        if 'instance=' in m.group(1):
+            attrs['instance'] = '1'
+        props = dict(line.split(' = ', 1) for line in m.group(2).split('\n') if ' = ' in line)
+        nodes.append((attrs, props))
+    return ext, nodes
+
+
+def _v2(s, d=(0.0, 0.0)):
+    m = re.match(r'Vector2\(([^,]+), ([^)]+)\)', s or '')
+    return (float(m.group(1)), float(m.group(2))) if m else d
+
+
+def _alpha(s):
+    if not s:
+        return 1.0
+    v = [float(x) for x in re.match(r'Color\(([^)]*)\)', s).group(1).split(',')]
+    return v[3] if len(v) > 3 else 1.0
+
+
+def _aff(a, b):  # 2x3 affine product
+    return (a[0] * b[0] + a[1] * b[3], a[0] * b[1] + a[1] * b[4], a[0] * b[2] + a[1] * b[5] + a[2],
+            a[3] * b[0] + a[4] * b[3], a[3] * b[1] + a[4] * b[4], a[3] * b[2] + a[4] * b[5] + a[5])
+
+
+# Where rest.cpp finds the extra pieces baked into the spare strip right of the 400x240 scene
+# (x 400..511 of the 512x256 texture): a flame mask and a soft round light (both white; the
+# screen tints and adds them). Keep in sync with kFlameSrc / kGlowSrc in source/ui/screens/rest.cpp.
+REST_FLAME = (400, 0, 48, 72)
+REST_GLOW = (400, 80, 96, 96)
+
+
+def bake_rest_sites(g, args):
+    """gfx/bg_rest_<act>.t3t: the act's campfire (scenes/rest_site/<act>_rest_site.tscn) as
+    NRestSiteRoom shows it -- the scene in BgContainer at (26, 74) of the 1920x1080 room --
+    with its static TextureRects / Sprite2Ds, the ground light the fire casts, then a 5:3 crop
+    around the fire. The Spine fire, particles and light shaders are the screen's (a flickering
+    flame and glow drawn from the strip at x 400+)."""
+    W, H = 1920, 1080
+    root = (1, 0, 26, 0, 1, 74)
+    flame = g.image('images/vfx/fire/fire_base_campfire.png').convert('L').crop((150, 110, 390, 470))
+    light = g.image('images/vfx/light.png').convert('L')
+    for act in ('overgrowth', 'underdocks', 'hive', 'glory'):
+        ext, nodes = _tscn(g.pck.read(f'scenes/rest_site/{act}_rest_site.tscn').decode())
+        scene = Image.new('RGBA', (W, H), (0, 0, 0, 255))
+        xf, alpha, skip = {}, {}, set()
+        fire = None
+        for attrs, p in nodes:
+            name, t, par = attrs.get('name'), attrs.get('type', ''), attrs.get('parent')
+            if par is None:
+                xf['.'], alpha['.'] = root, 1.0
+                continue
+            pk = par
+            path = name if par == '.' else par + '/' + name
+            r = float(p.get('rotation', 0))
+            sx, sy = _v2(p.get('scale'), (1.0, 1.0))
+            if 'position' in p:
+                x, y = _v2(p.get('position'))
+            else:
+                x, y = float(p.get('offset_left', 0)), float(p.get('offset_top', 0))
+            c, s = np.cos(r), np.sin(r)
+            m = _aff(xf.get(pk, root), (c * sx, -s * sy, x, s * sx, c * sy, y))
+            xf[path] = m
+            a = alpha.get(pk, 1.0) * _alpha(p.get('modulate'))
+            alpha[path] = a
+            if pk in skip or p.get('visible') == 'false' or 'SteppedFire' in name or 'instance' in attrs:
+                skip.add(path)
+                continue
+            tex = re.match(r'ExtResource\("([^"]+)"\)', p.get('texture', ''))
+            if t not in ('TextureRect', 'Sprite2D') or not tex or 'additive' in p.get('material', ''):
+                continue
+            sa = a * _alpha(p.get('self_modulate'))
+            res = ext.get(tex.group(1), '')
+            # Light overlays (rest_site_light_shader, faint) and water glints are additive in-game.
+            if sa < 0.3 or not res.endswith('.png') or res.endswith('vfx/light.png'):
+                continue
+            img = g.image(res).convert('RGBA')
+            if t == 'TextureRect':
+                w = float(p.get('offset_right', 0)) - float(p.get('offset_left', 0))
+                h = float(p.get('offset_bottom', 0)) - float(p.get('offset_top', 0))
+                if w <= 0 or h <= 0:
+                    w, h = img.size
+                loc = (w / img.width, 0, 0, 0, h / img.height, 0)
+            else:
+                ox, oy = _v2(p.get('offset'))
+                cen = p.get('centered', 'true') != 'false'
+                loc = (1, 0, ox - (img.width / 2 if cen else 0), 0, 1, oy - (img.height / 2 if cen else 0))
+            A = _aff(m, loc)
+            det = A[0] * A[4] - A[1] * A[3]
+            if abs(det) < 1e-9:
+                continue
+            inv = (A[4] / det, -A[1] / det, (A[1] * A[5] - A[4] * A[2]) / det,
+                   -A[3] / det, A[0] / det, (A[3] * A[2] - A[0] * A[5]) / det)
+            layer = img.transform((W, H), Image.AFFINE, inv, resample=Image.BILINEAR)
+            if sa < 1:
+                arr = np.array(layer)
+                arr[..., 3] = (arr[..., 3] * sa).astype(np.uint8)
+                layer = Image.fromarray(arr)
+            scene.alpha_composite(layer)
+            if 'FireLogs' in name and fire is None:  # the fire pit: its rect's centre
+                fire = (A[0] * img.width / 2 + A[1] * img.height / 2 + A[2], A[3] * img.width / 2 + A[4] * img.height / 2 + A[5])
+        if fire is None:
+            fire = (960, 790)
+        # The fire's warm light on the ground (RestSiteGroundLighting, additive).
+        rgb = np.array(scene.convert('RGB')).astype(np.float32)
+        yy, xx = np.mgrid[0:H, 0:W]
+        d = np.sqrt(((xx - fire[0]) / 620.0) ** 2 + ((yy - fire[1]) / 360.0) ** 2)
+        k = np.clip(1 - d, 0, 1) ** 1.6
+        rgb *= (1.3 + 0.6 * k)[..., None]  # the scene's lights are shaders here; lift it a little
+        rgb += k[..., None] * np.array([120, 62, 18], np.float32)
+        scene = Image.fromarray(np.clip(rgb, 0, 255).astype(np.uint8)).convert('RGBA')
+        # 5:3 crop, 1600x960, the fire at x 200 and about 70 % down.
+        cx0 = round(fire[0] - 800)
+        cy0 = max(0, min(H - 960, round(fire[1] - 0.7 * 960)))
+        top = scene.crop((cx0, cy0, cx0 + 1600, cy0 + 960)).resize((400, 240), Image.LANCZOS)
+        canvas = Image.new('RGBA', (512, 256), (0, 0, 0, 0))
+        canvas.paste(top, (0, 0))
+        fx, fy, fw, fh = REST_FLAME
+        fm = flame.resize((fw, fh), Image.LANCZOS)
+        canvas.paste(Image.merge('RGBA', (Image.new('L', (fw, fh), 255),) * 3 + (fm,)), (fx, fy))
+        gx, gy, gw, gh = REST_GLOW
+        gl = light.resize((gw, gh), Image.LANCZOS)
+        canvas.paste(Image.merge('RGBA', (Image.new('L', (gw, gh), 255),) * 3 + (gl,)), (gx, gy))
+        write_t3t(os.path.join(OUT, 'gfx', f'bg_rest_{act}.t3t'), canvas)
+        print('  rest site', act, 'fire at', round((fire[0] - cx0) / 4), round((fire[1] - cy0) / 4))
+        if args.preview:
+            canvas.save(os.path.join(ROOT, 'build', f'preview_bg_rest_{act}.png'))
+
+
 def add_ui_art(g, a, packer, known):
     """Buttons, panels, top bar, controls, reward / rest icons, character orbs and icons.
     Names are ui/<name>; sizes are chosen for the 400x240 / 320x240 screens (docs/UI_STYLE.md)."""
@@ -1031,6 +1167,7 @@ def build(args):
     write_t3t(os.path.join(OUT, 'gfx', 'bg_merchant.t3t'), canvas)
     if args.preview:
         canvas.save(os.path.join(ROOT, 'build', 'preview_bg_merchant.png'))
+    bake_rest_sites(g, args)  # S18: gfx/bg_rest_<act>.t3t
 
     print('text')
     strings = {}
