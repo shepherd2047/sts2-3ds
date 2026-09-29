@@ -676,13 +676,24 @@ void Run::rollCardUpgrade(Card& c, double baseChance) {
 std::vector<std::unique_ptr<Card>> Run::cardReward(RoomType room, int count) {
   std::vector<std::unique_ptr<Card>> out;
   std::vector<std::string> taken;
+  // Prismatic Gem (ModifyCardRewardCreationOptions): every character's pool joins the reward pool.
+  bool allPools = false;
+  for (auto& rel : relics) if (rel->allCharacterCardPools()) allPools = true;
+  auto poolOf = [&](const std::function<bool(const Card&)>& f) {
+    if (!allPools) return db::characterCards(characterId, f);
+    std::vector<std::string> u;
+    for (auto& ch : db::characterIds())
+      for (auto& id : db::characterCards(ch, f))
+        if (std::find(u.begin(), u.end(), id) == u.end()) u.push_back(id);
+    return u;
+  };
   for (int i = 0; i < count; ++i) {
     Rarity want = rollRarity(room);
-    auto pool = db::characterCards(characterId, [&](const Card& c) { return c.rarity == want; });
+    auto pool = poolOf([&](const Card& c) { return c.rarity == want; });
     pool.erase(std::remove_if(pool.begin(), pool.end(), [&](const std::string& id) {
       return std::find(taken.begin(), taken.end(), id) != taken.end();
     }), pool.end());
-    if (pool.empty()) pool = db::characterCards(characterId, [&](const Card& c) {
+    if (pool.empty()) pool = poolOf([&](const Card& c) {
       return (c.rarity == Rarity::Common || c.rarity == Rarity::Uncommon || c.rarity == Rarity::Rare) &&
              std::find(taken.begin(), taken.end(), c.id) == taken.end();
     });
@@ -894,6 +905,7 @@ Task<> Run::restSite() {
     if (hasRelic("Shovel")) restOptions.push_back(3);
     if (hasRelic("MeatCleaver")) restOptions.push_back(4);   // CookRestSiteOption
     if (hasRelic("PumpkinCandle")) restOptions.push_back(5); // KindleRestSiteOption
+    if (hasRelic("PaelsGrowth")) restOptions.push_back(6);   // CloneRestSiteOption
     screen = Screen::Rest;
     int opt = co_await restChoice.next();
     if (opt < 0) break;
@@ -936,6 +948,12 @@ Task<> Run::restSite() {
       done = true;
     } else if (opt == 5) {  // Kindle: Pumpkin Candle +5 combats
       for (auto& r : relics) if (r->id == "PumpkinCandle") { r->restSiteAction(5); r->doFlash(); }
+      done = true;
+    } else if (opt == 6) {  // CloneRestSiteOption: copy every deck card enchanted with Clone
+      std::vector<Card*> cloned;
+      for (auto& card : deck) if (card->enchantment && card->enchantment->id == "Clone") cloned.push_back(card.get());
+      for (Card* card : cloned) addCardToDeck(card->clone());
+      co_await wait(0.4);
       done = true;
     } else if (opt == 3) {  // DigRestSiteOption: a relic from the front of the bag
       co_await offerRelic(pullRelicFromFront(relicBag, rollRelicRarity(rng("Rewards"))), false);

@@ -31,9 +31,9 @@ void App::drawRest(bool top) {
     int o = opts[i];
     float x = i % 2 ? 166 : 16, y = 20 + (i / 2) * (bh + gapY + 16);
     bool used = std::find(r.restUsed.begin(), r.restUsed.end(), o) != r.restUsed.end();
-    static const char* keys[] = {"OPTION_HEAL", "OPTION_SMITH", "OPTION_LIFT", "OPTION_DIG", "OPTION_COOK", "OPTION_KINDLE"};
+    static const char* keys[] = {"OPTION_HEAL", "OPTION_SMITH", "OPTION_LIFT", "OPTION_DIG", "OPTION_COOK", "OPTION_KINDLE", "OPTION_CLONE"};
     button(x, y, bw, bh, L(std::string("rest_site_ui.") + keys[o] + ".name"), ID_GRID0 + o, r.restChoice.waiting() && restValid(o), sel_ == o);
-    static const char* subs[] = {"", "升级一张牌", "战斗开始时 +1 力量", "挖出一件遗物", "移除 2 张牌，+5 最大生命", "南瓜灯 +5 场战斗"};
+    static const char* subs[] = {"", "升级一张牌", "战斗开始时 +1 力量", "挖出一件遗物", "移除 2 张牌，+5 最大生命", "南瓜灯 +5 场战斗", "复制所有克隆牌"};
     std::string sub = o == 0 ? "回复 " + num(heal) + " 点生命" : std::string(subs[o]);
     R().text(x + bw / 2, y + bh + 2, used ? std::string("已使用") : sub, ts(F12, used ? col::gray : o == 0 ? col::green : col::gold, CENTER));
   }
@@ -65,7 +65,7 @@ void App::updateRest(const gfx::Input& in) {
   if ((in.down & gfx::BTN_A) && restValid(sel_)) { r.restChoice.fire(sel_); return; }
   if (in.touchDown) {
     int id = hitAt(in.tx, in.ty);
-    int pick = id >= ID_GRID0 && id < ID_GRID0 + 6 ? id - ID_GRID0 : -1;
+    int pick = id >= ID_GRID0 && id < ID_GRID0 + 7 ? id - ID_GRID0 : -1;
     if (pick >= 0) {
       if (sel_ == pick && restValid(pick)) { r.restChoice.fire(pick); return; }  // second tap confirms
       sel_ = pick;

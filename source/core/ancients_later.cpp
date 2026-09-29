@@ -913,6 +913,7 @@ struct AncientBase : Event {
       auto fresh = db::relic(shown->id);
       // Keep what the option was set up with (Dusty Tome's card).
       if (shown->id == "DustyTome") static_cast<DustyTome*>(fresh.get())->card = static_cast<DustyTome*>(shown.get())->card;
+      if (shown->id == "SeaGlass") fresh->vars = shown->vars;  // its character (A6)
       co_await run->obtainRelic(std::move(fresh));
       finished = true;
       options.clear();
@@ -939,8 +940,26 @@ struct Orobas : AncientBase {
   std::vector<EventOption> initialOptions() override {
     talk();
     // Pool 1: Electric Shrymp, Glass Eye, and Prismatic Gem (1/3) or Sea Glass.
+    // The Sea Glass character: NextItem over the other unlocked characters (own character if none).
+    std::vector<std::string> others;
+    for (auto& id : db::characterIds())
+      if (id != run->characterId && db::characterPlayable(id)) others.push_back(id);
+    std::string seaChar = others.empty() ? run->characterId : rng().nextItem(others);
     std::vector<std::string> pool1 = {"ElectricShrymp", "GlassEye", rng().nextFloat() < 0.3333333f ? "PrismaticGem" : "SeaGlass"};
-    std::vector<EventOption> out = pick1(pool1);
+    std::vector<EventOption> out;
+    auto p1 = ported(pool1);
+    if (!p1.empty()) {
+      std::string pick = rng().nextItem(p1);
+      if (pick == "SeaGlass") {
+        auto sg = db::relic("SeaGlass");
+        sg->run = run;
+        const auto& ids = db::characterIds();
+        sg->var("CharacterIndex")->base = Dec((int)(std::find(ids.begin(), ids.end(), seaChar) - ids.begin()));
+        out.push_back(relicOption(std::shared_ptr<Relic>(sg.release())));
+      } else {
+        out.push_back(relicOption(pick));
+      }
+    }
     auto o2 = pick1({"AlchemicalCoffer", "Driftwood", "RadiantPearl", "SandCastle"});
     out.insert(out.end(), o2.begin(), o2.end());
     std::vector<std::string> pool3;
