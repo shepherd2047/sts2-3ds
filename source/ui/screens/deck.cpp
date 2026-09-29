@@ -1,94 +1,10 @@
 // Split from ui.cpp (F3). S13: the deck grid select and choose-one screens (RGDSplus U15/U16).
+// S11: the deck view and the combat pile views (RGDSplus U13), at the end of the file.
 #include <map>
 
 #include "../ui_common.h"
 
 namespace ui {
-
-// ================================================================ deck view
-
-std::vector<Card*> App::listedCards() {
-  std::vector<Card*> cards;
-  if (cardListMode_ == CardListMode::Deck || !run_->combat) {
-    for (auto& c : run_->deck) cards.push_back(c.get());
-    return cards;
-  }
-  Combat& cb = *run_->combat;
-  const std::vector<Card*>& pile = cardListMode_ == CardListMode::Draw ? cb.draw
-                                   : cardListMode_ == CardListMode::Discard ? cb.discard : cb.exhaust;
-  cards.assign(pile.begin(), pile.end());
-  // The draw-pile page must not reveal its actual next-card order.
-  std::stable_sort(cards.begin(), cards.end(), [&](Card* a, Card* b) { return cardTitle(a) < cardTitle(b); });
-  return cards;
-}
-
-void App::openCardList(CardListMode mode) {
-  cardListMode_ = mode;
-  deckOpen_ = true;
-  sel_ = -1;
-  scroll_ = 0;
-}
-
-void App::drawDeck(bool top) {
-  std::vector<Card*> cards = listedCards();
-  const char* title = cardListMode_ == CardListMode::Deck ? "牌组" :
-                      cardListMode_ == CardListMode::Draw ? "抽牌堆" :
-                      cardListMode_ == CardListMode::Discard ? "弃牌堆" : "消耗堆";
-  if (top) {
-    drawSceneBg(true, 0.7f);
-    drawTopBar();
-    if (sel_ >= 0 && sel_ < (int)cards.size()) drawCard(cards[sel_], (kTop - 132) / 2, 34, 1.1f, false, true);
-    else R().text(kTop / 2, 100, std::string(title) + "（" + num((int)cards.size()) + " 张）", ts(F16, col::gold, CENTER));
-    if (cardListMode_ == CardListMode::Draw && sel_ < 0)
-      R().text(kTop / 2, 211, "不显示实际抽牌顺序", ts(F12, col::gray, CENTER));
-    return;
-  }
-  drawSceneBg(false, 0.65f);
-  drawCardGrid(cards, sel_, 0, 196, scroll_);
-  gfx::rect(0, 196, kBot, 44, 0x000000A0);
-  if (cardListMode_ == CardListMode::Deck) {
-    button(10, 200, 100, 34, "返回", ID_BACK);
-    button(118, 200, 84, 34, "详情", ID_DETAIL, sel_ >= 0 && sel_ < (int)cards.size());
-    button(kBot - 110, 200, 100, 34, "遗物", ID_RELICS);
-  } else {
-    button(4, 200, 64, 34, "返回", ID_BACK);
-    button(72, 200, 76, 34, "抽牌", ID_PILE_DRAW, true, cardListMode_ == CardListMode::Draw);
-    button(154, 200, 76, 34, "弃牌", ID_PILE_DISCARD, true, cardListMode_ == CardListMode::Discard);
-    button(236, 200, 76, 34, "消耗", ID_PILE_EXHAUST, true, cardListMode_ == CardListMode::Exhaust);
-  }
-}
-
-void App::updateDeck(const gfx::Input& in) {
-  std::vector<Card*> cards = listedCards();
-  int m = (int)cards.size();
-  if (cardListMode_ != CardListMode::Deck && (in.down & (gfx::BTN_L | gfx::BTN_R))) {
-    int mode = (int)cardListMode_ - (int)CardListMode::Draw;
-    mode = (mode + ((in.down & gfx::BTN_R) ? 1 : 2)) % 3;
-    openCardList((CardListMode)((int)CardListMode::Draw + mode));
-    return;
-  }
-  if (in.down & gfx::BTN_RIGHT) sel_ = std::min(m - 1, sel_ + 1);
-  if (in.down & gfx::BTN_LEFT) sel_ = std::max(0, sel_ - 1);
-  if (in.down & gfx::BTN_DOWN) sel_ = std::min(m - 1, sel_ + 5);
-  if (in.down & gfx::BTN_UP) sel_ = std::max(0, sel_ - 5);
-  if (sel_ >= 0) scroll_ = std::max(0, sel_ / 5 - 1);
-  if (in.down & (gfx::BTN_B | gfx::BTN_Y)) { deckOpen_ = false; cardListMode_ = CardListMode::Deck; sel_ = -1; return; }
-  if ((in.down & gfx::BTN_A) && sel_ >= 0 && sel_ < m) { detailCard_ = cards[sel_]; detailUpgrade_ = false; return; }
-  if (in.touchDown) {
-    int id = hitAt(in.tx, in.ty);
-    if (id >= ID_GRID0 && id < ID_GRID0 + m) {
-      int picked = id - ID_GRID0;
-      if (sel_ == picked) { detailCard_ = cards[picked]; detailUpgrade_ = false; return; }
-      sel_ = picked;
-    }
-    if (id == ID_DETAIL && sel_ >= 0 && sel_ < m) { detailCard_ = cards[sel_]; detailUpgrade_ = false; return; }
-    if (id == ID_BACK) { deckOpen_ = false; cardListMode_ = CardListMode::Deck; sel_ = -1; }
-    if (id == ID_RELICS) { deckOpen_ = false; relicsOpen_ = true; sel_ = run_->relics.empty() ? -1 : 0; scroll_ = 0; }
-    if (id == ID_PILE_DRAW) openCardList(CardListMode::Draw);
-    if (id == ID_PILE_DISCARD) openCardList(CardListMode::Discard);
-    if (id == ID_PILE_EXHAUST) openCardList(CardListMode::Exhaust);
-  }
-}
 
 // ================================================================ deck grid select (S13, U15)
 
@@ -166,9 +82,9 @@ Card* upgradedCopy(Card* c) {
 }
 
 int gridRows(int n) { return (n + kGPerRow - 1) / kGPerRow; }
-float gridMaxScroll(int n) { return std::max(0.f, gridRows(n) * kGRow + 8 - (kGY1 - kGY0)); }
+float gridMaxScroll(int n, float h = kGY1 - kGY0) { return std::max(0.f, gridRows(n) * kGRow + 8 - h); }
 float gridCellX(int i) { return kGCellGap + (i % kGPerRow) * (kGW + kGCellGap); }
-float gridCellY(int i, float scroll) { return kGY0 + 6 + (i / kGPerRow) * kGRow - scroll; }
+float gridCellY(int i, float scroll, float y0 = kGY0) { return y0 + 6 + (i / kGPerRow) * kGRow - scroll; }
 
 void gridScrollToSel(int n) {
   GridSel& g = GS();
@@ -179,13 +95,22 @@ void gridScrollToSel(int n) {
   g.scroll = std::clamp(g.scroll, 0.f, gridMaxScroll(n));
 }
 
-int gridCardAt(float tx, float ty, int n) {
-  if (ty < kGY0 || ty >= kGY1) return -1;
+int gridCardAt(float tx, float ty, int n, float scroll, float y0 = kGY0, float y1 = kGY1) {
+  if (ty < y0 || ty >= y1) return -1;
   for (int i = 0; i < n; ++i) {
-    float x = gridCellX(i), y = gridCellY(i, GS().scroll);
+    float x = gridCellX(i), y = gridCellY(i, scroll, y0);
     if (tx >= x && tx < x + kGW && ty >= y && ty < y + kGH) return i;
   }
   return -1;
+}
+
+// The grid's scrollbar at the right edge (only when the grid overflows).
+void gridScrollbar(float y0, float y1, float scroll, float maxScroll) {
+  if (maxScroll <= 0) return;
+  float h = y1 - y0, th = std::max(16.f, h * h / (h + maxScroll));
+  float ty = y0 + (h - th) * (scroll / maxScroll);
+  gfx::rect(kBot - 4, y0, 3, h, 0x00000080);
+  gfx::rect(kBot - 4, ty, 3, th, 0xC8B080FF);
 }
 
 std::string promptText(const std::string& key, int count) {
@@ -286,7 +211,7 @@ int App::gridSelectUpdate(const GridSelectSpec& s, const gfx::Input& in, std::ve
     g.touchDown = true;
     g.dragged = false;
     g.touchY0 = g.touchLastY = (float)in.ty;
-    g.touchCard = gridCardAt((float)in.tx, (float)in.ty, n);
+    g.touchCard = gridCardAt((float)in.tx, (float)in.ty, n, g.scroll);
     g.touchX = (float)in.tx;
   } else if (g.touchDown && in.touching) {
     g.touchX = (float)in.tx;
@@ -297,7 +222,7 @@ int App::gridSelectUpdate(const GridSelectSpec& s, const gfx::Input& in, std::ve
   if (in.touchUp && g.touchDown) {
     g.touchDown = false;
     int i = g.touchCard;
-    if (!g.dragged && i >= 0 && gridCardAt(g.touchX, g.touchLastY, n) == i) {
+    if (!g.dragged && i >= 0 && gridCardAt(g.touchX, g.touchLastY, n, g.scroll) == i) {
       g.zone = 0;
       widgets::setFocus(-1);
       if (multi) { g.sel = i; return toggle(i); }
@@ -407,12 +332,7 @@ void App::gridSelectDraw(const GridSelectSpec& s, bool top) {
     }
   }
   gfx::popClip();
-  if (gridMaxScroll(n) > 0) {  // scrollbar
-    float h = kGY1 - kGY0, th = std::max(16.f, h * h / (h + gridMaxScroll(n)));
-    float ty = kGY0 + (h - th) * (g.scroll / gridMaxScroll(n));
-    gfx::rect(kBot - 4, kGY0, 3, h, 0x00000080);
-    gfx::rect(kBot - 4, ty, 3, th, 0xC8B080FF);
-  }
+  gridScrollbar(kGY0, kGY1, g.scroll, gridMaxScroll(n));
   gfx::rect(0, kGY1, kBot, kH - kGY1, style::kScrim);
   widgets::beginFrame(barInput(g.zone));
   if (g.zone == 0) widgets::setFocus(-1);
@@ -633,6 +553,346 @@ App::ChooseOneSpec App::combatChooseOneSpec() const {
   s.canSkip = ch.minCount == 0;
   s.title = R().hasLoc(ch.prompt) ? L(ch.prompt) : ch.prompt;
   return s;
+}
+
+// ================================================================ deck view and pile views (S11, U13)
+
+// S11 (RGDSplus U13, C# NDeckViewScreen / NCardsViewScreen and NCardPileScreen): the listed cards
+// as a scrolling grid of grid-mini cards (F5, five a row, drag to scroll) on the bottom screen, the
+// focused card large on the top screen with its title and keywords (the overview -- title, count and
+// the C# info line -- while nothing is focused).
+// Deck (top bar / pause menu / map 牌组, combat Y): the four NCardViewSortButtons on top (获得顺序 /
+// 类型 / 费用 / 拼音顺序). As in the C#, a press flips that button's direction (the first press sorts
+// descending) and moves its order to the front of the sort priority, which starts obtained > type >
+// cost > title; the bar has 返回, the 查看升级 tickbox (NCardsViewScreen: upgradable cards shown
+// upgraded, and the detail opens on the upgrade), 详情 and 遗物.
+// Combat piles (the pile corners): tabs 抽牌堆 / 弃牌堆 / 消耗堆 with their counts (L/R switch);
+// the draw pile never shows its real order (NCardPileScreen.OnPileContentsChanged: rarity, then id
+// entry), the discard and exhaust piles are in pile order.
+// Keys: D-pad moves the focus through the strip / grid / bar, A or X on a card opens its detail
+// (C# HolderPressed -> ShowCardDetail), B / Y close. Touch: the first tap focuses a card, a tap on
+// the focused card opens its detail. Rules are untouched: the view only reads the deck / piles.
+// PORT NOTE: 拼音顺序 compares titles by code point (the C# uses the zh-CN culture's collation), as M8.
+namespace {
+constexpr int kVTab0 = 1401, kVSort0 = 1411, kVBack = 1421, kVUpgrades = 1422, kVDetail = 1423, kVRelics = 1424;
+constexpr float kVStripY = 2, kVStripH = 32;
+constexpr float kVY0 = 36, kVY1 = kGY1;  // the grid area under the strip
+// SortingOrders, the ones the deck view uses: index = sorter * 2 + descending.
+enum VSort { kObtained, kType, kCost, kAlphabet };
+const char* const kSortKeys[4] = {"gameplay_ui.SORT_OBTAINED", "gameplay_ui.SORT_TYPE", "gameplay_ui.SORT_COST",
+                                  "gameplay_ui.SORT_ALPHABET"};
+
+struct DeckView {
+  int sel = -1, zone = 1, pending = 0;  // zone: 0 sort buttons / pile tabs, 1 grid, 2 action bar
+  float scroll = 0;
+  bool touchDown = false, dragged = false;
+  float touchY0 = 0, touchLastY = 0, touchX = 0;
+  int touchCard = -1;
+  std::vector<int> priority{kObtained * 2, kType * 2, kCost * 2, kAlphabet * 2};  // NDeckViewScreen()
+  bool desc[4] = {};  // NCardViewSortButton.IsDescending per sorter
+  bool upgrades = false;
+  std::map<Card*, std::unique_ptr<Card>> upgraded;
+};
+DeckView& DV() {
+  static DeckView v;
+  return v;
+}
+
+// A card as the grid shows it: upgraded while 查看升级 is ticked.
+Card* viewCard(Card* c) {
+  if (!DV().upgrades || !c->upgradable()) return c;
+  auto& slot = DV().upgraded[c];
+  if (!slot || slot->id != c->id || slot->upgradeLevel != c->upgradeLevel + 1) {
+    slot = c->clone();
+    slot->upgrade();
+  }
+  return slot.get();
+}
+
+void viewScrollToSel(int n) {
+  DeckView& v = DV();
+  if (v.sel < 0) return;
+  float top = (v.sel / kGPerRow) * kGRow, h = kVY1 - kVY0;
+  if (top < v.scroll) v.scroll = top;
+  if (top + kGRow + 4 > v.scroll + h) v.scroll = top + kGRow + 4 - h;
+  v.scroll = std::clamp(v.scroll, 0.f, gridMaxScroll(n, h));
+}
+
+// A small up / down triangle (the sort buttons' direction), pixel rows.
+void sortArrow(float cx, float cy, bool down, uint32_t c) {
+  for (int r = 0; r < 4; ++r) {
+    float w = down ? 7 - 2 * r : 1 + 2 * r;
+    gfx::rect(cx - w / 2, cy - 2 + r, w, 1, c);
+  }
+}
+}  // namespace
+
+std::vector<Card*> App::listedCards() {
+  std::vector<Card*> cards;
+  if (cardListMode_ == CardListMode::Deck || !run_->combat) {
+    for (auto& c : run_->deck) cards.push_back(c.get());
+    // NCardGrid.SetCards with NDeckViewScreen's sort priority.
+    const std::vector<int>& pr = DV().priority;
+    if (pr[0] == kObtained * 2 + 1) {
+      std::reverse(cards.begin(), cards.end());
+    } else if (pr[0] != kObtained * 2) {
+      std::map<const Card*, int> index;
+      std::map<const Card*, std::string> titles;
+      for (int i = 0; i < (int)cards.size(); ++i) {
+        index[cards[i]] = i;
+        titles[cards[i]] = cardTitle(cards[i]);
+      }
+      auto cost = [](const Card* c) { return c->costsX ? c->xValue : std::max(0, c->costWithLocalMods()); };
+      auto cmp = [](auto a, auto b) { return (a > b) - (a < b); };
+      std::stable_sort(cards.begin(), cards.end(), [&](Card* a, Card* b) {
+        for (int o : pr) {
+          int d = 0;
+          switch (o / 2) {
+            case kObtained: d = cmp(index[a], index[b]); break;
+            case kType: d = cmp((int)a->type, (int)b->type); break;
+            case kCost: d = cmp(cost(a), cost(b)); break;
+            case kAlphabet: d = cmp(titles[a].compare(titles[b]), 0); break;
+          }
+          if (o & 1) d = -d;
+          if (d) return d < 0;
+        }
+        return a->locKey < b->locKey;
+      });
+    }
+    return cards;
+  }
+  Combat& cb = *run_->combat;
+  const std::vector<Card*>& pile = cardListMode_ == CardListMode::Draw ? cb.draw
+                                   : cardListMode_ == CardListMode::Discard ? cb.discard : cb.exhaust;
+  cards.assign(pile.begin(), pile.end());
+  // The draw-pile page must not reveal its actual next-card order (rarity, then id entry).
+  if (cardListMode_ == CardListMode::Draw)
+    std::stable_sort(cards.begin(), cards.end(), [](Card* a, Card* b) {
+      return a->rarity != b->rarity ? (int)a->rarity < (int)b->rarity : a->locKey < b->locKey;
+    });
+  return cards;
+}
+
+void App::openCardList(CardListMode mode) {
+  // Switching pile tabs keeps the strip focus; every open starts fresh (the C# makes a new screen).
+  const bool keepZone = deckOpen_ && mode != CardListMode::Deck && cardListMode_ != CardListMode::Deck;
+  const int zone = DV().zone;
+  DV() = DeckView{};
+  if (keepZone) DV().zone = zone;
+  cardListMode_ = mode;
+  deckOpen_ = true;
+  sel_ = -1;
+  scroll_ = 0;
+}
+
+void App::drawDeck(bool top) {
+  std::vector<Card*> cards = listedCards();
+  DeckView& v = DV();
+  const int n = (int)cards.size();
+  const bool deck = cardListMode_ == CardListMode::Deck;
+  const int tab = deck ? 0 : (int)cardListMode_ - (int)CardListMode::Draw;
+  if (top) {
+    drawSceneBg(true, 0.7f);
+    drawTopBar();
+    if (v.sel >= 0 && v.sel < n) {
+      drawCardInspect(viewCard(cards[v.sel]), 30);
+      R().text(kTop - 10, kH - 18, num(v.sel + 1) + " / " + num(n), ts(F12, col::gray, RIGHT));
+      return;
+    }
+    static const char* const kTitles[4] = {"牌组", "抽牌堆", "弃牌堆", "消耗堆"};
+    static const char* const kInfo[4] = {"gameplay_ui.DECK_PILE_INFO", "gameplay_ui.DRAW_PILE_INFO",
+                                         "gameplay_ui.DISCARD_PILE_INFO", "gameplay_ui.EXHAUST_PILE_INFO"};
+    const int m = deck ? 0 : 1 + tab;
+    screenTitle(kTop / 2, 44, std::string(kTitles[m]) + "（" + num(n) + " 张）");
+    R().text(kTop / 2, 88, L(kInfo[m]), ts(F12, col::white, CENTER, kTop - 40));
+    R().text(kTop / 2, kH - 30, n ? "点选一张牌查看，再点一次打开详情" : "这里没有牌", ts(F12, col::gray, CENTER));
+    return;
+  }
+
+  drawSceneBg(false, 0.65f);
+  gfx::Input in = takeFrameInput();
+  in.down &= ~(gfx::BTN_L | gfx::BTN_R);
+  if (v.zone == 1) in.down &= ~(gfx::BTN_LEFT | gfx::BTN_RIGHT | gfx::BTN_UP | gfx::BTN_DOWN | gfx::BTN_A);
+  else in.down &= ~(gfx::BTN_UP | gfx::BTN_DOWN);
+  widgets::beginFrame(in);
+  if (v.zone == 1) widgets::setFocus(-1);
+
+  // The strip: the sort buttons (deck) or the pile tabs with their counts.
+  if (deck) {
+    const float w = (kBot - 2 * style::kMargin - 3 * style::kGap) / 4;
+    for (int k = 0; k < 4; ++k) {
+      float x = style::kMargin + k * (w + style::kGap);
+      bool active = v.priority[0] / 2 == k;
+      if (widgets::button(kVSort0 + k, x, kVStripY, w, kVStripH, "")) v.pending = kVSort0 + k;
+      R().text(x + (w - 10) / 2, kVStripY + (kVStripH - R().lineHeight(F12)) / 2, L(kSortKeys[k]),
+               ts(F12, active ? col::gold : col::white, CENTER, w - 14));
+      sortArrow(x + w - 9, kVStripY + kVStripH / 2, v.desc[k], active ? col::gold : col::gray);
+    }
+  } else {
+    const Combat* cb = run_->combat.get();
+    auto count = [&](int t) {
+      if (!cb) return std::string("0");
+      return num((int)(t == 0 ? cb->draw : t == 1 ? cb->discard : cb->exhaust).size());
+    };
+    std::vector<std::string> labels = {"抽牌堆 " + count(0), "弃牌堆 " + count(1), "消耗堆 " + count(2)};
+    int t = widgets::tabs(kVTab0, style::kMargin, kVStripY, kBot - 2 * style::kMargin, kVStripH, labels, tab);
+    if (t != tab) v.pending = kVTab0 + t;
+  }
+
+  // The grid: only the visible rows; the focused card outlined.
+  gfx::pushClip(0, kVY0, kBot, kVY1 - kVY0);
+  for (int i = 0; i < n; ++i) {
+    float x = gridCellX(i), y = gridCellY(i, v.scroll, kVY0);
+    if (y + kGH < kVY0 || y > kVY1) continue;
+    drawCard(viewCard(cards[i]), x, y, kGS, false, false, i == v.sel);
+  }
+  gfx::popClip();
+  if (n == 0) R().text(kBot / 2, (kVY0 + kVY1) / 2 - 8, "（空）", ts(F16, col::gray, CENTER));
+  gridScrollbar(kVY0, kVY1, v.scroll, gridMaxScroll(n, kVY1 - kVY0));
+
+  // The action bar.
+  gfx::rect(0, kGY1, kBot, kH - kGY1, style::kScrim);
+  const bool focused = v.sel >= 0 && v.sel < n;
+  if (widgets::button(kVBack, style::kMargin, style::kActionY, 64, style::kButtonH, "返回")) v.pending = kVBack;
+  if (deck) {
+    bool u = widgets::toggle(kVUpgrades, style::kMargin + 64 + 8, style::kActionY + 1, v.upgrades,
+                             L("gameplay_ui.VIEW_UPGRADES"));
+    if (u != v.upgrades) v.pending = kVUpgrades;
+    if (widgets::button(kVDetail, kBot - style::kMargin - 64 - style::kGap - 60, style::kActionY, 60,
+                        style::kButtonH, "详情", widgets::Kind::Secondary, focused))
+      v.pending = kVDetail;
+    if (widgets::button(kVRelics, kBot - style::kMargin - 64, style::kActionY, 64, style::kButtonH, "遗物"))
+      v.pending = kVRelics;
+  } else {
+    if (widgets::button(kVDetail, kBot - style::kMargin - 64, style::kActionY, 64, style::kButtonH, "详情",
+                        widgets::Kind::Secondary, focused))
+      v.pending = kVDetail;
+  }
+  widgets::endFrame();
+}
+
+void App::updateDeck(const gfx::Input& in) {
+  frameIn = in;
+  frameInSet = true;
+  std::vector<Card*> cards = listedCards();
+  DeckView& v = DV();
+  const int n = (int)cards.size();
+  const bool deck = cardListMode_ == CardListMode::Deck;
+  if (v.sel >= n) v.sel = n - 1;
+  auto close = [&] {
+    deckOpen_ = false;
+    cardListMode_ = CardListMode::Deck;
+    sel_ = -1;
+    DV() = DeckView{};
+  };
+  auto detail = [&](int i) {
+    if (i < 0 || i >= n) return;
+    detailCard_ = cards[i];
+    detailUpgrade_ = v.upgrades && cards[i]->upgradable();
+    detailKeyword_ = -1;
+  };
+  auto stripFocus = [&] {
+    int c = v.sel >= 0 ? v.sel % kGPerRow : 0;
+    return deck ? kVSort0 + std::min(3, c * 4 / kGPerRow) : kVTab0 + (int)cardListMode_ - (int)CardListMode::Draw;
+  };
+  auto pile = [&](int t) {
+    openCardList((CardListMode)((int)CardListMode::Draw + t));
+    if (DV().zone == 0) widgets::setFocus(kVTab0 + t);
+  };
+
+  if (int id = v.pending) {  // a strip / bar widget pressed in the last draw
+    v.pending = 0;
+    if (id == kVBack) { close(); return; }
+    if (id == kVDetail) { detail(v.sel); return; }
+    if (id == kVUpgrades) { v.upgrades = !v.upgrades; return; }
+    if (id == kVRelics) {
+      close();
+      relicsOpen_ = true;
+      sel_ = run_->relics.empty() ? -1 : 0;
+      scroll_ = 0;
+      return;
+    }
+    if (id >= kVSort0 && id < kVSort0 + 4) {  // NDeckViewScreen.On*Sort
+      int k = id - kVSort0;
+      v.desc[k] = !v.desc[k];
+      v.priority.erase(std::remove_if(v.priority.begin(), v.priority.end(), [&](int o) { return o / 2 == k; }),
+                       v.priority.end());
+      v.priority.insert(v.priority.begin(), k * 2 + (v.desc[k] ? 1 : 0));
+      v.sel = -1;
+      v.scroll = 0;
+      return;
+    }
+    if (id >= kVTab0 && id < kVTab0 + 3) { pile(id - kVTab0); return; }
+  }
+  const uint32_t d = in.down;
+  if (!deck && (d & (gfx::BTN_L | gfx::BTN_R))) {
+    int t = (int)cardListMode_ - (int)CardListMode::Draw;
+    pile((t + ((d & gfx::BTN_R) ? 1 : 2)) % 3);
+    return;
+  }
+  if (d & (gfx::BTN_B | gfx::BTN_Y)) { close(); return; }
+  if (d & gfx::BTN_X) { detail(v.sel); return; }
+
+  // Touch: the grid scrolls on drag; a tap focuses a card, a tap on the focused card opens its detail.
+  if (in.touchDown && in.ty >= kVY0 && in.ty < kVY1) {
+    v.touchDown = true;
+    v.dragged = false;
+    v.touchY0 = v.touchLastY = (float)in.ty;
+    v.touchX = (float)in.tx;
+    v.touchCard = gridCardAt((float)in.tx, (float)in.ty, n, v.scroll, kVY0, kVY1);
+  } else if (v.touchDown && in.touching) {
+    v.touchX = (float)in.tx;
+    if (std::fabs(in.ty - v.touchY0) > kTapSlop) v.dragged = true;
+    if (v.dragged) v.scroll = std::clamp(v.scroll - (in.ty - v.touchLastY), 0.f, gridMaxScroll(n, kVY1 - kVY0));
+    v.touchLastY = (float)in.ty;
+  }
+  if (in.touchUp && v.touchDown) {
+    v.touchDown = false;
+    int i = v.touchCard;
+    if (!v.dragged && i >= 0 && gridCardAt(v.touchX, v.touchLastY, n, v.scroll, kVY0, kVY1) == i) {
+      v.zone = 1;
+      widgets::setFocus(-1);
+      if (v.sel == i) { detail(i); return; }
+      v.sel = i;
+      sfx::click();
+    }
+    return;
+  }
+
+  // D-pad: the strip and the bar belong to the widget kit (LEFT / RIGHT / A); UP / DOWN change zone.
+  if (v.zone == 0 || v.zone == 2) {
+    bool toGrid = v.zone == 0 ? (d & gfx::BTN_DOWN) != 0 : (d & gfx::BTN_UP) != 0;
+    if (!toGrid) return;
+    if (n > 0) {
+      v.zone = 1;
+      widgets::setFocus(-1);
+      if (v.sel < 0) v.sel = 0;
+      viewScrollToSel(n);
+    } else {
+      v.zone = 2 - v.zone;
+      widgets::setFocus(v.zone == 2 ? kVBack : stripFocus());
+    }
+    return;
+  }
+  if (n == 0) {
+    if (d & (gfx::BTN_DOWN | gfx::BTN_A)) { v.zone = 2; widgets::setFocus(kVBack); }
+    else if (d & gfx::BTN_UP) { v.zone = 0; widgets::setFocus(stripFocus()); }
+    return;
+  }
+  if (d & (gfx::BTN_LEFT | gfx::BTN_RIGHT | gfx::BTN_UP | gfx::BTN_DOWN)) {
+    if (v.sel < 0) v.sel = 0;
+    else if (d & gfx::BTN_RIGHT) v.sel = std::min(n - 1, v.sel + 1);
+    else if (d & gfx::BTN_LEFT) v.sel = std::max(0, v.sel - 1);
+    else if (d & gfx::BTN_UP) {
+      if (v.sel < kGPerRow) { v.zone = 0; widgets::setFocus(stripFocus()); return; }
+      v.sel -= kGPerRow;
+    } else if (d & gfx::BTN_DOWN) {
+      if (v.sel / kGPerRow == (n - 1) / kGPerRow) { v.zone = 2; widgets::setFocus(v.sel >= 0 ? kVDetail : kVBack); return; }
+      v.sel = std::min(n - 1, v.sel + kGPerRow);
+    }
+    viewScrollToSel(n);
+  }
+  if ((d & gfx::BTN_A) && v.sel >= 0) detail(v.sel);
 }
 
 }  // namespace ui
