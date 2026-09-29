@@ -265,6 +265,53 @@ bool readWhole(const std::string& path, std::string& out) {
 }
 }  // namespace
 
+// ---------------------------------------------------------------- text input (S03)
+
+namespace {
+// Cut to at most maxBytes bytes without splitting a UTF-8 character.
+std::string clampUtf8(std::string s, int maxBytes) {
+  if ((int)s.size() <= maxBytes) return s;
+  size_t cut = maxBytes;
+  while (cut > 0 && ((unsigned char)s[cut] & 0xC0) == 0x80) --cut;
+  s.resize(cut);
+  return s;
+}
+}  // namespace
+
+// Stand-in for the 3DS keyboard: the text being typed is shown in the window title.
+bool textInput(const char* hint, const std::string& initial, std::string& out, int maxBytes) {
+  if (const char* env = getenv("STS_TEXT_INPUT")) { out = clampUtf8(env, maxBytes); return true; }
+  if (getenv("STS_HIDDEN")) return false;
+  const std::string oldTitle = SDL_GetWindowTitle(win);
+  std::string text = clampUtf8(initial, maxBytes);
+  bool done = false, ok = false;
+  SDL_StartTextInput();
+  while (!done) {
+    std::string title = std::string(hint) + ": " + text + "_    (Enter = OK, Esc = cancel)";
+    SDL_SetWindowTitle(win, title.c_str());
+    SDL_Event e;
+    if (!SDL_WaitEvent(&e)) break;
+    if (e.type == SDL_QUIT) { quit = true; done = true; }
+    if (e.type == SDL_TEXTINPUT) text = clampUtf8(text + e.text.text, maxBytes);
+    if (e.type == SDL_KEYDOWN) {
+      SDL_Keycode k = e.key.keysym.sym;
+      if (k == SDLK_RETURN || k == SDLK_KP_ENTER) ok = done = true;
+      if (k == SDLK_ESCAPE) done = true;
+      if (k == SDLK_BACKSPACE && !text.empty()) {
+        size_t n = text.size() - 1;
+        while (n > 0 && ((unsigned char)text[n] & 0xC0) == 0x80) --n;
+        text.resize(n);
+      }
+    }
+  }
+  SDL_StopTextInput();
+  SDL_SetWindowTitle(win, oldTitle.c_str());
+  cur.held = 0;  // key releases went to the loop above
+  lastTicks = SDL_GetPerformanceCounter();
+  if (ok) out = text;
+  return ok;
+}
+
 bool readSave(const std::string& name, std::string& out) { return readWhole(saveDir() + name, out); }
 
 bool writeSave(const std::string& name, const std::string& data) {
