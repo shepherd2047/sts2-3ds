@@ -21,6 +21,7 @@ using Groups = std::vector<std::vector<std::string>>;  // ';' groups of ',' alte
 
 std::string dir;
 std::unordered_map<std::string, FileEntry> files;
+std::unordered_map<std::string, std::string> byPath;  // "music/<name>.adpcm" -> file id
 std::unordered_map<std::string, Groups> events;
 bool ready = false;
 float volumes[kBusCount] = {1, 1, 1, 1};
@@ -75,6 +76,7 @@ bool loadIndex() {
     std::vector<std::string> col = split(line, '\t');
     if (col[0] == "F" && col.size() >= 4) {
       files[col[1]] = FileEntry{col[3]};
+      byPath[col[3]] = col[1];
     } else if (col[0] == "E" && col.size() >= 4) {
       Groups g;
       for (const std::string& grp : split(col[3], ';')) {
@@ -91,6 +93,10 @@ bool loadIndex() {
 
 const FileEntry* file(const std::string& id) {
   auto it = files.find(id);
+  if (it == files.end()) {  // a path under the audio directory ("music/<name>.adpcm")
+    auto p = byPath.find(id);
+    if (p != byPath.end()) it = files.find(p->second);
+  }
   return it == files.end() ? nullptr : &it->second;
 }
 
@@ -152,14 +158,13 @@ bool init() {
   ready = loadIndex() && backend::init();
   if (!ready) {
     files.clear();
+    byPath.clear();
     events.clear();
     return false;
   }
 #ifndef __3DS__
   printf("audio: %zu files, %zu events from %s\n", files.size(), events.size(), dir.c_str());
 #endif
-  if (const char* m = getenv("STS_MUSIC")) playMusic(m, 0);
-  if (const char* a = getenv("STS_AMB")) playAmbience(a, 0);
   return true;
 }
 

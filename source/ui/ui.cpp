@@ -2,6 +2,7 @@
 #include "../core/events_crystal.h"
 #include "../core/profiles.h"
 #include "../core/settings_store.h"
+#include "music_router.h"
 #include "ui_common.h"
 
 namespace ui {
@@ -170,6 +171,7 @@ void App::returnTitle() {
 
 void App::update(const gfx::Input& in, double dt) {
   if (updateBoot(in, dt)) return;
+  routeMusic(*run_);  // U3: music / ambience follow the screen, room and act
   double visualDt = dt * (fastMode_ ? 1.75 : 1.0);
   time_ += visualDt;
   if (transitionT_ > 0) transitionT_ = std::max(0.f, transitionT_ - (float)visualDt / style::kFade);
