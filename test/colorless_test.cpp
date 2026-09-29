@@ -246,6 +246,61 @@ int main() {
     auto cards = colorlessRewardCards(*f.r, 3);
     CHECK(cards.size() == 3 && cards[0]->id != cards[1]->id && db::isColorless(cards[2]->id));
   }
+  {  // A1c: Rend, Scrawl, UltimateDefend tag, Volley.
+    Fight f;
+    Creature* e = f.enemy();
+    int hp = e->hp;
+    f.play(f.fresh("Rend"), e);
+    CHECK(hp - e->hp == 10);
+    bool done = false;
+    Scheduler::get().spawn(wrap(applyPower<WeakPower>(e, 2, f.c->player, nullptr), &done));
+    pump([&] { return done; });
+    hp = e->hp;
+    f.play(f.fresh("Rend"), e);
+    CHECK(hp - e->hp == 15);  // 10 + 5 for the one debuff
+    CHECK(db::card("UltimateDefend")->tags & tagDefend);
+    for (int i = 0; i < 12; ++i) f.c->draw.push_back(f.c->addCard(db::card("StrikeIronclad")));
+    f.c->hand.clear();
+    f.play(f.fresh("Scrawl"), nullptr);
+    CHECK((int)f.c->hand.size() == 10);
+    int total = 0;
+    for (Creature* x : f.c->enemies) total += x->hp;
+    Card* v = f.fresh("Volley");
+    f.c->energy = 2;
+    f.fire(v, nullptr);
+    f.c->energy = 2;
+    pump([&] { return f.idle(); });
+    int after = 0;
+    for (Creature* x : f.c->enemies) after += x->hp;
+    CHECK(total - after == 20 || total - after == 30);  // X = the energy at play time (2 or 10 -> capped by fire())
+  }
+  {  // A1c: SecretWeapon picks an Attack from the draw pile; TheGambit's power kills on unblocked damage.
+    Fight f;
+    Card* atk = f.fresh("UltimateStrike");
+    f.c->removeFromPiles(atk);
+    f.c->draw.push_back(atk);
+    f.fire(f.fresh("SecretWeapon"), nullptr);
+    pump([&] { return f.choosing(); });
+    CHECK(f.choosing() && f.c->choice.options.size() >= 1);
+    f.c->choice.result.fire(std::vector<Card*>{atk});
+    pump([&] { return f.idle(); });
+    CHECK(f.c->pileOf(atk) == Pile::Hand);
+    f.c->player->block = 0;
+    f.play(f.fresh("TheGambit"), nullptr);
+    CHECK(f.c->player->power("TheGambitPower") != nullptr);
+  }
+  {  // A1c: TheBomb explodes at the third turn end, ThinkingAhead puts a card on top of the draw pile.
+    Fight f;
+    Creature* e = f.enemy();
+    int hp = e->hp;
+    f.play(f.fresh("TheBomb"), nullptr);
+    f.endTurn();
+    f.endTurn();
+    CHECK(e->hp == hp);
+    f.endTurn();
+    CHECK(hp - e->hp == 40);
+    CHECK(f.c->player->power("TheBombPower") == nullptr);
+  }
 
   {  // A1b: MindBlast / Omnislice / Impatience / Production / Prowess / PrepTime numbers.
     Fight f;
