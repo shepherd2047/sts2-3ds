@@ -218,6 +218,7 @@ void registerNecrobinderRelics();  // char_necrobinder_relics.cpp (X4.1: BigHat.
 void registerNecrobinderCards();   // char_necrobinder_cards.cpp (X4.2: the Common card pool)
 void registerNecrobinderUncommonCards1();  // char_necrobinder_cards_uncommon1.cpp (X4.3a)
 void registerNecrobinderUncommonCards2();  // char_necrobinder_cards_uncommon2.cpp (X4.3b)
+void registerNecrobinderRareCards();       // char_necrobinder_cards_rare.cpp (X4.4)
 
 void registerNecrobinder() {
   registerPowerType<DieForYouPower>();
@@ -235,6 +236,7 @@ void registerNecrobinder() {
   registerNecrobinderCards();
   registerNecrobinderUncommonCards1();
   registerNecrobinderUncommonCards2();
+  registerNecrobinderRareCards();
 }
 
 }  // namespace sts
