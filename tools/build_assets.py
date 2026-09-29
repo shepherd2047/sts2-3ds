@@ -1246,6 +1246,10 @@ def build(args):
         'PROFILE_SCREEN', 'OPEN_PROFILE_SCREEN',  # S03: profile screen + the main menu's profile button
         'CUSTOM_RUN_SCREEN',  # M11+S05: the custom run screen
         'DAILY_RUN_MENU'))  # M12: the daily run screen
+    # S21: the settings screen (tabs, setting names / descriptions, toasts, reset popups)
+    take('settings_ui', lambda k: not k.startswith(('INPUT_SETTINGS', 'FEEDBACK', 'MODDING', 'DISCONNECT',
+                                                    'ANTI_ALIASING', 'ASPECT_RATIO', 'FULLSCREEN', 'MSAA',
+                                                    'VSYNC', 'WINDOW', 'KEYBOARD_ONLY', 'DISPLAY_DROPDOWN')))
     take('modifiers')  # M11: run modifier titles / descriptions (Neow options, custom run screen)
     for t in ('card_keywords', 'gameplay_ui', 'rest_site_ui', 'card_reward_ui', 'map', 'combat_messages',
               'card_selection', 'intents', 'game_over_screen', 'characters'):

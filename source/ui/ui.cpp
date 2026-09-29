@@ -50,6 +50,7 @@ bool App::init() {
   fastMode_ = settings::state().fastMode;
   screenShake_ = settings::state().screenShake;
   Scheduler::get().speed = fastMode_ ? 1.75 : 1.0;
+  applyVolumes();  // S21
   return true;
 }
 
