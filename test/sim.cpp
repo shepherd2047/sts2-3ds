@@ -248,8 +248,13 @@ int main(int argc, char** argv) {
             // Rotate through the options so every one gets exercised over many runs.
             auto& opts = cur->currentEvent->options;
             int pick = 0;
+            // Advance per page within one event, so a looping page (SlipperyBridge's HOLD_ON) is left.
+            static const void* lastEvent = nullptr;
+            static int page = 0;
+            page = lastEvent == cur->currentEvent.get() ? page + 1 : 0;
+            lastEvent = cur->currentEvent.get();
             if (!opts.empty()) {
-              pick = (s + cur->floor) % (int)opts.size();
+              pick = (s + cur->floor + page) % (int)opts.size();
               for (int k = 0; k < (int)opts.size() && opts[pick].locked(); ++k) pick = (pick + 1) % (int)opts.size();
             }
             if (getenv("SIM_FIGHTS")) printf("  event %s -> %d\n", cur->currentEvent->id.c_str(), pick);
