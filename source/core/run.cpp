@@ -703,7 +703,9 @@ void Run::generateMap() {
   // StandardActMap.CreateFor: Rng(seed, "act_<n>_map").
   std::string stream = "act_" + std::to_string(actIndex + 1) + "_map";
   // MapPointTypeCounts.NumOfElites: 5, 8 (round(5 * 1.6)) with SwarmingElites.
-  nodes = generateStandardActMap(rng(stream.c_str()), actIndex, hasAscension(kSwarmingElites) ? 8 : 5);
+  // StandardActMap.CreateFor: hasSecondBoss = Act.HasSecondBoss (DoubleBoss rolled a second boss).
+  nodes = generateStandardActMap(rng(stream.c_str()), actIndex, hasAscension(kSwarmingElites) ? 8 : 5,
+                                 !secondBossId.empty());
   // NMapScreen layout: each point jittered by up to ±21 / ±25 units (map_jitter_<act>
   // stream) and tilted by NextGaussianFloat(0, 8) degrees (Rng.Chaotic in C#: cosmetic only).
   std::string jitter = "map_jitter_" + std::to_string(actIndex);
@@ -718,6 +720,20 @@ void Run::generateMap() {
     n.angle = 8.f * std::sqrt(-2.f * std::log(u1)) * std::cos(6.2831853f * u2);
   }
 }
+int Run::bossNode() const {
+  for (int i = 0; i < (int)nodes.size(); ++i) if (nodes[i].type == RoomType::Boss) return i;
+  return -1;
+}
+int Run::secondBossNode() const {
+  int b = bossNode();
+  if (b < 0) return -1;
+  for (int i = b + 1; i < (int)nodes.size(); ++i) if (nodes[i].type == RoomType::Boss) return i;
+  return -1;
+}
+const std::string& Run::bossIdAt(int node) const {
+  return node >= 0 && node == secondBossNode() && !secondBossId.empty() ? secondBossId : bossId;
+}
+
 std::vector<int> Run::pathNodes() const {
   std::vector<int> out;
   if (currentNode < 0) {
@@ -920,7 +936,7 @@ Task<> Run::main() {
 
     if (type == RoomType::Monster || type == RoomType::Elite || type == RoomType::Boss) {
       std::string id;
-      if (type == RoomType::Boss) id = bossId;
+      if (type == RoomType::Boss) id = bossIdAt(choice);  // NBossMapPoint: SecondBossEncounter at its node
       else if (type == RoomType::Elite) {
         // ActModel.GenerateRooms: elites come from a grab bag, refilled when empty.
         id = eliteQueue.front();
@@ -941,21 +957,17 @@ Task<> Run::main() {
       // RewardsSet.WithRewardsFromRoom: the last act's boss gives nothing. RunManager.EnterNextAct
       // on the last act then enters TheArchitect (content_architect.cpp), whose PROCEED is WinRun.
       if (type == RoomType::Boss && actIndex + 1 >= kActs) {
-        // DoubleBoss: the second boss follows the first (which, like every boss of the last act, gives no rewards).
-        if (!secondBossId.empty()) {
-          std::string second = secondBossId;
-          secondBossId.clear();
-          ++floor;
-          historyPoint(history::PointType::Boss);  // RunManager.GenerateRooms: its own boss map point
-          historyRoom(history::RoomKind::Boss, second);
-          if (!co_await fight(second)) { recordRunEnd(*this, progress::RunOutcome::Loss); screen = Screen::GameOver; co_return; }
-        }
         // The fight is freed and the screen leaves it in the same step (as in combatRewards).
-        // PORT NOTE: no save point here (the C# saves the finished boss room); quitting during the
-        // ending resumes at the last map save.
         combat.reset();
         player->combat = nullptr;
         for (auto& rel : relics) rel->combat = nullptr;
+        // DoubleBoss: the first boss (no rewards, like every boss of the last act) leads back to
+        // the map, where the second boss is the only next node (NRewardsScreen proceed ->
+        // ProceedFromTerminalRewardsScreen). The run ends after the second boss
+        // (CombatManager: CurrentMapCoord == SecondBossMapPoint).
+        if (int second = secondBossNode(); second >= 0 && currentNode != second) continue;
+        // PORT NOTE: no save point here (the C# saves the finished boss room); quitting during the
+        // ending resumes at the last map save.
         screen = Screen::Event;
         // RunManager.EnterNextAct -> EnterRoom(TheArchitect): a room of the boss's map point.
         if (auto e = db::event("TheArchitect")) { historyRoom(history::RoomKind::Event, e->id); co_await runEvent(std::move(e)); }

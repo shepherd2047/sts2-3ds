@@ -980,9 +980,9 @@ struct MapNode {
 
 // StandardActMap (+ MapPathPruning, MapPostProcessing, Overgrowth.GetMapPointTypes):
 // the act's rooms in our indexing (row 0 = the game's row 1, the start point is
-// dropped; the boss is the last node, row 15, col 3). next = child indices.
-// Implemented in mapgen.cpp.
-std::vector<MapNode> generateStandardActMap(Rng& mapRng, int actIndex, int numOfElites = 5);
+// dropped; then the boss, row 15, col 3, and with hasSecondBoss the DoubleBoss node, row 16,
+// the boss's only child). next = child indices. Implemented in mapgen.cpp.
+std::vector<MapNode> generateStandardActMap(Rng& mapRng, int actIndex, int numOfElites = 5, bool hasSecondBoss = false);
 
 struct Encounter {
   std::string id;
@@ -1111,9 +1111,14 @@ struct Run {
   std::unique_ptr<Combat> combat;
   std::vector<std::string> normalQueue, weakQueue;
   std::string bossId;
-  // DoubleBoss (ascension 10, last act only): the act's second boss, fought right after the first.
-  // PORT NOTE: the C# adds it as a second boss node on the map (C11); here the fights are chained.
+  // DoubleBoss (ascension 10, last act only): the act's second boss (ActModel.SecondBossEncounter),
+  // fought at its own map node after the first boss (StandardActMap.SecondBossMapPoint).
   std::string secondBossId;
+  // The boss's map node (first Boss node) and the DoubleBoss node after it (-1 if none).
+  int bossNode() const;
+  int secondBossNode() const;
+  // The encounter of a boss node: secondBossId at the second boss node, else bossId.
+  const std::string& bossIdAt(int node) const;
   std::map<std::string, std::unique_ptr<Rng>> rngs;
   float rarityOffset = -0.05f;  // CardRarityOdds.CurrentValue
   Rarity rollRarity(RoomType room);

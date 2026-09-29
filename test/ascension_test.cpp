@@ -124,6 +124,34 @@ int main() {
       r.enterAct(2);
       if (level == 10) CHECK(!r.secondBossId.empty() && r.secondBossId != r.bossId && db::encounter(r.secondBossId));
       else CHECK(r.secondBossId.empty());
+      // C11: StandardActMap.SecondBossMapPoint, the boss's only child, one row past it.
+      int b = r.bossNode(), b2 = r.secondBossNode();
+      CHECK(b >= 0);
+      if (level == 10) {
+        CHECK(b2 == b + 1 && r.nodes[b].next == std::vector<int>{b2} && r.nodes[b2].next.empty());
+        CHECK(r.nodes[b2].type == RoomType::Boss && r.nodes[b2].row == r.nodes[b].row + 1);
+        CHECK(r.bossIdAt(b) == r.bossId && r.bossIdAt(b2) == r.secondBossId);
+        // Same map otherwise: the second boss node takes no Rng.
+        Run plain;
+        plain.start(4, "Ironclad", 9);
+        plain.enterAct(0);
+        plain.enterAct(2);
+        CHECK(plain.nodes.size() + 1 == r.nodes.size());
+        for (size_t i = 0; i < plain.nodes.size() && i < r.nodes.size(); ++i)
+          CHECK(plain.nodes[i].col == r.nodes[i].col && plain.nodes[i].row == r.nodes[i].row &&
+                plain.nodes[i].type == r.nodes[i].type && plain.nodes[i].jx == r.nodes[i].jx);
+        // The node survives a save.
+        Run loaded;
+        CHECK(loaded.load(r.save()) && loaded.secondBossNode() == b2 && loaded.save() == r.save());
+        // A save from before C11 (chained fights, no node) gets the node back when loaded.
+        std::string withNode = r.save();
+        r.nodes.pop_back();
+        r.nodes[b].next.clear();
+        Run old;
+        CHECK(old.load(r.save()) && old.secondBossNode() == b2 && old.save() == withNode);
+      } else {
+        CHECK(b2 < 0 && r.nodes[b].next.empty());
+      }
     }
   }
   {  // monsters read the run's ascension: Nibbit 42-46 -> 44-48 (ToughEnemies), Butt 12 -> 13 (DeadlyEnemies)
