@@ -1,6 +1,6 @@
 // Enchantments (A3a): the CardModel.Enchantment slot's rules, CardCmd.Enchant, the registry
 // and the deck helpers events use, plus the first enchantments (the ones that exercise every
-// new hook). The rest of the 22 in Models.Enchantments follow in A3b / A3c.
+// new hook). The rest are in enchantments_b.cpp (A3b), enchantments_c.cpp (A3c), events_underdocks.cpp (Spiral, Steady) and events_shared2.cpp (Nimble).
 //
 // Card-side wiring lives with the code it changes: combat.cpp (Hook.ModifyDamage/ModifyBlock
 // call the enchantment first, GetEnchantedReplayCount, OnPlay, the Imbued / PerfectFit /
