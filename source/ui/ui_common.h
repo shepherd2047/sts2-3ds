@@ -20,6 +20,8 @@ namespace ui {
 
 // The act's room / map texture path (frees the previous act's textures on change). ui.cpp.
 std::string actTexture(const sts::Run& r, const char* kind);
+// S21: settings.sav's music / SFX / ambience volumes -> the audio buses. screens/settings.cpp.
+void applyVolumes();
 // The player character's Spine / sprite key. visuals.cpp.
 std::string playerArt(sts::Run* r);
 // X1.5-X4.5: the run's energy orb / card-energy-gem sprite names. The Ironclad's are the
