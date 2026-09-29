@@ -966,6 +966,11 @@ struct EventOption {
   std::string key;
   std::function<Task<>()> action;
   std::shared_ptr<Relic> relic;  // AncientEventModel.RelicOption: the UI shows this relic
+  // Per-option dynamic text (EventOption with explicit title / description LocStrings): `title`
+  // (a loc key or literal text) replaces key.title when set; `strVars` add to / override the
+  // event's placeholders when this option's text is expanded ("desc.<Name>" only for the description).
+  std::string title;
+  std::map<std::string, std::string> strVars;
   bool locked() const { return !action; }
 };
 
