@@ -315,6 +315,16 @@ Task<> Run::combatRewards(RoomType type) {
       b.relic = pullRelicFromFront(relicBag, rollRelicRarity(rr));
       rewardItems.push_back(std::move(b));
     }
+  } else if (type != RoomType::Boss) {
+    // TryModifyRewards on any other combat room (Wongo's Mystery Ticket): extra RelicRewards.
+    int bonus = 0;
+    for (auto& rel : relics) bonus += rel->bonusRelicRewards(type);
+    for (int i = 0; i < bonus; ++i) {
+      RewardItem b;
+      b.kind = RewardKind::Relic;
+      b.relic = pullRelicFromFront(relicBag, rollRelicRarity(rr));
+      rewardItems.push_back(std::move(b));
+    }
   }
   // Amethyst Aubergine: TryModifyRewards adds its own flat GoldReward, not a bonus folded into
   // the base one -- so it is its own row here too.
