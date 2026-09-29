@@ -437,6 +437,7 @@ Task<std::vector<DamageResult>> damage(std::vector<Creature*> targets, Dec amoun
     if (r.unblocked > 0)
       for (Model* m : c.listeners()) co_await m->afterCurrentHpChanged(r.receiver, Dec(-r.unblocked));
   std::vector<Creature*> killedCreatures;
+  for (auto& r : results) c.damageHistory.push_back({c.roundNumber, c.currentSide, r.receiver, dealer, props});
   for (auto& r : results) {
     Creature* t = r.receiver;
     if (r.killed && t->dead()) {
