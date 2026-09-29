@@ -152,7 +152,7 @@ void ioPath(Archive& a, Path& path) {
       a.io(type);
       p.type = (PointType)type;
       a.io(p.goldGained);
-      if (a.reading) p.tracked = false;  // run.sav does not carry the badge inputs
+      if (a.reading) p.tracked = false;  // set again by the badge block that follows (run.sav 7, record 2)
       int rooms = (int)p.rooms.size();
       a.io(rooms);
       if (a.reading) p.rooms.assign((size_t)std::clamp(rooms, 0, 16), Room{});

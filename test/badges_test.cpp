@@ -377,6 +377,20 @@ int main() {
     CHECK(p.damageTaken == 7 && p.goldSpent == 75 && p.tracked);
     CHECK(p.restChoices.size() == 2 && p.restChoices[0] == "HEAL" && p.restChoices[1] == "SMITH");
   }
+  {  // run.sav version 7 keeps the badge inputs and CCCCOMBO: a resumed run counts them all.
+    Run run;
+    run.start(11, "Ironclad");
+    run.mapHistory.push_back({history::MapPoint{}});
+    badges::noteDamageTaken(run, 5);
+    badges::noteGoldSpent(run, 40);
+    badges::noteRestChoice(run, 0);
+    badges::noteCardsPlayedThisTurn(run, 20);
+    Run back;
+    CHECK(back.load(run.save()));
+    CHECK(back.cccCombo && !back.mapHistory.empty() && !back.mapHistory.back().empty());
+    auto& q = back.mapHistory.back().back();
+    CHECK(q.tracked && q.damageTaken == 5 && q.goldSpent == 40 && q.restChoices.size() == 1);
+  }
 
   printf("badges_test: %d checks, %d failed\n", checks, failures);
   return failures ? 1 : 0;

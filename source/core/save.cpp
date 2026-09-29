@@ -12,7 +12,7 @@ namespace sts {
 
 namespace {
 
-constexpr int kSaveVersion = 6;  // 2: card enchantments, 3: character id, 4: ascension (older saves load as Ironclad / ascension 0), 5: act list (older: Overgrowth, Hive, Glory), 6: run history path + times (M2; older: empty path)
+constexpr int kSaveVersion = 7;  // 2: card enchantments, 3: character id, 4: ascension (older saves load as Ironclad / ascension 0), 5: act list (older: Overgrowth, Hive, Glory), 6: run history path + times (M2; older: empty path), 7: badge inputs per map point + CCCCOMBO (M7; older: untracked points)
 
 void ioCard(Archive& a, std::unique_ptr<Card>& c) {
   std::string id = c ? c->id : "";
@@ -66,6 +66,7 @@ void ioCard(Archive& a, std::unique_ptr<Card>& c) {
     c->enchantment.p = std::move(e);
     c->enchantment->persist(a);
   }
+  c->afterLoad();
 }
 
 void ioRelic(Archive& a, Run& r, std::unique_ptr<Relic>& rel) {
@@ -179,6 +180,17 @@ void ioRun(Archive& a, Run& r) {
     a.io(ms);
     if (a.reading) r.runTime = (double)ms / 1000.0;
     history::ioPath(a, r.mapHistory);
+  }
+  if (version >= 7) {  // badge inputs (badges.h), as in the history record: a resumed run counts them all
+    a.tag("BADGES");
+    a.io(r.cccCombo);
+    for (auto& act : r.mapHistory)
+      for (auto& p : act) {
+        a.io(p.tracked);
+        a.io(p.goldSpent);
+        a.io(p.damageTaken);
+        a.io(p.restChoices);
+      }
   }
   a.tag("END");
 }

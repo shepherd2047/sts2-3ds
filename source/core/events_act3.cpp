@@ -263,6 +263,13 @@ struct MadScience : IroncladT<MadScience> {
     if (auto* d = var(n)) d->base = Dec(v); else addVar(n, Dec(v));
   }
   void onUpgrade() override { keywords |= kwInnate; }
+  // The chosen type and rider live in the vars (saved); the fields that drive onPlay are rebuilt.
+  void afterLoad() override {
+    int t = val("CardType").toInt();
+    int r = kNone;
+    for (int i = 1; i <= kImprovement; ++i) if (val(kRiderNames[i]).toInt()) r = i;
+    configure(t == 0 ? CardType::Attack : t == 1 ? CardType::Skill : CardType::Power, r);
+  }
 
   Task<> onPlay(CardPlay& p) override {
     switch (type) {

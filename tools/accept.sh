@@ -7,10 +7,10 @@
 cd "$(dirname "$0")/.."
 export OS=${OS:-Windows_NT}
 [ -d /ucrt64/bin ] && export PATH=/ucrt64/bin:$PATH
-seeds=12; floors="3 9 17 30"; do3ds=0
+seeds=12; floors="3 9 17 30 41 45"; do3ds=0
 for a in "$@"; do
   case $a in
-    --quick) seeds=6; floors="9 17" ;;
+    --quick) seeds=6; floors="9 17 41" ;;
     --3ds) do3ds=1 ;;
   esac
 done
@@ -22,7 +22,7 @@ out=$(make -f Makefile.sdl check 2>&1)
 if echo "$out" | grep -qE "[1-9][0-9]* failed|Error"; then say "FAIL make check"; echo "$out" | tail -5
 else say "ok   make check ($(echo "$out" | grep -oE '[0-9]+ checks, 0 failed' | tr '\n' ' '))"; fi
 
-sets=("X=1" "SIM_ALLCARDS=1" "SIM_ALLRELICS=1 SIM_ALLCARDS=1" "SIM_ALLPOTIONS=1" "SIM_ENCHANT=1")
+sets=("X=1" "SIM_ALLCARDS=1" "SIM_ASC=10 SIM_ALLCARDS=1" "SIM_ALLRELICS=1 SIM_ALLCARDS=1" "SIM_ALLPOTIONS=1" "SIM_ENCHANT=1")
 for c in ${ACCEPT_CHARS:-}; do sets+=("SIM_CHAR=$c SIM_ALLCARDS=1"); done
 for env in "${sets[@]}"; do
   base=$(env $env ./build/sim $seeds 2>&1 | grep -E "^seed|^wins|STUCK|MISMATCH")

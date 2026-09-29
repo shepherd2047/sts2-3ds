@@ -56,13 +56,13 @@ struct MapPoint {
   std::vector<Room> rooms;
   int goldGained = 0;  // PlayerMapPointHistoryEntry.GoldGained (PlayerCmd.GainGold)
   // Badge inputs (M7, badges.h), PlayerMapPointHistoryEntry.GoldSpent / DamageTaken / RestSiteChoices.
-  // NOT in run.sav (its format is unchanged): a path read back from run.sav has tracked == false,
-  // meaning these three are unknown for the point and the badges that need them skip it.
+  // ioPath does not carry them; run.sav version 7 and history record version 2 add them after the
+  // path. A path read from an older save has tracked == false: the badges that need them skip it.
   int goldSpent = 0;                       // gold paid at the merchant (LoseGold Spent)
   int damageTaken = 0;                     // unblocked damage the player took (CreatureCmd.Damage)
   std::vector<std::string> restChoices;    // rest site option ids: HEAL, SMITH, LIFT, DIG, COOK, KINDLE, CLONE
   bool tracked = true;
-  // The badge inputs and `tracked` are not part of equality (a run.sav round trip drops them).
+  // The badge inputs and `tracked` are not part of equality (ioPath alone drops them).
   bool operator==(const MapPoint& o) const { return type == o.type && rooms == o.rooms && goldGained == o.goldGained; }
 };
 using Path = std::vector<std::vector<MapPoint>>;  // per act (RunState.MapPointHistory)

@@ -453,6 +453,8 @@ struct Card : Model {
   virtual Task<> onPlay(CardPlay&) { return {}; }
   virtual void onUpgrade() {}
   virtual bool canBeGeneratedInCombat() const { return true; }  // CardModel.CanBeGeneratedInCombat (colorless pool helpers)
+  // After a save is read back (vars, cost, keywords restored): rebuild state kept outside the vars.
+  virtual void afterLoad() {}
   // HasTurnEndInHandEffect / OnTurnEndInHand (Burn, Infection, ...)
   virtual bool hasTurnEndInHandEffect() const { return false; }
   virtual Task<> onTurnEndInHand() { return {}; }
@@ -1206,7 +1208,7 @@ struct Run {
   history::Path mapHistory;
   int64_t startTime = 0;
   double runTime = 0;
-  bool cccCombo = false;  // ExtraFields.CccomboBadgeUnlocked (badges.h; not in run.sav)
+  bool cccCombo = false;  // ExtraFields.CccomboBadgeUnlocked (badges.h; run.sav version 7)
   void historyPoint(history::PointType type);  // RunState.AppendToMapPointHistory (rooms follow)
   void historyRoom(history::RoomKind type, const std::string& model = "");  // CurrentMapPointHistoryEntry.Rooms.Add
   // A room that is not ported yet (events, shops): Screen::Placeholder shows this text.
