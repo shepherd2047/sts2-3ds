@@ -706,6 +706,7 @@ struct Relic : Model {
   virtual void afterCardAddedToDeck(Card*) {}  // AfterCardChangedPiles(Deck) for new cards
   virtual Task<> afterUnknownRoomEntered() { return {}; }  // Planisphere
   virtual void restSiteAction(int /*option*/) {}  // Girya's Lift
+  virtual bool allCharacterCardPools() { return false; }  // ModifyCardRewardCreationOptions (Prismatic Gem)
 
   Creature* owner() const;  // the player
   void doFlash() { flash = 1.f; }
@@ -825,6 +826,7 @@ struct Combat {
   Side currentSide = Side::Player;
   bool inProgress = false, ending = false, over = false, won = false;
   bool playerPhase = false;  // UI may submit actions
+  bool autoSelectFirst = false;  // VakuuCardSelector: cmd::selectCards takes the first options (Whispering Earring)
   std::string encounterId;
   bool isBoss = false, isElite = false;
 

@@ -827,6 +827,10 @@ Task<> addStatusCards(Combat& c, std::string cardId, Pile to, int count, bool by
 
 Task<std::vector<Card*>> selectCards(Combat& c, std::string prompt, std::vector<Card*> options, int minCount, int maxCount) {
   if (options.empty()) co_return std::vector<Card*>{};
+  if (c.autoSelectFirst) {  // VakuuCardSelector: options.Take(maxSelect)
+    if ((int)options.size() > maxCount) options.resize(maxCount);
+    co_return options;
+  }
   c.choice.prompt = std::move(prompt);
   c.choice.options = std::move(options);
   c.choice.minCount = minCount;
