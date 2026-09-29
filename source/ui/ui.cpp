@@ -114,6 +114,8 @@ void App::startRun(bool resume) {
     for (auto& id : run_->character().cardPool)
       if (auto c = db::card(id)) run_->deck.push_back(std::move(c));
   }
+  if (const char* hp = getenv("STS_HP"))  // debug: start wounded (rest site previews)
+    run_->player->hp = std::clamp(atoi(hp), 1, run_->player->maxHp);
   Scheduler::get().spawn(run_->main());
   floats_.clear();
   visuals_.clear();
