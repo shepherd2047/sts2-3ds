@@ -63,6 +63,12 @@ void ioRecord(Archive& a, RunRecord& r) {
   } else if (a.reading) {
     for (auto& act : r.path) for (auto& p : act) p.tracked = false;
   }
+  if (version >= 3) {  // M11: custom runs
+    a.tag("MODE");
+    a.io(r.custom);
+    a.io(r.seedText);
+    a.io(r.modifiers);
+  }
   a.tag("DECK");
   int n = (int)r.deck.size();
   a.io(n);
@@ -260,6 +266,9 @@ RunRecord fromRun(const Run& run, bool win, bool abandoned) {
   if (run.player) { r.hp = std::max(0, run.player->hp); r.maxHp = run.player->maxHp; }
   r.score = score(r.path, r.ascension, win);
   r.cccCombo = run.cccCombo;
+  r.custom = run.customRun;
+  r.seedText = run.seedText;
+  r.modifiers = run.modifierKeys();
   r.badges = badges::compute(r);  // ScoreUtility.GetBadges (none when abandoned)
   return r;
 }

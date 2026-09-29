@@ -343,9 +343,10 @@ int main() {
     CHECK(g.path[0][1].goldSpent == 321 && g.path[0][1].damageTaken == 7 && g.path[0][1].tracked);
     // A version 1 record: same text up to the path, no badge section.
     std::string v1 = r.save();
-    size_t at = v1.find(" 2 ");
+    const std::string ver = " " + std::to_string(RunRecord::kVersion) + " ";
+    size_t at = v1.find(ver);
     CHECK(at != std::string::npos);
-    v1.replace(at, 3, " 1 ");
+    v1.replace(at, ver.size(), " 1 ");
     size_t cut = v1.find("BADGES");
     size_t end = v1.find("DECK");
     CHECK(cut != std::string::npos && end != std::string::npos);

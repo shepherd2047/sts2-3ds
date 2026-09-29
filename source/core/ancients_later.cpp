@@ -1064,6 +1064,8 @@ struct Darv : AncientBase {
     std::vector<std::string> sets = {"Astrolabe", "BlackStar", "CallingBell", "EmptyCage", "PandorasBox", "RunicPyramid", "SneckoEye"};
     if (act == 1) { sets.push_back("Ectoplasm"); sets.push_back("Sozu"); }
     if (act >= 1) { sets.push_back("PhilosophersStone"); sets.push_back("VelvetChoker"); }
+    // PandorasBox's ValidRelicSet: not when a modifier replaced the starting deck (M11).
+    if (run->modifiersClearDeck()) sets.erase(std::remove(sets.begin(), sets.end(), "PandorasBox"), sets.end());
     sets = ported(sets);
     rng().shuffle(sets);
     std::vector<EventOption> out;

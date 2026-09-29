@@ -28,6 +28,7 @@ struct Relic;
 struct Orb;
 struct Combat;
 struct Run;
+struct Modifier;  // M11 run modifiers (modifiers.h)
 
 // AscensionLevel (Entities.Ascension): a run at level N has every level <= N (Run::hasAscension).
 enum AscensionLevel : int {
@@ -988,6 +989,10 @@ struct MapNode {
 // dropped; then the boss, row 15, col 3, and with hasSecondBoss the DoubleBoss node, row 16,
 // the boss's only child). next = child indices. Implemented in mapgen.cpp.
 std::vector<MapNode> generateStandardActMap(Rng& mapRng, int actIndex, int numOfElites = 5, bool hasSecondBoss = false);
+// M11 (BigGameHunter): StandardActMap with a MapPointTypeCounts override -- the unknown / rest counts
+// are given (so GetMapPointTypes draws nothing) and elites may ignore the placement rules.
+struct MapTypeCounts { int unknowns = 0, rests = 0, elites = 5; bool elitesIgnoreRules = false; };
+std::vector<MapNode> generateStandardActMap(Rng& mapRng, int actIndex, const MapTypeCounts& counts, bool hasSecondBoss);
 
 struct Encounter {
   std::string id;
@@ -1306,6 +1311,20 @@ struct Run {
   // no-op if the run already ended (died or screen is already GameOver/Victory).
   // Called by the pause menu's abandon confirm (ui/screens/settings.cpp) before returnTitle.
   void abandon();
+
+  // M11 custom runs (modifiers.h / modifiers.cpp). RunState.Modifiers: hook listeners after the
+  // relics (Run::listeners, Combat::listeners), saved in run.sav (version 8) and the run history.
+  // Set them with setModifiers before start(); a load reads them back from the save.
+  std::vector<std::shared_ptr<Modifier>> modifiers;
+  bool customRun = false;         // GameMode.Custom: no ascension unlock at the end
+  std::string seedText;           // RunRngSet.StringSeed ("" when started from a numeric seed)
+  float unknownEliteOdds = -1.f;  // UnknownMapPointOdds Elite (-1 = never; DeadlyEvents 0.1)
+  void setModifiers(const std::vector<std::string>& keys);  // "Draft", "CharacterCards:Silent", ...
+  std::vector<std::string> modifierKeys() const;
+  bool hasModifier(const char* id) const;  // by the C# class name
+  bool modifiersClearDeck() const;         // ModifierModel.ClearsPlayerDeck (Draft, SealedDeck, Insanity)
+  std::vector<std::string> modifierCardPools() const;  // CharacterCards: the extra characters' pools
+  bool hoarding = false;                   // Hoarder: adding its own copies (CardPileAdd clonedBy)
 };
 
 // ---------------------------------------------------------------- registry

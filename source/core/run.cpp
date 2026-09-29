@@ -8,6 +8,7 @@
 #include "badges.h"
 #include "game.h"
 #include "history.h"
+#include "modifiers.h"
 #include "progress.h"
 
 namespace sts {
@@ -18,7 +19,10 @@ namespace {
 void recordRunEnd(Run& r, progress::RunOutcome outcome) {
   if (r.progressRecorded) return;
   r.progressRecorded = true;
+  // ProgressSaveManager.UpdateWithRunData: a custom run never raises the ascension level (M11).
+  int keepAsc = r.customRun ? progress::state().character(r.characterId).maxAscension : -1;
   progress::onRunEnded(r.characterId, r.ascension, outcome);
+  if (keepAsc >= 0) progress::state().character(r.characterId).maxAscension = keepAsc;
   // UpdateWithRunData: each Ancient map point's first Event room counts a win or a loss (AncientStats).
   for (auto& act : r.mapHistory)
     for (auto& point : act) {
@@ -71,6 +75,7 @@ void Run::historyRoom(history::RoomKind type, const std::string& model) {
 std::vector<Model*> Run::listeners() {
   std::vector<Model*> out;
   for (auto& r : relics) out.push_back(r.get());
+  for (auto& m : modifiers) out.push_back(m.get());  // RunState.IterateHookListeners: modifiers after relics
   return out;
 }
 
@@ -258,6 +263,13 @@ Card* Run::addCardToDeck(std::unique_ptr<Card> c) {
   deck.push_back(std::move(c));
   Card* added = deck.back().get();
   for (auto& rel : relics) rel->afterCardAddedToDeck(added);
+  // Hoarder.AfterCardChangedPiles: a new deck card brings two clones (which don't copy again).
+  // PORT NOTE: transformed cards (Run::transformCard) don't go through here, so they aren't copied.
+  if (!hoarding && hasModifier("Hoarder")) {
+    hoarding = true;
+    for (int i = 0; i < 2; ++i) addCardToDeck(added->clone());
+    hoarding = false;
+  }
   return added;
 }
 
@@ -430,6 +442,20 @@ Task<> Run::combatRewards(RoomType type) {
   for (auto& rel : relics)
     for (RoomType odds : rel->extraCardRewards(type)) makeCardItem(odds);  // Prayer Wheel / White Star
   for (; bonusCardRewards > 0; --bonusCardRewards) makeCardItem(type);  // CombatRoom.AddExtraReward (TheHunt)
+  // Hook.ModifyRewards, TryModifyRewardsLate (M11): Vintage turns a monster room's card rewards into
+  // relic rewards (populated after the rest, in place); Midas doubles every gold reward.
+  for (auto& m : modifiers) {
+    if (m->id == "Vintage" && type == RoomType::Monster)
+      for (auto& item : rewardItems)
+        if (item.kind == RewardKind::Card) {
+          item.kind = RewardKind::Relic;
+          item.cards.clear();
+          item.relic = pullRelicFromFront(relicBag, rollRelicRarity(rr));
+        }
+    if (m->id == "Midas")
+      for (auto& item : rewardItems)
+        if (item.kind == RewardKind::Gold) item.gold *= 2;
+  }
 
   std::stable_sort(rewardItems.begin(), rewardItems.end(), [](const RewardItem& a, const RewardItem& b) {
     auto rank = [](RewardKind k) { return k == RewardKind::Gold ? 0 : k == RewardKind::Potion ? 1 : k == RewardKind::Relic ? 2 : 3; };
@@ -480,17 +506,26 @@ RoomType Run::rollUnknownRoom() {
   float roll = rng("UnknownMapPoint").nextFloat();
   RoomType result = RoomType::Unknown;  // event
   float sum = 0;
+  // Monster, Elite (-1: never, unless DeadlyEvents set it), Treasure, Shop; negative odds are skipped.
   const std::pair<RoomType, float*> odds[] = {{RoomType::Monster, &unknownMonsterOdds},
+                                              {RoomType::Elite, &unknownEliteOdds},
                                               {RoomType::Treasure, &unknownTreasureOdds},
                                               {RoomType::Shop, &unknownShopOdds}};
   bool juzu = hasRelic("JuzuBracelet");  // ModifyUnknownMapPointRoomTypes: no Monster
   for (auto& [t, p] : odds) {
-    if (juzu && t == RoomType::Monster) continue;
+    if ((juzu && t == RoomType::Monster) || *p < 0) continue;
     sum += *p;
     if (roll <= sum) { result = t; break; }
   }
-  const float base[] = {0.1f, 0.02f, 0.03f};
-  for (int i = 0; i < 3; ++i) *odds[i].second = odds[i].first == result ? base[i] : *odds[i].second + base[i];
+  const bool deadly = hasModifier("DeadlyEvents");
+  const float base[] = {0.1f, deadly ? 0.1f : -1.f, 0.02f, 0.03f};
+  for (int i = 0; i < 4; ++i) {
+    if (odds[i].first == result) { *odds[i].second = base[i]; continue; }
+    if (*odds[i].second < 0 && base[i] < 0) continue;  // Elite without DeadlyEvents stays at -1
+    // Hook.ModifyOddsIncreaseForUnrolledRoomType: DeadlyEvents doubles the treasure increase.
+    float inc = deadly && odds[i].first == RoomType::Treasure ? base[i] * 2 : base[i];
+    *odds[i].second += inc;
+  }
   return result;
 }
 
@@ -540,10 +575,16 @@ void Run::start(uint64_t s, const std::string& charId, int ascensionLevel) {
     progress::markRelicSeen(rel->id);
     relics.push_back(std::move(rel));
   }
+  // ModifierModel.OnRunCreated (M11): ClearsPlayerDeck empties the starting deck, before the
+  // ascension effects (RunManager.InitializeNewRun), so Ascender's Bane stays.
+  for (auto& m : modifiers) m->run = this;
+  if (modifiersClearDeck()) deck.clear();
   // AscensionManager.ApplyEffectsTo: AscendersBane goes into the starting deck (TightBelt is the potion slot above).
   if (hasAscension(kAscendersBane))
     if (auto bane = db::card("AscendersBane")) deck.push_back(std::move(bane));
   populateRelicBags();
+  unknownEliteOdds = -1.f;
+  modifiers::afterRunCreated(*this);  // DeadlyEvents (after the relic bags, as in the C#)
   visitedEvents.clear();
   died = false;
   progressRecorded = false;
@@ -685,10 +726,12 @@ void Run::enterAct(int index) {
   unknownMonsterOdds = 0.1f;
   unknownTreasureOdds = 0.02f;
   unknownShopOdds = 0.03f;
+  unknownEliteOdds = hasModifier("DeadlyEvents") ? 0.1f : -1.f;
   generateMap();
   currentNode = 0;  // the starting point (the Ancient's node)
   nodes[0].visited = true;
   ancientPending = !ancientId.empty();
+  modifiers::afterActEntered(*this);  // Hook.AfterActEntered: CursedRun
 }
 
 // EnterMapCoord(StartingMapPoint): the Ancient event. AncientEventModel.BeforeEventStarted
@@ -726,6 +769,21 @@ void Run::generateMap() {
   // StandardActMap.CreateFor: hasSecondBoss = Act.HasSecondBoss (DoubleBoss rolled a second boss).
   nodes = generateStandardActMap(rng(stream.c_str()), actIndex, hasAscension(kSwarmingElites) ? 8 : 5,
                                  !secondBossId.empty());
+  // BigGameHunter.ModifyGeneratedMap: the act is generated again from a fresh Rng(seed,
+  // "act_<n>_map") with this map's unknown / rest counts, 2.5x its elites, elites free of the rules.
+  if (hasModifier("BigGameHunter")) {
+    MapTypeCounts counts;
+    int elites = 0;
+    for (auto& n : nodes) {
+      counts.unknowns += n.type == RoomType::Unknown;
+      counts.rests += n.type == RoomType::Rest;
+      elites += n.type == RoomType::Elite;
+    }
+    counts.elites = (int)std::round((float)elites * 2.5f);
+    counts.elitesIgnoreRules = true;
+    rngs[stream] = std::make_unique<Rng>(seed, stream);
+    nodes = generateStandardActMap(*rngs[stream], actIndex, counts, !secondBossId.empty());
+  }
   // NMapScreen layout: each point jittered by up to ±21 / ±25 units (map_jitter_<act>
   // stream) and tilted by NextGaussianFloat(0, 8) degrees (Rng.Chaotic in C#: cosmetic only).
   std::string jitter = "map_jitter_" + std::to_string(actIndex);
@@ -760,6 +818,13 @@ std::vector<int> Run::pathNodes() const {
     for (int i = 0; i < (int)nodes.size(); ++i) if (nodes[i].row == 0) out.push_back(i);
   } else {
     out = nodes[currentNode].next;
+    // Flight (Hook.ShouldAllowFreeTravel, MapTravel): every point of the next row.
+    if (hasModifier("Flight") && nodes[currentNode].type != RoomType::Boss) {
+      std::vector<int> row;
+      for (int i = 0; i < (int)nodes.size(); ++i)
+        if (nodes[i].row == nodes[currentNode].row + 1 && nodes[i].type != RoomType::Ancient) row.push_back(i);
+      if (!row.empty()) out = row;
+    }
   }
   return out;
 }
@@ -805,16 +870,23 @@ std::vector<std::unique_ptr<Card>> Run::cardReward(RoomType room, int count) {
   // Prismatic Gem (ModifyCardRewardCreationOptions): every character's pool joins the reward pool.
   bool allPools = false;
   for (auto& rel : relics) if (rel->allCharacterCardPools()) allPools = true;
+  // CharacterCards (M11, ModifyCardRewardCreationOptions): its character's pool joins (a Union).
+  std::vector<std::string> extraPools = modifierCardPools();
   auto poolOf = [&](const std::function<bool(const Card&)>& f) {
-    if (!allPools) return db::characterCards(characterId, f);
+    if (!allPools && extraPools.empty()) return db::characterCards(characterId, f);
     std::vector<std::string> u;
-    for (auto& ch : db::allCharacters())  // UnlockState.CharacterCardPools order
+    std::vector<std::string> chars = {characterId};
+    for (auto& ch : extraPools) chars.push_back(ch);
+    if (allPools) chars = db::allCharacters();  // UnlockState.CharacterCardPools order
+    for (auto& ch : chars)
       for (auto& id : db::characterCards(ch, f))
         if (std::find(u.begin(), u.end(), id) == u.end()) u.push_back(id);
     return u;
   };
+  // BigGameHunter: an elite fight's card reward is uniform odds over Rare cards (no rarity roll).
+  const bool bigGame = room == RoomType::Elite && hasModifier("BigGameHunter");
   for (int i = 0; i < count; ++i) {
-    Rarity want = rollRarity(room);
+    Rarity want = bigGame ? Rarity::Rare : rollRarity(room);
     auto pool = poolOf([&](const Card& c) { return c.rarity == want; });
     for (auto& rel : relics)  // Hook.ModifyCardRewardCreationOptions: CardPools.Union(ColorlessCardPool) (DingyRug)
       if (rel->addsColorlessToCardRewards()) {
@@ -1039,6 +1111,7 @@ Task<> Run::restSite() {
   for (auto& r : relics) if (r->id == "Girya") girya = r.get();
   for (;;) {
     restOptions = {0, 1};
+    if (hasModifier("Midas")) restOptions = {0};  // Midas.TryModifyRestSiteOptions: no Smith
     if (girya && girya->displayAmount() < 3) restOptions.push_back(2);
     if (hasRelic("Shovel")) restOptions.push_back(3);
     if (hasRelic("MeatCleaver")) restOptions.push_back(4);   // CookRestSiteOption

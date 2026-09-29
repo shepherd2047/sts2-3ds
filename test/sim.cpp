@@ -7,6 +7,7 @@
 #include "../source/core/game.h"
 #include "../source/core/events_crystal.h"
 #include "../source/core/history.h"
+#include "../source/core/modifiers.h"
 #include "../source/core/profiles.h"
 
 using namespace sts;
@@ -31,6 +32,11 @@ int main(int argc, char** argv) {
     std::vector<std::unique_ptr<Run>> keep;  // runs replaced by a load stay alive (their coroutines)
     keep.push_back(std::make_unique<Run>());
     Run* cur = keep.back().get();
+    // SIM_MODIFIERS=Draft,Midas,CharacterCards:Silent: a custom run with those modifiers (M11).
+    if (const char* m = getenv("SIM_MODIFIERS")) {
+      cur->setModifiers(modifiers::parseList(m));
+      cur->customRun = true;
+    }
     cur->start((uint64_t)s * 7919, getenv("SIM_CHAR") ? getenv("SIM_CHAR") : "Ironclad",
                 getenv("SIM_ASC") ? atoi(getenv("SIM_ASC")) : 0);  // SIM_CHAR=Silent, SIM_ASC=10
     cur->freeMap = getenv("STS_FREE_MAP") != nullptr;

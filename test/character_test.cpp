@@ -74,10 +74,10 @@ int main() {
     std::istringstream in(v3);
     std::vector<std::string> toks;
     for (std::string t; in >> t;) toks.push_back(t);
-    CHECK(toks.size() > 5 && toks[0] == "STS2SAVE" && toks[1] == "7" && toks[3] == "Ironclad" && toks[4] == "0");
+    CHECK(toks.size() > 5 && toks[0] == "STS2SAVE" && toks[1] == "8" && toks[3] == "Ironclad" && toks[4] == "0");
     // A save from a newer build is refused; an ascension run keeps its level.
     std::string future = v3;
-    future.replace(future.find("STS2SAVE 7"), 10, "STS2SAVE 9");
+    future.replace(future.find("STS2SAVE 8"), 10, "STS2SAVE 9");
     Run refused;
     CHECK(!refused.load(future));
     Run asc;

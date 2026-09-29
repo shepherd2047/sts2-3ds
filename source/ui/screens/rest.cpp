@@ -7,7 +7,10 @@ namespace ui {
 
 void App::drawRest(bool top) {
   Run& r = *run_;
-  int heal = (Dec(r.player->maxHp) * Dec::lit(0.3)).toInt();
+  // HealRestSiteOption: the amount through Hook.ModifyRestSiteHealAmount (NightTerrors: full, M11).
+  Dec healAmount = Dec(r.player->maxHp) * Dec::lit(0.3);
+  for (Model* m : r.listeners()) healAmount = m->modifyRestSiteHealAmount(r.player.get(), healAmount);
+  int heal = healAmount.toInt();
   if (top) {
     gfx::Texture* bg = R().texture(actTexture(*run_, "bg_"));
     gfx::image(bg, 0, 0, kTop, kH, 0, 0, kTop, kH, 0x100400FF, 0.6f);
