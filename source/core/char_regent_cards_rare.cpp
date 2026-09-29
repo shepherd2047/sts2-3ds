@@ -92,12 +92,10 @@ struct GenesisPower : Power {
 
 // MonarchsGazePower.cs: whenever the owner deals powered attack damage to a creature, that
 // creature gets Amount temporary Strength loss.
-// PORT NOTE: AfterDamageGiven is read from afterDamageReceived (dealer == owner); that hook is
-// skipped for a creature the hit killed, which no longer matters.
 struct MonarchsGazePower : Power {
   POWER_HEADER(MonarchsGazePower, "MONARCHS_GAZE_POWER")
-  Task<> afterDamageReceived(Creature* target, const DamageResult&, int props, Creature* dealer, Card*) override {
-    if (dealer == owner && isPoweredAttack(props) && target != owner)
+  Task<> afterDamageGiven(Creature* dealer, const DamageResult&, int props, Creature* target, Card*) override {
+    if (dealer == owner && isPoweredAttack(props))
       co_await applyPower<MonarchsGazeStrengthDownPower>(target, amount, owner, nullptr);
   }
 };
@@ -465,15 +463,15 @@ struct IAmInvincible : IroncladT<IAmInvincible> {
 
 // MakeItSo.cs: 0 cost, Attack, AnyEnemy. Damage 6. Whenever a Skill finishes playing and this
 // card is not in the hand, every 3rd Skill finished this turn returns it to the hand.
-// PORT NOTE: AfterCardPlayedLate is read from afterCardPlayed (no Late hook here), and this
-// engine bumps Combat::skillsFinishedThisTurn after that hook, so the finishing play is added.
+// This engine bumps Combat::skillsFinishedThisTurn after Hook.AfterCardPlayedLate, so the
+// finishing play is added.
 struct MakeItSo : IroncladT<MakeItSo> {
   CARD_HEADER(MakeItSo, "MAKE_IT_SO", 0, Attack, Rare, AnyEnemy)
     addVar("Damage", 6);
     addVar("Cards", 3);
   }
   Task<> onPlay(CardPlay& p) override { co_await attack(p.target, val("Damage")); }
-  Task<> afterCardPlayed(const CardPlay& cp) override {
+  Task<> afterCardPlayedLate(const CardPlay& cp) override {
     if (cp.card->type != CardType::Skill || combat->pileOf(this) == Pile::Hand) co_return;
     if (combat->pileOf(this) == Pile::None || combat->pileOf(this) == Pile::Play) co_return;
     int n = combat->skillsFinishedThisTurn + 1;

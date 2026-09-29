@@ -104,11 +104,9 @@ struct OblivionPower : Power {
 
 // ReaperFormPower.cs: Buff, Counter. Whenever the owner (or its Osty) deals powered attack damage,
 // apply Doom equal to the total damage (blocked + unblocked) times Amount to the target.
-// PORT NOTE: AfterDamageGiven is not a hook here; afterDamageReceived carries the same dealer /
-// result / props. It is not fired for a hit that kills its target, where the Doom would be moot.
 struct ReaperFormPower : Power {
   POWER_HEADER(ReaperFormPower, "REAPER_FORM_POWER")
-  Task<> afterDamageReceived(Creature* target, const DamageResult& r, int props, Creature* dealer, Card*) override {
+  Task<> afterDamageGiven(Creature* dealer, const DamageResult& r, int props, Creature* target, Card*) override {
     if (!dealer || !(dealer == owner || dealer->petOwner == owner) || !isPoweredAttack(props)) co_return;
     int total = r.blocked + r.unblocked;
     if (total <= 0) co_return;

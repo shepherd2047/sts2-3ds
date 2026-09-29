@@ -56,11 +56,9 @@ struct CorrosiveWavePower : Power {
 };
 
 // EnvenomPower.cs: unblocked powered attack damage dealt by the owner adds Poison.
-// PORT NOTE: AfterDamageGiven is not a hook here; AfterDamageReceived (called for every damage
-// result, not for killed targets, which no longer matter) carries the dealer and result.
 struct EnvenomPower : Power {
   POWER_HEADER(EnvenomPower, "ENVENOM_POWER")
-  Task<> afterDamageReceived(Creature* target, const DamageResult& r, int props, Creature* dealer, Card*) override {
+  Task<> afterDamageGiven(Creature* dealer, const DamageResult& r, int props, Creature* target, Card*) override {
     if (dealer == owner && isPoweredAttack(props) && r.unblocked > 0)
       co_await applyPower<PoisonPower>(target, Dec(amount), owner, nullptr);
   }
