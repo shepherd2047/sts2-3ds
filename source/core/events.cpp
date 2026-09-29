@@ -8,6 +8,7 @@ namespace sts {
 void registerAct1Events();  // events_act1.cpp
 void registerSharedEvents();  // events_shared.cpp
 void registerSharedEvents2();  // events_shared2.cpp
+void registerSharedEvents4();  // events_shared4.cpp
 void registerAct2Events();  // events_act2.cpp
 void registerAct3Events();  // events_act3.cpp
 void registerShared3Events();  // events_shared3.cpp (A7b)
@@ -21,6 +22,7 @@ void registerEvents() {
   registerAct1Events();
   registerSharedEvents();
   registerSharedEvents2();
+  registerSharedEvents4();
   registerAct2Events();
   registerAct3Events();
   registerShared3Events();

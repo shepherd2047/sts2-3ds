@@ -263,14 +263,14 @@ int main(int argc, char** argv) {
             cur->deckChoice.result.fire({pick});
           } else if (cur->shopChoice.waiting()) {
             int pick = -1;
-            for (int k = 0; k < (int)cur->shop.size() && pick < 0; ++k) {
+            // Cap the buys per visit: with a refilling relic (The Courier) and endless gold the shop never empties.
+            static int shopBuys = 0, shopFloor = -1;
+            if (shopFloor != cur->floor) { shopFloor = cur->floor; shopBuys = 0; }
+            for (int k = 0; k < (int)cur->shop.size() && pick < 0 && shopBuys < 40; ++k) {
               auto& it = cur->shop[k];
               if (it.stocked() && cur->shopPrice(it) <= cur->gold && (it.kind != ShopItem::PotionItem || cur->hasOpenPotionSlot())) pick = k;
             }
-            // Cap the buys per shop visit: Bing Bong + Lucky Fysh pay more gold per card than a card costs.
-            static int lastFloor = -1, buys = 0;
-            if (cur->floor != lastFloor) { lastFloor = cur->floor; buys = 0; }
-            if (pick >= 0 && ++buys > 30) pick = -1;
+            if (pick >= 0) ++shopBuys;
             if (getenv("SIM_FIGHTS") && pick >= 0) printf("  shop buy %d (%d gold)\n", pick, cur->gold);
             cur->shopChoice.fire(pick);
           }
