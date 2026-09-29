@@ -42,8 +42,8 @@ static std::vector<PauseItem> pauseItems(Screen scr, bool canSaveQuit) {
   if (scr != Screen::Map) v.push_back({kPMap, "地图", true, nullptr});  // on the map it is the screen itself
   v.push_back({kPDeck, "牌组", true, nullptr});
   v.push_back({kPSettings, gp("SETTINGS"), true, nullptr});
-  // TODO(M8): open App::openCardLibrary() once the card library lands; shown as 未完成 until then.
-  v.push_back({kPCompendium, gp("COMPENDIUM"), false, "未完成"});
+  // 百科大全 opens the card library (M8); the other compendium pages (relics, potions, bestiary) come later.
+  v.push_back({kPCompendium, gp("COMPENDIUM"), true, nullptr});
   v.push_back({kPGiveUp, gp("GIVE_UP"), true, nullptr});
   v.push_back({kPSaveQuit, gp("SAVE_AND_QUIT"), canSaveQuit, canSaveQuit ? nullptr : "尚无存档"});
   return v;
@@ -80,7 +80,7 @@ void App::drawPause(bool top) {
     switch (abandonConfirm_ ? kPGiveUp : items[pauseSel_].id) {
       case kPMap: tip = "查看本幕地图。"; break;
       case kPDeck: tip = "查看你的牌组。"; break;
-      case kPCompendium: tip = "百科大全尚未完成。"; break;
+      case kPCompendium: tip = "查看卡牌总览。"; break;
       case kPGiveUp: tip = mm("ABANDON_RUN_CONFIRMATION.body"); break;
       case kPSaveQuit:
         tip = items[pauseSel_].enabled ? "返回主菜单。继续游戏时从上一个存档点（地图）开始。"
@@ -147,15 +147,13 @@ void App::updatePause(const gfx::Input& in) {
   for (int i = 0; i < n; ++i)
     if (items[i].id == id) { pauseSel_ = i; picked = &items[i]; }
   if (!picked) return;
-  if (!picked->enabled) {
-    if (id == kPCompendium) { toast_ = gp("COMPENDIUM") + " · 未完成"; toastT_ = 1.2f; }
-    return;
-  }
+  if (!picked->enabled) return;
   switch (id) {
     case kPResume: pauseOpen_ = false; break;
     case kPMap: mapView_ = true; mapTouch_ = {}; mapUserScroll_ = false; break;
     case kPDeck: openCardList(CardListMode::Deck); break;
     case kPSettings: settingsOpen_ = true; break;
+    case kPCompendium: openCardLibrary(); break;
     case kPGiveUp: abandonConfirm_ = true; pauseModalSel_ = 0; break;
     case kPSaveQuit: returnTitle(true); break;  // run.sav stays: 继续 resumes at the last map choice
     default: break;
