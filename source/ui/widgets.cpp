@@ -1,4 +1,5 @@
 #include "widgets.h"
+#include "sfx_router.h"
 
 #include <algorithm>
 #include <cmath>
@@ -102,6 +103,7 @@ bool hit(int id, float x, float y, float w, float h, bool enabled) {
     setFocus(id);
     padMode = false;
     activated = true;
+    sfx::click();
     states[id].press = 1.f;
   }
   if (padMode && id == focusId && (curInput.down & gfx::BTN_A)) {

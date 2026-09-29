@@ -227,6 +227,8 @@ void App::update(const gfx::Input& in, double dt) {
     target_ = 0;
   }
   consumeEvents();
+  sfx::frame(*run_);
+  if (in.touchDown && hitAt(in.tx, in.ty) != ID_NONE) sfx::click();
   if (run_->combat) {
     auto decayShake = [&](Creature* c) {
       if (c) c->shake = std::max(0.f, c->shake - (float)visualDt * 4.f);
@@ -295,6 +297,7 @@ void App::consumeEvents() {
   Combat* c = run_->combat.get();
   if (!c) return;
   for (auto& e : c->events) {
+    sfx::combatEvent(e, *c, *run_);
     float dx = (float)((int)(floats_.size() * 13) % 21) - 10;
     switch (e.kind) {
       case VisualEvent::Damage:

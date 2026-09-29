@@ -123,6 +123,7 @@ void App::animateHand(float dt) {
     else if (inPile(cb->draw, c)) { g.tx = kDrawPileX; g.ty = kDrawPileY; }
     else if (inPile(cb->exhaust, c)) { g.exhaust = true; g.tx = from.x; g.ty = from.y - 40; g.ts = from.s * 0.2f; }
     else continue;
+    if (leaveQueue_ <= 0) sfx::cardsDiscarded();
     leaveQueue_ += kLeaveGap;
     ghosts_.push_back(g);
   }
@@ -158,6 +159,7 @@ void App::animateHand(float dt) {
     }
     if (p.delay > 0) { p.delay -= dt; continue; }
     if (p.drawT < 1) {
+      if (p.drawT == 0) sfx::cardDeal();
       // Arc from the pile towards the (moving) slot.
       p.drawT = std::min(1.f, p.drawT + dt / kDrawTime);
       float t = easeOut(p.drawT);
