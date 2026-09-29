@@ -1115,6 +1115,9 @@ struct Run {
     std::unique_ptr<Relic> relic;              // Relic: the rolled relic, not yet obtained
     std::vector<std::unique_ptr<Card>> cards;  // Card: the options currently on offer
   };
+  // CombatRoom.ExtraRewards: rewards added after the room's own by the event that started the fight
+  // (PunchOff: Relic, Potion). Populated (rolled) by the next combatRewards, then cleared.
+  std::vector<RewardKind> extraRewards;
   std::vector<RewardItem> rewardItems;
   int bonusCardRewards = 0;  // extra card rewards a card added this fight (TheHunt, X1.4); consumed by combatRewards
   Signal<int> rewardListChoice;       // row index to claim, or -1/out of range = Proceed

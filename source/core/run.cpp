@@ -304,6 +304,15 @@ Task<> Run::combatRewards(RoomType type) {
     rewardItems.push_back(std::move(item));
   };
   makeCardItem(type);  // CardReward.Populate -- before the relic reward, see comment above
+  for (RewardKind k : extraRewards) {  // CombatRoom.ExtraRewards, populated after the room's own
+    RewardItem item;
+    item.kind = k;
+    if (k == RewardKind::Relic) item.relic = pullRelicFromFront(relicBag, rollRelicRarity(rr));
+    else if (k == RewardKind::Potion) item.potion = randomPotion(rr, false);
+    else continue;
+    rewardItems.push_back(std::move(item));
+  }
+  extraRewards.clear();
 
   if (type == RoomType::Elite) {
     RewardItem item;

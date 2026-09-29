@@ -11,6 +11,7 @@ void registerSharedEvents2();  // events_shared2.cpp
 void registerAct2Events();  // events_act2.cpp
 void registerAct3Events();  // events_act3.cpp
 void registerShared3Events();  // events_shared3.cpp (A7b)
+void registerUnderdocksEvents();  // events_underdocks.cpp (A11e)
 
 namespace {
 std::map<std::string, EventFactory>& eventReg() { static std::map<std::string, EventFactory> m; return m; }
@@ -23,6 +24,7 @@ void registerEvents() {
   registerAct2Events();
   registerAct3Events();
   registerShared3Events();
+  registerUnderdocksEvents();
 }
 
 namespace db {
