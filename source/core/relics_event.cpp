@@ -3,8 +3,8 @@
 // starter relics (Touch of Orobas upgrades). Translated from MegaCrit.Sts2.Core.Models.Relics /
 // .Potions.
 //
-// Still skipped (need systems owned elsewhere or not yet built): LeadPaperweight (colorless
-// pool, A1a); PaelsGrowth (CloneRestSiteOption); the enchanting event relics (BeautifulBracelet,
+// Still skipped (need systems owned elsewhere or not yet built): LeadPaperweight is in
+// relics_shared2.cpp (A5); PaelsGrowth (CloneRestSiteOption); the enchanting event relics (BeautifulBracelet,
 // TriBoomerang, ElectricShrymp, PaelsClaw, NutritiousSoup, Glitter, SilkenTress, SilverCrucible)
 // are in relics_enchant.cpp (A3c); Byrdpip (pets +
 // ByrdonisEgg hatching); WingedBoots (free travel on the map); DowsingRod (quest cards);

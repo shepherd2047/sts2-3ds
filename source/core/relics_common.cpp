@@ -319,8 +319,7 @@ struct Whetstone : Relic {
   }
 };
 
-// MealTicket.cs: heal 15 on entering a merchant. PORT NOTE: IsAllowed
-// (IsBeforeAct3TreasureChest) is not checked.
+// MealTicket.cs: heal 15 on entering a merchant (IsAllowed: Run::removeDisallowedRelics).
 struct MealTicket : Relic {
   RELIC_HEADER(MealTicket, "MEAL_TICKET", Common)
     addVar("Heal", 15);

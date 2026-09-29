@@ -133,6 +133,12 @@ struct Model {
   virtual bool tryModifyPowerAmountReceived(Power* /*incoming*/, Creature* /*target*/, Dec /*amount*/,
                                             Creature* /*applier*/, Dec& /*out*/) { return false; }
   virtual Task<> afterModifyingPowerAmountReceived(Power*) { return {}; }
+  // Hook.BeforePowerAmountChanged / ModifyPowerAmountGiven{Additive,Multiplicative} / AfterModifyingPowerAmountGiven
+  // (PowerCmd.Apply, before ModifyPowerAmountReceived; only run when the applier is in the combat).
+  virtual Task<> beforePowerAmountChanged(Power*, Dec /*amount*/, Creature* /*target*/, Creature* /*applier*/, Card*) { return {}; }
+  virtual Dec modifyPowerAmountGivenAdditive(Power*, Creature* /*giver*/, Dec /*amount*/, Creature* /*target*/, Card*) { return Dec(0); }
+  virtual Dec modifyPowerAmountGivenMultiplicative(Power*, Creature* /*giver*/, Dec /*amount*/, Creature* /*target*/, Card*) { return Dec(1); }
+  virtual Task<> afterModifyingPowerAmountGiven(Power*) { return {}; }
 
   // Added for relics (Hook.* of the same names).
   virtual Task<> afterCombatEnd() { return {}; }              // victory, before afterCombatVictory
@@ -692,6 +698,10 @@ struct Relic : Model {
   virtual bool showCounter() const { return false; }
   virtual int displayAmount() const { return 0; }
   virtual bool allowedInShops() const { return true; }
+  virtual bool addsColorlessToCardRewards() const { return false; }  // ModifyCardRewardCreationOptions (DingyRug)
+  // RelicModel.IsAllowed: pruned from the grab bags on every pull (Run::removeDisallowedRelics).
+  // The IsBeforeAct3TreasureChest relics are handled by an id list in run.cpp.
+  virtual bool isAllowed(Run&) { return true; }
   virtual Task<> afterObtained() { return {}; }  // AfterObtained (pickup effects)
   virtual void persist(Archive&) {}  // state that lasts between rooms (saves)
   virtual int bonusRelicRewards(RoomType) { return 0; }  // TryModifyRewards: extra RelicRewards
@@ -1191,6 +1201,7 @@ struct Run {
   // Ironclad pools; the shared bag feeds treasure chests).
   std::map<RelicRarity, std::vector<std::string>> relicBag, sharedRelicBag;
   void populateRelicBags();
+  void removeDisallowedRelics();  // RelicGrabBag.RemoveDisallowedRelicsFromDeques
   RelicRarity rollRelicRarity(Rng& rng);  // RelicFactory.RollRarity
   std::unique_ptr<Relic> pullRelicFromFront(std::map<RelicRarity, std::vector<std::string>>& bag, RelicRarity r);
   Task<> obtainRelic(std::unique_ptr<Relic> r);   // RelicCmd.Obtain

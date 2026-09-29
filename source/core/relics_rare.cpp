@@ -398,8 +398,7 @@ struct GamblingChip : Relic {
   }
 };
 
-// ---- UnsettlingLamp: SKIPPED. Needs power-amount-given-multiplicative / before-power-amount
-// hooks to double the first debuff a card applies to an enemy.
+// ---- UnsettlingLamp: in relics_shared2.cpp (A5).
 
 // ---- VexingPuzzlebox: on turn 1, add a random Ironclad card to hand, free this turn. ----
 // PORT NOTE: picks from the whole character pool rather than the player's unlocked pool

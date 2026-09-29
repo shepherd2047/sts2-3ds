@@ -35,6 +35,7 @@ int potionBaseCost(PotionRarity r) { return r == PotionRarity::Rare ? 100 : r ==
 // Shop -> Common -> Uncommon -> Rare), only relics allowed in shops; also leaves the
 // shared bag. Falls back to Circlet.
 std::unique_ptr<Relic> Run::pullRelicFromBack(RelicRarity k) {
+  removeDisallowedRelics();
   while (k != RelicRarity::None) {
     auto& v = relicBag[k];
     for (int i = (int)v.size() - 1; i >= 0; --i) {

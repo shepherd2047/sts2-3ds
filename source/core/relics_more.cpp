@@ -2,10 +2,10 @@
 // reward / deck hooks, rest site options or death prevention. Translated from
 // MegaCrit.Sts2.Core.Models.Relics.
 //
-// Still skipped (no enchantments / colorless card pool yet): DingyRug, FresnelLens,
-// GnarledHammer, Kifuda, MysticLighter, PunchDagger, RoyalStamp, Toolbox, WingCharm; and
-// UnsettlingLamp (needs Hook.ModifyPowerAmountGivenMultiplicative). RelicModel.IsAllowed
-// (IsBeforeAct3TreasureChest) is not checked for any relic.
+// No relic of the shared and Ironclad pools is skipped any more: FresnelLens / GnarledHammer / Kifuda /
+// MysticLighter / PunchDagger / RoyalStamp / WingCharm are in events_underdocks.cpp and relics_enchant.cpp
+// (A3c), DingyRug / Toolbox / UnsettlingLamp in relics_shared2.cpp (A5). RelicModel.IsAllowed
+// (IsBeforeAct3TreasureChest) is applied by Run::removeDisallowedRelics (run.cpp, id list).
 #include "cards.h"
 
 namespace sts {
