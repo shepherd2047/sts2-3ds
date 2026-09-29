@@ -453,6 +453,14 @@ struct PunchConstruct : Monster {
 // Shared with content_underdocks_b.cpp (SeapunkNormal).
 std::unique_ptr<Monster> makeCalcifiedCultist() { return std::make_unique<CalcifiedCultist>(); }
 
+// Shared with events_underdocks.cpp (PunchOffEventEncounter: StartsWithFastPunch / StartingHpReduction).
+std::unique_ptr<Monster> makePunchConstruct(bool startsWithFastPunch, int startingHpReduction) {
+  auto m = std::make_unique<PunchConstruct>();
+  m->startsWithFastPunch = startsWithFastPunch;
+  m->startingHpReduction = startingHpReduction;
+  return m;
+}
+
 void registerUnderdocksA() {
   db::registerPower(RavenousPower::kId, [] { return std::unique_ptr<Power>(new RavenousPower()); });
   db::registerPower(SuckPower::kId, [] { return std::unique_ptr<Power>(new SuckPower()); });
