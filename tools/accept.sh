@@ -42,7 +42,7 @@ if [ $do3ds = 1 ]; then
     # macOS: devkitPro's make breaks on the repo's non-ASCII path, so build in the ASCII copy
     # (CLAUDE.md: ~/dev/sts2-3ds-build). romfs_3ds/ is kept there between builds.
     dst=~/dev/sts2-3ds-build; mkdir -p $dst
-    rsync -a --delete --exclude build/ --exclude .git/ --exclude romfs_3ds/ --exclude '*.3dsx' ./ $dst/
+    rsync -a --delete --exclude build/ --exclude .git/ --exclude .claude/ --exclude /audio/ --exclude romfs/audio/ --exclude romfs_3ds/ --exclude '*.3dsx' ./ $dst/
     out3ds=$dst/sts2-3ds.3dsx; before=$(mtime $out3ds)
     (cd $dst && DEVKITPRO=/opt/devkitpro DEVKITARM=/opt/devkitpro/devkitARM make -j8) >build/accept_3ds.log 2>&1
   else out3ds=; echo "skip 3DS build (no devkitPro here)"; fi
