@@ -174,7 +174,7 @@ std::vector<SubItem> subItems(int sub) {
     const char* spr4[] = {"ui/sub_card_library", "ui/sub_relic_collection", "ui/sub_potion_lab", "ui/sub_bestiary"};
     const char* key4[] = {"COMPENDIUM_CARD_LIBRARY", "COMPENDIUM_RELIC_COLLECTION", "COMPENDIUM_POTION_LAB",
                           "COMPENDIUM_BESTIARY"};
-    for (int i = 0; i < 4; ++i) v.push_back({kSCards + i, x0 + i * (w + gap), y, w, h, spr4[i], key4[i], i <= 2, false});
+    for (int i = 0; i < 4; ++i) v.push_back({kSCards + i, x0 + i * (w + gap), y, w, h, spr4[i], key4[i], true, false});
     const float sw = (kBot - 2 * x0 - gap) / 2, sy = y + h + 10;
     v.push_back({kSStats, x0, sy, sw, 44, "ui/sub_stats", "STATISTICS", true, true});
     v.push_back({kSHistory, x0 + sw + gap, sy, sw, 44, "ui/sub_history", "RUN_HISTORY", true, true});
@@ -402,6 +402,7 @@ void App::activateMenu(int id) {
     case kSCards: openCardLibrary(); break;  // M8
     case kSCards + 1: openRelicCollection(false); break;  // M9
     case kSCards + 2: openRelicCollection(true); break;   // M9
+    case kSCards + 3: openBestiary(); break;  // M10
     case kSBack: menuSub_ = 0; break;
     case kSStats: openStats(1); break;    // M6
     case kSHistory: openStats(2); break;  // M6

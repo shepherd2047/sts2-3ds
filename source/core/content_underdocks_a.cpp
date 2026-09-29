@@ -462,6 +462,9 @@ std::unique_ptr<Monster> makePunchConstruct(bool startsWithFastPunch, int starti
 }
 
 void registerUnderdocksA() {
+  db::registerMonster("FatGremlin", [] { return std::unique_ptr<Monster>(new FatGremlin()); });  // M10 bestiary: summons
+  db::registerMonster("SneakyGremlin", [] { return std::unique_ptr<Monster>(new SneakyGremlin()); });
+  db::registerMonster("GasBomb", [] { return std::unique_ptr<Monster>(new GasBomb()); });
   db::registerPower(RavenousPower::kId, [] { return std::unique_ptr<Power>(new RavenousPower()); });
   db::registerPower(SuckPower::kId, [] { return std::unique_ptr<Power>(new SuckPower()); });
   db::registerPower(ThieveryPower::kId, [] { return std::unique_ptr<Power>(new ThieveryPower()); });

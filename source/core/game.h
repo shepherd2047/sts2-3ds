@@ -594,11 +594,14 @@ struct MoveStateMachine {
   MonsterState* initial = nullptr;
   MonsterState* current = nullptr;
   bool performedFirstMove = false;
+  // State ids in the order they were added (the C#'s States dictionary order; M10's bestiary).
+  std::vector<std::string> order;
 
   template <class S> S* add(const std::string& id) {
     auto s = std::make_unique<S>();
     s->id = id;
     S* raw = s.get();
+    if (!states.count(id)) order.push_back(id);
     states[id] = std::move(s);
     return raw;
   }
@@ -1314,6 +1317,10 @@ std::vector<std::string> cardIds();  // every registered card id, sorted (M8's c
 std::unique_ptr<Power> power(const std::string& id);
 const Encounter* encounter(const std::string& id);
 std::vector<std::string> encounterIds();  // every registered encounter (tests, tools)
+// Monsters that only enter a fight as summons (in no encounter's generate), so the bestiary (M10)
+// can build them; null if `id` (the class name) is not registered.
+void registerMonster(const std::string& id, std::function<std::unique_ptr<Monster>()> make);
+std::unique_ptr<Monster> monster(const std::string& id);
 std::unique_ptr<Relic> relic(const std::string& id);
 std::unique_ptr<Potion> potion(const std::string& id);
 std::vector<std::string> relicIds();   // every registered relic id, sorted (M9's relic collection)

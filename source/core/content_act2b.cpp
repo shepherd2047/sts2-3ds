@@ -488,6 +488,8 @@ Task<> FlutterPower::afterDamageReceived(Creature* target, const DamageResult& r
 }  // namespace
 
 void registerAct2B() {
+  db::registerMonster("ToughEgg", [] { return std::unique_ptr<Monster>(new ToughEgg()); });  // M10 bestiary: summons
+  db::registerMonster("Parafright", [] { return std::unique_ptr<Monster>(new Parafright()); });
   db::registerPower(TenderPower::kId, [] { return std::unique_ptr<Power>(new TenderPower()); });
   db::registerPower(CurlUpPower::kId, [] { return std::unique_ptr<Power>(new CurlUpPower()); });
   db::registerPower(HatchPower::kId, [] { return std::unique_ptr<Power>(new HatchPower()); });

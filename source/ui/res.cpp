@@ -153,6 +153,16 @@ void Res::releaseTexture(const std::string& path) {
   textures_.erase(t);
 }
 
+bool Res::skeletonLoaded(const std::string& key) const { return skeletons_.count(key) > 0; }
+
+void Res::releaseSkeleton(const std::string& key) {
+  auto it = skeletons_.find(key);
+  if (it == skeletons_.end()) return;
+  if (it->second)
+    for (auto& p : it->second->pages) releaseTexture(p);
+  skeletons_.erase(it);
+}
+
 void Res::releaseSkeletons(const std::vector<std::string>& keep) {
   for (auto it = skeletons_.begin(); it != skeletons_.end();) {
     if (std::find(keep.begin(), keep.end(), it->first) != keep.end()) { ++it; continue; }

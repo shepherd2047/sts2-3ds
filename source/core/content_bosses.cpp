@@ -267,6 +267,7 @@ struct Fogmog : Monster {
 // ================================================================ registry
 
 void registerAct1Bosses() {
+  db::registerMonster("EyeWithTeeth", [] { return std::unique_ptr<Monster>(new EyeWithTeeth()); });  // M10 bestiary: summon
   db::registerCard("Dazed", [] { return std::unique_ptr<Card>(new Dazed()); });
   db::registerPower("MinionPower", [] { return std::unique_ptr<Power>(new MinionPower()); });
   db::registerPower("RingingPower", [] { return std::unique_ptr<Power>(new RingingPower()); });

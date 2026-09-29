@@ -126,6 +126,11 @@ class App {
  private:
   bool drawRelicCollection(bool top);
   bool updateRelicCollection(const gfx::Input& in);
+  // M10 bestiary (screens/bestiary.cpp, its state lives there): NBestiary, from the compendium
+  // submenu. Same contract as the card library; one monster's Spine loaded at a time.
+  void openBestiary();
+  bool drawBestiary(bool top);
+  bool updateBestiary(const gfx::Input& in);
   // M6 (U30) stats screen + run history viewer, screens/stats_screen.cpp (state lives there).
   // openStats(1) the stats page, openStats(2) the run history list; draw / update return false
   // while it is closed.
