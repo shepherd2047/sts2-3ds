@@ -134,7 +134,14 @@ void shutdown() {
 bool running() { return !quit; }
 double dt() { return frameDt; }
 
+// One reading per frame: main.cpp reads it before App::update, and screens that draw kit widgets
+// read it again while drawing. A second scan would report no new presses or taps, so later
+// calls in the same frame return the same Input (as scripted input always behaved).
+static int inputFrame = -1;
+
 Input input() {
+  if (inputFrame == frameCount) return cur;
+  inputFrame = frameCount;
   uint32_t prevHeld = cur.held;
   bool prevTouch = cur.touching;
   SDL_Event e;
