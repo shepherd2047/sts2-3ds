@@ -33,6 +33,11 @@ const std::vector<std::string>& characterIds() {
   return ids;
 }
 
+const std::vector<std::string>& allCharacters() {
+  static const std::vector<std::string> ids = {"Ironclad", "Silent", "Regent", "Necrobinder", "Defect"};
+  return ids;
+}
+
 bool characterPlayable(const std::string& id) {
   const Character& c = character(id);
   if (c.id != id) return false;

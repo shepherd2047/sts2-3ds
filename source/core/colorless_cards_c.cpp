@@ -267,8 +267,8 @@ struct Splash : IroncladT<Splash> {
   Task<> onPlay(CardPlay&) override {
     Combat& c = *combat;
     std::vector<std::string> ids;
-    for (auto& ch : db::characterIds()) {
-      if (ch == c.run->characterId && db::characterIds().size() > 1) continue;
+    for (auto& ch : db::allCharacters()) {  // UnlockState.CharacterCardPools order
+      if (ch == c.run->characterId && db::allCharacters().size() > 1) continue;
       auto part = db::characterCards(ch, [](const Card& k) { return k.type == CardType::Attack; });
       ids.insert(ids.end(), part.begin(), part.end());
     }

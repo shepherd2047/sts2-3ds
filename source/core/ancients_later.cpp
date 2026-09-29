@@ -11,6 +11,7 @@
 #include <algorithm>
 
 #include "cards.h"
+#include "progress.h"
 
 namespace sts {
 
@@ -893,13 +894,12 @@ struct DustyTome : Relic {
 
 namespace {
 
-// AncientEventModel: the character's first-visit dialogue (the UI drops lines without loc
-// text), and RelicOption (take the relic, then Done). Only registered relics are offered.
+// AncientEventModel: the dialogue NEventRoom picks for this character and visit
+// (db::ancientDialogueFor), and RelicOption (take the relic, then Done). Only registered relics are offered.
 struct AncientBase : Event {
   void talk() {
     ancient = true;
-    std::string k = locKey + ".talk." + run->character().key + ".0-";
-    dialogue = {k + "0.ancient", k + "1.char", k + "1.ancient", k + "2.char", k + "2.ancient"};
+    dialogue = db::ancientDialogueFor(*run, id);
   }
   static bool ok(const std::string& id) { return db::relicRegistered(id); }
   static std::vector<std::string> ported(std::vector<std::string> ids) {
@@ -942,7 +942,7 @@ struct Orobas : AncientBase {
     // Pool 1: Electric Shrymp, Glass Eye, and Prismatic Gem (1/3) or Sea Glass.
     // The Sea Glass character: NextItem over the other unlocked characters (own character if none).
     std::vector<std::string> others;
-    for (auto& id : db::characterIds())
+    for (auto& id : db::allCharacters())  // UnlockState.Characters order
       if (id != run->characterId && db::characterPlayable(id)) others.push_back(id);
     std::string seaChar = others.empty() ? run->characterId : rng().nextItem(others);
     std::vector<std::string> pool1 = {"ElectricShrymp", "GlassEye", rng().nextFloat() < 0.3333333f ? "PrismaticGem" : "SeaGlass"};
@@ -1039,6 +1039,8 @@ struct Tanx : AncientBase {
 
 struct Vakuu : AncientBase {
   EVENT_HEADER(Vakuu, "VAKUU")
+  // CalculateVars: "Visits" = this character's visits so far + 1 (VAKUU.talk.ANY.1-0r).
+  void calculateVars() override { addVar("Visits", progress::ancientVisits(id, run->characterId) + 1); }
   std::vector<EventOption> initialOptions() override {
     talk();
     std::vector<EventOption> out;

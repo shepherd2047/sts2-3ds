@@ -94,11 +94,11 @@ void App::startRun(bool resume) {
   }
   if (!loaded) {
     if (savesEnabled()) gfx::deleteSave(saveName());
-    // S04: the character select's choice (Random picks one of the five now), ascension and seed
+    // S04: the character select's choice (Random: Run::start resolves it from the seed), ascension and seed
     // string (RunRngSet: Seed = StringHelper.GetDeterministicHashCode(seed)). Debug: STS_CHAR /
     // STS_SEED (a number) override them.
     const auto& ids = db::characterIds();
-    std::string character = titleChar_ < (int)ids.size() ? ids[titleChar_] : ids[(size_t)time(nullptr) % ids.size()];
+    std::string character = titleChar_ < (int)ids.size() ? ids[titleChar_] : std::string(Run::kRandomCharacter);
     if (const char* c = getenv("STS_CHAR")) character = c;
     uint64_t seed = titleSeed_.empty() ? (uint64_t)time(nullptr) : deterministicHash(titleSeed_);
     if (const char* s = getenv("STS_SEED")) seed = (uint64_t)atoll(s);
