@@ -9,6 +9,8 @@
 
 namespace sts {
 
+std::unique_ptr<Monster> makeCalcifiedCultist();  // content_underdocks_a.cpp
+
 namespace {
 
 #define MONSTER_HEADER(Name, Key) \
@@ -59,25 +61,6 @@ struct Seapunk : Monster {
   }
 };
 
-// Calcified Cultist (Seapunk's partner in SeapunkNormal).
-// PORT NOTE: package A11a may define the same monster in content_underdocks_a.cpp; this copy is
-// private to this file (anonymous namespace) so the two never clash, and can be dropped later.
-struct CalcifiedCultist : Monster {
-  MONSTER_HEADER(CalcifiedCultist, "CALCIFIED_CULTIST")
-  int minHp() const override { return asc(kToughEnemies, 39, 38); }
-  int maxHp() const override { return asc(kToughEnemies, 42, 41); }
-  void buildMoves() override {
-    auto* incant = machine.add<MoveState>("INCANTATION_MOVE");
-    incant->perform = [this](Targets) { return applyById(this, "RitualPower", 2); };
-    incant->intents = {kindIntent(Intent::Buff)};
-    auto* strike = machine.add<MoveState>("DARK_STRIKE_MOVE");
-    strike->perform = [this](Targets) { return attack(asc(kDeadlyEnemies, 11, 9)); };
-    strike->intents = {attackIntent(asc(kDeadlyEnemies, 11, 9))};
-    incant->followUp = strike;
-    strike->followUp = strike;
-    machine.start(incant);
-  }
-};
 
 // ================================================================ Sewer Clam
 
@@ -270,7 +253,11 @@ struct TwoTailedRat : Monster {
 // ================================================================ encounters
 
 void registerUnderdocksB() {
-  db::registerEncounter("SeapunkNormal", RoomType::Monster, false, [](Rng&) { return list<CalcifiedCultist, Seapunk>(); });
+  db::registerEncounter("SeapunkNormal", RoomType::Monster, false, [](Rng&) {
+    auto v = list<Seapunk>();
+    v.insert(v.begin(), makeCalcifiedCultist());  // content_underdocks_a.cpp
+    return v;
+  });
   db::registerEncounter("SeapunkWeak", RoomType::Monster, true, [](Rng&) { return list<Seapunk>(); });
   db::registerEncounter("SewerClamNormal", RoomType::Monster, false, [](Rng&) { return list<SewerClam>(); });
   db::registerEncounter("SludgeSpinnerWeak", RoomType::Monster, true, [](Rng&) { return list<SludgeSpinner>(); });

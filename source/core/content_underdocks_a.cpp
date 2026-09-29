@@ -450,6 +450,9 @@ struct PunchConstruct : Monster {
 
 }  // namespace
 
+// Shared with content_underdocks_b.cpp (SeapunkNormal).
+std::unique_ptr<Monster> makeCalcifiedCultist() { return std::make_unique<CalcifiedCultist>(); }
+
 void registerUnderdocksA() {
   db::registerPower(RavenousPower::kId, [] { return std::unique_ptr<Power>(new RavenousPower()); });
   db::registerPower(SuckPower::kId, [] { return std::unique_ptr<Power>(new SuckPower()); });
