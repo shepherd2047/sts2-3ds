@@ -1032,7 +1032,8 @@ def build(args):
         'CONTINUE', 'ABANDON_RUN', 'ABANDON_RUN_CONFIRMATION', 'SINGLE_PLAYER', 'COMPENDIUM', 'STATISTICS',
         'SETTINGS', 'QUIT', 'QUIT_CONFIRM_POPUP', 'GENERIC_POPUP', 'STANDARD', 'DAILY', 'CUSTOM',
         'COMPENDIUM_CARD_LIBRARY', 'COMPENDIUM_RELIC_COLLECTION', 'COMPENDIUM_POTION_LAB', 'COMPENDIUM_BESTIARY',
-        'RUN_HISTORY', 'CONTINUE_RUN_INFO'))
+        'RUN_HISTORY', 'CONTINUE_RUN_INFO',
+        'PROFILE_SCREEN', 'OPEN_PROFILE_SCREEN'))  # S03: profile screen + the main menu's profile button
     for t in ('card_keywords', 'gameplay_ui', 'rest_site_ui', 'card_reward_ui', 'map', 'combat_messages',
               'card_selection', 'intents', 'game_over_screen', 'characters'):
         take(t, (lambda k: not k.startswith(('DAILY', 'DISCOVERY'))) if t == 'game_over_screen'

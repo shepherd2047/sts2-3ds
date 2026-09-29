@@ -103,6 +103,12 @@ class App {
   void drawMenuBg(bool top, float dim);
   void refreshContinueInfo();
   void activateMenu(int id);
+  // S03 (U03) profile screen, screens/profile_screen.cpp (its state lives there). The draw /
+  // update calls return false while the screen is closed.
+  void openProfiles();
+  bool drawProfiles(bool top);
+  bool updateProfiles(const gfx::Input& in);
+  void drawProfileChip(int hitId);  // main menu's NOpenProfileScreenButton (top-left corner)
 
  public:
   bool quitRequested() const { return quit_; }

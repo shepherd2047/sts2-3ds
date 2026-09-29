@@ -134,7 +134,7 @@ void App::updateCharacterSelect(const gfx::Input& in) {
 
 namespace {
 constexpr int kMContinue = 2001, kMAbandon = 2002, kMSingle = 2003, kMCompendium = 2004, kMStats = 2005,
-              kMSettings = 2006, kMQuit = 2007;
+              kMSettings = 2006, kMQuit = 2007, kMProfile = 2008;
 constexpr int kSStandard = 2101, kSDaily = 2102, kSCustom = 2103, kSCards = 2111,  // + 0..3: the four cards
               kSStats = 2115, kSHistory = 2116, kSBack = 2199;
 constexpr int kDCancel = 2201, kDConfirm = 2202;
@@ -259,6 +259,7 @@ void App::refreshContinueInfo() {
 
 void App::drawTitle(bool top) {
   if (titleCharacter_) { drawCharacterSelect(top); return; }
+  if (drawProfiles(top)) return;  // S03
   const bool sub = menuSub_ != 0;
   if (top) {
     drawMenuBg(true, sub ? 0.35f : 0.f);
@@ -320,6 +321,7 @@ void App::drawTitle(bool top) {
         spr(R().sprite("ui/menu_reticle_r"), kBot / 2 + tw / 2 + 6, reticleY_, 20, 20, col::gold, 1.f);
       }
     }
+    drawProfileChip(kMProfile);  // S03: NOpenProfileScreenButton
   } else {
     auto items = subItems(menuSub_);
     subSel_ = std::clamp(subSel_, 0, (int)items.size() - 1);
@@ -394,6 +396,7 @@ void App::activateMenu(int id) {
     case kMStats: notDone(mm("STATISTICS")); break;
     case kMSettings: settingsOpen_ = true; abandonConfirm_ = false; break;
     case kMQuit: menuModal_ = 2; menuModalSel_ = 0; break;
+    case kMProfile: openProfiles(); break;
     case kSStandard: titleCharacter_ = true; titleSeed_ = randomSeed(); break;
     case kSBack: menuSub_ = 0; break;
     default:
@@ -406,6 +409,7 @@ void App::activateMenu(int id) {
 
 void App::updateTitle(const gfx::Input& in) {
   if (titleCharacter_) { updateCharacterSelect(in); return; }
+  if (updateProfiles(in)) return;  // S03
   int id = in.touchDown ? hitAt(in.tx, in.ty) : ID_NONE;
   if (menuModal_) {
     if (in.down & (gfx::BTN_LEFT | gfx::BTN_RIGHT)) menuModalSel_ = 1 - menuModalSel_;
@@ -437,6 +441,8 @@ void App::updateTitle(const gfx::Input& in) {
   if (id == ID_NONE && (in.down & gfx::BTN_A)) id = items[titleSelection_].id;
   // START: a new run straight away (or continue the saved one), as before the menu existed.
   if (id == ID_NONE && (in.down & gfx::BTN_START)) id = hasSave_ ? kMContinue : kMSingle;
+  // B: the profile button's hotkey (NOpenProfileScreenButton.Hotkeys = pauseAndBack).
+  if (id == ID_NONE && (in.down & gfx::BTN_B)) id = kMProfile;
   for (int i = 0; i < n; ++i)
     if (items[i].id == id) titleSelection_ = i;
   if (id != ID_NONE) activateMenu(id);

@@ -42,6 +42,13 @@ bool readFile(const std::string& path, std::string& out);
 bool readSave(const std::string& name, std::string& out);
 bool writeSave(const std::string& name, const std::string& data);
 void deleteSave(const std::string& name);
+// Text entry (S03 profile names). Blocks until the player confirms or cancels; returns true
+// with the UTF-8 text in `out` (at most maxBytes bytes, whole characters) on OK. 3DS: the
+// system software keyboard (libctru swkbd). Preview: STS_TEXT_INPUT=<text> answers at once
+// (automated tests; also read from sts2-debug.txt on 3DS); otherwise the text is typed into the
+// window title (Enter = OK, Esc = cancel), hidden windows cancel. Call from update, not while
+// drawing a screen.
+bool textInput(const char* hint, const std::string& initial, std::string& out, int maxBytes);
 Texture* loadTexture(const std::string& path);
 // Only between frames' draws (e.g. from App::update): the GPU is done with the last frame.
 void freeTexture(Texture* t);

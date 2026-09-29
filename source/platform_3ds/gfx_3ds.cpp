@@ -133,6 +133,7 @@ constexpr int kMeshVerts = 48000, kMeshIndices = 96000;
 MeshVert* meshVerts;
 u16* meshIndices;
 int meshVertUsed, meshIndexUsed;
+bool frameOpen = false;  // between beginFrame and endFrame (textInput closes it around the applet)
 
 void initMesh() {
   meshDvlb = DVLB_ParseFile((u32*)mesh_shbin, mesh_shbin_size);
@@ -222,6 +223,7 @@ void beginFrame() {
   lastMs = now;
   C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
   meshVertUsed = meshIndexUsed = 0;  // the GPU finished last frame's meshes
+  frameOpen = true;
 }
 
 void screen(Screen s, uint32_t clear) {
@@ -235,6 +237,7 @@ void screen(Screen s, uint32_t clear) {
 void endFrame() {
   flushMesh();
   C3D_FrameEnd(0);
+  frameOpen = false;
   ++frameCount;
   for (auto& sh : shots) {
     if (sh.first != frameCount) continue;
@@ -251,6 +254,44 @@ void makeDir(const std::string&) {
   mkdir("sdmc:/3ds/sts2-3ds", 0777);
 }
 }  // namespace
+
+// ---------------------------------------------------------------- text input (S03)
+
+namespace {
+// Cut to at most maxBytes bytes without splitting a UTF-8 character.
+std::string clampUtf8(std::string s, int maxBytes) {
+  if ((int)s.size() <= maxBytes) return s;
+  size_t cut = maxBytes;
+  while (cut > 0 && ((unsigned char)s[cut] & 0xC0) == 0x80) --cut;
+  s.resize(cut);
+  return s;
+}
+}  // namespace
+
+bool textInput(const char* hint, const std::string& initial, std::string& out, int maxBytes) {
+  if (const char* env = getenv("STS_TEXT_INPUT")) { out = clampUtf8(env, maxBytes); return true; }
+  // swkbd counts UTF-16 units; 3 bytes each covers CJK, so a full-length name always fits.
+  SwkbdState kb;
+  swkbdInit(&kb, SWKBD_TYPE_NORMAL, 2, maxBytes / 3 > 0 ? maxBytes / 3 : 1);
+  swkbdSetHintText(&kb, hint);
+  swkbdSetInitialText(&kb, initial.c_str());
+  swkbdSetValidation(&kb, SWKBD_ANYTHING, 0, 0);
+  std::vector<char> buf(maxBytes + 16, 0);
+  // The applet takes over the GPU and the screens: close the (still empty) frame App::update runs
+  // in, and reopen it afterwards so the caller's draw pass proceeds as usual.
+  const bool reopen = frameOpen;
+  if (reopen) { flushMesh(); C3D_FrameEnd(0); frameOpen = false; }
+  SwkbdButton b = swkbdInputText(&kb, buf.data(), buf.size());
+  if (reopen) {
+    C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+    meshVertUsed = meshIndexUsed = 0;
+    frameOpen = true;
+  }
+  lastMs = osGetTime();  // the keyboard's time is not game time
+  if (b != SWKBD_BUTTON_CONFIRM) return false;
+  out = clampUtf8(buf.data(), maxBytes);
+  return true;
+}
 
 // ---------------------------------------------------------------- saves
 
