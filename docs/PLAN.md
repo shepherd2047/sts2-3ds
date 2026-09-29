@@ -8,26 +8,24 @@ Everything accepted is on `main`. State:
 - **Accepted today:** A3a, X0, F0-F6, C10, X1.0-X4.0, X1.1-X4.1 (starter decks, character relics, potions),
   X1.2-X4.2 (all Common cards of the four characters), M1 (progress.sav core), Y1 (settings.sav core), S14
   (interactive reward list).
-- **In progress, not merged: X1.5-X4.5 character visuals**, branch `wip/x5-character-visuals`
-  (commit 0b336a9 + a WIP commit). Done there: combat Spine for SILENT/DEFECT/REGENT/NECROBINDER + Osty baked,
-  select art baked (`gfx/bg_character_<key>`, `ui/<key>_select`), energy orb / card gem per character, Osty drawn
-  next to the player, Defect orb row, Regent star counter. **Review found three problems, still open:**
-  1. card portraits of the four new pools (and their tokens) are not baked -> cards show blank art;
-  2. the per-character frame retint gives wrong inner-border colours (Silent purple, Defect orange); the WIP
-     commit starts reverting the border to the plain sprite — verify against the game's materials;
-  3. the Regent's combat Spine renders as a dark tower with orange fragments (skin / unsupported attachment?).
-  Finish these, take screenshots per character, run accept.sh, then merge into main.
-- **Next packages** (the owner asked for character art first): finish X*.5 above, then S04 character select
+- **X1.5-X4.5 character visuals: accepted on the Mac and merged** (2026-09-28). Combat Spine for the four
+  characters + Osty, select art (`gfx/bg_character_<key>`, `ui/<key>_select`), energy orb / cost gem, Osty,
+  Defect orb row, Regent star counter. Review fixes: portraits were only a stale romfs; card frames now use the
+  card's own pool material and the portrait border / title banner the rarity's banner material, both baked from
+  the game's hsv.gdshader params (NCard.UpdateVisuals). The Regent's "dark tower" is his stone throne carried by
+  two minions — the game's own art (checked against an offline render). Open: MAD_SCIENCE (event card) has one
+  portrait per chosen type (`mad_science_attack/skill/power`), not baked yet.
+- **Next packages** (the owner asked for character art first): S04 character select
   (the baked select art is waiting for it), then X1.3a-X4.3a (Uncommon cards, first half), X*.3b, X*.4 (Rare +
   tokens), then the engine order (Y5 + H1/H3 need the real 3DS, A10, A11f, ...).
 - **Rules learned today** (also in CLAUDE.md): one class per power id (shared powers in `powers.h`);
   no two .cpp files with the same basename (3DS object names are flattened); `Card::createdByPlayer` is the
   C#'s `creator == Owner` check; subagents in worktrees must export `OS=Windows_NT` on Windows.
 - **Mac:** `bash tools/accept.sh --quick --3ds` now builds the .3dsx in `~/dev/sts2-3ds-build` on macOS
-  (untested on the Mac yet). Rebuild assets after pulling (`python3 tools/build_assets.py`): new UI icons
+  (works on the Mac; `make check` needed `<unistd.h>` in settings_test). Rebuild assets after pulling (`python3 tools/build_assets.py`): new UI icons
   and many new card strings need the new font glyphs.
 - Leftover worktrees on the PC (`.claude/worktrees/agent-*`, `../sts2-3ds-engine`, `../sts2-3ds-ui`) are all
-  merged except the visuals one (pushed as the wip branch); they can be deleted.
+  merged (the visuals one too); they can be deleted.
 
 ## Goal
 
@@ -341,10 +339,10 @@ and `Models.Powers\`.
 | id | Character | Step 0 systems | Status |
 |---|---|---|---|
 | X0 | All | Character plumbing (see Engine lane order #1) | done (engine), accepted 2026-09-28 |
-| X1.0-X1.5 | Silent | Shiv tokens, Poison, discard triggers (Sly), Retain, Accuracy-style powers | X1.0 done (engine), accepted 2026-09-28; X1.1 done (subagent), accepted 2026-09-28; X1.2 done (subagent), accepted 2026-09-28; X1.3a-X1.5 todo |
-| X2.0-X2.5 | Defect | Orbs (Lightning, Frost, Dark, Plasma, Glass), channel/evoke, Focus, orb slots and their rendering on the top screen | X2.0 done (subagent), accepted 2026-09-28; X2.1 done (subagent), accepted 2026-09-28; X2.2 done (subagent), accepted 2026-09-28; X2.3a-X2.5 todo |
-| X3.0-X3.5 | Regent | Stars (second resource with a HUD counter), Forge and Sovereign Blade, summons | X3.0 done (subagent), accepted 2026-09-28; X3.1 done (subagent), accepted 2026-09-28; X3.2 done (subagent), accepted 2026-09-28; X3.3a-X3.5 todo |
-| X4.0-X4.5 | Necrobinder | Osty (companion creature with its own HP, targeting, death), Doom, Souls | X4.0 done (subagent), accepted 2026-09-28; X4.1 done (subagent), accepted 2026-09-28; X4.2 done (subagent), accepted 2026-09-28; X4.3a-X4.5 todo |
+| X1.0-X1.5 | Silent | Shiv tokens, Poison, discard triggers (Sly), Retain, Accuracy-style powers | X1.0 done (engine), accepted 2026-09-28; X1.1 done (subagent), accepted 2026-09-28; X1.2 done (subagent), accepted 2026-09-28; X1.5 done, accepted 2026-09-28; X1.3a-X1.4 todo |
+| X2.0-X2.5 | Defect | Orbs (Lightning, Frost, Dark, Plasma, Glass), channel/evoke, Focus, orb slots and their rendering on the top screen | X2.0 done (subagent), accepted 2026-09-28; X2.1 done (subagent), accepted 2026-09-28; X2.2 done (subagent), accepted 2026-09-28; X2.5 done, accepted 2026-09-28; X2.3a-X2.4 todo |
+| X3.0-X3.5 | Regent | Stars (second resource with a HUD counter), Forge and Sovereign Blade, summons | X3.0 done (subagent), accepted 2026-09-28; X3.1 done (subagent), accepted 2026-09-28; X3.2 done (subagent), accepted 2026-09-28; X3.5 done, accepted 2026-09-28; X3.3a-X3.4 todo |
+| X4.0-X4.5 | Necrobinder | Osty (companion creature with its own HP, targeting, death), Doom, Souls | X4.0 done (subagent), accepted 2026-09-28; X4.1 done (subagent), accepted 2026-09-28; X4.2 done (subagent), accepted 2026-09-28; X4.5 done, accepted 2026-09-28; X4.3a-X4.4 todo |
 | X6 | All characters | ColorfulPhilosophers, cross-character Orobas options, per-character Ancient dialogue lines, Random character, per-character act-transition quotes | todo |
 
 That is 7 packages per character (X*.0, .1, .2, .3a, .3b, .4, .5), X1-X4 in order. X6
