@@ -306,7 +306,7 @@ screenshots of both screens, and tick the U table at the end of this file.
 | S16 | U20 | Shop: goods grid, price tags, sale, removal service, focused item on top | F5 | done (subagent), accepted 2026-09-29: RGDSplus U20 split by default (no owner note on the layout); tap to focus, tap again / A to buy, X detail |
 | S17 | U21 | Events: art and text on top, large option buttons on the bottom, locked options shown with the reason | F4 | done (subagent), accepted 2026-09-29: paged text, option focus previews offered card/relic/potion/enchantment (parsed from the option text), tap to focus + tap again to pick; Ancient layout unchanged |
 | S18 | U22 | Rest site: campfire and character on top, option buttons with descriptions | F3 | done (subagent), accepted 2026-09-29: baked `gfx/bg_rest_<act>.t3t` + flickering fire, character Spine, result held until 继续; `STS_HP=N` debug |
-| S19 | U24 | Top bar: HP, gold, potion belt, relic strip with scroll, floor/act, run timer, deck/map buttons | F3 | in progress (subagent) |
+| S19 | U24 | Top bar: HP, gold, potion belt, relic strip with scroll, floor/act, run timer, deck/map buttons | F3 | done (subagent), accepted 2026-09-29: game top-bar icons in one 18 px row, relic strip with counters and scroll, NRunTimer rules; ZL/ZR focus mode (New 3DS only; old 3DS uses the bottom-screen buttons) |
 | S20 | U25 | Detail popups for card/relic/potion: large on top with keywords, controls (upgrade preview, close) on the bottom | F5 | in progress (subagent) |
 | S21 | U26 | Settings and pause menus (screens only; logic in Y1/Y2) | Y1 | in progress (subagent) |
 | S22 | U27 | Tutorials, confirmations, errors | M13 | todo |
