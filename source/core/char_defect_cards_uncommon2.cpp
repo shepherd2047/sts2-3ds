@@ -12,8 +12,8 @@ namespace {
 
 // SmokestackPower: every Status card the owner generates into combat deals Amount Unpowered
 // damage to every hittable enemy.
-// PORT NOTE: AfterCardGeneratedForCombat is modeled by afterCardEnteredCombat (fired by
-// cmd::addGeneratedCard only); cmd::addStatusCards (Fight Through's Wounds) does not fire it yet.
+// AfterCardGeneratedForCombat is modeled by afterCardEnteredCombat (cmd::addGeneratedCard and
+// cmd::addStatusCards both fire it; createdByPlayer is the C#'s creator == Owner).
 struct SmokestackPower : Power {
   POWER_HEADER(SmokestackPower, "SMOKESTACK_POWER")
   Task<> afterCardEnteredCombat(Card* card) override {

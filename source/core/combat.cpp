@@ -802,11 +802,18 @@ Task<Card*> transform(Combat& c, Card* card, std::unique_ptr<Card> into) {
 
 void upgradeCard(Card* card) { card->upgrade(); }
 
-Task<> addStatusCards(Combat& c, std::string cardId, Pile to, int count) {
+Task<> addStatusCards(Combat& c, std::string cardId, Pile to, int count, bool byPlayer) {
+  // CardPileCmd.AddGeneratedCardsToCombat: add them all, then Hook.AfterCardGeneratedForCombat for
+  // each (Smokestack, RocketPunch, ...). byPlayer: the player's own card made them (creator == Owner).
+  std::vector<Card*> added;
   for (int i = 0; i < count; ++i) {
     Card* card = c.addCard(db::card(cardId));
+    card->createdByPlayer = byPlayer;
     co_await moveCard(c, card, to);
+    added.push_back(card);
   }
+  for (Card* card : added)
+    for (Model* m : c.listeners()) co_await m->afterCardEnteredCombat(card);
   c.push({VisualEvent::Banner, c.player, count, cardId});
   co_await wait(0.3);
 }

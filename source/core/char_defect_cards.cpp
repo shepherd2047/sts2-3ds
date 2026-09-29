@@ -99,7 +99,7 @@ struct BoostAway : IroncladT<BoostAway> {
   }
   Task<> onPlay(CardPlay&) override {
     co_await block(val("Block"));
-    co_await cmd::addStatusCards(*combat, "Dazed", Pile::Discard, 1);
+    co_await cmd::addStatusCards(*combat, "Dazed", Pile::Discard, 1, true);
   }
   void onUpgrade() override { upgradeVar("Block", 3); }
 };
@@ -208,7 +208,7 @@ struct GunkUp : IroncladT<GunkUp> {
   }
   Task<> onPlay(CardPlay& p) override {
     co_await attack(p.target, val("Damage"), val("Repeat").toInt());
-    co_await cmd::addStatusCards(*combat, "Slimed", Pile::Discard, 1);
+    co_await cmd::addStatusCards(*combat, "Slimed", Pile::Discard, 1, true);
   }
   void onUpgrade() override { upgradeVar("Damage", 1); }
 };
@@ -297,7 +297,7 @@ struct Turbo : IroncladT<Turbo> {
   }
   Task<> onPlay(CardPlay&) override {
     co_await cmd::gainEnergy(*combat, val("Energy").toInt());
-    co_await cmd::addStatusCards(*combat, "Void", Pile::Discard, 1);
+    co_await cmd::addStatusCards(*combat, "Void", Pile::Discard, 1, true);
   }
   void onUpgrade() override { upgradeVar("Energy", 1); }
 };

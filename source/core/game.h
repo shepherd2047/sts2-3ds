@@ -890,7 +890,7 @@ Task<Card*> addGeneratedCard(Combat& c, std::unique_ptr<Card> card, Pile to, boo
 Task<> autoPlay(Combat& c, Card* card, Creature* target = nullptr);  // CardCmd.AutoPlay
 Task<Card*> transform(Combat& c, Card* card, std::unique_ptr<Card> into);  // CardCmd.Transform
 void upgradeCard(Card* card);  // CardCmd.Upgrade
-Task<> addStatusCards(Combat& c, std::string cardId, Pile to, int count);
+Task<> addStatusCards(Combat& c, std::string cardId, Pile to, int count, bool byPlayer = false);  // byPlayer: creator == Owner
 Task<std::vector<Card*>> selectCards(Combat& c, std::string prompt, std::vector<Card*> options, int minCount, int maxCount);
 Task<> autoPlayFromDrawPile(Combat& c, int count, bool forceExhaust);
 // CreatureCmd.Add: a monster joins mid-combat (summons, splits).

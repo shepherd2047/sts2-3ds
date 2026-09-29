@@ -210,7 +210,7 @@ struct FightThrough : IroncladT<FightThrough> {
   }
   Task<> onPlay(CardPlay&) override {
     co_await block(val("Block"));
-    co_await cmd::addStatusCards(*combat, "Wound", Pile::Discard, 2);
+    co_await cmd::addStatusCards(*combat, "Wound", Pile::Discard, 2, true);
   }
   void onUpgrade() override { upgradeVar("Block", 4); }
 };
