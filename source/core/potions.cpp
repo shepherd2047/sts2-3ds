@@ -666,7 +666,7 @@ bool Run::canUsePotion(int slot) const {
   const Potion& p = *potions[slot];
   if (p.usage == PotionUsage::Automatic) return false;
   if (inCombat(this)) return combat->playerPhase;
-  return p.usage == PotionUsage::AnyTime && !combat;
+  return p.usage == PotionUsage::AnyTime && !combat && p.passesCustomUsabilityCheck();
 }
 
 Task<> Run::usePotion(int slot, Creature* target) {

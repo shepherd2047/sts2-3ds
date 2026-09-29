@@ -1,8 +1,9 @@
 // The merchant (package 9): MerchantRoom + MerchantInventory.CreateForNormalMerchant and its
 // entries (Entities/Merchant/*.cs), CardFactory.CreateForMerchant, RelicFactory
-// .PullNextRelicFromBack. PORT NOTE: the two colorless card slots are left out (no
-// colorless card pool yet); the Foul Potion throw and the merchant's dialogue on
-// entering are not ported.
+// .PullNextRelicFromBack. The two colorless card slots (Uncommon, Rare; A9) follow the five
+// character slots; the Foul Potion throw is FoulPotion::onUse (events_shared2.cpp) via the
+// shop screen's potion button. PORT NOTE: the merchant's dialogue on entering and the
+// BoughtColorless map-history entry are not ported.
 #include <algorithm>
 #include <cmath>
 
@@ -15,7 +16,11 @@ namespace {
 // C# Math.Round / Mathf.RoundToInt: round half to even.
 int roundEven(double x) { return (int)std::nearbyint(x); }
 
-int cardBaseCost(const Card& c) { return c.rarity == Rarity::Rare ? 150 : c.rarity == Rarity::Uncommon ? 75 : 50; }
+// MerchantCardEntry.GetCost: 50/75/150, colorless cards x1.15 rounded.
+int cardBaseCost(const Card& c, bool colorless = false) {
+  int n = c.rarity == Rarity::Rare ? 150 : c.rarity == Rarity::Uncommon ? 75 : 50;
+  return colorless ? (int)std::nearbyint((float)n * 1.15f) : n;
+}
 
 int relicBaseCost(RelicRarity r) {  // RelicModel.MerchantCost
   switch (r) {
@@ -75,27 +80,36 @@ void fillCard(Run& r, ShopItem& it) {
   std::vector<std::string> onShelf;
   for (auto& s : r.shop) if (s.card) onShelf.push_back(s.card->id);
   auto ofRarity = [&](Rarity want) {
+    if (it.colorless)  // CardFactory.CreateForMerchant(rarity): no Basic, the slot's rarity only
+      return db::colorlessCards([&](const Card& c) {
+        return c.rarity == want && std::find(onShelf.begin(), onShelf.end(), c.id) == onShelf.end();
+      });
     return db::characterCards(r.characterId, [&](const Card& c) {
       return c.type == it.cardType && c.rarity == want &&
              std::find(onShelf.begin(), onShelf.end(), c.id) == onShelf.end();
     });
   };
-  float roll = r.rng("Rewards").nextFloat();
-  float rare = (r.hasAscension(kScarcity) ? 0.045f : 0.09f) + r.rarityOffset;
-  Rarity want = roll < rare ? Rarity::Rare : roll < 0.37f + rare ? Rarity::Uncommon : Rarity::Common;
+  Rarity want = it.cardRarity;
   std::vector<std::string> ids;
-  for (int k = 0; k < 3 && (ids = ofRarity(want)).empty(); ++k)  // GetNextHighestRarityWithWrapping
-    want = want == Rarity::Common ? Rarity::Uncommon : want == Rarity::Uncommon ? Rarity::Rare : Rarity::Common;
+  if (it.colorless) {
+    ids = ofRarity(want);
+  } else {
+    float roll = r.rng("Rewards").nextFloat();
+    float rare = (r.hasAscension(kScarcity) ? 0.045f : 0.09f) + r.rarityOffset;
+    want = roll < rare ? Rarity::Rare : roll < 0.37f + rare ? Rarity::Uncommon : Rarity::Common;
+    for (int k = 0; k < 3 && (ids = ofRarity(want)).empty(); ++k)  // GetNextHighestRarityWithWrapping
+      want = want == Rarity::Common ? Rarity::Uncommon : want == Rarity::Uncommon ? Rarity::Rare : Rarity::Common;
+  }
   if (ids.empty()) { it.card.reset(); return; }
   it.card = db::card(r.rng("Shops").nextItem(ids));
   r.rollCardUpgrade(*it.card, -999999999);  // CardFactory.CreateForMerchant: the roll is made but can never succeed
   for (auto& rel : r.relics)  // ModifyMerchantCardCreationResults (the eggs)
     if (rel->upgradesNewCard(*it.card)) it.card->upgrade();
-  it.cost = roundEven(cardBaseCost(*it.card) * r.rng("Shops").nextFloat(0.95f, 1.05f));
+  it.cost = roundEven(cardBaseCost(*it.card, it.colorless) * r.rng("Shops").nextFloat(0.95f, 1.05f));
 }
 
 void calcCardCost(Run& r, ShopItem& it) {
-  it.cost = roundEven(cardBaseCost(*it.card) * r.rng("Shops").nextFloat(0.95f, 1.05f));
+  it.cost = roundEven(cardBaseCost(*it.card, it.colorless) * r.rng("Shops").nextFloat(0.95f, 1.05f));
   if (it.onSale) it.cost /= 2;
 }
 
@@ -128,6 +142,15 @@ Task<> Run::enterShop() {
       shop.back().onSale = true;
       calcCardCost(*this, shop.back());
     }
+  }
+  // PopulateColorlessCardEntries: an Uncommon and a Rare colorless card.
+  for (Rarity rar : {Rarity::Uncommon, Rarity::Rare}) {
+    ShopItem it;
+    it.kind = ShopItem::CardItem;
+    it.colorless = true;
+    it.cardRarity = rar;
+    fillCard(*this, it);
+    shop.push_back(std::move(it));
   }
   // PopulateRelicEntries: two rolled rarities and one Shop relic.
   RelicRarity rarities[] = {rollRelicRarity(rng("Rewards")), rollRelicRarity(rng("Rewards")), RelicRarity::Shop};

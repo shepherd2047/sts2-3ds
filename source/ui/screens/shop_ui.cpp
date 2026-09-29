@@ -10,7 +10,8 @@ namespace ui {
 // potions and the card removal service below), the picked item described on top;
 // buying is pick, then 购买.
 namespace {
-constexpr float kShopCardS = 0.4f;
+constexpr float kShopCardS = 0.34f;
+constexpr int kShopCardSlots = 7;  // 5 character + 2 colorless cards, one row
 constexpr int kShopCells = 7;  // relics, potions, removal
 constexpr float kShopCellW = 44.f, kShopRow2Y = 98.f;
 }
@@ -66,7 +67,7 @@ void App::drawShop(bool top) {
     R().text(cx, y, num(price), ts(F12, price <= r.gold ? col::gold : col::red, CENTER, 0, 0.9f));
   };
   // Character cards.
-  const float cw = kCardW * kShopCardS, ch = kCardH * kShopCardS, gap = (kBot - 5 * cw) / 6;
+  const float cw = kCardW * kShopCardS, ch = kCardH * kShopCardS, gap = (kBot - kShopCardSlots * cw) / (kShopCardSlots + 1);
   int cardIdx = 0;
   for (int i = 0; i < n; ++i) {
     ShopItem& s = r.shop[i];
@@ -98,21 +99,22 @@ void App::drawShop(bool top) {
   R().text(kBot / 2, 160, "金币 " + num(r.gold), ts(F16, col::gold, CENTER));
   bool canBuy = it && it->stocked() && r.shopPrice(*it) <= r.gold &&
                 (it->kind != ShopItem::PotionItem || r.hasOpenPotionSlot());
-  button(10, 196, 100, 36, "离开", ID_BACK);
-  button(116, 196, 88, 36, "详情", ID_DETAIL,
+  button(10, 196, 70, 36, "离开", ID_BACK);
+  button(84, 196, 70, 36, "药水", ID_POTIONS);  // throw a Foul Potion at the merchant
+  button(158, 196, 70, 36, "详情", ID_DETAIL,
          it && it->stocked() && (it->kind == ShopItem::CardItem || it->kind == ShopItem::RelicItem));
-  button(kBot - 110, 196, 100, 36, "购买", ID_CONFIRM, canBuy, true);
+  button(kBot - 88, 196, 78, 36, "购买", ID_CONFIRM, canBuy, true);
 }
 
 void App::updateShop(const gfx::Input& in) {
   Run& r = *run_;
   if (!r.shopChoice.waiting()) return;
   int n = (int)r.shop.size();
-  // D-pad: cards are 0..4 (top row), the other items follow (bottom row).
+  // D-pad: the seven cards are 0..6 (top row), the other seven items follow (bottom row).
   if (in.down & gfx::BTN_RIGHT) sel_ = std::min(n - 1, sel_ + 1);
   if (in.down & gfx::BTN_LEFT) sel_ = std::max(0, sel_ - 1);
-  if (in.down & gfx::BTN_DOWN) sel_ = sel_ < 5 ? std::min(n - 1, 5 + std::max(sel_, 0)) : sel_;
-  if (in.down & gfx::BTN_UP) sel_ = sel_ >= 5 ? std::min(4, sel_ - 5) : sel_;
+  if (in.down & gfx::BTN_DOWN) sel_ = sel_ < kShopCardSlots ? std::min(n - 1, kShopCardSlots + std::max(sel_, 0)) : sel_;
+  if (in.down & gfx::BTN_UP) sel_ = sel_ >= kShopCardSlots ? sel_ - kShopCardSlots : sel_;
   int id = in.touchDown ? hitAt(in.tx, in.ty) : ID_NONE;
   if (id >= ID_GRID0 && id < ID_GRID0 + n) sel_ = id - ID_GRID0;
   if (id == ID_DETAIL && sel_ >= 0 && r.shop[sel_].stocked()) {
@@ -129,6 +131,7 @@ void App::updateShop(const gfx::Input& in) {
     r.shopChoice.fire(pick);
     return;
   }
+  if (id == ID_POTIONS) { potionsOpen_ = true; potionAim_ = false; potionSel_ = -1; return; }
   if (id == ID_BACK) { sel_ = -1; r.shopChoice.fire(-1); }
 }
 
