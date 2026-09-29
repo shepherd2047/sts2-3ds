@@ -176,8 +176,8 @@ std::vector<SubItem> subItems(int sub) {
                           "COMPENDIUM_BESTIARY"};
     for (int i = 0; i < 4; ++i) v.push_back({kSCards + i, x0 + i * (w + gap), y, w, h, spr4[i], key4[i], i == 0, false});
     const float sw = (kBot - 2 * x0 - gap) / 2, sy = y + h + 10;
-    v.push_back({kSStats, x0, sy, sw, 44, "ui/sub_stats", "STATISTICS", false, true});
-    v.push_back({kSHistory, x0 + sw + gap, sy, sw, 44, "ui/sub_history", "RUN_HISTORY", false, true});
+    v.push_back({kSStats, x0, sy, sw, 44, "ui/sub_stats", "STATISTICS", true, true});
+    v.push_back({kSHistory, x0 + sw + gap, sy, sw, 44, "ui/sub_history", "RUN_HISTORY", true, true});
   }
   v.push_back({kSBack, 8, 198, 96, 34, "ui/btn_back", nullptr, true, true});
   return v;
@@ -260,6 +260,7 @@ void App::refreshContinueInfo() {
 void App::drawTitle(bool top) {
   if (titleCharacter_) { drawCharacterSelect(top); return; }
   if (drawProfiles(top)) return;  // S03
+  if (drawStats(top)) return;     // M6
   const bool sub = menuSub_ != 0;
   if (top) {
     drawMenuBg(true, sub ? 0.35f : 0.f);
@@ -393,13 +394,15 @@ void App::activateMenu(int id) {
       else { titleCharacter_ = true; titleSeed_ = randomSeed(); }
       break;
     case kMCompendium: menuSub_ = 2; subSel_ = 0; break;
-    case kMStats: notDone(mm("STATISTICS")); break;
+    case kMStats: openStats(1); break;  // M6
     case kMSettings: settingsOpen_ = true; abandonConfirm_ = false; break;
     case kMQuit: menuModal_ = 2; menuModalSel_ = 0; break;
     case kMProfile: openProfiles(); break;
     case kSStandard: titleCharacter_ = true; titleSeed_ = randomSeed(); break;
     case kSCards: openCardLibrary(); break;  // M8
     case kSBack: menuSub_ = 0; break;
+    case kSStats: openStats(1); break;    // M6
+    case kSHistory: openStats(2); break;  // M6
     default:
       for (auto& it : subItems(menuSub_))
         if (it.id == id && it.key)
@@ -411,6 +414,7 @@ void App::activateMenu(int id) {
 void App::updateTitle(const gfx::Input& in) {
   if (titleCharacter_) { updateCharacterSelect(in); return; }
   if (updateProfiles(in)) return;  // S03
+  if (updateStats(in)) return;     // M6
   int id = in.touchDown ? hitAt(in.tx, in.ty) : ID_NONE;
   if (menuModal_) {
     if (in.down & (gfx::BTN_LEFT | gfx::BTN_RIGHT)) menuModalSel_ = 1 - menuModalSel_;
