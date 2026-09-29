@@ -337,6 +337,7 @@ Task<> Run::combatRewards(RoomType type) {
   }
   for (auto& rel : relics)
     for (RoomType odds : rel->extraCardRewards(type)) makeCardItem(odds);  // Prayer Wheel / White Star
+  for (; bonusCardRewards > 0; --bonusCardRewards) makeCardItem(type);  // CombatRoom.AddExtraReward (TheHunt)
 
   std::stable_sort(rewardItems.begin(), rewardItems.end(), [](const RewardItem& a, const RewardItem& b) {
     auto rank = [](RewardKind k) { return k == RewardKind::Gold ? 0 : k == RewardKind::Potion ? 1 : k == RewardKind::Relic ? 2 : 3; };

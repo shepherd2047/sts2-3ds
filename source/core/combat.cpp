@@ -629,6 +629,7 @@ Task<std::vector<Card*>> drawCards(Combat& c, Dec count, bool fromHandDraw) {
     c.draw.erase(c.draw.begin());
     c.hand.push_back(card);
     result.push_back(card);
+    ++c.cardsDrawnThisCombat;
     co_await wait(0.08);
     for (Model* m : c.listeners()) co_await m->afterCardDrawn(card, fromHandDraw);
   }

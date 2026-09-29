@@ -636,6 +636,145 @@ int main() {
     f.toHand(s);
     f.play(s, e);
     CHECK(e->power("StranglePower") != nullptr);
+  {  // X1.4 Envenom: unblocked attack damage adds Poison; blocked damage does not
+    Fight f("Silent");
+    Creature* e = f.enemy();
+    Card* k = f.c->addCard(db::card("Envenom"));
+    f.toHand(k);
+    f.play(k, nullptr);
+    Card* s = f.c->addCard(db::card("StrikeSilent"));
+    f.toHand(s);
+    f.play(s, e);
+    CHECK(e->powerAmount<PoisonPower>() == 1);
+    e->block = 100;
+    Card* s2 = f.c->addCard(db::card("StrikeSilent"));
+    f.toHand(s2);
+    f.play(s2, e);
+    CHECK(e->powerAmount<PoisonPower>() == 1);
+  }
+  {  // X1.4 GrandFinale: only playable with an empty draw pile
+    Fight f("Silent");
+    Card* k = f.c->addCard(db::card("GrandFinale"));
+    f.toHand(k);
+    f.c->energy = 3;
+    CHECK(!f.c->canPlay(k));
+    f.c->discard.insert(f.c->discard.end(), f.c->draw.begin(), f.c->draw.end());
+    f.c->draw.clear();
+    CHECK(f.c->canPlay(k));
+    Creature* e = f.enemy();
+    f.play(k, nullptr);
+    CHECK(e->hp == 500 - 60);
+  }
+  {  // X1.4 Murder: 1 + 1 per card drawn this combat
+    Fight f("Silent");
+    int drawn = f.c->cardsDrawnThisCombat;
+    CHECK(drawn >= 5);
+    Card* k = f.c->addCard(db::card("Murder"));
+    f.toHand(k);
+    f.play(k, f.enemy());
+    CHECK(f.enemy()->hp == 500 - (1 + drawn));
+  }
+  {  // X1.4 Outbreak: Poison, then an immediate trigger
+    Fight f("Silent");
+    Creature* e = f.enemy();
+    Card* k = f.c->addCard(db::card("Outbreak"));
+    f.toHand(k);
+    f.play(k, nullptr);
+    CHECK(e->hp == 500 - 9 && e->powerAmount<PoisonPower>() == 8);
+  }
+  {  // X1.4 Shadowmeld: block doubles this turn only
+    Fight f("Silent");
+    Card* k = f.c->addCard(db::card("Shadowmeld"));
+    f.toHand(k);
+    f.play(k, nullptr);
+    Card* d = f.c->addCard(db::card("DefendSilent"));
+    f.toHand(d);
+    f.play(d, nullptr);
+    CHECK(f.c->player->block == 10);
+  }
+  {  // X1.4 Afterimage: 1 block per card played afterwards, not for Afterimage itself
+    Fight f("Silent");
+    Card* k = f.c->addCard(db::card("Afterimage"));
+    f.toHand(k);
+    f.play(k, nullptr);
+    CHECK(f.c->player->block == 0);
+    Card* d = f.c->addCard(db::card("DefendSilent"));
+    f.toHand(d);
+    f.play(d, nullptr);
+    CHECK(f.c->player->block == 5 + 1);
+  }
+  {  // X1.4 Burst: the next Skill is played twice, then the power is gone
+    Fight f("Silent");
+    Card* k = f.c->addCard(db::card("Burst"));
+    f.toHand(k);
+    f.play(k, nullptr);
+    Card* d = f.c->addCard(db::card("DefendSilent"));
+    f.toHand(d);
+    f.play(d, nullptr);
+    CHECK(f.c->player->block == 10);
+    Card* d2 = f.c->addCard(db::card("DefendSilent"));
+    f.toHand(d2);
+    f.play(d2, nullptr);
+    CHECK(f.c->player->block == 15);
+  }
+  {  // X1.4 Tracking: +50% against Weak
+    Fight f("Silent");
+    Creature* e = f.enemy();
+    Card* k = f.c->addCard(db::card("Tracking"));
+    f.toHand(k);
+    f.play(k, nullptr);
+    Card* s = f.c->addCard(db::card("StrikeSilent"));
+    f.toHand(s);
+    f.play(s, e);
+    CHECK(e->hp == 500 - 6);
+    f.apply<WeakPower>(e, 1);
+    Card* s2 = f.c->addCard(db::card("StrikeSilent"));
+    f.toHand(s2);
+    f.play(s2, e);
+    CHECK(e->hp == 500 - 6 - 9);
+  }
+  {  // X1.4 WellLaidPlans: the hand survives the end of turn
+    Fight f("Silent");
+    Card* k = f.c->addCard(db::card("WellLaidPlans"));
+    f.toHand(k);
+    f.play(k, nullptr);
+    Card* keep = f.c->hand[0];
+    f.endTurn();
+    CHECK(f.c->pileOf(keep) == Pile::Hand);
+  }
+  {  // X1.4 KnifeTrap: plays every exhausted Shiv at the target
+    Fight f("Silent");
+    Creature* e = f.enemy();
+    std::vector<Card*> shivs;
+    runTask(makeShivs(f.c, 2, &shivs));
+    for (Card* s : shivs) { f.c->removeFromPiles(s); f.c->exhaust.push_back(s); }
+    Card* k = f.c->addCard(db::card("KnifeTrap"));
+    f.toHand(k);
+    f.play(k, e);
+    CHECK(e->hp == 500 - 8);
+  }
+  {  // X1.4 TheHunt: a kill queues a bonus card reward and applies TheHuntPower
+    Fight f("Silent");
+    Creature* e = f.enemy();
+    e->hp = 5;
+    Card* k = f.c->addCard(db::card("TheHunt"));
+    f.toHand(k);
+    f.play(k, e);
+    CHECK(f.r->bonusCardRewards == 1);
+  }
+  {  // X1.4 ShadowStep: hand discarded, next turn's attacks deal double
+    Fight f("Silent");
+    Card* k = f.c->addCard(db::card("ShadowStep"));
+    f.toHand(k);
+    f.play(k, nullptr);
+    CHECK(f.c->hand.empty());
+    f.endTurn();
+    Creature* e = f.enemy();
+    e->block = 0;
+    Card* s = f.c->addCard(db::card("StrikeSilent"));
+    f.toHand(s);
+    f.play(s, e);
+    CHECK(e->hp == 500 - 12);
   }
   printf("%d checks, %d failed\n", checks, failures);
   return failures ? 1 : 0;

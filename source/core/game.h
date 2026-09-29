@@ -791,6 +791,7 @@ struct Combat {
   // CombatHistory.CardDiscarded entries (round + side they happened in), for "discarded this turn".
   struct DiscardEntry { int round; Side side; Card* card; };
   std::vector<DiscardEntry> discardHistory;
+  int cardsDrawnThisCombat = 0;  // CombatHistory CardDrawnEntry count (Murder, X1.4)
   int discardsThisTurn() const {
     int n = 0;
     for (auto& e : discardHistory) if (e.round == roundNumber && e.side == currentSide) ++n;
@@ -1115,6 +1116,7 @@ struct Run {
     std::vector<std::unique_ptr<Card>> cards;  // Card: the options currently on offer
   };
   std::vector<RewardItem> rewardItems;
+  int bonusCardRewards = 0;  // extra card rewards a card added this fight (TheHunt, X1.4); consumed by combatRewards
   Signal<int> rewardListChoice;       // row index to claim, or -1/out of range = Proceed
   std::vector<std::unique_ptr<Card>> rewardCards;  // the open Card row's options (empty = list mode)
   Signal<int> rewardChoice;           // index into rewardCards, or -1 skip (row stays)
