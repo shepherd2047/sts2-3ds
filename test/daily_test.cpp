@@ -97,7 +97,7 @@ int main() {
   CHECK(daily::best(progress::state(), "2026-09-29") == 300);
   CHECK(daily::bestOverall(progress::state()) == 300);
   std::string saved = progress::state().save();
-  CHECK(saved.find("STS2PROGRESS 2 ") == 0);
+  CHECK(saved.find("STS2PROGRESS " + std::to_string(Progress::kVersion) + " ") == 0);  // 2 or later
   Progress back;
   CHECK(back.load(saved) && back.dailyBest == progress::state().dailyBest);
   CHECK(back.save() == saved);

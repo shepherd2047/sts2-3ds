@@ -83,6 +83,19 @@ void ioProgress(Archive& a, Progress& p) {
       for (size_t i = 0; i < dates.size() && i < scores.size(); ++i) p.dailyBest[dates[i]] = std::max(0, scores[i]);
     }
   }
+  if (version >= 3) {  // M5: achievements (name -> unlock time) and defeated monsters
+    a.tag("ACHIEVEMENTS");
+    std::vector<std::string> ach;
+    std::vector<int64_t> when;
+    if (!a.reading) for (auto& [n, t] : p.achievements) { ach.push_back(n); when.push_back(t); }
+    a.io(ach);
+    a.io(when);
+    if (a.reading) {
+      p.achievements.clear();
+      for (size_t i = 0; i < ach.size() && i < when.size(); ++i) p.achievements.emplace(ach[i], std::max<int64_t>(0, when[i]));
+    }
+    ioSet("DEFEATED", p.defeatedMonsters);
+  }
   a.tag("END");
 }
 
