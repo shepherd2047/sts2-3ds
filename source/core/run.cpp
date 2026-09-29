@@ -65,6 +65,35 @@ void Run::populateRelicBags() {
   }
 }
 
+// RelicModel.IsBeforeAct3TreasureChest: TotalFloor < 41 (38 in multiplayer, not supported here).
+// These relics override IsAllowed with it (and stop dropping from the Act 3 treasure chest on).
+// PORT NOTE: kept as an id list instead of per-class overrides so the older relic files stay untouched;
+// LastingCandy's extra "first run as Ironclad" exclusion (UnlockState.NumberOfRuns == 0) is not ported.
+static bool relicAllowed(Relic& rel, Run& run) {
+  static const char* const kLimited[] = {
+      "AmethystAubergine", "BookOfFiveRings", "BowlerHat", "DragonFruit", "FrozenEgg", "Girya", "JuzuBracelet",
+      "LastingCandy", "LuckyFysh", "MealTicket", "MoltenEgg", "OldCoin", "Planisphere", "Shovel", "ToxicEgg",
+      "WhiteBeastStatue", "WhiteStar"};
+  for (const char* id : kLimited)
+    if (rel.id == id && run.floor >= 41) return false;
+  return rel.isAllowed(run);
+}
+
+// RelicGrabBag.RemoveDisallowedRelicsFromDeques (both bags: the answer only depends on run state).
+void Run::removeDisallowedRelics() {
+  auto prune = [&](std::map<RelicRarity, std::vector<std::string>>& bag) {
+    for (auto& [k, v] : bag) {
+      for (size_t i = 0; i < v.size();) {
+        auto rel = db::relic(v[i]);
+        if (rel && !relicAllowed(*rel, *this)) v.erase(v.begin() + (long)i);
+        else ++i;
+      }
+    }
+  };
+  prune(relicBag);
+  prune(sharedRelicBag);
+}
+
 RelicRarity Run::rollRelicRarity(Rng& rr) {
   float f = rr.nextFloat();
   return f < 0.5f ? RelicRarity::Common : f < 0.83f ? RelicRarity::Uncommon : RelicRarity::Rare;
@@ -73,6 +102,7 @@ RelicRarity Run::rollRelicRarity(Rng& rr) {
 // RelicGrabBag.PullFromFront: an empty rarity falls through Shop -> Common ->
 // Uncommon -> Rare, then RelicFactory.FallbackRelic (Circlet).
 std::unique_ptr<Relic> Run::pullRelicFromFront(std::map<RelicRarity, std::vector<std::string>>& bag, RelicRarity k) {
+  removeDisallowedRelics();
   while (k != RelicRarity::None) {
     auto& v = bag[k];
     if (!v.empty()) {
@@ -690,6 +720,12 @@ std::vector<std::unique_ptr<Card>> Run::cardReward(RoomType room, int count) {
   for (int i = 0; i < count; ++i) {
     Rarity want = rollRarity(room);
     auto pool = poolOf([&](const Card& c) { return c.rarity == want; });
+    for (auto& rel : relics)  // Hook.ModifyCardRewardCreationOptions: CardPools.Union(ColorlessCardPool) (DingyRug)
+      if (rel->addsColorlessToCardRewards()) {
+        for (auto& id : db::colorlessCards([&](const Card& c) { return c.rarity == want; }))
+          if (std::find(pool.begin(), pool.end(), id) == pool.end()) pool.push_back(id);
+        break;
+      }
     pool.erase(std::remove_if(pool.begin(), pool.end(), [&](const std::string& id) {
       return std::find(taken.begin(), taken.end(), id) != taken.end();
     }), pool.end());

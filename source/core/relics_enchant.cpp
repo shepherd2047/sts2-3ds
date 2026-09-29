@@ -3,7 +3,7 @@
 // WingCharm, MysticLighter (Shop); BeautifulBracelet, TriBoomerang, ElectricShrymp, NutritiousSoup,
 // PaelsClaw, Glitter, SilkenTress, SilverCrucible (Ancient / event pool).
 //
-// Still skipped: DingyRug (needs the colorless card pool, A1a); PaelsGrowth (its CLONE rest site
+// Still skipped: PaelsGrowth (its CLONE rest site
 // option, CloneRestSiteOption, is not ported; the Clone enchantment exists in enchantments_b.cpp).
 //
 // PORT NOTE (all reward relics): Relic::modifyCardReward has no CardCreationOptions; the flags

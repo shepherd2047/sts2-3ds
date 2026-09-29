@@ -20,21 +20,17 @@ struct RingOfTheSnake : Relic {
   }
 };
 
-// SneckoSkull.cs: Poison the owner applies is increased by 1. PORT NOTE: this engine has no
-// separate Hook.ModifyPowerAmountGiven family (relics_more.cpp skips UnsettlingLamp for the same
-// reason); `tryModifyPowerAmountReceived` runs at the same point in `cmd::applyPower` (before the
-// power's amount is set, for both a fresh application and stacking onto an existing one), so
-// reusing it here for the giver's side has the same net effect.
+// SneckoSkull.cs: Poison the owner applies is increased by 1 (Hook.ModifyPowerAmountGivenAdditive; runs
+// before the multiplicative pass, e.g. UnsettlingLamp).
 struct SneckoSkull : Relic {
   RELIC_HEADER(SneckoSkull, "SNECKO_SKULL", Common)
     addVar("PoisonPower", 1);
   }
-  bool tryModifyPowerAmountReceived(Power* incoming, Creature*, Dec amount, Creature* applier, Dec& out) override {
-    if (!incoming || incoming->id != "PoisonPower" || applier != owner()) return false;
-    out = amount + val("PoisonPower");
-    return true;
+  Dec modifyPowerAmountGivenAdditive(Power* power, Creature* giver, Dec, Creature*, Card*) override {
+    if (!power || power->id != "PoisonPower" || giver != owner()) return Dec(0);
+    return val("PoisonPower");
   }
-  Task<> afterModifyingPowerAmountReceived(Power* p) override {
+  Task<> afterModifyingPowerAmountGiven(Power* p) override {
     if (p->id == "PoisonPower") doFlash();
     return {};
   }

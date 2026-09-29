@@ -524,6 +524,21 @@ Task<> applyPower(std::unique_ptr<Power> power, Creature* target, Dec amount, Cr
   if (!c || c->ending || amount == Dec(0)) co_return;
   Power* p = power.get();
   p->applier = applier;
+  for (Model* m : c->listeners()) co_await m->beforePowerAmountChanged(p, amount, target, applier, src);
+  // Hook.ModifyPowerAmountGiven: additive pass, then multiplicative pass.
+  std::vector<Model*> givenModifiers;
+  if (applier && applier->combat == c) {
+    for (Model* m : c->listeners()) {
+      Dec d = m->modifyPowerAmountGivenAdditive(p, applier, amount, target, src);
+      amount = amount + d;
+      if (!(d == Dec(0))) givenModifiers.push_back(m);
+    }
+    for (Model* m : c->listeners()) {
+      Dec f = m->modifyPowerAmountGivenMultiplicative(p, applier, amount, target, src);
+      amount = amount * f;
+      if (!(f == Dec(1))) givenModifiers.push_back(m);
+    }
+  }
   // Hook.ModifyPowerAmountReceived (Artifact blocks debuffs).
   std::vector<Model*> receivedModifiers;
   for (Model* m : c->listeners()) {
@@ -531,6 +546,7 @@ Task<> applyPower(std::unique_ptr<Power> power, Creature* target, Dec amount, Cr
     if (m->tryModifyPowerAmountReceived(p, target, amount, applier, out)) { amount = out; receivedModifiers.push_back(m); }
   }
   if (amount == Dec(0)) {
+    for (Model* m : givenModifiers) co_await m->afterModifyingPowerAmountGiven(p);
     for (Model* m : receivedModifiers) co_await m->afterModifyingPowerAmountReceived(p);
     c->graveyard.push_back(std::move(power));  // listeners may still hold it
     co_return;
@@ -538,6 +554,7 @@ Task<> applyPower(std::unique_ptr<Power> power, Creature* target, Dec amount, Cr
   if (Power* existing = target->power(p->id)) {
     // PowerCmd.Apply -> ModifyAmount on the stack already there.
     co_await modifyPowerAmount(existing, amount, applier, src, silent);
+    for (Model* m : givenModifiers) co_await m->afterModifyingPowerAmountGiven(existing);
     for (Model* m : receivedModifiers) co_await m->afterModifyingPowerAmountReceived(existing);
     co_return;
   }
@@ -557,6 +574,7 @@ Task<> applyPower(std::unique_ptr<Power> power, Creature* target, Dec amount, Cr
     co_await scaledWait(0.1, 0.25);
   }
   if (target->side == Side::Player && p->type() == PowerType::Debuff) p->skipNextDurationTick = true;
+  for (Model* m : givenModifiers) co_await m->afterModifyingPowerAmountGiven(p);
   co_await p->afterApplied(applier, src);
   for (Model* m : c->listeners()) co_await m->afterPowerAmountChanged(p, amount, applier, src);
 }

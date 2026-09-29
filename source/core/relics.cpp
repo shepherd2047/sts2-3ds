@@ -12,6 +12,7 @@ void registerRelicsMore();      // relics_more.cpp (package 10)
 void registerRelicsEvent();     // relics_event.cpp (A8)
 void registerRelicsEnchant();   // relics_enchant.cpp (A3c)
 void registerRelicsAncient2();  // relics_ancient2.cpp (A6)
+void registerRelicsShared2();   // relics_shared2.cpp (A5)
 // The Defect's 8 relics (char_defect_relics.cpp) register from char_defect.cpp's registerDefect()
 // instead of here, alongside its cards, orbs and potions.
 
@@ -23,6 +24,7 @@ void registerRelics() {
   registerRelicsEvent();
   registerRelicsEnchant();
   registerRelicsAncient2();
+  registerRelicsShared2();
 }
 
 }  // namespace sts

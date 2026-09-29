@@ -34,8 +34,8 @@ struct BowlerHat : Relic {
   RELIC_HEADER(BowlerHat, "BOWLER_HAT", Uncommon)
     addVar("GoldIncrease", Dec::lit(1.25));
   }
-  // PORT NOTE: IsAllowedInShops=false / IsAllowed(IsBeforeAct3TreasureChest) drop
-  // this relic from shops and after act 3's treasure chest; no shops exist yet.
+  // IsAllowedInShops=false; IsAllowed(IsBeforeAct3TreasureChest) is Run::removeDisallowedRelics.
+  bool allowedInShops() const override { return false; }
   Dec modifyGoldGained(Dec amount) override { return amount * val("GoldIncrease"); }
   Task<> afterGoldGained(int) override { doFlash(); return {}; }
 };
