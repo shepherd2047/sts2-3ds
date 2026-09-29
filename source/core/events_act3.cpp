@@ -335,7 +335,16 @@ struct BattlewornDummy : Event {
     if (g_dummyRanOutOfTime) { setFinished("DEFEAT"); co_return; }
     setFinished("VICTORY");
     if (level == 1) {
-      // PORT NOTE: the random potion reward is skipped (no potions yet).
+      // Character potion pool + SharedPotionPool, one NextItem from the Rewards stream.
+      // PORT NOTE: only registered potions are in the list.
+      std::vector<std::string> items;
+      for (auto& id : db::potionPool(run->characterId)) if (db::potion(id)) items.push_back(id);
+      std::string pick = run->rng("Rewards").nextItem(items);
+      if (!pick.empty()) {
+        auto p = db::potion(pick);
+        p->run = run;
+        co_await run->offerPotion(std::move(p));
+      }
     } else if (level == 2) {
       for (Card* c : upgradableSample(*run, rng(), 2)) c->upgrade();
     } else {

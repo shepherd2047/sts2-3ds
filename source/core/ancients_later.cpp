@@ -272,7 +272,12 @@ struct TouchOfOrobas : Relic {
   Task<> afterObtained() override {
     for (auto& rel : run->relics) {
       if (rel->rarity != RelicRarity::Starter) continue;
-      std::string into = rel->id == "BurningBlood" ? "BlackBlood" : "Circlet";
+      // TouchOfOrobas.RefinementUpgrades
+      std::string into = rel->id == "BurningBlood" ? "BlackBlood"
+                       : rel->id == "RingOfTheSnake" ? "RingOfTheDrake"
+                       : rel->id == "DivineRight" ? "DivineDestiny"
+                       : rel->id == "BoundPhylactery" ? "PhylacteryUnbound"
+                       : rel->id == "CrackedCore" ? "InfusedCore" : "Circlet";
       auto r = db::relic(into);
       if (!r) co_return;
       r->run = run;

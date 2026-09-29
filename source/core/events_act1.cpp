@@ -398,13 +398,26 @@ struct UnrestSite : Event {
   }
 };
 
-// Wellspring.cs. PORT NOTE: BOTTLE (a random potion) is locked until potions exist.
+// Wellspring.cs
 struct Wellspring : Event {
   EVENT_HEADER(Wellspring, "WELLSPRING")
   void calculateVars() override { addVar("BatheCurses", 1); }
   std::vector<EventOption> initialOptions() override {
-    return {EventOption{page("INITIAL") + ".options.BOTTLE", nullptr},
+    return {option("INITIAL", "BOTTLE", [this] { return bottle(); }),
             option("INITIAL", "BATHE", [this] { return bathe(); })};
+  }
+  Task<> bottle() {
+    // Character potion pool + SharedPotionPool, one NextItem from the Rewards stream.
+    // PORT NOTE: only registered potions are in the list.
+    std::vector<std::string> items;
+    for (auto& id : db::potionPool(run->characterId)) if (db::potion(id)) items.push_back(id);
+    std::string pick = run->rng("Rewards").nextItem(items);
+    if (!pick.empty()) {
+      auto p = db::potion(pick);
+      p->run = run;
+      co_await run->offerPotion(std::move(p));  // RewardsCmd.OfferCustom(PotionReward)
+    }
+    setFinished("BOTTLE");
   }
   Task<> bathe() {
     auto picked = co_await run->selectFromDeck("card_selection.TO_REMOVE", [](Card*) { return true; }, 1);
@@ -414,14 +427,23 @@ struct Wellspring : Event {
   }
 };
 
-// WhisperingHollow.cs. PORT NOTE: GOLD (two potions) is locked until potions exist.
+// WhisperingHollow.cs
 struct WhisperingHollow : Event {
   EVENT_HEADER(WhisperingHollow, "WHISPERING_HOLLOW")
   void calculateVars() override { addVar("Gold", 35 + rng().nextInt(-9, 10)); addVar("HpLoss", 9); }
   bool isAllowed(Run& r) override { return r.gold >= 44; }
   std::vector<EventOption> initialOptions() override {
-    return {EventOption{page("INITIAL") + ".options.GOLD", nullptr},
+    return {option("INITIAL", "GOLD", [this] { return gold(); }),
             option("INITIAL", "HUG", [this] { return hug(); })};
+  }
+  Task<> gold() {
+    run->gold -= val("Gold").toInt();  // PlayerCmd.LoseGold(Spent)
+    // Two PotionRewards, rolled first (Populate), then offered in order.
+    auto p1 = run->randomPotion(run->rng("Rewards"), false);
+    auto p2 = run->randomPotion(run->rng("Rewards"), false);
+    co_await run->offerPotion(std::move(p1));
+    co_await run->offerPotion(std::move(p2));
+    setFinished("GOLD");
   }
   Task<> hug() {
     auto picked = co_await run->selectFromDeck("card_selection.TO_TRANSFORM", [](Card*) { return true; }, 1);
