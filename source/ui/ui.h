@@ -184,8 +184,22 @@ class App {
   enum class CardListMode { Deck, Draw, Discard, Exhaust };
   std::vector<sts::Card*> listedCards();
   void openCardList(CardListMode mode);
+  // S20 detail popup (screens/detail.cpp, U25): the item large on top with its hover tips,
+  // prev / next through `list`, upgrade preview and close below. Every screen opens it here.
+  void inspectCard(const std::vector<sts::Card*>& list, int index, bool upgrade = false);
+  void inspectCard(sts::Card* c, bool upgrade = false);
+  void inspectRelic(const std::vector<sts::Relic*>& list, int index);
+  void inspectRelic(sts::Relic* r);
+  void inspectRelics(const std::vector<std::unique_ptr<sts::Relic>>& list, int index);
+  void inspectPotion(const std::vector<sts::Potion*>& list, int index);
+  void inspectPotion(sts::Potion* p);
+  bool detailOpen() const;
+  void closeDetail();
   void drawDetail(bool top);
   void updateDetail(const gfx::Input& in);
+  void refreshDetail();
+  void detailStep(int delta);
+  void detailToggleUpgrade();
   void drawSettings(bool top);
   void updateSettings(const gfx::Input& in);
   void saveSettings();
@@ -309,8 +323,9 @@ class App {
   CardListMode cardListMode_ = CardListMode::Deck;
   sts::Card* detailCard_ = nullptr;
   sts::Relic* detailRelic_ = nullptr;
-  bool detailUpgrade_ = false;
-  int detailKeyword_ = -1;  // -1 shows the card description; 0..N-1 shows one keyword
+  sts::Potion* detailPotion_ = nullptr;
+  bool detailUpgrade_ = false;  // the popup's upgrade tick (card_selection.VIEW_UPGRADES)
+  int detailKeyword_ = -1;      // unused since S20 (tips sit beside the item); kept for old callers
   bool relicsOpen_ = false;
   bool settingsOpen_ = false;
   bool abandonConfirm_ = false;

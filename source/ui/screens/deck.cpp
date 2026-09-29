@@ -73,15 +73,15 @@ void App::updateDeck(const gfx::Input& in) {
   if (in.down & gfx::BTN_UP) sel_ = std::max(0, sel_ - 5);
   if (sel_ >= 0) scroll_ = std::max(0, sel_ / 5 - 1);
   if (in.down & (gfx::BTN_B | gfx::BTN_Y)) { deckOpen_ = false; cardListMode_ = CardListMode::Deck; sel_ = -1; return; }
-  if ((in.down & gfx::BTN_A) && sel_ >= 0 && sel_ < m) { detailCard_ = cards[sel_]; detailUpgrade_ = false; return; }
+  if ((in.down & gfx::BTN_A) && sel_ >= 0 && sel_ < m) { inspectCard(cards, sel_); return; }
   if (in.touchDown) {
     int id = hitAt(in.tx, in.ty);
     if (id >= ID_GRID0 && id < ID_GRID0 + m) {
       int picked = id - ID_GRID0;
-      if (sel_ == picked) { detailCard_ = cards[picked]; detailUpgrade_ = false; return; }
+      if (sel_ == picked) { inspectCard(cards, picked); return; }
       sel_ = picked;
     }
-    if (id == ID_DETAIL && sel_ >= 0 && sel_ < m) { detailCard_ = cards[sel_]; detailUpgrade_ = false; return; }
+    if (id == ID_DETAIL && sel_ >= 0 && sel_ < m) { inspectCard(cards, sel_); return; }
     if (id == ID_BACK) { deckOpen_ = false; cardListMode_ = CardListMode::Deck; sel_ = -1; }
     if (id == ID_RELICS) { deckOpen_ = false; relicsOpen_ = true; sel_ = run_->relics.empty() ? -1 : 0; scroll_ = 0; }
     if (id == ID_PILE_DRAW) openCardList(CardListMode::Draw);
@@ -254,9 +254,7 @@ int App::gridSelectUpdate(const GridSelectSpec& s, const gfx::Input& in, std::ve
   };
   auto detail = [&](int i) {
     if (i < 0 || i >= n) return;
-    detailCard_ = (*s.cards)[i];
-    detailUpgrade_ = s.upgrade && detailCard_->upgradable();
-    detailKeyword_ = -1;
+    inspectCard(*s.cards, i, s.upgrade);
   };
 
   // The action bar (pressed in the last draw).
@@ -546,7 +544,7 @@ int App::chooseOneUpdate(const ChooseOneSpec& s, const gfx::Input& in) {
     o.pending = 0;
     if (id == kOneSkip && s.canSkip) return take(-1);
     if (id == kOnePick && o.sel >= 0) return take(o.sel);
-    if (id == kOneDetail && o.sel >= 0) { detailCard_ = s.cards[o.sel]; detailUpgrade_ = false; detailKeyword_ = -1; }
+    if (id == kOneDetail && o.sel >= 0) inspectCard(s.cards, o.sel);
     if (id >= kOneCard0 && id < kOneCard0 + n) {
       int i = id - kOneCard0;
       if (o.sel == i) return take(i);
@@ -556,7 +554,7 @@ int App::chooseOneUpdate(const ChooseOneSpec& s, const gfx::Input& in) {
   }
   const uint32_t d = in.down;
   if ((d & gfx::BTN_B) && s.canSkip) return take(-1);
-  if ((d & gfx::BTN_X) && o.sel >= 0) { detailCard_ = s.cards[o.sel]; detailUpgrade_ = false; detailKeyword_ = -1; return -2; }
+  if ((d & gfx::BTN_X) && o.sel >= 0) { inspectCard(s.cards, o.sel); return -2; }
   if (o.zone == 1) {
     if (d & gfx::BTN_UP) { o.zone = 0; widgets::setFocus(-1); if (o.sel < 0 && n) o.sel = 0; }
     return -2;

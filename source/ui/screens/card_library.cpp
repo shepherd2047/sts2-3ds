@@ -298,13 +298,12 @@ void App::openCardLibrary() {
   const bool all = getenv("STS_SEEN_ALL") != nullptr;  // debug: preview every card as seen
   for (auto& e : st.all) e.seen = all || seen.count(e.card->id) > 0;
   refilter();
-  detailCard_ = nullptr;
+  closeDetail();
 }
 
 bool App::drawCardLibrary(bool top) {
   State& st = S();
   if (!st.open) return false;
-  if (detailCard_) { drawDetail(top); return true; }
   const bool title = run_->screen == Screen::Title;
   Entry* fe = focusedEntry();
   if (top) {
@@ -418,7 +417,6 @@ bool App::drawCardLibrary(bool top) {
 bool App::updateCardLibrary(const gfx::Input& in) {
   State& st = S();
   if (!st.open) return false;
-  if (detailCard_) { updateDetail(in); return true; }
   const int n = (int)st.shown.size();
   auto close = [&] { st.open = false; };
   auto setPool = [&](int p) {
@@ -430,9 +428,11 @@ bool App::updateCardLibrary(const gfx::Input& in) {
   auto inspect = [&](int i) {
     Entry& e = st.all[st.shown[i]];
     if (!e.seen) return;  // NotSeen cards cannot be inspected
-    detailCard_ = e.card.get();
-    detailUpgrade_ = st.upgrades && e.card->upgradable();
-    detailKeyword_ = -1;
+    std::vector<Card*> list;  // S20: prev / next through the seen cards of the filtered grid
+    int at = 0;
+    for (int k : st.shown)
+      if (st.all[k].seen) { if (k == st.shown[i]) at = (int)list.size(); list.push_back(st.all[k].card.get()); }
+    inspectCard(list, at, st.upgrades);
   };
   auto activate = [&](int id) {
     if (id >= kTab0 && id < kTab0 + kPools) setPool(id - kTab0);

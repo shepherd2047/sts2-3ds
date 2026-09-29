@@ -695,9 +695,7 @@ void App::updateCombat(const gfx::Input& in) {
   if (drag_.down && in.touchUp) {
     if (!drag_.moved) {
       if (sel_ == drag_.index) {
-        detailCard_ = drag_.card;  // second tap: inspect without playing
-        detailUpgrade_ = false;
-        detailKeyword_ = -1;
+        inspectCard(cb->hand, drag_.index);  // second tap: inspect without playing (S20 popup)
       } else {
         sel_ = drag_.index;  // first tap: preview
       }

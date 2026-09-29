@@ -221,8 +221,7 @@ void App::updateRelicOffer(const gfx::Input& in) {
     return;
   }
   if ((in.down & gfx::BTN_X) && focus_ >= 0 && focus_ < n) {
-    detailRelic_ = r.relicOffers[focus_].get();
-    detailCard_ = nullptr;
+    inspectRelics(r.relicOffers, focus_);
     return;
   }
   if (in.down & gfx::BTN_B) r.relicChoice.fire(0);
@@ -265,15 +264,15 @@ void App::updateRelics(const gfx::Input& in) {
   if (in.down & gfx::BTN_UP) sel_ = std::max(0, sel_ - 6);
   if (sel_ >= 0) scroll_ = std::max(0, sel_ / 6 - 2);
   if (in.down & gfx::BTN_B) { close(); return; }
-  if ((in.down & gfx::BTN_A) && sel_ >= 0 && sel_ < n) { detailRelic_ = run_->relics[sel_].get(); return; }
+  if ((in.down & gfx::BTN_A) && sel_ >= 0 && sel_ < n) { inspectRelics(run_->relics, sel_); return; }
   if (in.touchDown) {
     int id = hitAt(in.tx, in.ty);
     if (id >= ID_RELIC0 && id < ID_RELIC0 + n) {
       int picked = id - ID_RELIC0;
-      if (sel_ == picked) { detailRelic_ = run_->relics[picked].get(); return; }
+      if (sel_ == picked) { inspectRelics(run_->relics, picked); return; }
       sel_ = picked;
     }
-    if (id == ID_DETAIL && sel_ >= 0 && sel_ < n) { detailRelic_ = run_->relics[sel_].get(); return; }
+    if (id == ID_DETAIL && sel_ >= 0 && sel_ < n) { inspectRelics(run_->relics, sel_); return; }
     if (id == ID_BACK) close();
     if (id == ID_DECK) { close(); openCardList(CardListMode::Deck); }
   }
