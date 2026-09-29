@@ -162,7 +162,8 @@ scripts drift; delete the debug file afterwards.
   boss pools fall back to the act's normal fights). `Run::enterAct` builds each act's
   map (`generateStandardActMap(rng, act)`: 15 / 14 / 13 rooms), queues and events; a boss
   gives 100 gold + a card and leads to the next act (full heal until Ancients exist);
-  act 3's boss is Victory. Art per act: `gfx/bg_<act>.t3t`, `gfx/bg_map_<act>.t3t`.
+  act 3's boss leads to TheArchitect (`content_architect.cpp`, Ancient layout, `gfx/bg_thearchitect.t3t`),
+  whose PROCEED is `Run::winRun` -> Victory; `STS_ROOM=Event STS_EVENT=TheArchitect` jumps there. Art per act: `gfx/bg_<act>.t3t`, `gfx/bg_map_<act>.t3t`.
 - Ancients: `ancients.cpp` (Neow, its 19 relics and cards). Each map has a start node
   (`nodes[0]`, row -1, `RoomType::Ancient`) whose event runs before the first room
   (`Run::enterAncient`: full heal, then the event). `Event::ancient` switches the UI to the

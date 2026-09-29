@@ -1166,6 +1166,10 @@ struct Run {
   Task<> combatRewards(RoomType type);  // RewardsSet after a won fight
   Task<> restSite();
   bool died = false;
+  // RunManager.WinRun (TheArchitect's PROCEED, content_architect.cpp): the run is won; Run::main
+  // records it and shows Screen::Victory once the event returns.
+  bool runWon = false;
+  void winRun() { runWon = true; }
   bool progressRecorded = false;  // guards progress::onRunEnded against firing twice (see abandon())
   // A room that is not ported yet (events, shops): Screen::Placeholder shows this text.
   std::string placeholderText;
