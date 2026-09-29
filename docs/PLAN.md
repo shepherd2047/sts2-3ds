@@ -236,7 +236,7 @@ replay line (`App::describe`); the badge, glow and the enchant preview screen ar
 | id | Package | Kind | Needs | Status |
 |---|---|---|---|---|
 | C10 | Ascension 1-10 (SwarmingElites … DoubleBoss): `AscensionManager`, every `GetValueIfAscension` in ported content (script to list them), AscendersBane at A5, double boss at A10 | engine + content sweep, *Opus* | – | done (engine), accepted 2026-09-28 (merged by the reviewer: the lane session went offline before pushing) |
-| C11 | Map extras: boss preview, the act's second boss as a map node at ascension 10 (C10 chains the fights, see notes), map legend | engine + UI | C10 | in progress (subagent) |
+| C11 | Map extras: boss preview, the act's second boss as a map node at ascension 10 (C10 chains the fights, see notes), map legend | engine + UI | C10 | done (subagent, Opus), accepted 2026-09-29: second boss is a map node above the first (mapgen, no RNG; old saves get it on load), boss preview on the map top screen, legend per the game (tap to highlight); reviewer: MadScience lost its type after a load (Card::afterLoad), run.sav v7 keeps badge inputs, accept.sh tests save/load at floors 41/45 and SIM_ASC=10 |
 
 **C10 notes (ascension, done).** `Run::ascension` (0-10, `Run::start(seed, character, ascension)`; debug
 `STS_ASCENSION=`, `SIM_ASC=`), `Run::hasAscension(kToughEnemies)`, `Run::ascValue(level, a, b)`. Saved (save
@@ -414,7 +414,7 @@ their `clone()` must call `adoptEnchantment()`.
 | M4 | Timeline screen + unlock reveals | – | – | n/a (owner: everything unlocked) |
 | M5 | Achievements (22, `Achievements\`): checks, toast, achievement list page | content + UI | M1 | todo |
 | M6 | Stats screen: general and per-character stats (`Nodes.Screens.StatsScreen`) + run history viewer | UI | M2, F3 | todo |
-| M7 | Score and badges at the end of a run (28 badges, `Models.Badges`), used by S23 | content | M2 | done (subagent), accepted 2026-09-29: badges.h/.cpp, 19 single-player badges (the C# pool has 23, 4 multiplayer), stored in the history record (v2); no score bonus in the C#; TODO: per-point badge data is not in run.sav, so a resumed run under-counts PERFECT/KACHING/RESTFUL/RESTLESS/CCCCOMBO |
+| M7 | Score and badges at the end of a run (28 badges, `Models.Badges`), used by S23 | content | M2 | done (subagent), accepted 2026-09-29: badges.h/.cpp, 19 single-player badges (the C# pool has 23, 4 multiplayer), stored in the history record (v2); no score bonus in the C#; per-point badge data is in run.sav since version 7 |
 | M8 | Card library: filters by character, type and rarity; upgrade toggle; seen/locked | UI | M1, F5 | todo |
 | M9 | Relic collection + potion lab | UI | M1 | todo |
 | M10 | Bestiary: monster list, Spine viewer, moves | UI | M1 | todo |
