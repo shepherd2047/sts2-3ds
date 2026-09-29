@@ -113,6 +113,7 @@ Task<std::vector<Card*>> createShivsInHand(Combat& c, int count) {
 
 void registerSilentRelics();  // char_silent_relics.cpp
 void registerSilentCards();   // char_silent_cards.cpp (X1.2)
+void registerSilentUncommonCards1();  // char_silent_cards_uncommon1.cpp (X1.3a)
 
 void registerSilent() {
   registerPowerType<AccelerantPower>();
@@ -129,6 +130,7 @@ void registerSilent() {
   db::registerPotion("CunningPotion", [] { return std::unique_ptr<Potion>(new CunningPotion()); });
   registerSilentRelics();
   registerSilentCards();
+  registerSilentUncommonCards1();
 }
 
 }  // namespace sts

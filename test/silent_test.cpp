@@ -448,6 +448,90 @@ int main() {
     f.play(k, e);
     CHECK(e->powerAmount<PoisonPower>() == 7);
   }
+  {  // X1.3a Finisher: one hit per Attack play finished this turn (itself excluded), resets next turn
+    Fight f("Silent");
+    Creature* e = f.enemy(0);
+    Card* n1 = f.c->addCard(db::card("Neutralize"));
+    Card* n2 = f.c->addCard(db::card("Neutralize"));
+    Card* fin = f.c->addCard(db::card("Finisher"));
+    f.toHand(n1); f.toHand(n2); f.toHand(fin);
+    f.play(n1, e);
+    f.play(n2, e);
+    CHECK(fin->calcMultiplier(fin) == 2);
+    int hp = e->hp;
+    f.play(fin, e);
+    CHECK(hp - e->hp == 12);  // 2 hits x 6
+    f.endTurn();
+    CHECK(f.c->attackPlaysFinishedThisTurn == 0);
+  }
+  {  // X1.3a Flechettes: one hit per Skill in hand
+    Fight f("Silent");
+    Creature* e = f.enemy(0);
+    Card* fl = f.c->addCard(db::card("Flechettes"));
+    f.toHand(fl);
+    int skills = 0;
+    for (Card* k : f.c->hand) if (k->type == CardType::Skill) ++skills;
+    int hp = e->hp;
+    f.play(fl, e);
+    CHECK(skills > 0 && hp - e->hp == 5 * skills);
+  }
+  {  // X1.3a Expose: strips Block and Artifact, applies Vulnerable
+    Fight f("Silent");
+    Creature* e = f.enemy(0);
+    e->block = 20;
+    runTask(cmd::applyPower(db::power("ArtifactPower"), e, 1, f.c->player, nullptr));
+    CHECK(e->power("ArtifactPower"));
+    Card* k = f.c->addCard(db::card("Expose"));
+    f.toHand(k);
+    f.play(k, e);
+    CHECK(e->block == 0 && !e->power("ArtifactPower") && e->powerAmount<VulnerablePower>() == 2);
+  }
+  {  // X1.3a BubbleBubble: Poison only if the target already has Poison
+    Fight f("Silent");
+    Creature* e = f.enemy(0);
+    Card* k = f.c->addCard(db::card("BubbleBubble"));
+    f.toHand(k);
+    f.play(k, e);
+    CHECK(e->powerAmount<PoisonPower>() == 0);
+    f.apply<PoisonPower>(e, 2);
+    Card* k2 = f.c->addCard(db::card("BubbleBubble"));
+    f.toHand(k2);
+    f.play(k2, e);
+    CHECK(e->powerAmount<PoisonPower>() == 11);
+  }
+  {  // X1.3a Blur: block survives into the next turn
+    Fight f("Silent");
+    Card* k = f.c->addCard(db::card("Blur"));
+    f.toHand(k);
+    f.play(k, nullptr);
+    CHECK(f.c->player->block >= 5);
+    f.c->player->block = 100;  // survive the enemy's attack with room to spare
+    f.endTurn();
+    CHECK(f.c->player->block > 50);  // not cleared at the start of the new turn
+  }
+  {  // X1.3a CalculatedGamble: discard the hand, draw that many; upgraded keeps Retain
+    Fight f("Silent");
+    Card* k = f.c->addCard(db::card("CalculatedGamble"));
+    f.toHand(k);
+    size_t before = f.c->hand.size() - 1;  // cards left after playing it
+    f.play(k, nullptr);
+    CHECK(f.c->hand.size() == before);
+    CHECK(f.c->pileOf(k) == Pile::Exhaust);
+    Card* up = f.c->addCard(db::card("CalculatedGamble"));
+    up->upgrade();
+    CHECK(up->has(kwRetain));
+  }
+  {  // X1.3a Expertise: drawn cards are Retained this turn
+    Fight f("Silent");
+    Card* k = f.c->addCard(db::card("Expertise"));
+    f.toHand(k);
+    size_t before = f.c->hand.size();
+    f.play(k, nullptr);
+    CHECK(f.c->hand.size() == before - 1 + 2);
+    int retained = 0;
+    for (Card* c : f.c->hand) if (c->singleTurnRetain) ++retained;
+    CHECK(retained == 2);
+  }
   printf("%d checks, %d failed\n", checks, failures);
   return failures ? 1 : 0;
 }
