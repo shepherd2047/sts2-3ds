@@ -378,6 +378,117 @@ int main() {
     CHECK(!f.c->draw.empty() && f.c->draw.front() == chosen);
   }
 
+  // ---- X3.3a: uncommon cards, first half
+  auto fresh = [](Fight& f, const char* id, bool up = false) {
+    Card* k = f.c->addCard(db::card(id));
+    if (up) k->upgrade();
+    f.toHand(k);
+    return k;
+  };
+  {  // BlackHole: gaining stars, and a card that spent stars, hit every enemy for 3 (unpowered).
+    Fight f;
+    Creature* e = f.enemy(0);
+    f.play(fresh(f, "BlackHole"), nullptr);
+    int hp = e->hp;
+    runTask(cmd::gainStars(*f.c, 2));
+    CHECK(hp - e->hp == 3);
+    hp = e->hp;
+    f.play(fresh(f, "FallingStar"), e);  // 2 stars, 8 damage: hit + black hole after it
+    CHECK(hp - e->hp == 8 + 3);
+  }
+  {  // ChildOfTheStars: 2 block per star spent.
+    Fight f;
+    f.play(fresh(f, "ChildOfTheStars"), nullptr);
+    runTask(cmd::setStars(*f.c, 4));
+    f.play(fresh(f, "Devastate"), f.enemy(0));
+    CHECK(f.c->stars == 0 && f.c->player->block == 8);
+  }
+  {  // KnockoutBlow: 30 damage; 5 stars only on a kill.
+    Fight f;
+    f.play(fresh(f, "KnockoutBlow"), f.enemy(0));
+    CHECK(f.c->stars == 0 && f.enemy(0)->hp == 470);
+    f.enemy(1)->hp = 10;
+    f.play(fresh(f, "KnockoutBlow"), f.enemy(1));
+    CHECK(f.c->stars == 5);
+  }
+  {  // LunarBlast: 4 damage per Skill finished this turn (0 skills = 0 hits).
+    Fight f;
+    Creature* e = f.enemy(0);
+    f.play(fresh(f, "LunarBlast"), e);
+    CHECK(e->hp == 500);
+    f.play(fresh(f, "DefendRegent"), nullptr);
+    f.play(fresh(f, "DefendRegent"), nullptr);
+    f.play(fresh(f, "LunarBlast"), e);
+    CHECK(e->hp == 492);
+  }
+  {  // KinglyKick: costs 1 less per draw; KinglyPunch: +4 damage per draw.
+    Fight f;
+    Card* kick = fresh(f, "KinglyKick");
+    Card* punch = fresh(f, "KinglyPunch");
+    for (Card* k : {kick, punch}) { f.c->removeFromPiles(k); f.c->draw.insert(f.c->draw.begin(), k); }
+    runTask([](Combat* c) -> Task<> { co_await cmd::drawCards(*c, 2); }(f.c));
+    CHECK(f.c->energyCost(kick) == 3);
+    CHECK(punch->val("Damage") == Dec(12));
+  }
+  {  // Conqueror: forge 3 and the target takes double from Sovereign Blade (13 -> 26).
+    Fight f;
+    Creature* e = f.enemy(0);
+    f.play(fresh(f, "Conqueror"), e);
+    Card* blade = nullptr;
+    for (Card* k : f.c->hand) if (k->id == "SovereignBlade") blade = k;
+    CHECK(blade && blade->val("Damage") == Dec(13));
+    if (blade) {
+      f.play(blade, e);
+      CHECK(e->hp == 500 - 26);
+    }
+  }
+  {  // Furnace: forge 5 at the start of each turn (10 + 5 on the blade after one turn).
+    Fight f;
+    f.play(fresh(f, "Furnace"), nullptr);
+    f.endTurn();
+    Card* blade = nullptr;
+    for (Card* k : f.c->allCards()) if (k->id == "SovereignBlade") blade = k;
+    CHECK(blade && blade->val("Damage") == Dec(15));
+  }
+  {  // Monologue: +1 Strength per card played afterwards (two Monologues stack), gone at end of turn.
+    Fight f;
+    f.play(fresh(f, "Monologue"), nullptr);
+    CHECK(f.c->player->powerAmount<StrengthPower>() == 0);
+    f.play(fresh(f, "DefendRegent"), nullptr);
+    CHECK(f.c->player->powerAmount<StrengthPower>() == 1);
+    f.play(fresh(f, "Monologue"), nullptr);
+    CHECK(f.c->player->powerAmount<StrengthPower>() == 2);
+    f.play(fresh(f, "DefendRegent"), nullptr);
+    CHECK(f.c->player->powerAmount<StrengthPower>() == 4);
+    f.endTurn();
+    CHECK(f.c->player->powerAmount<StrengthPower>() == 0);
+  }
+  {  // Convergence: retains the hand; +1 energy and +1 star next turn.
+    Fight f;
+    Card* keep = fresh(f, "DefendRegent");
+    f.play(fresh(f, "Convergence"), nullptr);
+    f.endTurn();
+    CHECK(f.c->pileOf(keep) == Pile::Hand);
+    CHECK(f.c->stars == 1);
+  }
+  {  // Charge (upgraded): two draw-pile cards become upgraded MinionDiveBombs.
+    Fight f;
+    Card* ch = fresh(f, "Charge", true);
+    PlayerAction a;
+    a.kind = PlayerAction::PlayCard;
+    a.card = ch;
+    f.c->energy = 10;
+    f.c->actions.fire(a);
+    pump([&] { return f.c->choice.active && f.c->choice.result.waiting(); });
+    CHECK(f.c->choice.minCount == 2 && f.c->choice.maxCount == 2);
+    std::vector<Card*> two = {f.c->draw[0], f.c->draw[1]};
+    f.c->choice.result.fire(two);
+    pump([&] { return f.c->playerPhase && f.c->actions.waiting(); });
+    int bombs = 0;
+    for (Card* k : f.c->draw) if (k->id == "MinionDiveBomb" && k->val("Damage") == Dec(16)) ++bombs;
+    CHECK(bombs == 2);
+  }
+
   printf("%d checks, %d failed\n", checks, failures);
   return failures ? 1 : 0;
 }

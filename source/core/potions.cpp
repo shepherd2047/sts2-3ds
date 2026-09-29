@@ -142,13 +142,7 @@ struct ReptileTrinketPower : TemporaryStatPower<StrengthPower, 1> {
   POWER_HEADER(ReptileTrinketPower, "TEMPORARY_STRENGTH_POWER")
 };
 
-struct RetainHandPower : Power {
-  POWER_HEADER(RetainHandPower, "RETAIN_HAND_POWER")
-  bool shouldFlush() override { return false; }
-  Task<> afterSideTurnEnd(Side, const std::vector<Creature*>& participants) override {
-    if (contains(participants, owner)) co_await cmd::decrement(this);
-  }
-};
+// RetainHandPower moved to powers.h (shared with Convergence, X3.3a).
 
 // ================================================================ potions
 

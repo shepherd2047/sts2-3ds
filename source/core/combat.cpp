@@ -993,6 +993,7 @@ Task<> Combat::setupPlayerTurn() {
   for (Model* m : listeners()) resetEnergy = resetEnergy && m->shouldResetEnergy();
   energy = resetEnergy ? maxEnergyNow() : energy + maxEnergyNow();
   cardsPlayedThisTurn = 0;
+  skillsFinishedThisTurn = 0;
   for (Model* m : listeners()) co_await m->afterEnergyReset();
   for (Model* m : listeners()) co_await m->beforeHandDraw();
   Dec handDraw = 5;
@@ -1178,6 +1179,7 @@ Task<> Combat::playCard(Card* card, Creature* target, bool autoPlay, bool forceE
     if (card->enchantment && player->alive()) co_await card->enchantment->onPlay(cp);
     if (player->alive() && !over)
       for (Model* m : listeners()) co_await m->afterCardPlayed(cp);
+    if (card->type == CardType::Skill) ++skillsFinishedThisTurn;  // CardPlayFinishedEntry (LunarBlast)
   }
   card->clearCostMods(Card::kWhenPlayed);  // AfterCardPlayedCleanup
 

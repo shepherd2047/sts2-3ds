@@ -204,4 +204,14 @@ struct BlockNextTurnPower : Power {
   }
 };
 
+// RetainHandPower.cs: the owner's hand isn't discarded at end of turn; ticks down each turn.
+// (Moved here from potions.cpp so Convergence can share it.)
+struct RetainHandPower : Power {
+  POWER_HEADER(RetainHandPower, "RETAIN_HAND_POWER")
+  bool shouldFlush() override { return false; }
+  Task<> afterSideTurnEnd(Side, const std::vector<Creature*>& participants) override {
+    if (contains(participants, owner)) co_await cmd::decrement(this);
+  }
+};
+
 }  // namespace sts
