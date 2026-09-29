@@ -20,9 +20,16 @@ uint32_t nextCodepoint(const std::string& s, size_t& i) {
   return cp;
 }
 
-bool Res::load() {
+bool Res::load(const std::function<void(float)>& progress) {
   std::string data;
   if (!gfx::readFile("gfx/atlas.txt", data)) return false;
+  int pageCount = 1;  // for progress only
+  if (progress) {
+    std::istringstream in(data);
+    std::string name;
+    int page, x, y, w, h, ax, ay;
+    while (in >> name >> page >> x >> y >> w >> h >> ax >> ay) pageCount = std::max(pageCount, page + 1);
+  }
   {
     std::istringstream in(data);
     std::string name;
@@ -30,6 +37,7 @@ bool Res::load() {
     while (in >> name >> page >> x >> y >> w >> h >> ax >> ay) {
       while ((int)atlasPages_.size() <= page) {
         atlasPages_.push_back(gfx::loadTexture("gfx/atlas_" + std::to_string(atlasPages_.size()) + ".t3t"));
+        if (progress) progress(std::min(0.95f, (float)atlasPages_.size() / (float)pageCount));
       }
       Sprite s;
       s.tex = atlasPages_[page];
@@ -94,6 +102,7 @@ bool Res::load() {
       strings_[line.substr(0, tab)] = v;
     }
   }
+  if (progress) progress(1.f);
   return fontTex_[0] && !atlasPages_.empty();
 }
 

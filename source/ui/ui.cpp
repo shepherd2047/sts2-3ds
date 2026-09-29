@@ -30,7 +30,8 @@ bool savesEnabled() { return !getenv("STS_HIDDEN") && !getenv("STS_NO_SAVE"); }
 }
 
 bool App::init() {
-  if (!R().load()) return false;
+  auto loading = beginBoot();  // S01: loading frames, then the splash (not in automated previews)
+  if (!R().load(loading)) return false;
   run_ = std::make_unique<Run>();
   autoplay_ = getenv("STS_AUTOPLAY") != nullptr;
   hasSave_ = hasSave();
@@ -133,6 +134,7 @@ void App::returnTitle() {
 // ================================================================ frame
 
 void App::update(const gfx::Input& in, double dt) {
+  if (updateBoot(in, dt)) return;
   double visualDt = dt * (fastMode_ ? 1.75 : 1.0);
   time_ += visualDt;
   if (transitionT_ > 0) transitionT_ = std::max(0.f, transitionT_ - (float)visualDt / style::kFade);
@@ -168,6 +170,7 @@ void App::update(const gfx::Input& in, double dt) {
     if ((scr == Screen::GameOver || scr == Screen::Victory) && savesEnabled()) gfx::deleteSave(kSaveName);
     if (scr == Screen::Title) hasSave_ = hasSave();
   }
+  updateActTitle((float)visualDt);
   if (run_->combat.get() != lastCombat_) {
     lastCombat_ = run_->combat.get();
     visuals_.clear();
@@ -306,6 +309,7 @@ void App::draw() {
     bool top = pass == 0;
     gfx::screen(top ? gfx::TOP : gfx::BOTTOM, 0x0B0B12FF);
     if (const char* m = getenv("STS_MOCK")) { drawStyleMock(std::atoi(m), top); continue; }
+    if (drawBoot(top)) continue;
     if (settingsOpen_) { drawSettings(top); continue; }
     if (devOpen_) { drawDev(top); continue; }
     if (detailCard_ || detailRelic_) { drawDetail(top); continue; }
@@ -339,6 +343,7 @@ void App::draw() {
         break;
       default: break;
     }
+    if (top && scr == Screen::Map) drawActTitle();
     // F6: fade through black on a screen change (style::kFade seconds).
     if (transitionT_ > 0) gfx::rect(0, 0, top ? kTop : kBot, kH, 0x000000FF & (0xFFFFFF00 | (uint32_t)(transitionT_ * 255)));
     if (!top && toastT_ > 0) {
