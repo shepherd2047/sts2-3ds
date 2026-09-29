@@ -20,9 +20,9 @@ std::string energyOrbSprite(Run* r) {
   return R().sprite(name) ? name : "ui/energy_orb";
 }
 
-std::string cardEnergySprite(Run* r) {
-  std::string color = r ? r->character().energyColor : std::string("ironclad");
-  std::string name = color == "ironclad" ? "card/energy" : "card/energy_" + color;
+std::string cardEnergySprite(const std::string& pool) {
+  // The Curse pool's EnergyColorName is colorless too.
+  std::string name = pool == "ironclad" ? "card/energy" : "card/energy_" + (pool == "curse" ? std::string("colorless") : pool);
   return R().sprite(name) ? name : "card/energy";
 }
 

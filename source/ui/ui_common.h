@@ -25,7 +25,7 @@ std::string playerArt(sts::Run* r);
 // long-standing unsuffixed "ui/energy_orb" / "card/energy"; the other characters' were baked
 // (X0/X2) as "..._<energyColor>" (Character::energyColor, e.g. "silent").
 std::string energyOrbSprite(sts::Run* r);
-std::string cardEnergySprite(sts::Run* r);
+std::string cardEnergySprite(const std::string& pool);  // a card pool's energyColor
 // Card and event text: [dynvar], pluralisation and choose() formatting for loc strings. cardtext.cpp.
 std::string expandSmart(const std::string& src, const std::vector<DynVar>& vars, bool inCombat,
                         const std::map<std::string, std::string>* strVars = nullptr, bool upgraded = false);
