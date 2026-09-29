@@ -1047,6 +1047,7 @@ Task<> Combat::executeEnemyTurn() {
 Task<> Combat::endEnemyTurn() {
   std::vector<Creature*> es;
   for (auto* e : enemies) if (!e->removed) es.push_back(e);
+  for (Model* m : listeners()) co_await m->beforeSideTurnEndVeryEarly(Side::Enemy, es);
   for (Model* m : listeners()) co_await m->beforeSideTurnEndEarly(Side::Enemy, es);
   for (Model* m : listeners()) co_await m->beforeSideTurnEnd(Side::Enemy, es);
   for (Model* m : listeners()) co_await m->afterSideTurnEnd(Side::Enemy, es);
@@ -1057,6 +1058,7 @@ Task<> Combat::endEnemyTurn() {
 Task<> Combat::endPlayerTurnPhaseOne() {
   std::vector<Creature*> ps{player};
   for (Model* m : listeners()) co_await m->afterAutoPostPlayPhaseEntered();
+  for (Model* m : listeners()) co_await m->beforeSideTurnEndVeryEarly(Side::Player, ps);
   for (Model* m : listeners()) co_await m->beforeSideTurnEndEarly(Side::Player, ps);
   for (Model* m : listeners()) co_await m->beforeSideTurnEnd(Side::Player, ps);
   // DoTurnEnd: PlayerCombatState.OrbQueue.BeforeTurnEnd first (Lightning/Frost/Dark/Glass passives).
