@@ -304,18 +304,24 @@ struct ColossalFlower : Event {
   }
 };
 
-// FieldOfManSizedHoles.cs. PORT NOTE: ENTER_YOUR_HOLE (PerfectFit enchantment) is locked.
+// FieldOfManSizedHoles.cs
 struct FieldOfManSizedHoles : Event {
   EVENT_HEADER(FieldOfManSizedHoles, "FIELD_OF_MAN_SIZED_HOLES")
   void calculateVars() override {
     addVar("Gold", 75);
     addVar("Cards", 2);
     setStr("ResistCurse", "cards.NORMALITY.title");
-    setStr("Enchantment", "Perfect Fit");
+    setStr("Enchantment", "enchantments.PERFECT_FIT.title");
   }
   std::vector<EventOption> initialOptions() override {
     return {option("INITIAL", "RESIST", [this] { return resist(); }),
-            EventOption{page("INITIAL") + ".options.ENTER_YOUR_HOLE", nullptr}};
+            option("INITIAL", "ENTER_YOUR_HOLE", [this] { return enterYourHole(); })};
+  }
+  bool isAllowed(Run& r) override { return r.canEnchantAny("PerfectFit"); }
+  Task<> enterYourHole() {
+    auto picked = co_await run->selectForEnchantment("PerfectFit", 1);
+    if (!picked.empty()) run->enchantCard(picked[0], "PerfectFit", 1);
+    setFinished("ENTER_YOUR_HOLE");
   }
   Task<> resist() {
     auto picked = co_await run->selectFromDeck("card_selection.TO_REMOVE", [](Card*) { return true; }, val("Cards").toInt());

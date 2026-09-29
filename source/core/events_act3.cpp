@@ -363,19 +363,14 @@ struct BattleFriendV3 : BattleFriend<300> { MONSTER_HEADER(BattleFriendV3, "BATT
 
 // GraveOfTheForgotten.cs: take the Forgotten Soul relic, or curse yourself to make a card
 // lose Exhaust (the SoulsPower enchantment).
-// PORT NOTE: no enchantment system; the card simply loses its Exhaust keyword.
 struct GraveOfTheForgotten : Event {
   EVENT_HEADER(GraveOfTheForgotten, "GRAVE_OF_THE_FORGOTTEN")
   void calculateVars() override {
     setStr("Relic", "relics.FORGOTTEN_SOUL.title");
-    setStr("Enchantment", "灵魂之力");
+    setStr("Enchantment", "enchantments.SOULS_POWER.title");
     setStr("Curse", "cards.DECAY.title");
   }
-  static bool enchantable(Card* c) { return c->has(kwExhaust); }
-  static bool hasEnchantable(Run& r) {
-    for (auto& c : r.deck) if (enchantable(c.get())) return true;
-    return false;
-  }
+  static bool hasEnchantable(Run& r) { return r.canEnchantAny("SoulsPower"); }
   bool isAllowed(Run& r) override { return hasEnchantable(r); }
   std::vector<EventOption> initialOptions() override {
     EventOption confront = hasEnchantable(*run)
@@ -385,8 +380,8 @@ struct GraveOfTheForgotten : Event {
   }
   Task<> confrontSoul() {
     run->addCardToDeck(db::card("Decay"));
-    auto picked = co_await run->selectFromDeck("card_selection.TO_ENCHANT", enchantable, 1);
-    if (!picked.empty()) picked[0]->keywords &= ~kwExhaust;
+    auto picked = co_await run->selectForEnchantment("SoulsPower", 1);
+    if (!picked.empty()) run->enchantCard(picked[0], "SoulsPower", 1);
     setFinished("CONFRONT");
   }
   Task<> accept() {
