@@ -372,6 +372,17 @@ void App::updateRest(const gfx::Input& in) {
   if ((in.down & gfx::BTN_B) && sel_ >= 0 && !fx.fireOnProceed) { sel_ = -1; widgets::setFocus(-1); }
 }
 
+// Smith (C# NDeckUpgradeSelectScreen, cancelable, one card): the S13 grid select over the
+// upgradable deck cards.
+static App::GridSelectSpec smithSpec(const Run& r) {
+  App::GridSelectSpec s;
+  s.cards = &r.upgradeOptions;
+  s.prompt = "gameplay_ui.CHOOSE_CARD_UPGRADE_HEADER";
+  s.canCancel = true;
+  s.upgrade = true;
+  return s;
+}
+
 void App::drawUpgrade(bool top) {
   Run& r = *run_;
   auto& opts = r.upgradeOptions;
@@ -390,16 +401,7 @@ void App::drawUpgrade(bool top) {
       drawCard(opts[fx.pick], kTop / 2 - kCardW * s / 2, 52, s, false, true);
       return;
     }
-    if (sel_ >= 0 && sel_ < (int)opts.size()) {
-      Card* c = opts[sel_];
-      auto up = c->clone();
-      up->upgrade();
-      drawCard(c, 50, 36, 1.05f, false, true);
-      R().text(kTop / 2, 110, "→", ts(F16, col::gold, CENTER, 0, 2.f));
-      drawCard(up.get(), 224, 36, 1.05f, false, true);
-    } else {
-      R().text(kTop / 2, 100, L("gameplay_ui.CHOOSE_CARD_UPGRADE_HEADER"), ts(F16, col::gold, CENTER));
-    }
+    gridSelectDraw(smithSpec(r), true);  // S13: the focused card before -> after
     return;
   }
   gfx::image(bg, 40, 0, kBot, kH, 0, 0, kBot, kH);
@@ -411,10 +413,7 @@ void App::drawUpgrade(bool top) {
     button(kBot - 110, 200, 100, 34, L("ancients.PROCEED.title"), ID_CONFIRM, fx.t > 0.2f, true);
     return;
   }
-  drawCardGrid(opts, sel_, 0, 196, scroll_);
-  gfx::rect(0, 196, kBot, 44, 0x000000A0);
-  button(10, 200, 100, 34, "返回", ID_BACK);
-  button(kBot - 110, 200, 100, 34, "升级", ID_CONFIRM, sel_ >= 0 && sel_ < (int)opts.size(), true);
+  gridSelectDraw(smithSpec(r), false);  // S13 deck grid select
 }
 
 void App::updateUpgrade(const gfx::Input& in) {
@@ -438,22 +437,10 @@ void App::updateUpgrade(const gfx::Input& in) {
     fx.hold = true;
     r.upgradeChoice.fire(i);
   };
-  if (in.down & gfx::BTN_RIGHT) sel_ = std::min(m - 1, sel_ + 1);
-  if (in.down & gfx::BTN_LEFT) sel_ = std::max(0, sel_ - 1);
-  if (in.down & gfx::BTN_DOWN) sel_ = std::min(m - 1, sel_ + 5);
-  if (in.down & gfx::BTN_UP) sel_ = std::max(0, sel_ - 5);
-  if (sel_ >= 0) scroll_ = std::max(0, sel_ / 5 - 1);
-  if ((in.down & gfx::BTN_A) && sel_ >= 0) { pick(sel_); return; }
-  if (in.down & gfx::BTN_B) { fx = RestFx{}; r.upgradeChoice.fire(-1); return; }
-  if (in.touchDown) {
-    int id = hitAt(in.tx, in.ty);
-    if (id >= ID_GRID0 && id - ID_GRID0 < m) {
-      if (sel_ == id - ID_GRID0) { pick(sel_); return; }
-      sel_ = id - ID_GRID0;
-    }
-    if (id == ID_CONFIRM && sel_ >= 0) pick(sel_);
-    if (id == ID_BACK) { fx = RestFx{}; r.upgradeChoice.fire(-1); }
-  }
+  std::vector<int> picked;
+  int got = gridSelectUpdate(smithSpec(r), in, picked);  // S13 deck grid select
+  if (got > 0 && !picked.empty() && picked[0] < m) pick(picked[0]);
+  else if (got < 0) { fx = RestFx{}; r.upgradeChoice.fire(-1); }
 }
 
 }  // namespace ui

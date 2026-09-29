@@ -204,6 +204,34 @@ class App {
   void drawDeckChoice(bool top);
   void updateDeckChoice(const gfx::Input& in);
   std::vector<int> deckPicks_;
+
+ public:
+  // S13 (RGDSplus U15/U16), screens/deck.cpp: the deck grid select (N of M with a counter,
+  // confirm / cancel, the focused card previewed on top: before -> after for upgrades) and the
+  // choose-one-of-N card row (skip where allowed). The caller draws the backgrounds and top bar.
+  struct GridSelectSpec {
+    const std::vector<sts::Card*>* cards = nullptr;
+    std::string prompt;            // loc key or text; "{Amount}" becomes `count`
+    int count = 1, minCount = -1;  // minCount -1: exactly count (DeckChoice)
+    bool canCancel = false, upgrade = false;
+  };
+  struct ChooseOneSpec {
+    std::vector<sts::Card*> cards;
+    bool canSkip = true;
+    std::string title, sub;  // top screen while nothing is focused (title defaults to CHOOSE_CARD_HEADER)
+  };
+
+ private:
+  // 1 confirmed (`picked` = option indices), -1 cancelled, 0 still choosing.
+  int gridSelectUpdate(const GridSelectSpec& s, const gfx::Input& in, std::vector<int>& picked);
+  void gridSelectDraw(const GridSelectSpec& s, bool top);
+  void gridSelectReset();
+  // The picked option index, -1 skipped, -2 still choosing.
+  int chooseOneUpdate(const ChooseOneSpec& s, const gfx::Input& in);
+  void chooseOneDraw(const ChooseOneSpec& s, bool top);
+  void drawCardInspect(sts::Card* c, float y);
+  bool combatChooseOne() const;  // the combat CardChoice offers generated cards (choose-one screen)
+  ChooseOneSpec combatChooseOneSpec() const;
   // Developer menu (SELECT, or 开发 on the map): cheats and pickers for testing.
   void drawDev(bool top);
   void updateDev(const gfx::Input& in);
