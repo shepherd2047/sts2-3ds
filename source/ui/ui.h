@@ -85,12 +85,29 @@ class App {
   // hasSave_. Rename: profiles::rename(id, name). Slot info: profiles::info(id).
   bool selectProfile(int id);
   bool deleteProfile(int id);
+  bool readRunSave(std::string& data) const;
   bool hasSave_ = false;  // the title offers 继续
   bool titleCharacter_ = false;  // title menu -> character select (S04)
   int titleChar_ = 0;             // selected button: db::characterIds() index, or its size for Random
   int titleAsc_ = 0;              // ascension picked on the select screen (0-10, all open per the owner)
   std::string titleSeed_;         // SeedHelper-style 12-character seed shown on the select screen
-  int titleSelection_ = 0;       // continue (when present) or new game
+  int titleSelection_ = 0;       // focused main menu button (S02)
+  // S02 (U02) main menu, title.cpp.
+  int menuSub_ = 0;              // 0 the button list, 1 singleplayer submenu, 2 compendium submenu
+  int subSel_ = 0;               // focused submenu card
+  int menuModal_ = 0;            // 0 none, 1 abandon-run confirm, 2 quit confirm
+  int menuModalSel_ = 0;         // 0 cancel, 1 confirm
+  float reticleY_ = -1;          // eased y of the focus reticles
+  bool quit_ = false;            // 退出 confirmed: main() leaves its loop
+  std::string continueInfo_, continueIcon_;  // NContinueRunInfo text, cleared when the save may change
+  void drawMenuBg(bool top, float dim);
+  void refreshContinueInfo();
+  void activateMenu(int id);
+
+ public:
+  bool quitRequested() const { return quit_; }
+
+ private:
   Visual* visual(sts::Creature* c);
   void trigger(sts::Creature* c, const std::string& what, int amount);
   std::string idleAnim(const Visual& v) const;

@@ -208,10 +208,13 @@ def bake_title_art(g, args):
         layer, _ = spine_render.render(skel, atlas, load, scale=0.15, animation='animation')
         layer = layer.resize((round(layer.width * 1.25), round(layer.height * 1.25)), Image.LANCZOS)
         menu.alpha_composite(layer, (x, 0))
-    skel, atlas, load = g.spine('animations/backgrounds/mainmenu/logo/main_menu_logo_skel_data.tres')
-    logo, _ = spine_render.render(skel, atlas, load, scale=0.15, animation='animation')
-    logo.thumbnail((225, 140), Image.LANCZOS)
-    menu.alpha_composite(logo, ((400 - logo.width) // 2, 20))
+    # S02: the sky layer leaves a few transparent rows at the top and bottom of the tall
+    # background; stretch the covered rows over the whole 480 so neither screen has a dark
+    # band. The logo is no longer baked in: it is the atlas sprite ui/menu_logo (add_ui_art).
+    rgb = np.array(menu)[:, :, :3].astype(int)
+    covered = np.where(np.abs(rgb - np.array((12, 13, 24))).sum(axis=2).max(axis=1) > 12)[0]
+    if len(covered):
+        menu = menu.crop((0, int(covered[0]), 400, int(covered[-1]) + 1)).resize((400, 480), Image.LANCZOS)
     canvas = Image.new('RGBA', (512, 512), (0, 0, 0, 255))
     canvas.paste(menu, (0, 0))
     write_t3t(os.path.join(OUT, 'gfx', 'bg_menu.t3t'), canvas)
@@ -595,6 +598,26 @@ def add_ui_art(g, a, packer, known):
     put('ui/btn_ancient_outline', 'packed/common_ui/ancient_event_option_button_outline.png', (48, 48), (14, 14, 14, 14))
     put('ui/btn_compendium', 'packed/common_ui/submenu_compendium_button.png', (93, 66))
     put('ui/btn_delete', 'packed/main_menu/delete_button.png', (32, 32))
+    # S02 main menu (NMainMenu): button reticles either side of the focused text button
+    # (ButtonReticleLeft / flip_h ButtonReticleRight), the logo (main_menu_logo Spine, first
+    # frame), NSubmenuButton art for the singleplayer / compendium submenus.
+    put('ui/menu_reticle', 'packed/main_menu/main_menu_button_highlight.png', (20, 20))
+    if 'ui/menu_reticle_r' not in known:
+        packer.add('ui/menu_reticle_r', fit(src('packed/main_menu/main_menu_button_highlight.png'), (20, 20))
+                   .transpose(Image.FLIP_LEFT_RIGHT))
+        known.add('ui/menu_reticle_r')
+    if 'ui/menu_logo' not in known:
+        skel, atlas, load = g.spine('animations/backgrounds/mainmenu/logo/main_menu_logo_skel_data.tres')
+        logo, _ = spine_render.render(skel, atlas, load, scale=0.15, animation='animation')
+        logo = logo.crop(logo.getbbox())
+        logo.thumbnail((236, 146), Image.LANCZOS)
+        packer.add('ui/menu_logo', logo)
+        known.add('ui/menu_logo')
+    for nm in ('standard', 'daily', 'custom', 'card_library', 'relic_collection', 'potion_lab', 'bestiary'):
+        put('ui/sub_' + nm, f'ui/main_menu/submenu_{nm}.png', (84, 64))
+    put('ui/sub_lock', 'packed/main_menu/submenu_lock.png', (40, 30))
+    put('ui/sub_stats', 'packed/main_menu/submenu_stats_icon.png', (44, 25))
+    put('ui/sub_history', 'packed/main_menu/submenu_history_icon.png', (40, 25))
     put('ui/end_turn_glow', 'packed/combat_ui/end_turn_button_glow.png', (84, 42))
     put('ui/exhaust_pile', 'packed/combat_ui/exhaust_pile.png', (30, 30))
     put('ui/pile_count', 'packed/combat_ui/pile_button_count.png', (24, 20))
@@ -1003,6 +1026,13 @@ def build(args):
     take('merchant_room')
     take('acts', lambda k: k.endswith('.title'))  # S01: the act banner's name (ActModel.Title)
     take('ascension', lambda k: k.startswith('LEVEL_'))  # S04: the character select's ascension panel
+    # S02: main menu buttons, its submenus (NSingleplayerSubmenu / NCompendiumSubmenu), the
+    # continue-run info and the abandon / quit popups.
+    take('main_menu_ui', lambda k: k.split('.')[0] in (
+        'CONTINUE', 'ABANDON_RUN', 'ABANDON_RUN_CONFIRMATION', 'SINGLE_PLAYER', 'COMPENDIUM', 'STATISTICS',
+        'SETTINGS', 'QUIT', 'QUIT_CONFIRM_POPUP', 'GENERIC_POPUP', 'STANDARD', 'DAILY', 'CUSTOM',
+        'COMPENDIUM_CARD_LIBRARY', 'COMPENDIUM_RELIC_COLLECTION', 'COMPENDIUM_POTION_LAB', 'COMPENDIUM_BESTIARY',
+        'RUN_HISTORY', 'CONTINUE_RUN_INFO'))
     for t in ('card_keywords', 'gameplay_ui', 'rest_site_ui', 'card_reward_ui', 'map', 'combat_messages',
               'card_selection', 'intents', 'game_over_screen', 'characters'):
         take(t, (lambda k: not k.startswith(('DAILY', 'DISCOVERY'))) if t == 'game_over_screen'

@@ -14,7 +14,7 @@ int main() {
   // U2 debug hook until U3/U4 route game events: STS_MUSIC=<id> plays at startup (audio::init)
   // and every tap plays STS_TAP_SFX (default: a UI click).
   const char* tapSfx = getenv("STS_MUSIC") ? (getenv("STS_TAP_SFX") ? getenv("STS_TAP_SFX") : "event:/sfx/ui/clicks/ui_click") : nullptr;
-  while (gfx::running()) {
+  while (gfx::running() && !app.quitRequested()) {  // 退出 on the main menu (S02)
     gfx::Input in = gfx::input();
     if ((in.down & gfx::BTN_START) && (in.held & gfx::BTN_SELECT)) break;
     double dt = gfx::dt();
