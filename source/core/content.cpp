@@ -635,6 +635,7 @@ void registerAncientsLater(); // ancients_later.cpp: acts 2-3 and Darv
 void registerPotions();      // potions.cpp
 void registerEnchantments(); // enchantments.cpp
 void registerEnchantmentsB(); // enchantments_b.cpp (A3b)
+void registerEnchantmentsC(); // enchantments_c.cpp (A3c)
 void registerSilent();       // char_silent.cpp
 void registerNecrobinder();  // char_necrobinder.cpp
 void registerRegent();       // char_regent.cpp
@@ -741,6 +742,7 @@ void init() {
   registerRelic("Circlet", [] { return std::unique_ptr<Relic>(new Circlet()); });
   registerEnchantments();
   registerEnchantmentsB();
+  registerEnchantmentsC();
   registerSilent();
   registerNecrobinder();
   registerRegent();

@@ -215,6 +215,42 @@ int main() {
     pump([&] { return f.c->pileOf(k) == Pile::Hand; });
     CHECK(f.c->pileOf(k) == Pile::Hand && k->costWithLocalMods() >= 0 && k->costWithLocalMods() <= 3);
   }
+  {  // A3c: Instinct doubles, Momentum grows per play, RoyallyApproved / TezcatarasEmber keywords and cost
+    Fight f(5, [](Run& r) {
+      cmd::enchant(deckCard(r, "StrikeIronclad", 0), db::enchantment("Instinct"), 1);
+      cmd::enchant(deckCard(r, "StrikeIronclad", 1), db::enchantment("Momentum"), 5);
+      cmd::enchant(deckCard(r, "StrikeIronclad", 2), db::enchantment("TezcatarasEmber"), 1);
+      cmd::enchant(deckCard(r, "DefendIronclad", 0), db::enchantment("RoyallyApproved"), 1);
+    });
+    Card* inst = f.find("Instinct");
+    Card* mom = f.find("Momentum");
+    Card* tez = f.find("TezcatarasEmber");
+    Card* roy = f.find("RoyallyApproved");
+    CHECK(inst && mom && tez && roy);
+    f.toHand(inst);
+    CHECK(f.play(inst) == 12);
+    f.toHand(mom);
+    CHECK(f.play(mom) == 6);
+    f.toHand(mom);
+    CHECK(f.play(mom) == 11);
+    CHECK(tez->cost == 0 && tez->has(kwEternal) && !tez->isRemovable());
+    f.toHand(tez);
+    CHECK(f.play(tez) == 9);
+    CHECK(roy->has(kwInnate) && roy->has(kwRetain));
+    CHECK(!db::enchantment("RoyallyApproved")->canEnchant(*db::card("Inflame")));  // Powers excluded
+  }
+  {  // A3c relics: pickup enchantments
+    Run r;
+    r.start(4);
+    auto soup = db::relic("NutritiousSoup");
+    CHECK(soup != nullptr);
+    Scheduler::get().spawn([](Run* rr) -> Task<> { co_await rr->obtainRelic(db::relic("NutritiousSoup")); }(&r));
+    pump([&] { return false; }, 50);
+    int embers = 0;
+    for (auto& k : r.deck) if (k->enchantment && k->enchantment->id == "TezcatarasEmber") { ++embers; CHECK(k->id == "StrikeIronclad"); }
+    CHECK(embers == 5);
+    Scheduler::get().clear();
+  }
   {  // saves keep enchantments (id, amount, status, vars)
     Run r;
     r.start(9);

@@ -4,8 +4,9 @@
 // .Potions.
 //
 // Still skipped (need systems owned elsewhere or not yet built): LeadPaperweight (colorless
-// pool, A1a); BeautifulBracelet, TriBoomerang, ElectricShrymp, PaelsClaw, PaelsGrowth,
-// NutritiousSoup, Glitter, SilkenTress, SilverCrucible (enchantments, A3b/A3c); Byrdpip (pets +
+// pool, A1a); PaelsGrowth (CloneRestSiteOption); the enchanting event relics (BeautifulBracelet,
+// TriBoomerang, ElectricShrymp, PaelsClaw, NutritiousSoup, Glitter, SilkenTress, SilverCrucible)
+// are in relics_enchant.cpp (A3c); Byrdpip (pets +
 // ByrdonisEgg hatching); WingedBoots (free travel on the map); DowsingRod (quest cards);
 // Driftwood (card reward reroll); PaelsWing (sacrificing card rewards); PaelsEye (extra turn);
 // PaelsLegion (pets); GoldenCompass (golden path); FurCoat (map marks); ToyBox (wax relics);

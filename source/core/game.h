@@ -699,6 +699,7 @@ struct Relic : Model {
   virtual std::vector<RoomType> extraCardRewards(RoomType) { return {}; }  // odds of each extra reward
   // TryModifyCardRewardOptions (late = ...Late): Lasting Candy, Lava Lamp, the eggs.
   virtual void modifyCardReward(std::vector<std::unique_ptr<Card>>&, RoomType, bool /*late*/) {}
+  virtual bool shouldGenerateTreasure() { return true; }  // Hook.ShouldGenerateTreasure (SilverCrucible)
   // TryModifyCardBeingAddedToDeck / ModifyMerchantCardCreationResults (the eggs).
   virtual bool upgradesNewCard(const Card&) { return false; }
   virtual void afterCardAddedToDeck(Card*) {}  // AfterCardChangedPiles(Deck) for new cards
