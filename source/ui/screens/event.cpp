@@ -44,8 +44,9 @@ void App::drawAncient(bool top) {
     } else if (!e->dialogue.empty()) {
       size_t line = std::min(e->dialogueLine, e->dialogue.size() - 1);
       const std::string& k = e->dialogue[line];
-      bool player = k.size() > 5 && k.compare(k.size() - 5, 5, ".char") == 0;  // the Ironclad answers
-      R().text(kTop / 2, kH - 52, L("ancients." + k), ts(F16, player ? col::gold : 0xB8E8FFFF, CENTER, kTop - 24));
+      bool player = k.size() > 5 && k.compare(k.size() - 5, 5, ".char") == 0;  // the character answers
+      // The event's vars fill the line (Vakuu's {Visits}).
+      R().text(kTop / 2, kH - 52, expandSmart(L("ancients." + k), e->vars, false, &e->strVars), ts(F16, player ? col::gold : 0xB8E8FFFF, CENTER, kTop - 24));
     }
     return;
   }

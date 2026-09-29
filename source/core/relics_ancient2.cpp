@@ -102,7 +102,7 @@ struct Kaleidoscope : Relic {
   Task<> afterObtained() override {
     for (int i = 0; i < val("Cards").toInt(); ++i) {
       std::vector<std::string> others;
-      for (auto& id : db::characterIds())
+      for (auto& id : db::allCharacters())  // UnlockState.CharacterCardPools order
         if (id != run->characterId && db::characterPlayable(id)) others.push_back(id);
       run->rng("Niche").shuffle(others);
       if (others.size() > 3) others.resize(3);

@@ -19,6 +19,16 @@ void recordRunEnd(Run& r, progress::RunOutcome outcome) {
   if (r.progressRecorded) return;
   r.progressRecorded = true;
   progress::onRunEnded(r.characterId, r.ascension, outcome);
+  // UpdateWithRunData: each Ancient map point's first Event room counts a win or a loss (AncientStats).
+  for (auto& act : r.mapHistory)
+    for (auto& point : act) {
+      if (point.type != history::PointType::Ancient) continue;
+      for (auto& room : point.rooms)
+        if (room.type == history::RoomKind::Event) {
+          progress::recordAncientRun(room.model, r.characterId, outcome == progress::RunOutcome::Win);
+          break;
+        }
+    }
   history::onRunEnded(r, outcome == progress::RunOutcome::Win, outcome == progress::RunOutcome::Abandon);
 }
 // Run history kinds of the port's room types.
@@ -493,12 +503,22 @@ Task<> Run::gainGold(int amount) {
   for (Model* m : listeners()) co_await m->afterGoldGained(n);
 }
 
+// StartRunLobby.BeginRunLocally: a player who picked RandomCharacter gets
+// rng.NextItem(ModelDb.AllCharacters) from the same Rng(seed, "act_selection") that has just
+// rolled the act list (ActModel.GetRandomList), so the roll is reproducible from the seed.
+std::string Run::resolveCharacter(uint64_t seed, const std::string& charId) {
+  if (charId != kRandomCharacter) return charId;
+  Rng rng(seed, "act_selection");
+  db::randomActList(rng);
+  return rng.nextItem(db::allCharacters());
+}
+
 void Run::start(uint64_t s, const std::string& charId, int ascensionLevel) {
   db::init();
   seed = s;
   if (const char* env = getenv("STS_ASCENSION")) ascensionLevel = std::atoi(env);  // debug: STS_ASCENSION=0-10
   ascension = std::clamp(ascensionLevel, 0, 10);
-  characterId = db::character(charId).id;  // unknown ids fall back to the Ironclad
+  characterId = db::character(resolveCharacter(seed, charId)).id;  // unknown ids fall back to the Ironclad
   const Character& ch = character();
   rngs.clear();
   player = std::make_unique<Creature>();
@@ -788,7 +808,7 @@ std::vector<std::unique_ptr<Card>> Run::cardReward(RoomType room, int count) {
   auto poolOf = [&](const std::function<bool(const Card&)>& f) {
     if (!allPools) return db::characterCards(characterId, f);
     std::vector<std::string> u;
-    for (auto& ch : db::characterIds())
+    for (auto& ch : db::allCharacters())  // UnlockState.CharacterCardPools order
       for (auto& id : db::characterCards(ch, f))
         if (std::find(u.begin(), u.end(), id) == u.end()) u.push_back(id);
     return u;

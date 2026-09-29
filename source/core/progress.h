@@ -69,6 +69,14 @@ void markPotionSeen(const std::string& id);
 void markMonsterSeen(const std::string& id);
 void incrementCounter(const std::string& name, int64_t amount = 1);
 
+// AncientStats (X6): per Ancient and character, the runs won / lost after meeting it
+// (ProgressSaveManager.UpdateWithRunData: every Ancient map point of the finished run). Kept in
+// `counters` as "ancient.<AncientId>.<CharacterId>.wins" / ".losses" (no save version change).
+// Visits = wins + losses (AncientCharacterStats.Visits); they pick the Ancients' dialogue.
+void recordAncientRun(const std::string& ancientId, const std::string& characterId, bool win);
+int ancientVisits(const std::string& ancientId, const std::string& characterId);  // GetVisitsAs
+int ancientTotalVisits(const std::string& ancientId);                              // TotalVisits
+
 enum class RunOutcome { Win, Loss, Abandon };
 // Called once when a run concludes: a won fight against the final boss, a lost fight/event/HP
 // loss, or the player abandoning from the pause menu. Mirrors

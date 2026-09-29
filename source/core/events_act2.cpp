@@ -1,7 +1,6 @@
 // Act 2 (Hive) events, translated from MegaCrit.Sts2.Core.Models.Events (package 5).
-// Not ported: ColorfulPhilosophers (IsAllowed needs a second unlocked character card pool;
-// only the Ironclad exists). FieldOfManSizedHoles keeps ENTER_YOUR_HOLE locked (PerfectFit
-// enchantment is not ported).
+// ColorfulPhilosophers came with the other characters (X6). FieldOfManSizedHoles keeps
+// ENTER_YOUR_HOLE locked (PerfectFit enchantment is not ported).
 #include <algorithm>
 
 #include "cards.h"
@@ -33,6 +32,32 @@ std::unique_ptr<Card> rewardCardWhere(Run& r, std::function<bool(const Card&)> f
     });
   if (pool.empty()) return nullptr;
   return db::card(r.rng("Rewards").nextItem(pool));
+}
+
+// RewardsCmd.OfferCustom: the rewards as one claimable list (as in events_shared2.cpp: a skipped
+// Card row stays until the player leaves).
+Task<> offerRewards(Run& r, std::vector<Run::RewardItem> items) {
+  r.rewardItems = std::move(items);
+  r.screen = Screen::Reward;
+  for (;;) {
+    int pick = co_await r.rewardListChoice.next();
+    if (pick < 0 || pick >= (int)r.rewardItems.size()) break;
+    Run::RewardItem& item = r.rewardItems[pick];
+    if (item.kind != Run::RewardKind::Card) break;  // only card rows are offered here
+    r.rewardCards = std::move(item.cards);
+    int cardPick = co_await r.rewardChoice.next();
+    bool claimed = false;
+    if (cardPick >= 0 && cardPick < (int)r.rewardCards.size()) {
+      r.addCardToDeck(std::move(r.rewardCards[cardPick]));
+      claimed = true;
+    } else {
+      item.cards = std::move(r.rewardCards);
+    }
+    r.rewardCards.clear();
+    if (claimed) r.rewardItems.erase(r.rewardItems.begin() + pick);
+  }
+  r.rewardItems.clear();
+  r.rewardCards.clear();
 }
 }  // namespace
 
@@ -265,6 +290,63 @@ struct Bugslayer : Event {
   }
 };
 
+// ColorfulPhilosophers.cs: up to three of the other characters' colours (CardPoolColorOrder:
+// Necrobinder, Ironclad, Regent, Silent, Defect; the extra ones removed with Rng.NextInt), each
+// giving three card rewards (Common, Uncommon, Rare) from that character's pool.
+// IsAllowed: every player has more than one character card pool unlocked -- always true here.
+struct ColorfulPhilosophers : Event {
+  EVENT_HEADER(ColorfulPhilosophers, "COLORFUL_PHILOSOPHERS")
+  void calculateVars() override { addVar("Cards", 3); }
+  std::vector<EventOption> initialOptions() override {
+    static const char* const kColorOrder[] = {"Necrobinder", "Ironclad", "Regent", "Silent", "Defect"};
+    std::vector<EventOption> list;
+    for (const char* pool : kColorOrder) {
+      // PORT NOTE: UnlockState.CharacterCardPools = every character whose cards are ported.
+      if (pool == run->characterId || !db::characterPlayable(pool)) continue;
+      std::string ch = pool;
+      // "...options." + CardPoolModel.EnergyColorName.ToUpperInvariant()
+      list.push_back(option("INITIAL", db::character(ch).key, [this, ch] { return offer(ch); }));
+    }
+    int keep = std::min(3, (int)list.size());
+    while ((int)list.size() > keep) list.erase(list.begin() + rng().nextInt((int)list.size()));
+    return list;
+  }
+  // CardReward(CardCreationOptions([pool], Other, Uniform, rarity == r, NoRarityModification |
+  // NoCardPoolModifications), Cards): CardFactory.CreateForReward, three distinct cards each followed
+  // by RollForUpgrade(0), all on the Rewards rng; the three rewards are populated in order.
+  // PORT NOTE: the Uniform odds also drop Basic / Ancient cards; filtering on one rarity already does.
+  std::vector<std::unique_ptr<Card>> cards(const std::string& ch, Rarity rarity) {
+    std::vector<std::unique_ptr<Card>> out;
+    std::vector<std::string> taken;
+    auto pool = db::characterCards(ch, [&](const Card& c) { return c.rarity == rarity; });
+    for (int i = 0; i < val("Cards").toInt(); ++i) {
+      std::vector<std::string> items;
+      for (auto& id : pool) if (std::find(taken.begin(), taken.end(), id) == taken.end()) items.push_back(id);
+      if (items.empty()) break;
+      std::string id = run->rng("Rewards").nextItem(items);
+      taken.push_back(id);
+      auto c = db::card(id);
+      run->rollCardUpgrade(*c, 0);
+      out.push_back(std::move(c));
+    }
+    // Hook.TryModifyCardRewardOptions (the flags do not include NoModifyHooks), as an event room.
+    for (bool late : {false, true})
+      for (auto& rel : run->relics) rel->modifyCardReward(out, RoomType::Unknown, late);
+    return out;
+  }
+  Task<> offer(std::string ch) {
+    std::vector<Run::RewardItem> rows;
+    for (Rarity rarity : {Rarity::Common, Rarity::Uncommon, Rarity::Rare}) {
+      Run::RewardItem row;
+      row.kind = Run::RewardKind::Card;
+      row.cards = cards(ch, rarity);
+      if (!row.cards.empty()) rows.push_back(std::move(row));
+    }
+    co_await offerRewards(*run, std::move(rows));
+    setFinished("DONE");
+  }
+};
+
 // ColossalFlower.cs: dig for gold (5, 6 damage), then Pollinous Core for 7 more.
 struct ColossalFlower : Event {
   EVENT_HEADER(ColossalFlower, "COLOSSAL_FLOWER")
@@ -469,6 +551,7 @@ void registerAct2Events() {
   });
   reg<Amalgamator>();
   reg<Bugslayer>();
+  reg<ColorfulPhilosophers>();
   reg<ColossalFlower>();
   reg<FieldOfManSizedHoles>();
   reg<InfestedAutomaton>();
@@ -479,9 +562,9 @@ void registerAct2Events() {
 }
 
 namespace db {
-// Hive.AllEvents (ColorfulPhilosophers is left out, see the top of this file).
+// Hive.AllEvents.
 const std::vector<std::string>& act2Events() {
-  static const std::vector<std::string> ids = {"Amalgamator", "Bugslayer", "ColossalFlower", "FieldOfManSizedHoles",
+  static const std::vector<std::string> ids = {"Amalgamator", "Bugslayer", "ColorfulPhilosophers", "ColossalFlower", "FieldOfManSizedHoles",
                                                "InfestedAutomaton", "LostWisp", "SpiritGrafter", "TheLanternKey", "ZenWeaver"};
   return ids;
 }

@@ -121,6 +121,28 @@ void markMonsterSeen(const std::string& id) { if (!id.empty()) state().seenMonst
 
 void incrementCounter(const std::string& name, int64_t amount) { state().counters[name] += amount; }
 
+void recordAncientRun(const std::string& ancientId, const std::string& characterId, bool win) {
+  if (ancientId.empty()) return;
+  incrementCounter("ancient." + ancientId + "." + characterId + (win ? ".wins" : ".losses"));
+}
+
+int ancientVisits(const std::string& ancientId, const std::string& characterId) {
+  const auto& c = state().counters;
+  std::string base = "ancient." + ancientId + "." + characterId;
+  int64_t n = 0;
+  for (const char* k : {".wins", ".losses"})
+    if (auto it = c.find(base + k); it != c.end()) n += it->second;
+  return (int)n;
+}
+
+int ancientTotalVisits(const std::string& ancientId) {
+  std::string prefix = "ancient." + ancientId + ".";
+  int64_t n = 0;
+  for (auto it = state().counters.lower_bound(prefix); it != state().counters.end() && it->first.compare(0, prefix.size(), prefix) == 0; ++it)
+    n += it->second;
+  return (int)n;
+}
+
 // ProgressSaveManager.UpdateWithRunData + IncrementSingleplayerAscension.
 void onRunEnded(const std::string& characterId, int ascension, RunOutcome outcome) {
   CharacterProgress& cp = state().character(characterId);

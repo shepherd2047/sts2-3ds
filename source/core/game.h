@@ -1269,7 +1269,10 @@ struct Run {
     if (!r) r = std::make_unique<Rng>(seed, stream);
     return *r;
   }
+  // characterId may be kRandomCharacter (the character select's Random): resolveCharacter picks one.
   void start(uint64_t seed, const std::string& characterId = "Ironclad", int ascension = 0);
+  static constexpr const char* kRandomCharacter = "RandomCharacter";
+  static std::string resolveCharacter(uint64_t seed, const std::string& characterId);
   void enterAct(int index);        // RunManager.EnterAct: new map, encounters and events
   const db::ActDef& act() const;
   // Music hook for the audio lane: NRunMusicController.ResolveMusic picks the act's
@@ -1360,6 +1363,16 @@ void registerEncounter(const std::string& id, RoomType room, bool weak, std::fun
 // Characters (characters.cpp). `character` falls back to the Ironclad for an unknown id.
 const Character& character(const std::string& id);
 const std::vector<std::string>& characterIds();  // playable characters in the game's order
+// ModelDb.AllCharacters order (Ironclad, Silent, Regent, Necrobinder, Defect): use it wherever the
+// C# draws from the character list with an rng (Random character, Orobas, Kaleidoscope, ...).
+const std::vector<std::string>& allCharacters();
+// An Ancient's dialogue for this visit (ancient_dialogues.cpp): AncientDialogueSet.GetValidDialogues
+// then NextItem on `rng` (Rng.Chaotic: pass a cosmetic stream). The line keys are in the ancients table.
+std::vector<std::string> ancientDialogue(const std::string& ancientId, const std::string& characterId, int charVisits,
+                                         int totalVisits, Rng& rng);
+// The same for this run: the visits come from the profile (progress::ancientVisits), the pick from a
+// private stream of the run seed (Rng.Chaotic in the C#; it never touches the game's rngs).
+std::vector<std::string> ancientDialogueFor(const Run& run, const std::string& ancientId);
 // True when the character's starter deck and starting relic are all registered (ported).
 bool characterPlayable(const std::string& id);
 // Registered cards of the character's pool matching a filter, in pool order, without the

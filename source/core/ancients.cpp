@@ -373,8 +373,8 @@ struct Neow : Event {
   }
   std::vector<EventOption> initialOptions() override {
     ancient = true;
-    // DefineDialogues: the character's first-visit line (no profile, so always visit 0).
-    dialogue = {"NEOW.talk." + run->character().key + ".0-0.ancient"};
+    // DefineDialogues / NEventRoom: the dialogue for this character and visit count.
+    dialogue = db::ancientDialogueFor(*run, id);
     // GenerateInitialOptions (no run modifiers).
     std::vector<std::string> curses;
     for (auto& id : kCurse) if (allowedAtNeow(id)) curses.push_back(id);
