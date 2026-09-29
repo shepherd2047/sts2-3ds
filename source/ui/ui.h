@@ -99,6 +99,12 @@ class App {
   void openCustomRun();
   bool drawCustomRun(bool top);
   bool updateCustomRun(const gfx::Input& in);
+  // M12 daily run screen (screens/daily_run.cpp): the next new run's daily date (GameMode.Daily,
+  // daily.h); startRun consumes it with the title* fields above.
+  std::string titleDaily_;
+  void openDailyRun();
+  bool drawDailyRun(bool top);
+  bool updateDailyRun(const gfx::Input& in);
   int titleSelection_ = 0;       // focused main menu button (S02)
   // S02 (U02) main menu, title.cpp.
   int menuSub_ = 0;              // 0 the button list, 1 singleplayer submenu, 2 compendium submenu

@@ -69,6 +69,10 @@ void ioRecord(Archive& a, RunRecord& r) {
     a.io(r.seedText);
     a.io(r.modifiers);
   }
+  if (version >= 4) {  // M12: daily runs
+    a.tag("DAILY");
+    a.io(r.dailyDate);
+  }
   a.tag("DECK");
   int n = (int)r.deck.size();
   a.io(n);
@@ -269,6 +273,7 @@ RunRecord fromRun(const Run& run, bool win, bool abandoned) {
   r.custom = run.customRun;
   r.seedText = run.seedText;
   r.modifiers = run.modifierKeys();
+  r.dailyDate = run.dailyDate;
   r.badges = badges::compute(r);  // ScoreUtility.GetBadges (none when abandoned)
   return r;
 }

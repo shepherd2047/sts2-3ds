@@ -87,7 +87,8 @@ struct RunRecord {
   // 2 (M7): per-point badge inputs (gold spent, damage taken, rest choices), the CCCCOMBO flag and
   // the badges. Version 1 records still load (no badge data: tracked == false on every point).
   // 3 (M11): game mode (custom), the seed text and the modifiers; older records: standard, none.
-  static constexpr int kVersion = 3;
+  // 4 (M12): the daily run's date (GameMode.Daily); older records: not daily.
+  static constexpr int kVersion = 4;
 
   uint64_t seq = 0;          // 1, 2, 3... per profile (set by append); higher = newer
   uint64_t seed = 0;         // Run::seed (the numeric seed; the typed seed text is not kept)
@@ -114,6 +115,7 @@ struct RunRecord {
   bool custom = false;                 // RunHistory.GameMode == Custom (M11)
   std::string seedText;                // RunHistory.Seed (the typed / rolled text; "" = numeric only)
   std::vector<std::string> modifiers;  // RunHistory.Modifiers (keys, modifiers.h)
+  std::string dailyDate;               // GameMode.Daily (M12): "YYYY-MM-DD", "" otherwise
 
   std::string save() const;
   bool load(const std::string& data);  // false (and *this unchanged) if empty/garbled/future
