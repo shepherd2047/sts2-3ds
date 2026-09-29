@@ -267,6 +267,10 @@ int main(int argc, char** argv) {
               auto& it = cur->shop[k];
               if (it.stocked() && cur->shopPrice(it) <= cur->gold && (it.kind != ShopItem::PotionItem || cur->hasOpenPotionSlot())) pick = k;
             }
+            // Cap the buys per shop visit: Bing Bong + Lucky Fysh pay more gold per card than a card costs.
+            static int lastFloor = -1, buys = 0;
+            if (cur->floor != lastFloor) { lastFloor = cur->floor; buys = 0; }
+            if (pick >= 0 && ++buys > 30) pick = -1;
             if (getenv("SIM_FIGHTS") && pick >= 0) printf("  shop buy %d (%d gold)\n", pick, cur->gold);
             cur->shopChoice.fire(pick);
           }
