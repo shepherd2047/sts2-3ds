@@ -236,7 +236,7 @@ replay line (`App::describe`); the badge, glow and the enchant preview screen ar
 | id | Package | Kind | Needs | Status |
 |---|---|---|---|---|
 | C10 | Ascension 1-10 (SwarmingElites … DoubleBoss): `AscensionManager`, every `GetValueIfAscension` in ported content (script to list them), AscendersBane at A5, double boss at A10 | engine + content sweep, *Opus* | – | done (engine), accepted 2026-09-28 (merged by the reviewer: the lane session went offline before pushing) |
-| C11 | Map extras: boss preview, the act's second boss as a map node at ascension 10 (C10 chains the fights, see notes), map legend | engine + UI | C10 | todo |
+| C11 | Map extras: boss preview, the act's second boss as a map node at ascension 10 (C10 chains the fights, see notes), map legend | engine + UI | C10 | in progress (subagent) |
 
 **C10 notes (ascension, done).** `Run::ascension` (0-10, `Run::start(seed, character, ascension)`; debug
 `STS_ASCENSION=`, `SIM_ASC=`), `Run::hasAscension(kToughEnemies)`, `Run::ascValue(level, a, b)`. Saved (save
@@ -409,12 +409,12 @@ their `clone()` must call `adoptEnchantment()`.
 | id | Package | Kind | Needs | Status |
 |---|---|---|---|---|
 | M1 | Profile save `progress.sav` (versioned, atomic write): per-character wins, losses, best streak, max ascension; seen/unlocked cards, relics, potions and monsters; counters for stats and achievements | engine, *Opus* | – | done (subagent), accepted 2026-09-28: `progress.h/.cpp` (ProgressSaveManager rules, seen sets, counters); not persisted yet (Y4 picks the path and calls `progress::save/load`), `Run::abandon()` still to be called from the UI abandon button |
-| M2 | Run history store: the last 50 runs (seed, character, ascension, path, deck, relics, floor reached, killed by, time, score) | engine | M1 | in progress (subagent) |
+| M2 | Run history store: the last 50 runs (seed, character, ascension, path, deck, relics, floor reached, killed by, time, score) | engine | M1 | done (subagent, Opus), accepted 2026-09-29: history.h/.cpp; profile<N>/history/NN.run ring of 50 (Archive, versioned); Run::mapHistory + play time (run.sav version 6); recorded once at death / TheArchitect win / abandon; ScoreUtility ported (badges -> M7) |
 | M3 | Timeline / epochs engine | – | – | n/a (owner: everything unlocked) |
 | M4 | Timeline screen + unlock reveals | – | – | n/a (owner: everything unlocked) |
 | M5 | Achievements (22, `Achievements\`): checks, toast, achievement list page | content + UI | M1 | todo |
 | M6 | Stats screen: general and per-character stats (`Nodes.Screens.StatsScreen`) + run history viewer | UI | M2, F3 | todo |
-| M7 | Score and badges at the end of a run (28 badges, `Models.Badges`), used by S23 | content | M2 | todo |
+| M7 | Score and badges at the end of a run (28 badges, `Models.Badges`), used by S23 | content | M2 | in progress (subagent) |
 | M8 | Card library: filters by character, type and rarity; upgrade toggle; seen/locked | UI | M1, F5 | todo |
 | M9 | Relic collection + potion lab | UI | M1 | todo |
 | M10 | Bestiary: monster list, Spine viewer, moves | UI | M1 | todo |
