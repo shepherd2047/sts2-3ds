@@ -14,6 +14,18 @@ std::string playerArt(Run* r) {
   return R().sprite("creature/" + key) ? key : std::string("IRONCLAD");
 }
 
+std::string energyOrbSprite(Run* r) {
+  std::string color = r ? r->character().energyColor : std::string("ironclad");
+  std::string name = color == "ironclad" ? "ui/energy_orb" : "ui/energy_orb_" + color;
+  return R().sprite(name) ? name : "ui/energy_orb";
+}
+
+std::string cardEnergySprite(const std::string& pool) {
+  // The Curse pool's EnergyColorName is colorless too.
+  std::string name = pool == "ironclad" ? "card/energy" : "card/energy_" + (pool == "curse" ? std::string("colorless") : pool);
+  return R().sprite(name) ? name : "card/energy";
+}
+
 App::Visual* App::visual(Creature* c) {
   auto it = visuals_.find(c);
   if (it != visuals_.end()) return it->second.skel ? &it->second : nullptr;

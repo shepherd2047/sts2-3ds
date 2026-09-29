@@ -21,6 +21,11 @@ namespace ui {
 std::string actTexture(const sts::Run& r, const char* kind);
 // The player character's Spine / sprite key. visuals.cpp.
 std::string playerArt(sts::Run* r);
+// X1.5-X4.5: the run's energy orb / card-energy-gem sprite names. The Ironclad's are the
+// long-standing unsuffixed "ui/energy_orb" / "card/energy"; the other characters' were baked
+// (X0/X2) as "..._<energyColor>" (Character::energyColor, e.g. "silent").
+std::string energyOrbSprite(sts::Run* r);
+std::string cardEnergySprite(const std::string& pool);  // a card pool's energyColor
 // Card and event text: [dynvar], pluralisation and choose() formatting for loc strings. cardtext.cpp.
 std::string expandSmart(const std::string& src, const std::vector<DynVar>& vars, bool inCombat,
                         const std::map<std::string, std::string>* strVars = nullptr, bool upgraded = false);

@@ -1,6 +1,7 @@
 // Split from ui.cpp (F3).
 #include "../ui_common.h"
 #include "combat_internal.h"
+#include <cctype>
 
 namespace ui {
 
@@ -49,6 +50,33 @@ void App::drawCombat(bool top) {
     };
     center(cb->player, 95);
     drawCreature(cb->player, 95, feet, tgt == cb->player && !arrowAlly);
+    // X4.5: the Necrobinder's Osty (Combat::osty) stands beside the player. drawCreature already
+    // draws its idle animation, HP bar and powers (it treats any non-player Creature the same
+    // way), and fades it out on death (c->dead() -> "if (dying) return;" after the die anim), so
+    // no separate dead-state drawing is needed here.
+    if (cb->osty && !cb->osty->removed) drawCreature(cb->osty, 150, feet, false);
+    // X2.5: the Defect's orb slots (Combat::orbQueue / orbCapacity), laid out like NOrbManager's
+    // arc around the player but simplified to a row above the top bar for the 400px screen.
+    // Filled slots show the queued orb (id "<Name>Orb" -> sprite orb/<name>), empty ones
+    // orb/empty; orbCapacity can exceed the queue (Defect starts with 3, relics/Focus add more).
+    if (run_->character().orbSlots > 0 || cb->orbCapacity > 0) {
+      const float os = 20, ogap = 4, oy2 = 24;
+      float ox2 = 4;
+      for (int i = 0; i < cb->orbCapacity; ++i) {
+        std::string name = "orb/empty";
+        if (i < (int)cb->orbQueue.size()) {
+          std::string id = cb->orbQueue[i]->id;  // "LightningOrb" -> "orb/lightning"
+          std::string lower;
+          for (char ch : id) lower += (char)std::tolower((unsigned char)ch);
+          size_t suf = lower.rfind("orb");
+          if (suf != std::string::npos && suf + 3 == lower.size()) lower.resize(suf);
+          name = "orb/" + lower;
+          if (!R().sprite(name)) name = "orb/empty";
+        }
+        spr(R().sprite(name), ox2, oy2, os, os);
+        ox2 += os + ogap;
+      }
+    }
     for (int i = 0; i < (int)enemies.size(); ++i) {
       float x = enemyX(i, (int)enemies.size());
       center(enemies[i], x);
@@ -110,12 +138,19 @@ void App::drawCombat(bool top) {
   }
 
   // Energy orb left and end turn right, level with each other a little below the hand
-  // (~77% down, ~10% / ~87% across on RGDSplus).
-  Sprite orb = R().sprite("ui/energy_orb");
+  // (~77% down, ~10% / ~87% across on RGDSplus). Colour is the run's character
+  // (Character::energyColor; X1.5-X4.5).
+  Sprite orb = R().sprite(energyOrbSprite(run_.get()));
   const float ox = 32, oy = 185, od = 34;
   spr(orb, ox - od / 2, oy - od / 2, od, od);
   TextStyle et = ts(F12, cb->energy > 0 ? col::white : col::gray, CENTER);
   R().text(ox, oy - R().lineHeight(F12) / 2, num(cb->energy) + "/" + num(cb->maxEnergyNow()), et);
+  // X3.5: the Regent's star counter (Combat::stars, Character::alwaysShowStars) next to energy.
+  if (run_->character().alwaysShowStars || cb->stars > 0) {
+    const float sx = ox + od / 2 + 22, sy = oy;
+    spr(R().sprite("ui/star"), sx - 9, sy - 9, 18, 18);
+    R().text(sx + 12, sy - R().lineHeight(F12) / 2, num(cb->stars), ts(F12, col::white, LEFT));
+  }
   Sprite endTurn = R().sprite("ui/end_turn");
   const float ew = 64, eh = 32, ex = 278 - ew / 2, ey = oy - eh / 2;  // sprite is 2:1
   spr(endTurn, ex, ey, ew, eh, canAct ? 0xFFFFFFFF : 0x000000FF, canAct ? 0 : 0.5f);

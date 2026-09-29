@@ -15,18 +15,49 @@ static uint32_t rarityOutline(Rarity r) {
   }
 }
 
+// CardModel.BannerMaterialPath: Basic, Common and Token cards use the common material.
+static const char* bannerRarity(Rarity r) {
+  switch (r) {
+    case Rarity::Uncommon: return "uncommon";
+    case Rarity::Rare: return "rare";
+    case Rarity::Curse: return "curse";
+    case Rarity::Status: return "status";
+    default: return "common";
+  }
+}
+
+// The card's pool as its frame material key (CardPoolModel.EnergyColorName, except the Curse
+// pool's own frame): a character's cards keep that character's colour in any run.
+static std::string framePool(const Card* c) {
+  static std::map<std::string, std::string> owner;
+  if (owner.empty())
+    for (auto& id : db::characterIds())
+      for (auto& card : db::character(id).cardPool) owner.emplace(card, db::character(id).energyColor);
+  if (c->type == CardType::Curse) return "curse";
+  auto it = owner.find(c->id);
+  return it != owner.end() ? it->second : "colorless";
+}
+
 void App::drawCard(Card* c, float x, float y, float s, bool dim, bool desc, bool selected) {
   const char* kind = c->type == CardType::Attack ? "attack" : c->type == CardType::Power ? "power" : "skill";
-  bool status = c->type == CardType::Status || c->type == CardType::Curse;
   bool ancient = c->rarity == Rarity::Ancient;
   uint32_t tint = dim ? 0x000000FF : 0xFFFFFFFF;
   float blend = dim ? 0.45f : 0.f;
   if (selected) gfx::rect(x - 3 * s - 1, y - 3 * s - 1, 126 * s + 2, 175 * s + 2, 0xFFE070C0);
   spr(R().sprite("portrait/" + c->locKey), x + 8 * s, y + 16 * s, 104 * s, 78 * s, tint, blend);
-  Sprite frame = R().sprite(ancient ? "card/frame_ancient" : std::string("card/frame_") + kind);
-  spr(frame, x, y, 120 * s, 169 * s, status ? 0x606060FF : tint, status ? 0.5f : blend);
-  spr(R().sprite(std::string("card/border_") + kind), x - 3 * s, y + 4 * s, 126 * s, 96 * s, tint, blend);
-  Sprite banner = R().sprite(ancient ? "card/ancient_banner" : "card/banner");
+  // X1.5-X4.5 (NCard.UpdateVisuals): the frame takes the colour of the card's own pool
+  // (VisualCardPool.FrameMaterial), the portrait border and title banner that of its rarity
+  // (CardModel.BannerMaterial). build_assets bakes each combination.
+  Sprite frame = R().sprite(ancient ? "card/frame_ancient" : std::string("card/frame_") + kind + "_" + framePool(c));
+  if (!frame) frame = R().sprite(std::string("card/frame_") + kind);
+  spr(frame, x, y, 120 * s, 169 * s, tint, blend);
+  if (!ancient) {
+    Sprite border = R().sprite(std::string("card/border_") + kind + "_" + bannerRarity(c->rarity));
+    if (!border) border = R().sprite(std::string("card/border_") + kind);
+    spr(border, x - 3 * s, y + 4 * s, 126 * s, 96 * s, tint, blend);
+  }
+  Sprite banner = R().sprite(ancient ? "card/ancient_banner" : std::string("card/banner_") + bannerRarity(c->rarity));
+  if (!banner) banner = R().sprite("card/banner");
   spr(banner, x - 3 * s, y + 3 * s, 126 * s, 28 * s, tint, blend);
 
   // Title, shrunk to fit the banner. The outline marks rarity (F5); it needs at least a whole
@@ -52,7 +83,7 @@ void App::drawCard(Card* c, float x, float y, float s, bool dim, bool desc, bool
     spr(R().sprite("card/unplayable"), x - 5 * s, y - 5 * s, os, os, tint, blend);
   } else if (c->cost >= 0 || c->costsX) {
     float os = 30 * std::max(s, 0.6f);
-    spr(R().sprite("card/energy"), x - 7 * s, y - 7 * s, os, os, tint, blend);
+    spr(R().sprite(cardEnergySprite(framePool(c))), x - 7 * s, y - 7 * s, os, os, tint, blend);
     bool live = c->combat && c->combat->inProgress;
     int shownCost = live ? c->combat->energyCost(c) : c->cost;
     uint32_t cc = shownCost < c->canonicalCost ? col::green : shownCost > c->canonicalCost ? col::red : col::white;
