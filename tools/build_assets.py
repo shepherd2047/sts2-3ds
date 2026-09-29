@@ -1024,6 +1024,7 @@ def build(args):
     take('enchantments', lambda k: k.split('.')[0] in ENCHANTMENTS)
     take('static_hover_tips', lambda k: k.startswith('REPLAY'))  # the enchantment replay line
     take('merchant_room')
+    take('badges')  # M7: the end-of-run badges' names and descriptions (badges.h locKeys)
     take('acts', lambda k: k.endswith('.title'))  # S01: the act banner's name (ActModel.Title)
     take('ascension', lambda k: k.startswith('LEVEL_'))  # S04: the character select's ascension panel
     # S02: main menu buttons, its submenus (NSingleplayerSubmenu / NCompendiumSubmenu), the

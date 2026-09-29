@@ -16,8 +16,8 @@
 // Dropped vs. the C# RunHistory: platform_type, game_mode (no daily/custom yet, M11 can add it),
 // build_id, modifiers, multiplayer players (single player: the player fields are the record's own),
 // and most PlayerMapPointHistoryEntry stats (only GoldGained, which the score needs).
-// PORT NOTE: badges (RunHistoryPlayer.Badges, ScoreUtility.GetBadges) are M7's; the record keeps
-// everything the badge checks read from the path (room types and ids), so M7 can derive them.
+// Badges (RunHistoryPlayer.Badges, ScoreUtility.GetBadges) are computed by badges.h at the end of
+// the run (fromRun) and stored in the record (M7).
 //
 // Nothing here touches disk unless profiles::init() ran (profiles::diskEnabled()): automated
 // previews (STS_HIDDEN / STS_NO_SAVE), the headless sim and the tests never write a real profile.
@@ -55,7 +55,15 @@ struct MapPoint {
   PointType type = PointType::Unassigned;
   std::vector<Room> rooms;
   int goldGained = 0;  // PlayerMapPointHistoryEntry.GoldGained (PlayerCmd.GainGold)
-  bool operator==(const MapPoint&) const = default;
+  // Badge inputs (M7, badges.h), PlayerMapPointHistoryEntry.GoldSpent / DamageTaken / RestSiteChoices.
+  // NOT in run.sav (its format is unchanged): a path read back from run.sav has tracked == false,
+  // meaning these three are unknown for the point and the badges that need them skip it.
+  int goldSpent = 0;                       // gold paid at the merchant (LoseGold Spent)
+  int damageTaken = 0;                     // unblocked damage the player took (CreatureCmd.Damage)
+  std::vector<std::string> restChoices;    // rest site option ids: HEAL, SMITH, LIFT, DIG, COOK, KINDLE, CLONE
+  bool tracked = true;
+  // The badge inputs and `tracked` are not part of equality (a run.sav round trip drops them).
+  bool operator==(const MapPoint& o) const { return type == o.type && rooms == o.rooms && goldGained == o.goldGained; }
 };
 using Path = std::vector<std::vector<MapPoint>>;  // per act (RunState.MapPointHistory)
 
@@ -67,9 +75,18 @@ struct DeckCard {
   bool operator==(const DeckCard&) const = default;
 };
 
+// SerializableBadge: an obtained badge (badges.h). rarity = badges::BadgeRarity (1 bronze .. 3 gold).
+struct BadgeEntry {
+  std::string id;  // Badge.Id, e.g. "TINY_DECK"
+  int rarity = 0;
+  bool operator==(const BadgeEntry&) const = default;
+};
+
 // RunHistory + its (single) RunHistoryPlayer.
 struct RunRecord {
-  static constexpr int kVersion = 1;
+  // 2 (M7): per-point badge inputs (gold spent, damage taken, rest choices), the CCCCOMBO flag and
+  // the badges. Version 1 records still load (no badge data: tracked == false on every point).
+  static constexpr int kVersion = 2;
 
   uint64_t seq = 0;          // 1, 2, 3... per profile (set by append); higher = newer
   uint64_t seed = 0;         // Run::seed (the numeric seed; the typed seed text is not kept)
@@ -90,6 +107,9 @@ struct RunRecord {
   int maxPotionSlots = 3;
   int gold = 0, hp = 0, maxHp = 0;  // at the end (port addition, for the history screen)
   int score = 0;                    // ScoreUtility.CalculateScore(path, ascension, win)
+                                    // (the C# adds no badge bonus to the score)
+  bool cccCombo = false;            // ExtraFields.CccomboBadgeUnlocked: 20 cards in one turn
+  std::vector<BadgeEntry> badges;   // RunHistoryPlayer.Badges (empty when abandoned); badges.h
 
   std::string save() const;
   bool load(const std::string& data);  // false (and *this unchanged) if empty/garbled/future

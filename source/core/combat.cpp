@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstdio>
 
+#include "badges.h"
 #include "game.h"
 
 namespace sts {
@@ -386,6 +387,7 @@ Task<std::vector<DamageResult>> damage(std::vector<Creature*> targets, Dec amoun
     r.blocked = blockedAmt;
     r.blockBroken = blockBroken;
     r.fullyBlocked = fullyBlocked;
+    if (target->isPlayer) badges::noteDamageTaken(*c.run, r.unblocked);  // PlayerMapPointHistoryEntry.DamageTaken (M7)
     return r;
   };
   auto pushVisual = [&](const DamageResult& r, Creature* target, Dec modified) {
@@ -1186,6 +1188,7 @@ Task<> Combat::playCard(Card* card, Creature* target, bool autoPlay, bool forceE
     for (Model* m : listeners()) card->starXValue = m->modifyXValue(card, card->starXValue);  // Hook.ModifyXValue
   }
   ++cardsPlayedThisTurn;
+  badges::noteCardsPlayedThisTurn(*run, cardsPlayedThisTurn);  // CCCCOMBO badge (M7)
   removeFromPiles(card);
   play.push_back(card);
 

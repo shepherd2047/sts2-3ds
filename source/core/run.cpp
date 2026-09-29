@@ -5,6 +5,7 @@
 #include <ctime>
 #include <set>
 
+#include "badges.h"
 #include "game.h"
 #include "history.h"
 #include "progress.h"
@@ -578,6 +579,7 @@ void Run::start(uint64_t s, const std::string& charId, int ascensionLevel) {
   }
   // Run history (M2): RunState.MapPointHistory starts empty; StartTime is the wall clock.
   mapHistory.clear();
+  cccCombo = false;
   startTime = (int64_t)time(nullptr);
   runTime = 0;
   // Debug: STS_ACT=2|3 starts the run in that act.
@@ -1065,6 +1067,7 @@ Task<> Run::restSite() {
     }
     if (!done) continue;
     restUsed.push_back(opt);
+    badges::noteRestChoice(*this, opt);  // RestSiteChoices (M7, RESTFUL / RESTLESS)
     bool tent = hasRelic("MiniatureTent");
     if (!tent) break;
   }
