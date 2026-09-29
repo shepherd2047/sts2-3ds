@@ -341,7 +341,7 @@ and `Models.Powers\`.
 | X2.0-X2.5 | Defect | Orbs (Lightning, Frost, Dark, Plasma, Glass), channel/evoke, Focus, orb slots and their rendering on the top screen | X2.0 done (subagent), accepted 2026-09-28; X2.1 done (subagent), accepted 2026-09-28; X2.2 done (subagent), accepted 2026-09-28; X2.5 done, accepted 2026-09-28; X2.3a done (subagent), accepted 2026-09-28 (Feral/Iteration/Ftl approximate the missing card-play history (PORT NOTEs)); X2.3b done (subagent), accepted 2026-09-28 (status cards now fire the generated-card hook (reviewer fix)); X2.4 done (subagent), accepted 2026-09-28 |
 | X3.0-X3.5 | Regent | Stars (second resource with a HUD counter), Forge and Sovereign Blade, summons | X3.0 done (subagent), accepted 2026-09-28; X3.1 done (subagent), accepted 2026-09-28; X3.2 done (subagent), accepted 2026-09-28; X3.5 done, accepted 2026-09-28; X3.3a done (subagent), accepted 2026-09-28 (engine hook Combat::skillsFinishedThisTurn (LunarBlast); ManifestAuthority's colorless card waits for A1a); X3.3b done (subagent), accepted 2026-09-28 (Quasar/SpectrumShift wait for A1a; hooks cardPlaysFinished/starsGained/cardsGenerated); X3.4 done (subagent), accepted 2026-09-28 (BundleOfJoy / HeirloomHammer pick wait for A1a) |
 | X4.0-X4.5 | Necrobinder | Osty (companion creature with its own HP, targeting, death), Doom, Souls | X4.0 done (subagent), accepted 2026-09-28; X4.1 done (subagent), accepted 2026-09-28; X4.2 done (subagent), accepted 2026-09-28; X4.5 done, accepted 2026-09-28; X4.3a done (subagent), accepted 2026-09-28 (Debilitate doubles Vulnerable/Weak in powers.h (C# order); DeathMarch/DeathsDoor/Fetch keep their own per-turn records); X4.3b done (subagent), accepted 2026-09-28 (hooks afterDamageGiven, afterCardPlayedLate); X4.4 done (subagent), accepted 2026-09-28 (SweepingGaze token) |
-| X6 | All characters | ColorfulPhilosophers, cross-character Orobas options, per-character Ancient dialogue lines, Random character, per-character act-transition quotes | todo |
+| X6 | All characters | ColorfulPhilosophers, cross-character Orobas options, per-character Ancient dialogue lines, Random character, per-character act-transition quotes | in progress (subagent) |
 
 That is 7 packages per character (X*.0, .1, .2, .3a, .3b, .4, .5), X1-X4 in order. X6
 needs X1-X4. Every character needs track F done first, so their cards are drawn
@@ -413,9 +413,9 @@ their `clone()` must call `adoptEnchantment()`.
 | M3 | Timeline / epochs engine | – | – | n/a (owner: everything unlocked) |
 | M4 | Timeline screen + unlock reveals | – | – | n/a (owner: everything unlocked) |
 | M5 | Achievements (22, `Achievements\`): checks, toast, achievement list page | content + UI | M1 | todo |
-| M6 | Stats screen: general and per-character stats (`Nodes.Screens.StatsScreen`) + run history viewer | UI | M2, F3 | todo |
+| M6 | Stats screen: general and per-character stats (`Nodes.Screens.StatsScreen`) + run history viewer | UI | M2, F3 | in progress (subagent) |
 | M7 | Score and badges at the end of a run (28 badges, `Models.Badges`), used by S23 | content | M2 | done (subagent), accepted 2026-09-29: badges.h/.cpp, 19 single-player badges (the C# pool has 23, 4 multiplayer), stored in the history record (v2); no score bonus in the C#; per-point badge data is in run.sav since version 7 |
-| M8 | Card library: filters by character, type and rarity; upgrade toggle; seen/locked | UI | M1, F5 | todo |
+| M8 | Card library: filters by character, type and rarity; upgrade toggle; seen/locked | UI | M1, F5 | in progress (subagent) |
 | M9 | Relic collection + potion lab | UI | M1 | todo |
 | M10 | Bestiary: monster list, Spine viewer, moves | UI | M1 | todo |
 | M11 | Custom run: 16 modifiers (`Models.Modifiers`), seed entry with the 3DS keyboard, seeded runs | engine + UI | M1 | todo |
@@ -427,7 +427,7 @@ their `clone()` must call `adoptEnchantment()`.
 | id | Package | Kind | Needs | Status |
 |---|---|---|---|---|
 | Y1 | Settings store `settings.sav` + logic: fast mode, screen shake, BGM/SFX/ambience volume, language, run timer, text effects, long-press confirm, common tooltips, hand card count, reset tutorials, delete data | engine | – | done (subagent), accepted 2026-09-28: `settings_store.h/.cpp` (C# SettingsSave + PrefsSave merged into settings.sav), loaded in App::init; volumes not wired to audio yet (U track), no settings screen yet (S21) |
-| Y2 | Pause menu (START during a run): resume, settings, deck, compendium, save & quit, abandon run (with confirm) | UI | Y1, F3 | todo |
+| Y2 | Pause menu (START during a run): resume, settings, deck, compendium, save & quit, abandon run (with confirm) | UI | Y1, F3 | in progress (subagent) |
 | Y3 | Languages: bake English + 简体中文 loc and fonts, switch at runtime | tools + UI | Y1 | todo |
 | Y4 | Profiles: 3 slots on SD, rename and delete; the run save and progress files are per profile | engine | M1 | done (subagent, Opus), accepted 2026-09-29: profiles.h/.cpp; saves/ (PC) or sdmc:/3ds/sts2-3ds/ (3DS): profile.sav + profile<N>/run.sav, progress.sav; settings.sav global; old top-level saves migrate to profile 1; progress now saved (save points, run end, returnTitle), abandon wired; API for S03: profiles::info/rename/select/remove, App::selectProfile/deleteProfile |
 | Y5 | 3DS system behaviour: sleep when the lid is closed, HOME menu, safe saves on power loss, SD errors shown in a dialog | 3DS | – | todo |
