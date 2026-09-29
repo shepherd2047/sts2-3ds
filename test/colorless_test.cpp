@@ -247,6 +247,74 @@ int main() {
     CHECK(cards.size() == 3 && cards[0]->id != cards[1]->id && db::isColorless(cards[2]->id));
   }
 
+  {  // A1b: MindBlast / Omnislice / Impatience / Production / Prowess / PrepTime numbers.
+    Fight f;
+    Creature* e = f.enemy(0);
+    int draw = (int)f.c->draw.size();
+    int hp = e->hp;
+    f.play(f.fresh("MindBlast"), e);
+    CHECK(hp - e->hp == draw);
+    hp = e->hp;
+    f.play(f.fresh("Omnislice"), e);
+    CHECK(hp - e->hp == 8);
+    for (size_t i = 1; i < f.c->enemies.size(); ++i) CHECK(f.c->enemies[i]->hp == 500 - 8);
+    for (Card* k : std::vector<Card*>(f.c->hand)) if (k->type == CardType::Attack) { f.c->removeFromPiles(k); f.c->discard.push_back(k); }
+    int hand = (int)f.c->hand.size();
+    f.play(f.fresh("Impatience"), nullptr);
+    CHECK((int)f.c->hand.size() >= hand + 1);  // drew 2 (may draw attacks), minus itself
+    f.play(f.fresh("Prowess"), nullptr);
+    CHECK(f.c->player->powerAmount<StrengthPower>() == 1 && f.c->player->powerAmount<DexterityPower>() == 1);
+    f.play(f.fresh("PrepTime", true), nullptr);
+    CHECK(f.c->player->power("PrepTimePower") && f.c->player->power("PrepTimePower")->amount == 6);
+  }
+  {  // PanicButton: block, then no card block; Nostalgia: first Attack / Skill goes to the draw pile top.
+    Fight f;
+    f.c->player->block = 0;
+    f.play(f.fresh("PanicButton"), nullptr);
+    CHECK(f.c->player->block == 30);
+    f.play(f.fresh("Finesse"), nullptr);
+    CHECK(f.c->player->block == 30);
+    Fight g;
+    g.play(g.fresh("Nostalgia"), nullptr);
+    Card* a = g.fresh("Finesse");
+    Card* b = g.fresh("Finesse");
+    g.play(a, nullptr);
+    CHECK(g.c->pileOf(a) == Pile::Draw);
+    g.play(b, nullptr);
+    CHECK(g.c->pileOf(b) == Pile::Discard);
+  }
+  {  // HiddenGem: a draw-pile card gains 2 replays; Purity exhausts the chosen cards; Jackpot adds 0-cost cards.
+    Fight f;
+    f.play(f.fresh("HiddenGem"), nullptr);
+    int replays = 0;
+    for (Card* k : f.c->draw) replays += k->baseReplayCount;
+    CHECK(replays == 2);
+    Card* p = f.fresh("Purity");
+    f.fire(p, nullptr);
+    pump([&] { return f.choosing(); });
+    CHECK(f.c->choice.minCount == 0 && f.c->choice.maxCount == 3);
+    Card* v = f.c->choice.options[0];
+    f.c->choice.result.fire(std::vector<Card*>{v});
+    pump([&] { return f.idle(); });
+    CHECK(f.c->pileOf(v) == Pile::Exhaust);
+    int hand = (int)f.c->hand.size();
+    f.play(f.fresh("Jackpot", true), f.enemy(0));
+    int added = (int)f.c->hand.size() - hand;
+    CHECK(added == 3);
+    f.play(f.fresh("JackOfAllTrades"), nullptr);
+    CHECK(f.count(Pile::Exhaust, "JackOfAllTrades") == 1);
+  }
+  {  // HandOfGreed: gold only on a kill.
+    Fight f;
+    Creature* e = f.enemy(0);
+    int gold = f.r->gold;
+    f.play(f.fresh("HandOfGreed"), e);
+    CHECK(f.r->gold == gold);
+    e->hp = 10;
+    f.play(f.fresh("HandOfGreed"), e);
+    CHECK(f.r->gold == gold + 20);
+  }
+
   printf("%d checks, %d failed\n", checks, failures);
   return failures ? 1 : 0;
 }

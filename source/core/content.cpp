@@ -642,6 +642,7 @@ void registerDefect();       // char_defect.cpp
 void registerAscension();    // content_ascension.cpp
 void registerMiscCards();    // content_cards_misc.cpp
 void registerColorlessA();   // colorless_cards_a.cpp (+ colorless_pool.cpp)
+void registerColorlessB();   // colorless_cards_b.cpp
 
 namespace db {
 
@@ -749,6 +750,7 @@ void init() {
   registerAscension();
   registerMiscCards();
   registerColorlessA();
+  registerColorlessB();
   registerRelics();
   registerEvents();
   registerAncients();
