@@ -6,7 +6,10 @@ namespace ui {
 // ================================================================ settings and end
 
 void App::drawSettings(bool top) {
-  drawSceneBg(top, 0.8f);
+  // S02: opened from the main menu, the page sits on the menu background and has no run to abandon.
+  const bool fromMenu = run_->screen == Screen::Title;
+  if (fromMenu) drawMenuBg(top, 0.8f);
+  else drawSceneBg(top, 0.8f);
   if (top) {
     panel(36, 26, kTop - 72, 185);
     R().text(kTop / 2, 42, abandonConfirm_ ? "放弃本局？" : "设置", ts(F16, col::gold, CENTER, kTop - 96, 1.35f));
@@ -28,7 +31,7 @@ void App::drawSettings(bool top) {
   button(18, 14, 284, 36, std::string("快速模式：") + (fastMode_ ? "开" : "关"), ID_FAST_MODE, true, fastMode_);
   button(18, 58, 284, 36, std::string("屏幕震动：") + (screenShake_ ? "开" : "关"), ID_SCREEN_SHAKE, true, screenShake_);
   button(18, 102, 284, 36, "音量：音频尚未接入", ID_NONE, false);
-  button(18, 150, 284, 34, "放弃本局", ID_ABANDON);
+  if (!fromMenu) button(18, 150, 284, 34, "放弃本局", ID_ABANDON);
   button(90, 202, 140, 32, "返回", ID_BACK);
 }
 

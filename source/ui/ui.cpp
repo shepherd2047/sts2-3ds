@@ -59,6 +59,10 @@ bool App::hasSave() const {
   return savesEnabled() && gfx::readSave(kSaveName, data) && !data.empty();
 }
 
+bool App::readRunSave(std::string& data) const {  // S02: the main menu's continue-run info
+  return savesEnabled() && gfx::readSave(kSaveName, data) && !data.empty();
+}
+
 void App::startRun(bool resume) {
   run_ = std::make_unique<Run>();
   bool loaded = false;
@@ -103,6 +107,8 @@ void App::startRun(bool resume) {
   abandonConfirm_ = false;
   titleCharacter_ = false;
   titleSelection_ = 0;
+  menuSub_ = 0;
+  continueInfo_.clear();
   R().releaseTexture("gfx/bg_menu.t3t");
   for (auto& id : db::characterIds()) R().releaseTexture("gfx/bg_character_" + db::character(id).energyColor + ".t3t");
 }
@@ -128,6 +134,8 @@ void App::returnTitle() {
   detailRelic_ = nullptr;
   titleCharacter_ = false;
   titleSelection_ = 0;
+  menuSub_ = menuModal_ = 0;
+  continueInfo_.clear();
   hasSave_ = hasSave();
 }
 

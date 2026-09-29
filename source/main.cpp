@@ -7,7 +7,7 @@ int main() {
   if (!gfx::init()) return 1;
   ui::App app;
   bool ok = app.init();
-  while (gfx::running()) {
+  while (gfx::running() && !app.quitRequested()) {  // 退出 on the main menu (S02)
     gfx::Input in = gfx::input();
     if ((in.down & gfx::BTN_START) && (in.held & gfx::BTN_SELECT)) break;
     double dt = gfx::dt();
