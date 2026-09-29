@@ -143,6 +143,8 @@ Task<> Run::runEvent(std::unique_ptr<Event> e) {
   currentEvent = std::move(e);
   Event* ev = currentEvent.get();
   for (Model* m : listeners()) co_await m->afterRoomEntered(RoomType::Unknown);
+  co_await ev->onStart();
+  if (ev->finished || died) { currentEvent.reset(); co_return; }  // custom layouts leave without a proceed page
   for (;;) {
     screen = Screen::Event;
     int pick = co_await eventChoice.next();
@@ -273,7 +275,9 @@ Task<> Run::combatRewards(RoomType type) {
   // EncounterModel.Min/MaxGoldReward: 10-20 / 35-45 / 100, times 0.75 (truncated) with Poverty.
   auto poor = [&](int v) { return hasAscension(kPoverty) ? (int)(v * 0.75) : v; };
   int baseGold = type == RoomType::Boss ? poor(100)
-                : type == RoomType::Elite ? rr.nextInt(poor(35), poor(45) + 1) : rr.nextInt(poor(10), poor(20) + 1);
+                : type == RoomType::Elite ? rr.nextInt(poor(35), poor(45) + 1)
+                : rewardGold >= 0 ? rr.nextInt(poor(rewardGold), poor(rewardGold) + 1) : rr.nextInt(poor(10), poor(20) + 1);
+  rewardGold = -1;
   bool finalBoss = type == RoomType::Boss && actIndex + 1 >= kActs;
   // The fight is freed and the screen leaves it in the same step (nothing may wait in
   // between: the UI still shows Screen::Combat until then).
@@ -316,6 +320,13 @@ Task<> Run::combatRewards(RoomType type) {
       rewardItems.push_back(std::move(b));
     }
   }
+  for (auto& rel : extraRewardRelics) {  // EnterCombatWithoutExitingEvent's extra RelicRewards
+    RewardItem item;
+    item.kind = RewardKind::Relic;
+    item.relic = std::move(rel);
+    rewardItems.push_back(std::move(item));
+  }
+  extraRewardRelics.clear();
   // Amethyst Aubergine: TryModifyRewards adds its own flat GoldReward, not a bonus folded into
   // the base one -- so it is its own row here too.
   if (!finalBoss) for (auto& rel : relics) {

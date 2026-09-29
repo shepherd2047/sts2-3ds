@@ -990,6 +990,7 @@ struct Event {
   virtual bool isAllowed(Run&) { return true; }                 // IsAllowed
   virtual std::vector<EventOption> initialOptions() = 0;        // GenerateInitialOptions
   virtual void calculateVars() {}                               // CalculateVars (before the first page)
+  virtual Task<> onStart() { return {}; }                       // custom-layout events (FakeMerchant): runs before the option loop; setting `finished` ends the event
 
   Rng& rng() { return *rngPtr; }
   Creature* owner();
@@ -1131,6 +1132,10 @@ struct Run {
   Task<> gainMaxHp(int amount);
   Task<> loseMaxHp(int amount);
   Task<bool> eventFight(const std::string& encounterId);  // fight + monster rewards, back to the event
+  // EnterCombatWithoutExitingEvent extras for the next combatRewards: the encounter's fixed gold
+  // (Min/MaxGoldReward, -1 = the room default) and preset RelicRewards (FakeMerchant).
+  int rewardGold = -1;
+  std::vector<std::unique_ptr<Relic>> extraRewardRelics;
   Task<> combatRewards(RoomType type);  // RewardsSet after a won fight
   Task<> restSite();
   bool died = false;
