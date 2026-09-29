@@ -289,7 +289,7 @@ screenshots of both screens, and tick the U table at the end of this file.
 | id | U | Screen | Needs | Status |
 |---|---|---|---|---|
 | S01 | U01 | Boot splash, loading, act transition title card ("第二幕 蜂巢") | F3 | done (subagent, Opus), accepted 2026-09-29: boot.cpp (MegaCrit logo Spine, loading bar; skipped under STS_HIDDEN/STS_FIXED_STEP/STS_SCRIPT, STS_BOOT=1 forces it), act_title.cpp (NActBanner: game fonts pre-rendered, "阶段N / <act>") |
-| S02 | U02 | Main menu: tall background across both screens, logo on top, buttons at 1.65× on the bottom (继续 / 单人 / 图鉴 / 统计 / 设置 / 退出), submenus | F3 | in progress (subagent) |
+| S02 | U02 | Main menu: tall background across both screens, logo on top, buttons at 1.65× on the bottom (继续 / 单人 / 图鉴 / 统计 / 设置 / 退出), submenus | F3 | done (subagent, Opus), accepted 2026-09-29: main menu per NMainMenu (logo top, run info when a save exists, 继续游戏/放弃当前游戏 replace 单人模式 as in the game), singleplayer + compendium submenus (unported entries locked "未完成"), quit |
 | S03 | U03 | Profiles: 3 slots, rename (3DS software keyboard), delete + warning | Y4 | todo |
 | S04 | U04 | Character select: art and description on top; the 5 characters + Random, ascension, seed and start/back on the bottom; locked characters | F3, C10 | done, accepted 2026-09-28 (Mac): `drawCharacterSelect` in `title.cpp`; ascension 0-10 all open and the seed shown only (Y / tap re-rolls), both owner decisions; no locked characters (everything unlocked) |
 | S05 | U05 | Custom run: modifier list, character, seed, confirm | M11 | todo |
@@ -437,7 +437,7 @@ their `clone()` must call `adoptEnchantment()`.
 | id | Package | Kind | Needs | Status |
 |---|---|---|---|---|
 | U1 | Extraction: FMOD `banks/desktop/*.bank` (FSB5) and `*.mp3` → DSP-ADPCM in romfs, with a list of events and names; keep the size in budget | tools, *Opus* | – | done (subagent, Opus), accepted 2026-09-29: tools/audio_extract.py + audio_dsp.py ("S2AD" DSP-ADPCM, index.txt of 591 FMOD events + 52 one-shots; vgmstream via Homebrew); 265 MB mono (music/amb 22 kHz, sfx 32 kHz) -> goes to the SD card, not romfs (owner decision); no loop points in the data |
-| U2 | Audio engine: 3DS ndsp streaming of ADPCM music from romfs, SFX voices; SDL backend decodes the same files; SDL backend | platform | U1 | in progress (subagent) |
+| U2 | Audio engine: 3DS ndsp streaming of ADPCM music from romfs, SFX voices; SDL backend decodes the same files; SDL backend | platform | U1 | done (subagent, Opus), accepted 2026-09-29: source/audio/ (audio.h API: playSfx/playMusic/playAmbience with crossfade, per-bus volume), audio_3ds.cpp (ndsp, DSP decodes ADPCM, 8 SFX voices + 4 streaming slots on a thread), audio_sdl.cpp; files from sdmc:/3ds/sts2-3ds/audio/ or ./audio/ (STS_AUDIO_DIR); debug STS_MUSIC / STS_TAP_SFX in main.cpp (U3/U4 remove it); not heard on hardware yet |
 | U3 | Music routing: title, each act's map and fights, elite, boss, shop, rest, Ancient, victory, death; crossfades | UI | U2 | todo |
 | U4 | SFX: cards, hits, block, buffs, gold, relics, potions and UI controls, mapped from the C# `SfxCmd` names | content | U2 | todo |
 | U5 | Ambience per room, and wiring the volume sliders | UI | U3, Y1 | todo |
