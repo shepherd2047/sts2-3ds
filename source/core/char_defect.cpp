@@ -10,6 +10,7 @@ void registerDefectPotions();     // char_defect_relics.cpp
 void registerDefectCommonCards(); // char_defect_cards.cpp
 void registerDefectUncommonCards1(); // char_defect_cards_uncommon1.cpp
 void registerDefectUncommonCards2(); // char_defect_cards_uncommon2.cpp
+void registerDefectRareCards();      // char_defect_cards_rare.cpp
 
 namespace {
 template <class T> void regOrbType() { db::registerOrb(T::kId, [] { return std::unique_ptr<Orb>(new T()); }); }
@@ -72,6 +73,7 @@ void registerDefect() {
   registerDefectCommonCards();
   registerDefectUncommonCards1();
   registerDefectUncommonCards2();
+  registerDefectRareCards();
   registerDefectRelics();
   registerDefectPotions();
 }

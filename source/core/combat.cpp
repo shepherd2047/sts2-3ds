@@ -729,6 +729,7 @@ Task<> channelOrb(Combat& c, std::unique_ptr<Orb> orb) {
   c.orbQueue.push_back(std::move(orb));
   // PORT NOTE: CustomScaledWait(0.1, 0.25) collapses to a fixed wait (single player: always "IsMe").
   co_await scaledWait(0.1, 0.25);
+  if (raw->id == "LightningOrb") ++c.lightningOrbsChanneled;
   for (Model* m : c.listeners()) co_await m->afterOrbChanneled(raw);
 }
 
@@ -1009,6 +1010,7 @@ Task<> Combat::setupPlayerTurn() {
   cardPlaysFinishedThisTurn = 0;
   starsGainedThisTurn = 0;
   shivPlaysFinishedThisTurn = 0;
+  energySpentThisTurn = 0;
   for (Model* m : listeners()) co_await m->afterEnergyReset();
   for (Model* m : listeners()) co_await m->beforeHandDraw();
   Dec handDraw = 5;
@@ -1175,6 +1177,7 @@ Task<> Combat::playCard(Card* card, Creature* target, bool autoPlay, bool forceE
     playCount = n;
   }
   for (Model* m : countModifiers) co_await m->afterModifyingCardPlayCount(card);
+  if (spent > 0) energySpentThisTurn += spent;
   if (spent > 0) for (Model* m : listeners()) co_await m->afterEnergySpent(card, spent);
   if (starsSpent > 0) for (Model* m : listeners()) co_await m->afterStarsSpent(starsSpent);  // CardModel.SpendStars
 
