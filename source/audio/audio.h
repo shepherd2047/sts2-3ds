@@ -16,6 +16,8 @@ void shutdown();  // before gfx::shutdown
 bool available();  // index loaded and the backend is running
 void update(double dt);  // once per frame: fades
 
+// Names below: an index event name, a file id, or a file's path under the audio directory
+// ("music/sts2_merchant_act1_v2.adpcm", stable across re-extractions unlike the numeric ids).
 // A sound effect: an index event name ("event:/sfx/block_gain", "blunt_attack.mp3") or a file
 // id. Each of the event's groups plays one randomly chosen alternative, all at once.
 // Returns false when nothing could be played (unknown name, missing file, no audio).

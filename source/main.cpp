@@ -1,5 +1,3 @@
-#include <cstdlib>
-
 #include "audio/audio.h"
 #include "core/task.h"
 #include "gfx/gfx.h"
@@ -11,14 +9,11 @@ int main() {
   ui::App app;
   bool ok = app.init();
   audio::init();  // silent no-op when the audio folder is missing
-  // U2 debug hook until U3/U4 route game events: STS_MUSIC=<id> plays at startup (audio::init)
-  // and every tap plays STS_TAP_SFX (default: a UI click).
-  const char* tapSfx = getenv("STS_MUSIC") ? (getenv("STS_TAP_SFX") ? getenv("STS_TAP_SFX") : "event:/sfx/ui/clicks/ui_click") : nullptr;
+  // Music and ambience follow the game state (ui/music_router.cpp, called from App::update).
   while (gfx::running() && !app.quitRequested()) {  // 退出 on the main menu (S02)
     gfx::Input in = gfx::input();
     if ((in.down & gfx::BTN_START) && (in.held & gfx::BTN_SELECT)) break;
     double dt = gfx::dt();
-    if (tapSfx && in.touchDown) audio::playSfx(tapSfx);
     audio::update(dt);
     gfx::beginFrame();
     if (ok) {
