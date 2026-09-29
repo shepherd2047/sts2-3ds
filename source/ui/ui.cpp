@@ -125,6 +125,21 @@ void App::startRun(bool resume) {
     for (auto& id : run_->character().cardPool)
       if (auto c = db::card(id)) run_->deck.push_back(std::move(c));
   }
+  if (const char* list = getenv("STS_DECK")) {  // debug: exact deck, "Id,Id+,..." (+ = upgraded)
+    run_->deck.clear();
+    std::string s = list;
+    for (size_t a = 0; a < s.size();) {
+      size_t b = s.find(',', a);
+      std::string id = s.substr(a, b == std::string::npos ? std::string::npos : b - a);
+      bool up = !id.empty() && id.back() == '+';
+      if (up) id.pop_back();
+      if (auto c = db::card(id)) {
+        if (up) c->upgrade();
+        run_->deck.push_back(std::move(c));
+      }
+      a = b == std::string::npos ? s.size() : b + 1;
+    }
+  }
   if (const char* hp = getenv("STS_HP"))  // debug: start wounded (rest site previews)
     run_->player->hp = std::clamp(atoi(hp), 1, run_->player->maxHp);
   Scheduler::get().spawn(run_->main());

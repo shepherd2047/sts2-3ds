@@ -5,6 +5,43 @@
 
 namespace ui {
 
+namespace {
+// S12: the hand-select prompt (C# NPlayerHand._selectionHeader = prefs.Prompt with Amount /
+// MinCount / MaxCount). Rules pass a loc key, a card/relic id or plain text.
+std::string handSelectPrompt(const CardChoice& ch, int minN, int maxN) {
+  const std::string& p = ch.prompt;
+  std::string s;
+  if (R().hasLoc(p)) s = L(p);
+  else if (R().hasLoc("cards." + p + ".selectionScreenPrompt")) s = L("cards." + p + ".selectionScreenPrompt");
+  else if (R().hasLoc("relics." + p + ".selectionScreenPrompt")) s = L("relics." + p + ".selectionScreenPrompt");
+  else if (R().hasLoc("cards." + p + ".title")) s = "[gold]" + L("cards." + p + ".title") + "[/gold]：选择[blue]" + num(maxN) + "[/blue]张牌";
+  else s = p;
+  auto sub = [&](const std::string& key, int v) {
+    for (size_t at; (at = s.find(key)) != std::string::npos;) s.replace(at, key.size(), num(v));
+  };
+  sub("{Amount}", maxN);
+  sub("{MinCount}", minN);
+  sub("{MaxCount}", maxN);
+  return s;
+}
+
+// A new hand choice resets the picks and focuses the first card that can be picked.
+HandSelect& syncHandSelect(const Combat& cb, int& sel) {
+  HandSelect& hs = handSel();
+  if (hs.options != cb.choice.options) {
+    hs = HandSelect{};
+    hs.options = cb.choice.options;
+    sel = -1;
+    for (int i = 0; i < (int)cb.hand.size() && sel < 0; ++i)
+      if (hs.has(cb.hand[i])) sel = i;
+    widgets::setFocus(-1);
+  }
+  return hs;
+}
+
+constexpr int kHsClearId = 0x5120, kHsConfirmId = 0x5121;  // widget ids (bottom action bar)
+}  // namespace
+
 void App::drawCombat(bool top) {
   Combat* cb = run_->combat.get();
   if (!cb) return;
@@ -13,7 +50,9 @@ void App::drawCombat(bool top) {
   int n = (int)cb->hand.size();
   if (sel_ >= n) sel_ = -1;
   if (target_ >= (int)alive.size()) target_ = 0;
-  Card* selCard = sel_ >= 0 ? cb->hand[sel_] : nullptr;
+  const bool selecting = isHandSelect(*cb);  // S12 hand select (U14)
+  if (selecting) syncHandSelect(*cb, sel_);
+  Card* selCard = sel_ >= 0 && !selecting ? cb->hand[sel_] : nullptr;
   bool canAct = cb->playerPhase && cb->actions.waiting();
 
   // Which card aims where this frame.
@@ -94,6 +133,67 @@ void App::drawCombat(bool top) {
       st.scale = 1.3f;
       R().text(x + f.dx, y - f.t * 40, f.text, st);
     }
+    if (selecting) {
+      // S12 top screen: the battlefield dimmed under the prompt, the k / N counter at the left,
+      // the focused hand card large in the middle, the picked cards listed at the right.
+      const HandSelect& hs = handSel();
+      const int maxN = handSelectMax(*cb), minN = handSelectMin(*cb), k = (int)hs.picks.size();
+      const bool valid = k >= minN && k <= maxN;
+      gfx::rect(0, 18, kTop, kH - 18, 0x000000B0);
+      TextStyle pt = ts(F16, col::white, CENTER, kTop - 24);
+      std::string prompt = handSelectPrompt(cb->choice, minN, maxN);
+      float ph = 0;
+      R().measure(prompt, pt, &ph);
+      R().text(kTop / 2, 22, prompt, pt);
+      const float lineY = 22 + std::max(ph, R().lineHeight(F16)) + 3;
+      gfx::rect(kTop / 2 - 100, lineY, 200, 2, style::kPanelHi);
+
+      const float cs = 1.f, cw = kCardW * cs, ch = kCardH * cs;
+      const float cx = (kTop - cw) / 2, cy = std::min(kH - ch - 6, std::max(62.f, lineY + 8));
+      const float sideY = cy + 8, sideW = 118;
+      // Counter.
+      {
+        const float x = 10, h = 104;
+        widgets::panel("ui/hover_tip", x, sideY, sideW, h);
+        R().text(x + sideW / 2, sideY + 8, "已选", ts(F12, col::gold, CENTER));
+        TextStyle kt = ts(F16, valid ? col::gold : col::white, CENTER, 0, 1.6f);
+        R().text(x + sideW / 2, sideY + 26, num(k) + " / " + num(maxN), kt);
+        std::string range = minN == maxN ? "需选 " + num(maxN) + " 张"
+                            : minN == 0  ? "最多 " + num(maxN) + " 张，可不选"
+                                         : "选 " + num(minN) + "–" + num(maxN) + " 张";
+        R().text(x + sideW / 2, sideY + 60, range, ts(F12, col::gray, CENTER, sideW - 12));
+        if (k < minN) R().text(x + sideW / 2, sideY + 80, "还需选 " + num(minN - k) + " 张", ts(F12, col::red, CENTER));
+      }
+      // Picked cards, in pick order.
+      {
+        const float x = kTop - 10 - sideW;
+        const int rows = std::max(1, std::min(k, 8));
+        widgets::panel("ui/hover_tip", x, sideY, sideW, 30 + rows * 15.f);
+        R().text(x + sideW / 2, sideY + 8, "已选的牌", ts(F12, col::gold, CENTER));
+        if (k == 0) R().text(x + sideW / 2, sideY + 26, "（无）", ts(F12, col::gray, CENTER));
+        for (int i = 0; i < k && i < 8; ++i) {
+          std::string name = i == 7 && k > 8 ? "…" : num(i + 1) + ". " + cardTitle(hs.picks[i]);
+          gfx::pushClip(x + 6, sideY + 24 + i * 15.f, sideW - 12, 15);
+          R().text(x + 8, sideY + 25 + i * 15.f, name, ts(F12, col::white));
+          gfx::popClip();
+        }
+      }
+      // The focused card, readable.
+      Card* fc = sel_ >= 0 && sel_ < n ? cb->hand[sel_] : nullptr;
+      if (fc) {
+        bool ok = hs.has(fc), pk = hs.picked(fc);
+        drawCard(fc, cx, cy, cs, !ok, true, pk);
+        std::string tag = pk ? "已选中" : ok ? "" : "不可选";
+        if (!tag.empty()) {
+          TextStyle tt = ts(F12, pk ? col::gold : col::gray, CENTER);
+          float tw = R().measure(tag, tt) + 14;
+          gfx::rect(kTop / 2 - tw / 2, cy + ch - 20, tw, 16, 0x000000D0);
+          R().text(kTop / 2, cy + ch - 19, tag, tt);
+        }
+      } else {
+        R().text(kTop / 2, cy + ch / 2 - 8, "←→ 或触摸下屏选择手牌", ts(F12, col::gray, CENTER));
+      }
+    }
     drawTopBar();
     if (cb->bannerTime > 0) {
       cb->bannerTime -= 1.f / 60;
@@ -122,6 +222,81 @@ void App::drawCombat(bool top) {
     chooseOneDraw(combatChooseOneSpec(), false);
     return;
   }
+  if (selecting) {
+    // S12 bottom screen: the fanned hand stays (C# moves the hand in front of a backstop);
+    // pickable cards bright, others dimmed, picked ones raised with their pick number;
+    // 重选 left, the counter centre, 确认 right (enabled only for a legal count).
+    HandSelect& hs = handSel();
+    const int maxN = handSelectMax(*cb), minN = handSelectMin(*cb), k = (int)hs.picks.size();
+    const bool valid = k >= minN && k <= maxN && cb->choice.result.waiting();
+    gfx::rect(0, 0, kBot, kH, 0x00000070);
+    gfx::Input in = pauseOpen_ ? gfx::Input{} : gfx::input();
+    {
+      int fo = widgets::focused();
+      if (fo != kHsClearId && fo != kHsConfirmId) widgets::setFocus(-1);
+    }
+    const int prevFocus = widgets::focused();
+    widgets::beginFrame(in);
+    // The D-pad walks the hand (updateCombat) while no button is focused; down goes to the
+    // bar, up comes back.
+    const uint32_t dpad = gfx::BTN_LEFT | gfx::BTN_RIGHT | gfx::BTN_UP | gfx::BTN_DOWN;
+    if (in.down & dpad) {
+      if (prevFocus < 0) widgets::setFocus((in.down & gfx::BTN_DOWN) ? (valid ? kHsConfirmId : k > 0 ? kHsClearId : -1) : -1);
+      else if (in.down & gfx::BTN_UP) widgets::setFocus(-1);
+    }
+    R().text(kBot / 2, 4, handSelectPrompt(cb->choice, minN, maxN), ts(F12, col::white, CENTER, kBot - 16));
+
+    auto flying = [&](Card* c) {
+      for (auto& f : flights_) if (f.card == c) return true;
+      return false;
+    };
+    drawGhosts();
+    const bool padOnHand = widgets::usingPad() && widgets::focused() < 0;
+    // Left to right (right cards overlap left ones), arriving cards next, the focused card last.
+    for (int pass = 0; pass < 3; ++pass)
+      for (int i = 0; i < n; ++i) {
+        Card* c = cb->hand[i];
+        if (flying(c)) continue;
+        auto it = poses_.find(c);
+        if (it == poses_.end() || it->second.delay > 0) continue;
+        const Pose& p = it->second;
+        int want = i == sel_ ? 2 : p.drawT < 1 ? 1 : 0;
+        if (want != pass) continue;
+        bool ok = hs.has(c), pk = hs.picked(c);
+        float w = kCardW * p.s, h = kCardH * p.s, x = p.x - w / 2, y = p.y - h / 2;
+        gfx::pushTransform(gfx::Affine::rotateAround(p.x, p.y, p.angle));
+        drawCard(c, x, y, p.s, !ok, true, pk);
+        if (pk) {
+          int order = (int)(std::find(hs.picks.begin(), hs.picks.end(), c) - hs.picks.begin()) + 1;
+          const float bx = x + w - 5, by = y + 5;  // top-right corner, clear of cost and title
+          gfx::circle(bx, by, 8, style::kFocus);
+          R().text(bx, by - R().lineHeight(F12) / 2, num(order), ts(F12, 0x2A1A08FF, CENTER));
+        }
+        if (i == sel_ && padOnHand) {
+          const float t = 2;
+          gfx::rect(x - t, y - t, w + 2 * t, t, style::kFocus);
+          gfx::rect(x - t, y + h, w + 2 * t, t, style::kFocus);
+          gfx::rect(x - t, y - t, t, h + 2 * t, style::kFocus);
+          gfx::rect(x + w, y - t, t, h + 2 * t, style::kFocus);
+        }
+        gfx::popTransform();
+      }
+
+    if (widgets::button(kHsClearId, style::kMargin, style::kActionY, 72, style::kButtonH, "重选",
+                        widgets::Kind::Secondary, k > 0 && cb->choice.result.waiting())) {
+      hs.picks.clear();
+      widgets::setFocus(-1);
+    }
+    if (widgets::button(kHsConfirmId, kBot - style::kMargin - 96, style::kActionY, 96, style::kButtonH, "确认",
+                        widgets::Kind::Primary, valid))
+      hs.confirm = true;  // fired by updateCombat next frame
+    R().text(kBot / 2, style::kActionY + 2, num(k) + " / " + num(maxN), ts(F16, valid ? col::gold : col::white, CENTER));
+    std::string why = k < minN ? "还需选 " + num(minN - k) + " 张" : minN < maxN ? "最多 " + num(maxN) + " 张" : "";
+    if (!why.empty()) R().text(kBot / 2, style::kActionY + 20, why, ts(F12, k < minN ? col::red : col::gray, CENTER));
+    widgets::endFrame();
+    return;
+  }
+
   if (cb->choice.active) {
     gfx::rect(0, 0, kBot, kH, 0x000000A0);
     const CardChoice& ch = cb->choice;
@@ -273,6 +448,68 @@ void App::updateCombat(const gfx::Input& in) {
                  flights_.end());
   auto alive = cb->aliveEnemies();
   int n = (int)cb->hand.size();
+
+  if (!isHandSelect(*cb) && !handSel().options.empty()) handSel() = HandSelect{};
+  if (isHandSelect(*cb)) {
+    // S12 hand select: tap / A toggles a card (full: the last pick is swapped out, as C#
+    // SelectCardInSimpleMode), left/right or L/R walk the pickable cards, X or 确认 confirms a
+    // legal count, B takes back the last pick (or answers an "up to N" choice with nothing).
+    // A forced choice has no way out, as in C#.
+    drag_ = {};
+    aiming_ = false;
+    HandSelect& hs = syncHandSelect(*cb, sel_);
+    if (!cb->choice.result.waiting()) return;
+    const int maxN = handSelectMax(*cb), minN = handSelectMin(*cb);
+    auto ok = [&](int i) { return i >= 0 && i < n && hs.has(cb->hand[i]); };
+    auto finish = [&] {
+      std::vector<Card*> picked = hs.picks;
+      hs = HandSelect{};
+      sel_ = -1;
+      widgets::setFocus(-1);
+      cb->choice.result.fire(std::move(picked));
+    };
+    auto toggle = [&](int i) {
+      Card* c = cb->hand[i];
+      auto it = std::find(hs.picks.begin(), hs.picks.end(), c);
+      if (it != hs.picks.end()) hs.picks.erase(it);
+      else {
+        if ((int)hs.picks.size() >= maxN) hs.picks.pop_back();
+        hs.picks.push_back(c);
+      }
+      sfx::click();
+    };
+    auto step = [&](int d) {
+      int i = sel_ < 0 ? (d > 0 ? -1 : n) : sel_;
+      for (int t = 0; t < n; ++t) {
+        i = ((i + d) % n + n) % n;
+        if (ok(i)) { sel_ = i; return; }
+      }
+    };
+    const int k = (int)hs.picks.size();
+    const bool valid = k >= minN && k <= maxN;
+    if (hs.confirm) {
+      hs.confirm = false;
+      if (valid) { finish(); return; }
+    }
+    const bool onHand = widgets::focused() < 0;
+    if (onHand) {
+      if (in.down & (gfx::BTN_RIGHT | gfx::BTN_R)) step(1);
+      if (in.down & (gfx::BTN_LEFT | gfx::BTN_L)) step(-1);
+      if ((in.down & gfx::BTN_A) && ok(sel_)) toggle(sel_);
+    }
+    if ((in.down & gfx::BTN_X) && valid) { finish(); return; }
+    if (in.down & gfx::BTN_B) {
+      if (!onHand) widgets::setFocus(-1);
+      else if (!hs.picks.empty()) hs.picks.pop_back();
+      else if (minN == 0) { finish(); return; }
+    }
+    if (in.touchDown) {
+      int i = hitHandCard(in.tx, in.ty);
+      if (ok(i)) { sel_ = i; toggle(i); widgets::setFocus(-1); }
+      else if (i >= 0) sel_ = i;  // not pickable: shown dimmed on the top screen
+    }
+    return;
+  }
 
   if (cb->choice.active) {
     drag_ = {};
