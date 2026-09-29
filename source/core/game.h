@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "dec.h"
+#include "history.h"
 #include "rng.h"
 #include "task.h"
 
@@ -1193,6 +1194,14 @@ struct Run {
   bool runWon = false;
   void winRun() { runWon = true; }
   bool progressRecorded = false;  // guards progress::onRunEnded against firing twice (see abandon())
+  // Run history (history.h, M2): the path so far (RunState.MapPointHistory, saved in run.sav),
+  // when the run started (unix seconds) and the seconds played (the app adds real frame time
+  // while the run is on screen; the headless sim leaves it at 0).
+  history::Path mapHistory;
+  int64_t startTime = 0;
+  double runTime = 0;
+  void historyPoint(history::PointType type);  // RunState.AppendToMapPointHistory (rooms follow)
+  void historyRoom(history::RoomKind type, const std::string& model = "");  // CurrentMapPointHistoryEntry.Rooms.Add
   // A room that is not ported yet (events, shops): Screen::Placeholder shows this text.
   std::string placeholderText;
   std::string ancientId;            // this act's Ancient event ("Neow" in act 1), empty if none

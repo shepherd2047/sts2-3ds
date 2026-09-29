@@ -2,20 +2,40 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <ctime>
 #include <set>
 
 #include "game.h"
+#include "history.h"
 #include "progress.h"
 
 namespace sts {
 
 namespace {
-// progress::onRunEnded, guarded so a run is only ever recorded once (Run::main has several
-// GameOver/Victory exits, and Run::abandon() is a separate, UI-triggered path).
+// progress::onRunEnded + the run history entry (M2), guarded so a run is only ever recorded once
+// (Run::main has several GameOver/Victory exits, and Run::abandon() is a separate, UI-triggered path).
 void recordRunEnd(Run& r, progress::RunOutcome outcome) {
   if (r.progressRecorded) return;
   r.progressRecorded = true;
   progress::onRunEnded(r.characterId, r.ascension, outcome);
+  history::onRunEnded(r, outcome == progress::RunOutcome::Win, outcome == progress::RunOutcome::Abandon);
+}
+// Run history kinds of the port's room types.
+history::PointType historyPointType(RoomType t) {
+  switch (t) {
+    case RoomType::Monster: return history::PointType::Monster;
+    case RoomType::Elite: return history::PointType::Elite;
+    case RoomType::Rest: return history::PointType::RestSite;
+    case RoomType::Treasure: return history::PointType::Treasure;
+    case RoomType::Unknown: return history::PointType::Unknown;
+    case RoomType::Boss: return history::PointType::Boss;
+    case RoomType::Shop: return history::PointType::Shop;
+    case RoomType::Ancient: return history::PointType::Ancient;
+    default: return history::PointType::Unassigned;
+  }
+}
+history::RoomKind historyFightKind(RoomType t) {
+  return t == RoomType::Elite ? history::RoomKind::Elite : t == RoomType::Boss ? history::RoomKind::Boss : history::RoomKind::Monster;
 }
 // Registered ids of a list, in order.
 std::vector<std::string> registered(const std::vector<std::string>& ids) {
@@ -26,6 +46,16 @@ std::vector<std::string> registered(const std::vector<std::string>& ids) {
 }  // namespace
 
 Creature* Relic::owner() const { return run->player.get(); }
+
+void Run::historyPoint(history::PointType type) {
+  if ((int)mapHistory.size() <= actIndex) mapHistory.resize((size_t)actIndex + 1);
+  mapHistory[actIndex].push_back({type, {}, 0});
+}
+
+void Run::historyRoom(history::RoomKind type, const std::string& model) {
+  if (mapHistory.empty() || mapHistory.back().empty()) return;  // no map point yet (debug starts)
+  mapHistory.back().back().rooms.push_back({type, model});
+}
 
 std::vector<Model*> Run::listeners() {
   std::vector<Model*> out;
@@ -264,6 +294,7 @@ Task<> Run::loseMaxHp(int amount) {
 Task<bool> Run::eventFight(const std::string& encounterId) {
   const Encounter* enc = db::encounter(encounterId);
   if (!enc) co_return true;
+  historyRoom(historyFightKind(enc->room), encounterId);  // the event's fight is a room of its map point
   bool won = co_await fight(encounterId);
   if (!won) { died = true; co_return false; }
   co_await combatRewards(enc->room);
@@ -457,6 +488,7 @@ Task<> Run::gainGold(int amount) {
   for (Model* m : listeners()) a = m->modifyGoldGained(a);
   int n = std::max(0, a.toInt());
   gold += n;
+  if (!mapHistory.empty() && !mapHistory.back().empty()) mapHistory.back().back().goldGained += n;  // PlayerCmd.GainGold
   for (Model* m : listeners()) co_await m->afterGoldGained(n);
 }
 
@@ -544,6 +576,10 @@ void Run::start(uint64_t s, const std::string& charId, int ascensionLevel) {
     if (const char* a1 = getenv("STS_ACT1"))
       if (const db::ActDef* d = db::act(a1); d && d->index == 0) actIds[0] = d->name;
   }
+  // Run history (M2): RunState.MapPointHistory starts empty; StartTime is the wall clock.
+  mapHistory.clear();
+  startTime = (int64_t)time(nullptr);
+  runTime = 0;
   // Debug: STS_ACT=2|3 starts the run in that act.
   const char* startAct = getenv("STS_ACT");
   enterAct(startAct ? std::atoi(startAct) - 1 : 0);
@@ -639,6 +675,8 @@ Task<> Run::enterAncient() {
   ancientPending = false;
   auto e = db::event(ancientId);
   if (!e) co_return;
+  historyPoint(history::PointType::Ancient);  // an Ancient's map point resolves to an Event room
+  historyRoom(history::RoomKind::Event, ancientId);
   // AncientEventModel.BeforeEventStarted: heal to full (Neow starts from 0 HP); WearyTraveler heals 80%.
   if (hasAscension(kWearyTraveler)) {
     int from = ancientId == "Neow" ? 0 : player->hp;
@@ -844,6 +882,7 @@ Task<> Run::main() {
     }
     // Debug: STS_ROOM=Event makes the first room an event; STS_EVENT=<id> picks which.
     bool forcedEvent = floor == 1 && getenv("STS_ROOM") && std::string(getenv("STS_ROOM")) == "Event";
+    historyPoint(forcedEvent ? history::PointType::Unknown : historyPointType(type));
     // "?" rooms resolve when entered (UnknownMapPointOdds); Unknown afterwards means an event.
     if (forcedEvent) type = RoomType::Unknown;
     else if (type == RoomType::Unknown) {
@@ -855,6 +894,7 @@ Task<> Run::main() {
       if (const char* id = getenv("STS_EVENT"); forcedEvent && id) e = db::event(id);
       if (!e) e = pullNextEvent();
       if (e) {
+        historyRoom(history::RoomKind::Event, e->id);
         co_await runEvent(std::move(e));
         if (died) { recordRunEnd(*this, progress::RunOutcome::Loss); screen = Screen::GameOver; co_return; }
         if (runWon) { recordRunEnd(*this, progress::RunOutcome::Win); screen = Screen::Victory; co_return; }  // STS_EVENT=TheArchitect
@@ -862,12 +902,14 @@ Task<> Run::main() {
       }
     }
     if (type == RoomType::Shop) {
+      historyRoom(history::RoomKind::Shop);
       co_await enterShop();
       continue;
     }
     if (type == RoomType::Unknown) {
       // PORT NOTE: no registered event is left; say so and move on.
       for (Model* m : listeners()) co_await m->afterRoomEntered(type);
+      historyRoom(history::RoomKind::Event);
       placeholderText = "事件（尚未实现）";
       screen = Screen::Placeholder;
       co_await placeholderDone.next();
@@ -891,6 +933,7 @@ Task<> Run::main() {
       if (const char* forced = getenv("STS_ENCOUNTER"); forced && floor == 1 && db::encounter(forced)) id = forced;
       if (!devNextEncounter.empty() && db::encounter(devNextEncounter)) { id = devNextEncounter; devNextEncounter.clear(); }
 
+      historyRoom(historyFightKind(type), id);
       bool won = co_await fight(id);
       if (!won) { recordRunEnd(*this, progress::RunOutcome::Loss); screen = Screen::GameOver; co_return; }
       // RewardsSet.WithRewardsFromRoom: the last act's boss gives nothing. RunManager.EnterNextAct
@@ -901,6 +944,8 @@ Task<> Run::main() {
           std::string second = secondBossId;
           secondBossId.clear();
           ++floor;
+          historyPoint(history::PointType::Boss);  // RunManager.GenerateRooms: its own boss map point
+          historyRoom(history::RoomKind::Boss, second);
           if (!co_await fight(second)) { recordRunEnd(*this, progress::RunOutcome::Loss); screen = Screen::GameOver; co_return; }
         }
         // The fight is freed and the screen leaves it in the same step (as in combatRewards).
@@ -910,7 +955,8 @@ Task<> Run::main() {
         player->combat = nullptr;
         for (auto& rel : relics) rel->combat = nullptr;
         screen = Screen::Event;
-        if (auto e = db::event("TheArchitect")) co_await runEvent(std::move(e));
+        // RunManager.EnterNextAct -> EnterRoom(TheArchitect): a room of the boss's map point.
+        if (auto e = db::event("TheArchitect")) { historyRoom(history::RoomKind::Event, e->id); co_await runEvent(std::move(e)); }
         if (died) { recordRunEnd(*this, progress::RunOutcome::Loss); screen = Screen::GameOver; co_return; }
         recordRunEnd(*this, progress::RunOutcome::Win);
         screen = Screen::Victory;
@@ -934,6 +980,7 @@ Task<> Run::main() {
       }
     } else if (type == RoomType::Treasure) {
       // TreasureRoom: 42-52 gold, then one relic from the shared bag.
+      historyRoom(history::RoomKind::Treasure);
       for (Model* m : listeners()) co_await m->afterRoomEntered(type);
       bool generate = true;  // Hook.ShouldGenerateTreasure: no relic, no gold
       for (auto& rel : relics) generate = generate && rel->shouldGenerateTreasure();
@@ -942,6 +989,7 @@ Task<> Run::main() {
         co_await offerRelic(pullRelicFromFront(sharedRelicBag, rollRelicRarity(rng("TreasureRoomRelics"))), true);
       }
     } else if (type == RoomType::Rest) {
+      historyRoom(history::RoomKind::RestSite);
       for (Model* m : listeners()) co_await m->afterRoomEntered(type);
       co_await restSite();
     }

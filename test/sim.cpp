@@ -6,6 +6,8 @@
 
 #include "../source/core/game.h"
 #include "../source/core/events_crystal.h"
+#include "../source/core/history.h"
+#include "../source/core/profiles.h"
 
 using namespace sts;
 #include <map>
@@ -22,6 +24,9 @@ int main(int argc, char** argv) {
   int wins = 0, floorsTotal = 0;
   int startSeed = getenv("SIM_SEED") ? atoi(getenv("SIM_SEED")) : 1;
   int endSeed = getenv("SIM_SEED") ? startSeed : runs;
+  // SIM_HISTORY_ROOT=<scratch dir>: turn saves on under that root so each finished run is written
+  // to its profile 1 run history (M2); never point it at a real save directory.
+  if (const char* root = getenv("SIM_HISTORY_ROOT")) profiles::init(root);
   for (int s = startSeed; s <= endSeed; ++s) {
     std::vector<std::unique_ptr<Run>> keep;  // runs replaced by a load stay alive (their coroutines)
     keep.push_back(std::make_unique<Run>());
@@ -346,6 +351,16 @@ int main(int argc, char** argv) {
     Scheduler::get().update(0.05);
   }
   printf("wins %d/%d, avg floor %.1f\n", wins, runs, (double)floorsTotal / runs);
+  if (getenv("SIM_HISTORY_ROOT")) {
+    auto list = history::load(profiles::current());
+    printf("history: %zu runs in %s\n", list.size(), history::dir(profiles::current()).c_str());
+    for (auto& r : list)
+      printf("  #%llu %s A%d seed %llu %s floor %d killed by %s score %d (acts %zu, deck %zu, relics %zu)\n",
+             (unsigned long long)r.seq, r.character.c_str(), r.ascension, (unsigned long long)r.seed,
+             r.win ? "WIN " : r.abandoned ? "ABANDON" : "LOSS", r.floorReached,
+             r.killedByEncounter.empty() ? (r.killedByEvent.empty() ? "-" : r.killedByEvent.c_str()) : r.killedByEncounter.c_str(),
+             r.score, r.path.size(), r.deck.size(), r.relics.size());
+  }
   if (!potionsUsed.empty()) {
     printf("potions used (%zu kinds):", potionsUsed.size());
     for (auto& [id, n] : potionsUsed) printf(" %s:%d", id.c_str(), n);

@@ -170,6 +170,9 @@ void App::returnTitle() {
 
 void App::update(const gfx::Input& in, double dt) {
   if (updateBoot(in, dt)) return;
+  // M2: time played (RunManager's active run time; the pause menu stops it).
+  if (run_->screen != Screen::Title && run_->screen != Screen::GameOver && run_->screen != Screen::Victory && !settingsOpen_)
+    run_->runTime += dt;
   double visualDt = dt * (fastMode_ ? 1.75 : 1.0);
   time_ += visualDt;
   if (transitionT_ > 0) transitionT_ = std::max(0.f, transitionT_ - (float)visualDt / style::kFade);

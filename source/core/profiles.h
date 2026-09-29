@@ -8,6 +8,7 @@
 //   <root>/settings.sav           Y1 settings (global; see settings_store.h)
 //   <root>/profile<N>/run.sav     the run in progress of slot N (1..3)
 //   <root>/profile<N>/progress.sav  M1 progress of slot N
+//   <root>/profile<N>/history/NN.run  M2 run history of slot N (history.h)
 // PORT NOTE: the C# nests these under profile<N>/saves/ and names them *.save; the port keeps
 // its .sav names and a flat per-profile directory. Slot names are a port addition (the C#
 // profiles are unnamed); S03 edits them with the 3DS software keyboard.
@@ -70,7 +71,7 @@ Info info(int id);
 bool select(int id);
 // Name is trimmed to kNameMax bytes (whole UTF-8 characters); "" resets to the default label.
 bool rename(int id, const std::string& name);
-// Deletes the slot's run.sav and progress.sav and clears its name. Deleting the current slot
+// Deletes the slot's run.sav, progress.sav and run history (history/) and clears its name. Deleting the current slot
 // also resets progress::state(). The slot stays selectable (as an empty profile).
 bool remove(int id);
 
