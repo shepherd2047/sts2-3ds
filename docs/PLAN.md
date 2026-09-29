@@ -294,7 +294,7 @@ screenshots of both screens, and tick the U table at the end of this file.
 | S04 | U04 | Character select: art and description on top; the 5 characters + Random, ascension, seed and start/back on the bottom; locked characters | F3, C10 | done, accepted 2026-09-28 (Mac): `drawCharacterSelect` in `title.cpp`; ascension 0-10 all open and the seed shown only (Y / tap re-rolls), both owner decisions; no locked characters (everything unlocked) |
 | S05 | U05 | Custom run: modifier list, character, seed, confirm | M11 | done with M11, accepted 2026-09-29: `custom_run.cpp` |
 | S06 | U06 | Neow / Ancient dialogue and relic choice (polish only) | F4 | todo |
-| S07 | U07 | Map: legend, boss icon, path highlight, scroll bounds, top-screen preview, node pulse | F3 | in progress (subagent) |
+| S07 | U07 | Map: legend, boss icon, path highlight, scroll bounds, top-screen preview, node pulse | F3 | done (subagent), accepted 2026-09-29: visited ink circles, pulsing next nodes, red route preview (D-pad follows paths), node info panel on top, scroll bounds from the parchment |
 | S08 | U08/U10 | Combat HUD: hand fan, energy orb, piles with counts, end turn, HP/block bars, power icons, intents with numbers, turn banner | F5, F6 | todo |
 | S09 | U09/U12 | Targeting arrow and potion aim; enemy highlight | S08 | todo |
 | S10 | U11 | Combat inspect: a 信息 button, cycle through creatures, power list with descriptions on top | S08 | todo |
@@ -306,7 +306,7 @@ screenshots of both screens, and tick the U table at the end of this file.
 | S16 | U20 | Shop: goods grid, price tags, sale, removal service, focused item on top | F5 | done (subagent), accepted 2026-09-29: RGDSplus U20 split by default (no owner note on the layout); tap to focus, tap again / A to buy, X detail |
 | S17 | U21 | Events: art and text on top, large option buttons on the bottom, locked options shown with the reason | F4 | done (subagent), accepted 2026-09-29: paged text, option focus previews offered card/relic/potion/enchantment (parsed from the option text), tap to focus + tap again to pick; Ancient layout unchanged |
 | S18 | U22 | Rest site: campfire and character on top, option buttons with descriptions | F3 | done (subagent), accepted 2026-09-29: baked `gfx/bg_rest_<act>.t3t` + flickering fire, character Spine, result held until 继续; `STS_HP=N` debug |
-| S19 | U24 | Top bar: HP, gold, potion belt, relic strip with scroll, floor/act, run timer, deck/map buttons | F3 | todo |
+| S19 | U24 | Top bar: HP, gold, potion belt, relic strip with scroll, floor/act, run timer, deck/map buttons | F3 | in progress (subagent) |
 | S20 | U25 | Detail popups for card/relic/potion: large on top with keywords, controls (upgrade preview, close) on the bottom | F5 | partial (modal + keyword pages) |
 | S21 | U26 | Settings and pause menus (screens only; logic in Y1/Y2) | Y1 | partial (START page) |
 | S22 | U27 | Tutorials, confirmations, errors | M13 | todo |
