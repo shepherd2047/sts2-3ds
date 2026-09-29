@@ -806,6 +806,7 @@ struct Combat {
   int cardPlaysFinishedThisTurn = 0;  // CardPlaysFinished of all types this turn, bumped before AfterCardPlayed (PaleBlueDot, X3.3b)
   int starsGainedThisTurn = 0;  // StarsModifiedEntry amounts > 0 this turn (Radiate, X3.3b)
   int cardsGeneratedThisCombat = 0;  // CardGeneratedEntry count (Supermassive, X3.3b)
+  int shivPlaysFinishedThisTurn = 0;  // CardPlaysFinished of Shivs this turn (PhantomBlades, X1.3b)
   Side currentSide = Side::Player;
   bool inProgress = false, ending = false, over = false, won = false;
   bool playerPhase = false;  // UI may submit actions

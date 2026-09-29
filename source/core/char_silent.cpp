@@ -114,6 +114,7 @@ Task<std::vector<Card*>> createShivsInHand(Combat& c, int count) {
 void registerSilentRelics();  // char_silent_relics.cpp
 void registerSilentCards();   // char_silent_cards.cpp (X1.2)
 void registerSilentUncommonCards1();  // char_silent_cards_uncommon1.cpp (X1.3a)
+void registerSilentUncommonCards2();  // char_silent_cards_uncommon2.cpp (X1.3b)
 
 void registerSilent() {
   registerPowerType<AccelerantPower>();
@@ -131,6 +132,7 @@ void registerSilent() {
   registerSilentRelics();
   registerSilentCards();
   registerSilentUncommonCards1();
+  registerSilentUncommonCards2();
 }
 
 }  // namespace sts

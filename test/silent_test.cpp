@@ -532,6 +532,111 @@ int main() {
     for (Card* c : f.c->hand) if (c->singleTurnRetain) ++retained;
     CHECK(retained == 2);
   }
+  {  // X1.3b MementoMori: 9 + 4 per card discarded this turn
+    Fight f("Silent");
+    Creature* e = f.enemy(0);
+    Card* k = f.c->addCard(db::card("MementoMori"));
+    f.toHand(k);
+    int hp = e->hp;
+    f.play(k, e);
+    CHECK(hp - e->hp == 9);
+    Card* d = f.c->hand[0];
+    runTask([](Combat* c, Card* d) -> Task<> { co_await cmd::discardCard(*c, d); }(f.c, d));
+    Card* k2 = f.c->addCard(db::card("MementoMori"));
+    f.toHand(k2);
+    hp = e->hp;
+    f.play(k2, e);
+    CHECK(hp - e->hp == 13);
+  }
+  {  // X1.3b Mirage: block = all enemy Poison; PreciseCut: 13 - 2 per other card in hand
+    Fight f("Silent");
+    Creature* e = f.enemy(0);
+    f.apply<PoisonPower>(e, 7);
+    Card* m = f.c->addCard(db::card("Mirage"));
+    f.toHand(m);
+    f.c->player->block = 0;
+    f.play(m, nullptr);
+    CHECK(f.c->player->block >= 7);
+    Card* p = f.c->addCard(db::card("PreciseCut"));
+    f.toHand(p);
+    while (f.c->hand.size() > 4) { Card* x = f.c->hand[0]; f.c->removeFromPiles(x); f.c->discard.push_back(x); }
+    int others = (int)f.c->hand.size() - 1;
+    int hp = e->hp;
+    f.play(p, e);
+    CHECK(hp - e->hp == 13 - 2 * others);
+  }
+  {  // X1.3b Skewer: X hits; Pounce makes the next Skill free; Pinpoint gets cheaper per Skill
+    Fight f("Silent");
+    Creature* e = f.enemy(0);
+    Card* s = f.c->addCard(db::card("Skewer"));
+    f.toHand(s);
+    f.c->energy = 10;
+    int hp = e->hp;
+    PlayerAction a;
+    a.kind = PlayerAction::PlayCard;
+    a.card = s;
+    a.target = e;
+    f.c->energy = 3;
+    f.c->actions.fire(a);
+    pump([&] { return f.c->playerPhase && f.c->actions.waiting(); });
+    CHECK(hp - e->hp == 24);
+    Card* pn = f.c->addCard(db::card("Pounce"));
+    f.toHand(pn);
+    f.play(pn, e);
+    Card* d = f.c->addCard(db::card("DefendSilent"));
+    f.toHand(d);
+    CHECK(f.c->energyCost(d) == 0);
+    Card* pp = f.c->addCard(db::card("Pinpoint"));
+    f.toHand(pp);
+    int before = f.c->energyCost(pp);
+    f.play(d, nullptr);
+    CHECK(f.c->energyCost(pp) == before - 1);
+  }
+  {  // X1.3b NoxiousFumes: Poison on every enemy at the turn start; UpMySleeve: 3 Shivs, then cheaper
+    Fight f("Silent");
+    Card* n = f.c->addCard(db::card("NoxiousFumes"));
+    f.toHand(n);
+    f.play(n, nullptr);
+    f.endTurn();
+    CHECK(f.enemy(0)->powerAmount<PoisonPower>() >= 2);
+    Card* u = f.c->addCard(db::card("UpMySleeve"));
+    f.toHand(u);
+    int shivs = 0;
+    for (Card* c : f.c->hand) if (c->tags & tagShiv) ++shivs;
+    f.play(u, nullptr);
+    int after = 0;
+    for (Card* c : f.c->hand) if (c->tags & tagShiv) ++after;
+    CHECK(after == shivs + 3);
+    CHECK(f.c->energyCost(u) == 1);
+  }
+  {  // X1.3b PhantomBlades: Shivs Retain, only the first Shiv each turn gets +9
+    Fight f("Silent");
+    Creature* e = f.enemy(0);
+    Card* pb = f.c->addCard(db::card("PhantomBlades"));
+    f.toHand(pb);
+    f.play(pb, nullptr);
+    std::vector<Card*> made;
+    runTask(makeShivs(f.c, 2, &made));
+    CHECK(made.size() == 2 && made[0]->has(kwRetain));
+    int hp = e->hp;
+    f.play(made[0], e);
+    CHECK(hp - e->hp == 4 + 9);
+    hp = e->hp;
+    f.play(made[1], e);
+    CHECK(hp - e->hp == 4);
+  }
+  {  // X1.3b Haze / Strangle apply their debuffs
+    Fight f("Silent");
+    Creature* e = f.enemy(0);
+    Card* h = f.c->addCard(db::card("Haze"));
+    f.toHand(h);
+    f.play(h, nullptr);
+    CHECK(e->powerAmount<PoisonPower>() == 4 && e->powerAmount<WeakPower>() == 1);
+    Card* s = f.c->addCard(db::card("Strangle"));
+    f.toHand(s);
+    f.play(s, e);
+    CHECK(e->power("StranglePower") != nullptr);
+  }
   printf("%d checks, %d failed\n", checks, failures);
   return failures ? 1 : 0;
 }
