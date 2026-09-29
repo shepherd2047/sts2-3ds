@@ -115,6 +115,8 @@ void registerSilentRelics();  // char_silent_relics.cpp
 void registerSilentCards();   // char_silent_cards.cpp (X1.2)
 void registerSilentUncommonCards1();  // char_silent_cards_uncommon1.cpp (X1.3a)
 
+void registerSilentRareCards();  // char_silent_cards_rare.cpp (X1.4)
+
 void registerSilent() {
   registerPowerType<AccelerantPower>();
   registerPowerType<PoisonPower>();
@@ -131,6 +133,7 @@ void registerSilent() {
   registerSilentRelics();
   registerSilentCards();
   registerSilentUncommonCards1();
+  registerSilentRareCards();
 }
 
 }  // namespace sts
