@@ -228,8 +228,12 @@ scripts drift; delete the debug file afterwards.
   game's own parchment and NMapScreen geometry (columns 150, rows 155 units, ±21/±25
   jitter, tilt) scaled by `kMapS` = 0.17 for the RGDSplus look; icons ~9 px, dotted
   paths every 22 units, legend on the right. "?" rooms roll UnknownMapPointOdds;
-  events and shops show a "not ported yet" page. START opens it for a look from any
-  room, with a red 返回 in the bottom-left corner.
+  events and shops show a "not ported yet" page. From any other room the pause menu's 地图
+  opens it for a look, with a red 返回 in the bottom-left corner.
+- Pause menu (Y2, `screens/pause.cpp`): START during a run (or 暂停 top-right on the map HUD):
+  继续, 地图, 牌组, 设置, 百科大全 (not wired yet), 放弃 (confirm, `Run::abandon`), 保存并退出
+  (keeps run.sav: 继续 resumes at the last map save point). It freezes the scheduler and the run
+  timer; map / deck / settings open over it and return to it. Scripts: `START` then `UP`/`DOWN`/`A`.
 - `Res` frees monster Spine pages when a new fight starts (only IRONCLAD stays);
   3DS textures live in limited linear memory.
 

@@ -130,6 +130,7 @@ void App::startRun(bool resume) {
   relicsOpen_ = false;
   settingsOpen_ = false;
   abandonConfirm_ = false;
+  pauseOpen_ = false;
   titleCharacter_ = false;
   titleSelection_ = 0;
   menuSub_ = 0;
@@ -138,13 +139,13 @@ void App::startRun(bool resume) {
   for (auto& id : db::characterIds()) R().releaseTexture("gfx/bg_character_" + db::character(id).energyColor + ".t3t");
 }
 
-void App::returnTitle() {
+void App::returnTitle(bool keepSave) {
   // Abandon can happen while Run::main is suspended on a UI signal. Destroy
   // those coroutines before the Run and its cards/creatures they reference.
   Scheduler::get().clear();
   if (savesEnabled()) {
-    gfx::deleteSave(saveName());
-    profiles::saveProgress();  // after Run::abandon() / a finished run
+    if (!keepSave) gfx::deleteSave(saveName());
+    profiles::saveProgress();  // after Run::abandon() / a finished run / save & quit
   }
   visuals_.clear();
   R().releaseSkeletons({});
@@ -156,7 +157,7 @@ void App::returnTitle() {
   ghosts_.clear();
   mapTouch_ = {};
   drag_ = {};
-  deckOpen_ = relicsOpen_ = settingsOpen_ = abandonConfirm_ = mapView_ = devOpen_ = false;
+  deckOpen_ = relicsOpen_ = settingsOpen_ = abandonConfirm_ = mapView_ = devOpen_ = pauseOpen_ = false;
   potionsOpen_ = false;
   detailCard_ = nullptr;
   detailRelic_ = nullptr;
@@ -172,8 +173,11 @@ void App::returnTitle() {
 void App::update(const gfx::Input& in, double dt) {
   if (updateBoot(in, dt)) return;
   // M2: time played (RunManager's active run time; the pause menu stops it).
-  if (run_->screen != Screen::Title && run_->screen != Screen::GameOver && run_->screen != Screen::Victory && !settingsOpen_)
+  if (run_->screen != Screen::Title && run_->screen != Screen::GameOver && run_->screen != Screen::Victory && !settingsOpen_ &&
+      !pauseOpen_)
     run_->runTime += dt;
+  // Y2: the pause menu freezes the run's coroutines (RunManager.IsPaused); fast mode otherwise.
+  Scheduler::get().speed = pauseOpen_ ? 0.0 : fastMode_ ? 1.75 : 1.0;
   routeMusic(*run_);  // U3: music / ambience follow the screen, room and act
   double visualDt = dt * (fastMode_ ? 1.75 : 1.0);
   time_ += visualDt;
@@ -260,23 +264,18 @@ void App::update(const gfx::Input& in, double dt) {
   if (devOpen_) { updateDev(in); return; }
   if (detailCard_ || detailRelic_) { updateDetail(in); return; }
   if (run_->deckChoice.active) { updateDeckChoice(in); return; }
-  // START opens the map for a look from any room (RGDSplus: map entry on the top bar).
-  if ((in.down & gfx::BTN_START) && !mapView_ && scr != Screen::Title && scr != Screen::Map &&
+  // Y2: START opens the pause menu from any room of a run (its 地图 entry is the look-only map
+  // that START used to open). While it is open, START resumes (updatePause) or closes the map.
+  if ((in.down & gfx::BTN_START) && !pauseOpen_ && !mapView_ && scr != Screen::Title &&
       scr != Screen::GameOver && scr != Screen::Victory) {
-    mapView_ = true;
-    mapTouch_ = {};
-    mapUserScroll_ = false;
+    openPause();
     return;
   }
   if (mapView_) { updateMap(in); return; }
   if (relicsOpen_) { updateRelics(in); return; }
   if (deckOpen_) { updateDeck(in); return; }
   if (potionsOpen_) { updatePotions(in); return; }
-  if (scr == Screen::Map && (in.down & gfx::BTN_START)) {
-    settingsOpen_ = true;
-    abandonConfirm_ = false;
-    return;
-  }
+  if (pauseOpen_) { updatePause(in); return; }
   switch (scr) {
     case Screen::Title: updateTitle(in); break;
     case Screen::Map: updateMap(in); break;
@@ -393,6 +392,7 @@ void App::draw() {
       default: break;
     }
     if (top && scr == Screen::Map) drawActTitle();
+    if (pauseOpen_) drawPause(top);  // Y2: over the room, under the fade and toasts
     // F6: fade through black on a screen change (style::kFade seconds).
     if (transitionT_ > 0) gfx::rect(0, 0, top ? kTop : kBot, kH, 0x000000FF & (0xFFFFFF00 | (uint32_t)(transitionT_ * 255)));
     if (!top && toastT_ > 0) {

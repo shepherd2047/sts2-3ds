@@ -12,6 +12,7 @@ constexpr RoomType kLegendTypes[] = {RoomType::Unknown, RoomType::Shop, RoomType
 constexpr const char* kLegendKeys[] = {"LEGEND_UNKNOWN", "LEGEND_MERCHANT", "LEGEND_TREASURE",
                                        "LEGEND_REST", "LEGEND_ENEMY", "LEGEND_ELITE"};
 constexpr int kLegendCount = 6;
+constexpr int ID_PAUSE = 2400;   // 暂停: opens the pause menu (Y2), like START
 constexpr int ID_LEGEND = 7000;  // + item index (touch targets local to the map)
 // Legend panel on the right of the lower screen (as on RGDSplus), clear of the paths.
 constexpr float kLegendX = 320 - 64, kLegendY = 60, kLegendW = 60, kLegendRow = 17, kLegendTop = 21;
@@ -156,7 +157,7 @@ void App::drawMap(bool top) {
     return;
   }
   // Bottom HUD in the corners, clear of row 0. Looking at the map from another room
-  // (START) shows only the red 返回 in the bottom-left corner, as on RGDSplus.
+  // (the pause menu's 地图) shows only the red 返回 in the bottom-left corner, as on RGDSplus.
   if (mapView_) {
     const float bx = 4, by = 208, bw = 72, bh = 26;
     gfx::rect(bx, by, bw, bh, 0xB83A3AF0);
@@ -169,6 +170,7 @@ void App::drawMap(bool top) {
     button(72, 210, 64, 26, "遗物", ID_RELICS);
     button(140, 210, 56, 26, "开发", ID_DEVMENU);
     button(200, 210, 56, 26, "药水", ID_POTIONS);
+    button(kBot - 52, 4, 48, 24, "暂停", ID_PAUSE);  // top-right, clear of the nodes and the legend
   }
   // Legend (NMapScreen MapLegend: LEGEND_HEADER over the six NMapLegendItems) on the right, as
   // on RGDSplus. Tapping an item is its focus: that point type lights up on the map and its hover
@@ -265,6 +267,7 @@ void App::updateMap(const gfx::Input& in) {
     if (hud == ID_DECK) { openCardList(CardListMode::Deck); mapTouch_ = {}; return; }
     if (hud == ID_RELICS) { relicsOpen_ = true; sel_ = run_->relics.empty() ? -1 : 0; scroll_ = 0; mapTouch_ = {}; return; }
     if (hud == ID_DEVMENU) { devOpen_ = true; devPage_ = 0; sel_ = -1; scroll_ = 0; mapTouch_ = {}; return; }
+    if (hud == ID_PAUSE) { openPause(); return; }
     if (hud == ID_POTIONS) { potionsOpen_ = true; potionAim_ = false; potionSel_ = -1; mapTouch_ = {}; return; }
     mapTouch_ = {};
     mapTouch_.down = true;
