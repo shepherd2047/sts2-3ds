@@ -5,6 +5,35 @@ namespace ui {
 
 // ================================================================ map
 
+namespace {
+// NMapScreen's MapLegend/LegendItems (NMapLegendItem): these six, in this order.
+constexpr RoomType kLegendTypes[] = {RoomType::Unknown, RoomType::Shop, RoomType::Treasure,
+                                     RoomType::Rest, RoomType::Monster, RoomType::Elite};
+constexpr const char* kLegendKeys[] = {"LEGEND_UNKNOWN", "LEGEND_MERCHANT", "LEGEND_TREASURE",
+                                       "LEGEND_REST", "LEGEND_ENEMY", "LEGEND_ELITE"};
+constexpr int kLegendCount = 6;
+constexpr int ID_LEGEND = 7000;  // + item index (touch targets local to the map)
+// Legend panel on the right of the lower screen (as on RGDSplus), clear of the paths.
+constexpr float kLegendX = 320 - 64, kLegendY = 60, kLegendW = 60, kLegendRow = 17, kLegendTop = 21;
+
+// EncounterModel.Title: encounters.<ID_IN_UPPER_SNAKE>.title, e.g. VantomBoss -> VANTOM_BOSS.
+std::string encounterTitle(const std::string& id) {
+  std::string key;
+  for (size_t i = 0; i < id.size(); ++i) {
+    char c = id[i];
+    if (i > 0 && std::isupper((unsigned char)c) && !std::isupper((unsigned char)id[i - 1])) key += '_';
+    key += (char)std::toupper((unsigned char)c);
+  }
+  key = "encounters." + key + ".title";
+  return R().hasLoc(key) ? L(key) : id;
+}
+std::string fillVar(std::string s, const std::string& name, const std::string& value) {
+  std::string tag = "{" + name + "}";
+  for (size_t p; (p = s.find(tag)) != std::string::npos;) s.replace(p, tag.size(), value);
+  return s;
+}
+}  // namespace
+
 
 void App::drawSceneBg(bool top, float dim) {
   const int w = top ? kTop : kBot;
@@ -20,7 +49,7 @@ void App::drawSceneBg(bool top, float dim) {
 
 // Node centre on the two-screen virtual canvas.
 std::pair<float, float> App::mapPos(const MapNode& n) const {
-  auto [nx, ny] = mapNative(n, mapDistY(run_->nodes));
+  auto [nx, ny] = mapNative(n, run_->nodes);
   return {kTop / 2.f + nx * kMapS, kMapY0 + ny * kMapS + mapScroll_};
 }
 
@@ -34,7 +63,7 @@ int App::mapNodeAt(float tx, float ty) {
   for (int i = 0; i < (int)reach.size(); ++i) {
     auto& n = r.nodes[reach[i]];
     auto [x, y] = mapPos(n);
-    float d = std::hypot(vx - x, vy - y), radius = n.type == RoomType::Boss ? kBossSize / 2 : 11.f;
+    float d = std::hypot(vx - x, vy - y), radius = n.type == RoomType::Boss ? mapBossSize(r.nodes) / 2 : 11.f;
     if (d < radius && d < bestD) { best = i; bestD = d; }
   }
   return best;
@@ -90,28 +119,42 @@ void App::drawMap(bool top) {
     if (y < -40 || y > kH + 40) continue;
     bool chosen = !reach.empty() && reach[mapSel_] == i;
     bool reachable = chosen || std::find(path.begin(), path.end(), i) != path.end();
-    Sprite ic = roomIcon(n.type, n.type == RoomType::Ancient ? r.ancientId : r.bossId);
+    Sprite ic = roomIcon(n.type, n.type == RoomType::Ancient ? r.ancientId : r.bossIdAt(i));
     // Icon height at its native size (ui_atlas map icons) times the map scale.
     float nativeH = n.type == RoomType::Elite ? 70 : n.type == RoomType::Rest ? 90 : n.type == RoomType::Treasure ? 59
                   : n.type == RoomType::Unknown ? 72 : n.type == RoomType::Ancient ? 150 : 68;
-    float sz = n.type == RoomType::Boss ? kBossSize : nativeH * kNodeScale;
+    float sz = n.type == RoomType::Boss ? mapBossSize(r.nodes) : nativeH * kNodeScale;
+    // NMapLegendItem focus -> NMapScreen.HighlightPointType: that type's icons at 1.45x, in white.
+    bool legendLit = mapLegend_ >= 0 && n.type == kLegendTypes[mapLegend_];
+    if (legendLit) sz *= 1.45f;
     if (reachable && n.type != RoomType::Boss) {
       float pulse = 1.f + 0.15f * std::sin((float)time_ * 6);
       sz *= chosen ? 1.4f * pulse : pulse;
       gfx::circle(x, y, sz * 0.75f, chosen ? 0xFFE07070 : 0xFFFFFF38);
+    } else if (reachable && !mapView_) {  // a travelable boss (NBossMapPoint): a slow pulse
+      sz *= 1.f + 0.06f * std::sin((float)time_ * 4);
     }
-    uint32_t tint = n.visited ? 0x404040FF : 0xFFFFFFFF;
+    uint32_t tint = n.visited && !legendLit ? 0x404040FF : 0xFFFFFFFF;
     float w = ic.w / ic.h * sz;
     gfx::pushTransform(gfx::Affine::rotateAround(x, y, n.angle * 3.14159265f / 180.f));  // NMapPoint.SetAngle
-    if (n.type == RoomType::Boss)
-      spr(ic, x - w / 2, y - sz / 2, w, sz, 0x2E241AFF, 1.f);  // boss icons are masks/sprites: ink them
-    else
+    if (n.type == RoomType::Boss) {
+      // NBossMapPoint: the placeholder image over its outline (MapBgColor), so the boss reads on
+      // the parchment and above it. Boss icons are masks/sprites: ink them.
+      const float o = 1.5f;
+      for (auto [dx, dy] : {std::pair{-o, 0.f}, {o, 0.f}, {0.f, -o}, {0.f, o}})
+        spr(ic, x - w / 2 + dx, y - sz / 2 + dy, w, sz, 0xD8C8A0FF, 1.f);
+      spr(ic, x - w / 2, y - sz / 2, w, sz, n.visited ? 0x6A5A48FF : 0x2E241AFF, 1.f);
+    } else
       spr(ic, x - w / 2, y - sz / 2, w, sz, tint, n.visited ? 0.5f : 0.f);
     gfx::popTransform();
     if (i == r.currentNode) spr(R().sprite("map/marker"), x - 7, y - sz / 2 - 14, 14, 16);
   }
 
-  if (top) { drawTopBar(); return; }
+  if (top) {
+    drawTopBar();
+    drawBossPreview();
+    return;
+  }
   // Bottom HUD in the corners, clear of row 0. Looking at the map from another room
   // (START) shows only the red 返回 in the bottom-left corner, as on RGDSplus.
   if (mapView_) {
@@ -127,18 +170,26 @@ void App::drawMap(bool top) {
     button(140, 210, 56, 26, "开发", ID_DEVMENU);
     button(200, 210, 56, 26, "药水", ID_POTIONS);
   }
-  // Legend panel on the right, as on RGDSplus (the map's own legend, lower screen).
+  // Legend (NMapScreen MapLegend: LEGEND_HEADER over the six NMapLegendItems) on the right, as
+  // on RGDSplus. Tapping an item is its focus: that point type lights up on the map and its hover
+  // tip shows; tapping it again (or anything else) clears it.
   {
-    const float lx = kBot - 62, ly = 88, lw = 58;
-    const RoomType types[] = {RoomType::Unknown, RoomType::Shop, RoomType::Treasure, RoomType::Rest,
-                              RoomType::Monster, RoomType::Elite};
-    panel(lx, ly, lw, 18 + 6 * 17, 0x2A2418D8, 0x8A7A5AFF);
-    R().text(lx + lw / 2, ly + 3, "图例", ts(F12, col::gold, CENTER));
-    for (int i = 0; i < 6; ++i) {
-      float y = ly + 19 + i * 17;
-      Sprite ic = roomIcon(types[i]);
-      spr(ic, lx + 4, y, 14, 14);
-      R().text(lx + 22, y + 1, roomName(types[i]), ts(F12, col::white, LEFT, 0, 0.85f));
+    const float h = kLegendTop + kLegendCount * kLegendRow + 10;
+    widgets::panel("ui/panel_legend", kLegendX, kLegendY, kLegendW, h);
+    R().text(kLegendX + kLegendW / 2, kLegendY + 4, L("map.LEGEND_HEADER"), ts(F12, col::dark, CENTER));
+    for (int i = 0; i < kLegendCount; ++i) {
+      float y = kLegendY + kLegendTop + i * kLegendRow;
+      Sprite ic = roomIcon(kLegendTypes[i]);
+      float s = mapLegend_ == i ? 17.f : 14.f;  // NMapLegendItem: the icon at 1.25x while focused
+      if (ic) spr(ic, kLegendX + 11 - ic.w / ic.h * s / 2, y + 8 - s / 2, ic.w / ic.h * s, s, 0x2E241AFF, 1.f);
+      R().text(kLegendX + 21, y + 2, L(std::string("map.") + kLegendKeys[i] + ".title"),
+               ts(F12, mapLegend_ == i ? 0x7A1E12FF : col::dark, LEFT, 0, 0.85f));
+      hits_.push_back({kLegendX, y, kLegendW, kLegendRow, ID_LEGEND + i});
+    }
+    if (mapLegend_ >= 0) {
+      std::string k = std::string("map.") + kLegendKeys[mapLegend_] + ".hoverTip.";
+      widgets::keywordTip(L(k + "title"), L(k + "description"), kLegendX - 100,  // left of the legend
+                          kLegendY + kLegendTop + mapLegend_ * kLegendRow + 20, false);
     }
   }
   if (!reach.empty()) {
@@ -147,6 +198,36 @@ void App::drawMap(bool top) {
     gfx::rect(kBot - w - 4, 214, w, 20, 0x000000A0);
     R().text(kBot - 10, 217, label, ts(F12, col::gold, RIGHT));
   }
+}
+
+// The boss preview (NTopBarBossIcon) in the top screen's corner, under the top bar: the act's
+// boss icon and name (static_hover_tips BOSS); with DoubleBoss both icons, the second offset
+// behind the first (second_boss_icon.tscn at (30, 22)) and dimmed until the first is beaten, and
+// DOUBLE_BOSS's names. Standing on the first boss (ShouldOnlyShowSecondBossIcon) only the
+// second is shown.
+void App::drawBossPreview() {
+  Run& r = *run_;
+  int b = r.bossNode(), b2 = r.secondBossNode();
+  if (b < 0) return;
+  bool onlySecond = b2 >= 0 && r.currentNode == b;
+  const std::string& first = onlySecond ? r.secondBossId : r.bossId;
+  const float x = 6, y = 22, s = 40;
+  auto icon = [&](const std::string& id, float ix, float iy, float size, uint32_t ink) {
+    Sprite ic = roomIcon(RoomType::Boss, id);
+    if (!ic) return;
+    float w = ic.w / ic.h * size;
+    spr(ic, ix + (size - w) / 2, iy, w, size, ink, 1.f);  // the icon is a mask: paint it
+  };
+  bool two = b2 >= 0 && !onlySecond;
+  // Parchment-coloured on the dark scene; the second one dimmed (MapUntraveledColor) until its turn.
+  if (two) icon(r.secondBossId, x + s * 0.45f, y + s * 0.35f, s * 0.75f, 0x8A7A62FF);
+  icon(first, x, y, s, 0xE0CFA8FF);
+  std::string name = two ? fillVar(fillVar(L("static_hover_tips.DOUBLE_BOSS.title"), "BossName1", encounterTitle(r.bossId)),
+                                   "BossName2", encounterTitle(r.secondBossId))
+                         : fillVar(L("static_hover_tips.BOSS.title"), "BossName", encounterTitle(first));
+  if (!R().hasLoc("static_hover_tips.BOSS.title"))  // romfs built before C11
+    name = two ? encounterTitle(r.bossId) + " & " + encounterTitle(r.secondBossId) : encounterTitle(first);
+  R().text(x, y + s + (two ? 12 : 4), name, ts(F12, col::gold, LEFT, 64));
 }
 
 // RGDSplus R4_MAP_TOUCH: drag anywhere to scroll; a press that never moved more than
@@ -172,7 +253,15 @@ void App::updateMap(const gfx::Input& in) {
   int pick = -1;
   if (choosing && (in.down & gfx::BTN_A)) pick = mapSel_;
   if (in.touchDown) {
-    int hud = choosing ? hitAt(in.tx, in.ty) : ID_NONE;
+    int hud = hitAt(in.tx, in.ty);
+    // Legend items (both while choosing and when only looking): toggle the highlight.
+    if (hud >= ID_LEGEND && hud < ID_LEGEND + kLegendCount) {
+      mapLegend_ = mapLegend_ == hud - ID_LEGEND ? -1 : hud - ID_LEGEND;
+      mapTouch_ = {};
+      return;
+    }
+    mapLegend_ = -1;
+    if (!choosing) hud = ID_NONE;
     if (hud == ID_DECK) { openCardList(CardListMode::Deck); mapTouch_ = {}; return; }
     if (hud == ID_RELICS) { relicsOpen_ = true; sel_ = run_->relics.empty() ? -1 : 0; scroll_ = 0; mapTouch_ = {}; return; }
     if (hud == ID_DEVMENU) { devOpen_ = true; devPage_ = 0; sel_ = -1; scroll_ = 0; mapTouch_ = {}; return; }

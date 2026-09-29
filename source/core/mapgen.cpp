@@ -4,9 +4,11 @@
 // MegaCrit.Sts2.Core.Models.ActModel.GetNumberOfRooms.
 //
 // Specialized to single player (isMultiplayer=false), shouldReplaceTreasureWithElites
-// = false, hasSecondBoss = false, no mapPointTypeCountsOverride and no
-// AscensionLevel.SwarmingElites (NumOfElites is always 5). The act index picks
-// BaseNumberOfRooms (Overgrowth 15, Hive 14, Glory 13) and GetMapPointTypes.
+// = false and no mapPointTypeCountsOverride (NumOfElites is a parameter: 8 with
+// SwarmingElites). The act index picks BaseNumberOfRooms (Overgrowth 15, Hive 14,
+// Glory 13) and GetMapPointTypes. hasSecondBoss (DoubleBoss, ascension 10, last act)
+// adds SecondBossMapPoint one row past the boss, the boss's only child; it takes no Rng
+// and path pruning stops at the first boss (FindAllPaths), so the rest is unchanged.
 //
 // Indexing: the C# grid is Grid[col, row] with col in [0,7) and row in
 // [0, mapLength) where mapLength = BaseNumberOfRooms + 1 (16 in act 1). Row 0 is never
@@ -14,7 +16,8 @@
 // real rooms occupy rows 1..15. The boss lives at row mapLength = 16 (out of
 // grid bounds), col 3, and is also not stored in the grid. Our output puts
 // the starting point first (row -1, RoomType::Ancient), renumbers row-1..row-15
-// as our rows 0..14 and appends the boss as the last MapNode (row 15, col 3).
+// as our rows 0..14 and appends the boss (row 15, col 3), then the second boss if
+// any (row 16, col 3).
 //
 // PORT NOTE: MapPoint.Children / MapPoint.parents are C# HashSet<MapPoint>,
 // whose enumeration order is an implementation detail. We approximate it with
@@ -680,7 +683,7 @@ RoomType toRoomType(MPType t) {
 
 }  // namespace
 
-std::vector<MapNode> generateStandardActMap(Rng& mapRng, int actIndex, int numOfElites) {
+std::vector<MapNode> generateStandardActMap(Rng& mapRng, int actIndex, int numOfElites, bool hasSecondBoss) {
   // BaseNumberOfRooms: Overgrowth 15, Hive 14, Glory 13.
   static const int kRooms[] = {15, 14, 13};
   actIndex = std::clamp(actIndex, 0, 2);
@@ -725,6 +728,12 @@ std::vector<MapNode> generateStandardActMap(Rng& mapRng, int actIndex, int numOf
   bossNode.row = b.mapLength - 1;  // one past the last room row
   bossNode.type = RoomType::Boss;
   nodes.push_back(bossNode);
+  if (hasSecondBoss) {  // StandardActMap: SecondBossMapPoint at (col / 2, rowCount + 1), the boss's child
+    MapNode second = bossNode;
+    second.row = b.mapLength;
+    nodes[bossIndex].next.push_back(bossIndex + 1);
+    nodes.push_back(second);
+  }
 
   int outIdx = 0;
   for (int row = 1; row < b.mapLength; row++) {

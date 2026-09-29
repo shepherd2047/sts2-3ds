@@ -64,13 +64,31 @@ constexpr float kMapTapSlop = 5.f;       // 12 px of 768 on RGDSplus, rounded up
 // Native map coordinates (NMapScreen): our row r is the game's row r + 1.
 // NMapScreen: rows are 2325 / (rowCount - 1) apart (155 in Overgrowth's 16-row grid,
 // wider in the shorter Hive and Glory maps); the boss sits after the last row.
-inline float mapDistY(const std::vector<MapNode>& nodes) {
-  int rowCount = nodes.empty() ? 16 : nodes.back().row + 1;  // the boss is last, one past the rooms
-  return 2325.f / (float)std::max(2, rowCount - 1);
+// DoubleBoss (a second Boss node after the first): rows are 0.9 as far apart, and the two
+// boss nodes sit at (-200, -1980 * 0.9) and (-200, -2280 * 0.9) scaled 0.75.
+inline bool mapDoubleBoss(const std::vector<MapNode>& nodes) {
+  int bosses = 0;
+  for (auto& n : nodes) bosses += n.type == RoomType::Boss;
+  return bosses > 1;
 }
-inline std::pair<float, float> mapNative(const MapNode& n, float distY) {
-  if (n.type == RoomType::Boss) return {0.f, -1780.f};
+inline int mapRowCount(const std::vector<MapNode>& nodes) {  // the grid's rows: one less than the (first) boss's
+  for (auto& n : nodes) if (n.type == RoomType::Boss) return n.row + 1;
+  return 16;
+}
+inline float mapDistY(const std::vector<MapNode>& nodes) {
+  return 2325.f / (float)std::max(2, mapRowCount(nodes) - 1) * (mapDoubleBoss(nodes) ? 0.9f : 1.f);
+}
+// The boss icon's size on the map (NBossMapPoint, 0.75 with two bosses).
+inline float mapBossSize(const std::vector<MapNode>& nodes) { return kBossSize * (mapDoubleBoss(nodes) ? 0.75f : 1.f); }
+inline std::pair<float, float> mapNative(const MapNode& n, const std::vector<MapNode>& nodes) {
+  if (n.type == RoomType::Boss) {
+    // NBossMapPoint (400 x 400, top-left at (-200, -1980 * num)): centred at (0, -1780) on one boss.
+    if (!mapDoubleBoss(nodes)) return {0.f, -1780.f};
+    bool second = n.row >= mapRowCount(nodes);
+    return {0.f, (second ? -2280.f : -1980.f) * 0.9f + 200.f};
+  }
   if (n.type == RoomType::Ancient) return {0.f, 790.f};  // the game's row 0: the start point
+  float distY = mapDistY(nodes);
   return {n.col * 150.f - 450.f + n.jx, 790.f - (n.row + 1.f) * distY + n.jy};
 }
 

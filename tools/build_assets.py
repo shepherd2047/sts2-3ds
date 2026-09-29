@@ -1022,7 +1022,9 @@ def build(args):
     take('ancients', lambda k: k.split('.')[0] in EVENTS or k.startswith('PROCEED.'))  # PROCEED: TheArchitect's option
     take('potions', lambda k: k.split('.')[0] in POTIONS)
     take('enchantments', lambda k: k.split('.')[0] in ENCHANTMENTS)
-    take('static_hover_tips', lambda k: k.startswith('REPLAY'))  # the enchantment replay line
+    # the enchantment replay line; C11: the map's boss preview (NTopBarBossIcon: BOSS / DOUBLE_BOSS)
+    take('static_hover_tips', lambda k: k.startswith(('REPLAY', 'BOSS.', 'DOUBLE_BOSS.')))
+    take('encounters', lambda k: k.endswith('_BOSS.title'))  # C11: boss names (EncounterModel.Title)
     take('merchant_room')
     take('acts', lambda k: k.endswith('.title'))  # S01: the act banner's name (ActModel.Title)
     take('ascension', lambda k: k.startswith('LEVEL_'))  # S04: the character select's ascension panel

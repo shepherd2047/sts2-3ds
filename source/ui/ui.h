@@ -185,6 +185,7 @@ class App {
   std::pair<float, float> mapPos(const sts::MapNode& n) const;
   int mapNodeAt(float tx, float ty);
   void drawTopBar();
+  void drawBossPreview();  // C11: NTopBarBossIcon on the map's top screen
   void drawStatusBar(float y);
   void drawCreature(sts::Creature* c, float x, float feetY, bool targeted);
   void drawCard(sts::Card* c, float x, float y, float s, bool dim = false, bool desc = false, bool selected = false);
@@ -233,6 +234,7 @@ class App {
   bool rewardCardOpen_ = false;  // S14: tracks the reward list's card sub-screen, to reset sel_
   int target_ = 0;     // index into alive enemies
   int mapSel_ = 0;
+  int mapLegend_ = -1;  // C11: the map legend item tapped (NMapLegendItem focus: highlight + tip), -1 none
   int scroll_ = 0;
   float mapScroll_ = 0;        // rows; see kMapBase in ui.cpp
   bool mapUserScroll_ = false;  // dragged by hand: stop auto-following the current row

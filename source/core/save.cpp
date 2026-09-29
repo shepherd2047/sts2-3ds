@@ -205,6 +205,20 @@ bool Run::load(const std::string& data) {
         version >= 4 && a.toks.size() > 4 ? std::atoi(a.toks[4].c_str()) : 0);
   ioRun(a, *this);
   if (!a.ok) return false;
+  // Saves from before C11 (DoubleBoss fights chained, no map node): give the last act's map its
+  // second boss node (StandardActMap.SecondBossMapPoint takes no Rng, so the rest is the same).
+  if (!secondBossId.empty() && secondBossNode() < 0) {
+    int b = bossNode();
+    if (b >= 0) {
+      MapNode second = nodes[b];
+      second.row = nodes[b].row + 1;
+      second.y = (float)second.row;  // Run::generateMap: layout (col, row)
+      second.next.clear();
+      second.visited = false;
+      nodes[b].next = {(int)nodes.size()};
+      nodes.push_back(second);
+    }
+  }
   ancientPending = false;
   died = false;
   screen = Screen::Map;
