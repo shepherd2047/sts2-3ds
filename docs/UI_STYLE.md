@@ -16,8 +16,15 @@ mock-ups (`STS_MOCK=1|2|3`, `source/ui/style_mock.cpp`) show them on screen: 1 r
   the hand is centred with card text visible, energy on the left and 结束 on the right just below the
   hand, the piles (and potions) in the corners, no status strip. It has more than three controls; each
   is still at least 32 px to touch and none overlaps a card's text.
-- Top **status bar**: 20 px, black at 72 %, teal line under it. Fields left to right: HP (red), gold,
-  floor, deck, potion belt, relic strip (right, scrolls). It is drawn by S19 and shared by every room.
+- Top **status bar** (S19, `source/ui/topbar.cpp`, C# NTopBar): 18 px, black at 72 %, teal rule on its
+  bottom row, `ui/tb_*` icons. Left to right as in the C#: HP (red), gold, potion belt, floor + act
+  (阶段N), ascension badge; the relic strip fills the middle (16 px icons with their counters, scrolls
+  sideways with "+N" chips at the ends; a new or flashing relic scrolls into view); right: run timer
+  (always with the ShowRunTimer setting, else only on the map / under a page), deck + count, map, pause.
+  The top screen is not touchable, so **ZL / ZR** (New 3DS; preview keys E / R, scripts `ZL` / `ZR`)
+  enters its focus mode: ←→ walk, L / R jump groups, the focused item's hover tip shows under the bar,
+  A opens (potion → the use / discard popup on that slot, relic → detail, deck / map / pause), B / ZL /
+  ZR / a touch leave. Pages opened from it return to it. Shared by every room.
 - Screen title: F16 at 1.25x (about 20 px), gold, with a 2 px teal line under it. Only one title per
   screen, on the top screen except for pure list pages.
 - Panels: fill `kPanel`, 1 px teal border, a faint 1 px highlight inside the top edge. Square

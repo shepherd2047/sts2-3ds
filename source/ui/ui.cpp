@@ -185,7 +185,7 @@ void App::returnTitle(bool keepSave) {
   ghosts_.clear();
   mapTouch_ = {};
   drag_ = {};
-  deckOpen_ = relicsOpen_ = settingsOpen_ = abandonConfirm_ = mapView_ = devOpen_ = pauseOpen_ = false;
+  deckOpen_ = relicsOpen_ = settingsOpen_ = abandonConfirm_ = mapView_ = devOpen_ = pauseOpen_ = topBarFocus_ = false;
   potionsOpen_ = false;
   detailCard_ = nullptr;
   detailRelic_ = nullptr;
@@ -199,6 +199,7 @@ void App::returnTitle(bool keepSave) {
 // ================================================================ frame
 
 void App::update(const gfx::Input& in, double dt) {
+  widgets::suspendInput(false);  // S19: updateTopBar suspends the bottom widgets while it owns the input
   if (updateBoot(in, dt)) return;
   // M2: time played (RunManager's active run time; the pause menu stops it).
   if (run_->screen != Screen::Title && run_->screen != Screen::GameOver && run_->screen != Screen::Victory && !settingsOpen_ &&
@@ -229,6 +230,7 @@ void App::update(const gfx::Input& in, double dt) {
   Screen scr = run_->screen;
   if (scr != lastScreen_) {
     transitionT_ = 1.f;  // F6: fade through black on every screen change
+    topBarFocus_ = false;  // S19: a new room takes the input back from the top bar
     detailCard_ = nullptr;
     detailRelic_ = nullptr;
     detailUpgrade_ = false;
@@ -307,6 +309,7 @@ void App::update(const gfx::Input& in, double dt) {
   if (deckOpen_) { updateDeck(in); return; }
   if (potionsOpen_) { updatePotions(in); return; }
   if (pauseOpen_) { updatePause(in); return; }
+  if (updateTopBar(in)) return;  // S19: ZL / ZR focus mode on the top screen's status bar
   switch (scr) {
     case Screen::Title: updateTitle(in); break;
     case Screen::Map: updateMap(in); break;

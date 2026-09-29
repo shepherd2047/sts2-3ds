@@ -70,9 +70,15 @@ int navigate(uint32_t downBtn) {
   return best ? best->id : focusId;
 }
 
+bool suspended = false;  // suspendInput(): another layer owns this frame's input
+
 }  // namespace
 
-void beginFrame(const gfx::Input& in) {
+void suspendInput(bool on) { suspended = on; }
+
+void beginFrame(const gfx::Input& inRaw) {
+  static const gfx::Input none{};
+  const gfx::Input& in = suspended ? none : inRaw;
   curInput = in;
   curHits.clear();
   clock_ += 1.f / 60;

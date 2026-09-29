@@ -69,6 +69,7 @@ void parseScript() {
       else if (k == "UP") sc.btn = BTN_UP; else if (k == "DOWN") sc.btn = BTN_DOWN;
       else if (k == "START") sc.btn = BTN_START;
       else if (k == "SELECT") sc.btn = BTN_SELECT;
+      else if (k == "ZL") sc.btn = BTN_ZL; else if (k == "ZR") sc.btn = BTN_ZR;
       script.push_back(sc);
     }
   }
@@ -102,6 +103,8 @@ uint32_t mapKey(SDL_Keycode k) {
     case SDLK_RIGHT: return BTN_RIGHT;
     case SDLK_RETURN: return BTN_START;
     case SDLK_BACKSPACE: return BTN_SELECT;
+    case SDLK_e: return BTN_ZL;
+    case SDLK_r: return BTN_ZR;
     default: return 0;
   }
 }

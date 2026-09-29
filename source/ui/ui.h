@@ -276,7 +276,15 @@ class App {
   void drawSceneBg(bool top, float dim);
   std::pair<float, float> mapPos(const sts::MapNode& n) const;
   int mapNodeAt(float tx, float ty);
+  // S19 (U24, NTopBar): the run's status bar on the top screen, drawn by every room. ZL / ZR
+  // enters its focus mode (the top screen is not touchable): ←→ walk HP, gold, potions, floor,
+  // relics, deck, map and pause with a tooltip under the focused one, L / R jump between groups,
+  // A opens (potion popup, relic detail, deck, map, pause menu), B / ZL / ZR / a touch leave.
+  // Pages opened from it return to it. Layout and relic-strip scroll live in topbar.cpp.
   void drawTopBar();
+  bool updateTopBar(const gfx::Input& in);  // true while the top bar owns the input
+  bool topBarActive() const;                // focus mode on and no page open over it
+  bool topBarFocus_ = false;
   void drawBossPreview();  // C11: NTopBarBossIcon on the map's top screen
   void drawStatusBar(float y);
   void drawCreature(sts::Creature* c, float x, float feetY, bool targeted);

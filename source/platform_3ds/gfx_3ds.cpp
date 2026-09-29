@@ -59,6 +59,7 @@ void parseScript(const char* s) {
     else if (k == "LEFT") sc.btn = BTN_LEFT; else if (k == "RIGHT") sc.btn = BTN_RIGHT;
     else if (k == "UP") sc.btn = BTN_UP; else if (k == "DOWN") sc.btn = BTN_DOWN;
     else if (k == "START") sc.btn = BTN_START;
+    else if (k == "ZL") sc.btn = BTN_ZL; else if (k == "ZR") sc.btn = BTN_ZR;
     script.push_back(sc);
   }
 }
@@ -217,9 +218,9 @@ Input input() {
     if (sc.frame == frameCount - 1 && sc.kind == 'T') { cur.touching = false; cur.touchUp = true; }
   }
   // Keep only the buttons gfx.h defines.
-  cur.down &= 0xFFF;
-  cur.held &= 0xFFF;
-  cur.up &= 0xFFF;
+  cur.down &= 0xFFF | BTN_ZL | BTN_ZR;
+  cur.held &= 0xFFF | BTN_ZL | BTN_ZR;
+  cur.up &= 0xFFF | BTN_ZL | BTN_ZR;
   return cur;
 }
 
