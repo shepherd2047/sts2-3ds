@@ -194,7 +194,7 @@ meta and progression (M), system (Y), audio (U) and hardware/release (H).
 | A7a | Shared events 1/3: DollRoom, PotionCourier, SelfHelpBook, StoneOfAllTime, TheFutureOfPotions + their relics | content, parallel-safe | – | done (subagent), accepted 2026-09-28 |
 | A7b | Shared events 2/3: TheLegendsWereTrue, WarHistorianRepy, WelcomeToWongos (+ Wongo relics/badge) | content, parallel-safe | – | done (subagent), accepted 2026-09-28 |
 | A7c | Shared events 3/3: FakeMerchant (+ FakeMerchantEventEncounter, 10 Fake* relics, fake shop UI reuse) | content | – | done (subagent), accepted 2026-09-28: fake shop reuses the shop screen (relics only; D-pad up/down assumes card slots); the fight needs a Foul Potion throw from the shop (STS_FAKE_FIGHT=1 for tests) |
-| A7d | CrystalSphere: its minigame (`Events.Custom.CrystalSphereEvent`) + custom bottom-screen UI | content + UI, *Opus* | – | in progress (subagent) |
+| A7d | CrystalSphere: its minigame (`Events.Custom.CrystalSphereEvent`) + custom bottom-screen UI | content + UI, *Opus* | – | done (subagent, Opus), accepted 2026-09-29: events_crystal.cpp + ui/screens/crystal_ui.cpp (sphere grid on the bottom, fortune teller + rules on top) |
 | A8 | Remaining event-pool relics whose source already exists (run the pool diff), unlock Wellspring BOTTLE / WhisperingHollow GOLD, BattlewornDummy potion | content | A7a-c | done (subagent), accepted 2026-09-28: relics_event.cpp (LostCoffer, PhialHolster, NeowsSacrifice, Ambergris without its extra turn, the 4 refined starters for Touch of Orobas); the rest of the event pool waits for A1a / A3c / pets / map systems (list in the file header) |
 | A9 | Shop leftovers: 2 colorless slots, Foul Potion throw at the merchant, event potions Ambergris / Glowwater / Foul | content | A1a | done (subagent), accepted 2026-09-28: 2 colorless shop slots (7 cards in one row, owner to confirm the look), Foul Potion throw (Merchant 100 gold, FakeMerchant fight); Ambergris extra turn still missing |
 | A10 | TheArchitect: the true ending after the act 3 boss (event + TheArchitectEventEncounter), victory flow | content + engine | – | done (subagent, Opus), accepted 2026-09-28: content_architect.cpp; act 3 boss -> TheArchitect (Ancient layout) -> Run::winRun -> Victory; the combat-room staging and score-based damage numbers dropped (PORT NOTE) |
@@ -203,7 +203,7 @@ meta and progression (M), system (Y), audio (U) and hardware/release (H).
 | A11c | Underdocks elites: PhantasmalGardeners, SkulkingColony, TerrorEel | content | – | done (subagent), accepted 2026-09-28 |
 | A11d | Underdocks bosses: WaterfallGiant, SoulFysh, LagavulinMatriarch | content (+engine) | – | done (subagent, Opus), accepted 2026-09-28: content_underdocks_d.cpp; hook beforeSideTurnEndVeryEarly |
 | A11e | Underdocks events (AbyssalBaths, DrowningBeacon, EndlessConveyor, PunchOff + encounter, SpiralingWhirlpool, SunkenTreasury, DoorsOfLightAndDark, TrashHeap, WaterloggedScriptorium) | content | – | done (subagent), accepted 2026-09-28: also FresnelLens, DarkstonePeriapt, DreamCatcher, HandDrill, MawBank, TheBoot, GlowwaterPotion, Spiral/Steady enchantments (A3c must reuse them); EndlessConveyor FRIED_EEL waits for A1a |
-| A11f | Underdocks as act 1: act choice as in `ActModel` / `RunManager` discovery order, map bg, room art, boss icons, per-act music hook | engine | A11a-e | in progress (subagent) |
+| A11f | Underdocks as act 1: act choice as in `ActModel` / `RunManager` discovery order, map bg, room art, boss icons, per-act music hook | engine | A11a-e | done (subagent, Opus), accepted 2026-09-29: act list rolled from Rng(seed,"act_selection") (Overgrowth or Underdocks), STS_ACT1=Underdocks, save version 5 (act list), per-act music ids (Run::actMusic) for U3; every act counts as discovered |
 
 **A3a notes (enchantment engine, done).** `Enchantment` (game.h) is a `Model` owned by
 `Card::enchantment`; write one like `Sharp` in `enchantments.cpp` (`ENCHANTMENT_HEADER(Name, "KEY")`,
@@ -288,7 +288,7 @@ screenshots of both screens, and tick the U table at the end of this file.
 
 | id | U | Screen | Needs | Status |
 |---|---|---|---|---|
-| S01 | U01 | Boot splash, loading, act transition title card ("第二幕 蜂巢") | F3 | in progress (subagent) |
+| S01 | U01 | Boot splash, loading, act transition title card ("第二幕 蜂巢") | F3 | done (subagent, Opus), accepted 2026-09-29: boot.cpp (MegaCrit logo Spine, loading bar; skipped under STS_HIDDEN/STS_FIXED_STEP/STS_SCRIPT, STS_BOOT=1 forces it), act_title.cpp (NActBanner: game fonts pre-rendered, "阶段N / <act>") |
 | S02 | U02 | Main menu: tall background across both screens, logo on top, buttons at 1.65× on the bottom (继续 / 单人 / 图鉴 / 统计 / 设置 / 退出), submenus | F3 | partial (native art, e2c9023) |
 | S03 | U03 | Profiles: 3 slots, rename (3DS software keyboard), delete + warning | Y4 | todo |
 | S04 | U04 | Character select: art and description on top; the 5 characters + Random, ascension, seed and start/back on the bottom; locked characters | F3, C10 | done, accepted 2026-09-28 (Mac): `drawCharacterSelect` in `title.cpp`; ascension 0-10 all open and the seed shown only (Y / tap re-rolls), both owner decisions; no locked characters (everything unlocked) |
@@ -436,7 +436,7 @@ their `clone()` must call `adoptEnchantment()`.
 
 | id | Package | Kind | Needs | Status |
 |---|---|---|---|---|
-| U1 | Extraction: FMOD `banks/desktop/*.bank` (FSB5) and `*.mp3` → DSP-ADPCM in romfs, with a list of events and names; keep the size in budget | tools, *Opus* | – | in progress (subagent) |
+| U1 | Extraction: FMOD `banks/desktop/*.bank` (FSB5) and `*.mp3` → DSP-ADPCM in romfs, with a list of events and names; keep the size in budget | tools, *Opus* | – | done (subagent, Opus), accepted 2026-09-29: tools/audio_extract.py + audio_dsp.py ("S2AD" DSP-ADPCM, index.txt of 591 FMOD events + 52 one-shots; vgmstream via Homebrew); 265 MB mono (music/amb 22 kHz, sfx 32 kHz) -> goes to the SD card, not romfs (owner decision); no loop points in the data |
 | U2 | Audio engine: 3DS ndsp streaming of ADPCM music from romfs, SFX voices; SDL backend decodes the same files; SDL backend | platform | U1 | todo |
 | U3 | Music routing: title, each act's map and fights, elite, boss, shop, rest, Ancient, victory, death; crossfades | UI | U2 | todo |
 | U4 | SFX: cards, hits, block, buffs, gold, relics, potions and UI controls, mapped from the C# `SfxCmd` names | content | U2 | todo |
@@ -580,6 +580,8 @@ Any new relic with a C# `[SavedProperty]` needs `persist`.
 - **Audio: ADPCM** (3DS DSP-ADPCM, played by ndsp without a decoder). Watch romfs size:
   use mono or a lower sample rate for long music tracks if needed (U1, H3).
 - **New 3DS only.**
+- **Audio lives on the SD card** (`sdmc:/3ds/sts2-3ds/audio/`, copied once), not in romfs, so the
+  `.3dsx` stays small for `make link`; U1's default quality (music/ambience 22 kHz mono, sfx 32 kHz).
 - **Ascension 0-10 is open for every character** from the start (no win-to-unlock); the character
   select shows the run's seed but has no seed entry (custom runs, U05, get one).
 
