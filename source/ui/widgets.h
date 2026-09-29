@@ -27,6 +27,9 @@ namespace ui::widgets {
 
 void beginFrame(const gfx::Input& in);
 void endFrame();
+// While true, beginFrame ignores its input (no touch, no D-pad): another layer owns the input this
+// frame -- the top bar's focus mode (S19), over a screen whose widgets read the input in draw.
+void suspendInput(bool on);
 
 // The currently focused control id (-1 if none; set by touch too, so the ring follows).
 int focused();
