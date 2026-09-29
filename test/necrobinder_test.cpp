@@ -755,6 +755,151 @@ int main() {
     CHECK(f.c->discard.empty() && std::find(f.c->hand.begin(), f.c->hand.end(), d1) != f.c->hand.end());
   }
 
+  // ---- X4.3b: Uncommon cards, second half
+  {  // Haunt: playing a Soul damages a random enemy. Shroud: applying Doom grants Block.
+    Fight f("Necrobinder");
+    Card* h = f.c->addCard(db::card("Haunt"));
+    Card* sh = f.c->addCard(db::card("Shroud"));
+    f.c->hand.push_back(h);
+    f.c->hand.push_back(sh);
+    f.play(h, nullptr);
+    f.play(sh, nullptr);
+    Card* soul = f.c->addCard(db::card("Soul"));
+    f.c->hand.push_back(soul);
+    int total0 = f.enemy(0)->hp + f.enemy(1)->hp;
+    f.play(soul, nullptr);
+    CHECK(total0 - (f.enemy(0)->hp + f.enemy(1)->hp) == 7);
+    int blk0 = f.c->player->block;
+    f.apply<DoomPower>(f.enemy(0), 5);
+    CHECK(f.c->player->block == blk0 + 3);
+  }
+  {  // NoEscape: 10 Doom, +5 per 10 Doom already on the target.
+    Fight f("Necrobinder");
+    f.apply<DoomPower>(f.enemy(0), 25);
+    Card* ne = f.c->addCard(db::card("NoEscape"));
+    f.c->hand.push_back(ne);
+    f.play(ne, f.enemy(0));
+    CHECK(f.enemy(0)->powerAmount<DoomPower>() == 25 + 10 + 5 * 2);
+  }
+  {  // Lethality: +50% on the first Attack of the turn only. Veilpiercer: Ethereal cards cost 0.
+    Fight f("Necrobinder");
+    Card* l = f.c->addCard(db::card("Lethality"));
+    f.c->hand.push_back(l);
+    f.play(l, nullptr);
+    Card* a1 = f.c->addCard(db::card("Bury"));
+    Card* a2 = f.c->addCard(db::card("Bury"));
+    f.c->hand.push_back(a1);
+    f.c->hand.push_back(a2);
+    int hp0 = f.enemy(0)->hp;
+    f.play(a1, f.enemy(0));
+    CHECK(hp0 - f.enemy(0)->hp == 78);
+    hp0 = f.enemy(0)->hp;
+    f.play(a2, f.enemy(0));
+    CHECK(hp0 - f.enemy(0)->hp == 52);
+    Card* v = f.c->addCard(db::card("Veilpiercer"));
+    Card* par = f.c->addCard(db::card("Parse"));
+    f.c->hand.push_back(v);
+    f.c->hand.push_back(par);
+    CHECK(f.c->energyCost(par) == 1);
+    f.play(v, f.enemy(0));
+    CHECK(f.c->energyCost(par) == 0);
+  }
+  {  // PullFromBelow: one hit per Ethereal play.
+    Fight f("Necrobinder");
+    Card* pf = f.c->addCard(db::card("PullFromBelow"));
+    f.c->hand.push_back(pf);
+    Card* p1 = f.c->addCard(db::card("Parse"));
+    Card* p2 = f.c->addCard(db::card("Parse"));
+    f.c->hand.push_back(p1);
+    f.c->hand.push_back(p2);
+    f.play(p1, nullptr);
+    f.play(p2, nullptr);
+    int hp0 = f.enemy(0)->hp;
+    f.play(pf, f.enemy(0));
+    CHECK(hp0 - f.enemy(0)->hp == 5 * 2);
+  }
+  {  // Rattle: hits 1 + Osty attacks this turn. HighFive needs Osty. Putrefy, Severance, Spur.
+    Fight f("Necrobinder");
+    Card* ra = f.c->addCard(db::card("Rattle"));
+    f.c->hand.push_back(ra);
+    Card* fe = f.c->addCard(db::card("Fetch"));
+    f.c->hand.push_back(fe);
+    f.play(fe, f.enemy(0));
+    int hp0 = f.enemy(0)->hp;
+    f.play(ra, f.enemy(0));
+    CHECK(hp0 - f.enemy(0)->hp == 7 * 2);
+    Card* hf = f.c->addCard(db::card("HighFive"));
+    f.c->hand.push_back(hf);
+    CHECK(f.c->canPlay(hf));
+    hp0 = f.enemy(1)->hp;
+    f.play(hf, nullptr);
+    CHECK(hp0 - f.enemy(1)->hp == 11 && f.enemy(1)->power("VulnerablePower")->amount == 2);
+    Card* pu = f.c->addCard(db::card("Putrefy"));
+    f.c->hand.push_back(pu);
+    f.play(pu, f.enemy(0));
+    CHECK(f.enemy(0)->power("WeakPower")->amount == 2 && f.enemy(0)->power("VulnerablePower")->amount == 4);
+    Card* sv = f.c->addCard(db::card("Severance"));
+    f.c->hand.push_back(sv);
+    size_t draw0 = f.c->draw.size(), disc0 = f.c->discard.size();
+    f.play(sv, f.enemy(0));
+    CHECK(f.c->draw.size() == draw0 + 1 && f.c->discard.size() == disc0 + 2);  // Severance itself + a Soul
+    Card* sp = f.c->addCard(db::card("Spur"));
+    f.c->hand.push_back(sp);
+    f.c->osty->hp = 1;
+    int max0 = f.c->osty->maxHp;
+    f.play(sp, nullptr);
+    CHECK(f.c->osty->maxHp == max0 + 3 && f.c->osty->hp == std::min(f.c->osty->maxHp, 1 + 3 + 5));
+    f.c->osty->hp = 0;
+    CHECK(!f.c->canPlay(hf));
+  }
+  {  // RightHandHand returns from the discard pile after a card that spent 2+ energy.
+    Fight f("Necrobinder");
+    Card* rh = f.c->addCard(db::card("RightHandHand"));
+    f.c->hand.push_back(rh);
+    f.play(rh, f.enemy(0));
+    CHECK(std::find(f.c->discard.begin(), f.c->discard.end(), rh) != f.c->discard.end());
+    Card* big = f.c->addCard(db::card("Bury"));
+    f.c->hand.push_back(big);
+    f.play(big, f.enemy(0));
+    CHECK(std::find(f.c->hand.begin(), f.c->hand.end(), rh) != f.c->hand.end());
+  }
+  {  // SicEm: the applier's Osty hits summon; SleightOfFlesh: debuffs applied to enemies hurt them.
+    Fight f("Necrobinder");
+    Card* se = f.c->addCard(db::card("SicEm"));
+    f.c->hand.push_back(se);
+    f.play(se, f.enemy(0));
+    CHECK(f.enemy(0)->power("SicEmPower") && f.enemy(0)->power("SicEmPower")->amount == 3);
+    int max0 = f.c->osty->maxHp;
+    Card* fe = f.c->addCard(db::card("Fetch"));
+    f.c->hand.push_back(fe);
+    f.play(fe, f.enemy(0));
+    CHECK(f.c->osty->maxHp == max0 + 3);
+    Card* sf = f.c->addCard(db::card("SleightOfFlesh"));
+    f.c->hand.push_back(sf);
+    f.play(sf, nullptr);
+    int hp0 = f.enemy(1)->hp;
+    Card* pu = f.c->addCard(db::card("Putrefy"));
+    f.c->hand.push_back(pu);
+    f.play(pu, f.enemy(1));
+    CHECK(hp0 - f.enemy(1)->hp == 9 * 2);
+  }
+  {  // Melancholy gets cheaper when an enemy dies; Pagestorm draws when an Ethereal card is drawn.
+    Fight f("Necrobinder");
+    Card* me = f.c->addCard(db::card("Melancholy"));
+    f.c->hand.push_back(me);
+    CHECK(f.c->energyCost(me) == 3);
+    runTask([](Creature* e) -> Task<> { co_await cmd::kill({e}); }(f.enemy(1)));
+    CHECK(f.c->energyCost(me) == 2);
+    Card* pg = f.c->addCard(db::card("Pagestorm"));
+    f.c->hand.push_back(pg);
+    f.play(pg, nullptr);
+    Card* et = f.c->addCard(db::card("Parse"));
+    f.c->draw.insert(f.c->draw.begin(), et);
+    size_t hand0 = f.c->hand.size();
+    runTask([](Combat* c) -> Task<> { co_await cmd::drawCards(*c, Dec(1)); }(f.c));
+    CHECK(f.c->hand.size() == hand0 + 2);
+  }
+
   printf("%d checks, %d failed\n", checks, failures);
   return failures ? 1 : 0;
 }

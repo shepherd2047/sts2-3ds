@@ -217,6 +217,7 @@ Task<> NecroMasteryPower::afterCurrentHpChanged(Creature* creature, Dec delta) {
 void registerNecrobinderRelics();  // char_necrobinder_relics.cpp (X4.1: BigHat...UndyingSigil)
 void registerNecrobinderCards();   // char_necrobinder_cards.cpp (X4.2: the Common card pool)
 void registerNecrobinderUncommonCards1();  // char_necrobinder_cards_uncommon1.cpp (X4.3a)
+void registerNecrobinderUncommonCards2();  // char_necrobinder_cards_uncommon2.cpp (X4.3b)
 
 void registerNecrobinder() {
   registerPowerType<DieForYouPower>();
@@ -233,6 +234,7 @@ void registerNecrobinder() {
   registerNecrobinderRelics();
   registerNecrobinderCards();
   registerNecrobinderUncommonCards1();
+  registerNecrobinderUncommonCards2();
 }
 
 }  // namespace sts

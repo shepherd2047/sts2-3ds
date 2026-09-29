@@ -184,6 +184,10 @@ struct Model {
 
   // Added for the Necrobinder's relics (X4.1; Hook.* of the same names).
   virtual Task<> afterAttack(Creature* /*attacker*/) { return {}; }  // Hook.AfterAttack (AttackCommand.Execute, once per card)
+  // Added for the Necrobinder's uncommons (X4.3b): Hook.AfterDamageGiven (per damage result, before AfterDamageReceived)
+  // and Hook.AfterCardPlayedLate (after every AfterCardPlayed of that play).
+  virtual Task<> afterDamageGiven(Creature* /*dealer*/, const DamageResult&, int /*props*/, Creature* /*target*/, Card*) { return {}; }
+  virtual Task<> afterCardPlayedLate(const CardPlay&) { return {}; }
   // Hook.AfterFlush: hand cards discarded / retained at the end of the player's turn.
   virtual Task<> afterFlush(const std::vector<Card*>& /*flushed*/, const std::vector<Card*>& /*retained*/) { return {}; }
 };

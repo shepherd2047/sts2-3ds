@@ -439,6 +439,7 @@ Task<std::vector<DamageResult>> damage(std::vector<Creature*> targets, Dec amoun
   std::vector<Creature*> killedCreatures;
   for (auto& r : results) {
     Creature* t = r.receiver;
+    for (Model* m : c.listeners()) co_await m->afterDamageGiven(dealer, r, props, t, src);
     if (r.killed && t->dead()) {
       killedCreatures.push_back(t);
     } else {
@@ -1178,8 +1179,10 @@ Task<> Combat::playCard(Card* card, Creature* target, bool autoPlay, bool forceE
     co_await card->onPlay(cp);
     // CardModel.OnPlayWrapper: the enchantment's OnPlay follows the card's own effect.
     if (card->enchantment && player->alive()) co_await card->enchantment->onPlay(cp);
-    if (player->alive() && !over)
+    if (player->alive() && !over) {
       for (Model* m : listeners()) co_await m->afterCardPlayed(cp);
+      for (Model* m : listeners()) co_await m->afterCardPlayedLate(cp);  // Hook.AfterCardPlayedLate
+    }
     if (card->type == CardType::Skill) ++skillsFinishedThisTurn;  // CardPlayFinishedEntry (LunarBlast)
     if (card->type == CardType::Attack) ++attackPlaysFinishedThisTurn;
   }
