@@ -14,6 +14,7 @@ void registerAct3Events();  // events_act3.cpp
 void registerShared3Events();  // events_shared3.cpp (A7b)
 void registerUnderdocksEvents();  // events_underdocks.cpp (A11e)
 void registerArchitect();  // content_architect.cpp (A10)
+void registerCrystalSphere();  // events_crystal.cpp (A7d)
 
 namespace {
 std::map<std::string, EventFactory>& eventReg() { static std::map<std::string, EventFactory> m; return m; }
@@ -29,6 +30,7 @@ void registerEvents() {
   registerShared3Events();
   registerUnderdocksEvents();
   registerArchitect();
+  registerCrystalSphere();
 }
 
 namespace db {

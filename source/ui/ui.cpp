@@ -1,4 +1,5 @@
 // Split from ui.cpp (F3).
+#include "../core/events_crystal.h"
 #include "../core/settings_store.h"
 #include "ui_common.h"
 
@@ -419,7 +420,10 @@ void App::autoplay(double dt) {
       break;
     case Screen::Event:
       if (r.deckChoice.active && r.deckChoice.result.waiting()) r.deckChoice.result.fire({r.deckChoice.options[0]});
-      else if (r.eventChoice.waiting() && r.currentEvent) {
+      else if (CrystalSphereGame* g = crystalSphereGame(r); g && g->cellChoice.waiting()) {
+        for (int c = 0; c < CrystalSphereGame::kSize * CrystalSphereGame::kSize; ++c)  // first fogged cell
+          if (g->hidden[c % CrystalSphereGame::kSize][c / CrystalSphereGame::kSize]) { g->cellChoice.fire(c); break; }
+      } else if (r.eventChoice.waiting() && r.currentEvent) {
         int pick = 0;
         auto& opts = r.currentEvent->options;
         while (pick < (int)opts.size() && opts[pick].locked()) ++pick;

@@ -108,6 +108,10 @@ class App {
   void drawEvent(bool top);
   void drawAncient(bool top);
   void updateEvent(const gfx::Input& in);
+  // A7d: the CrystalSphere minigame (screens/crystal_ui.cpp), in place of the event page.
+  void drawCrystalSphere(bool top);
+  void updateCrystalSphere(const gfx::Input& in);
+  int crystalCursor_ = 60;  // cell y * 11 + x
   // Choosing cards from the deck for an event or relic (CardSelectCmd.FromDeck*).
   void drawDeckChoice(bool top);
   void updateDeckChoice(const gfx::Input& in);

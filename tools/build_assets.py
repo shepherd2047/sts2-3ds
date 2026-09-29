@@ -417,6 +417,71 @@ NINE = []  # (name, l, t, r, b): 9-slice margins in baked pixels, written to gfx
 UI_ATLAS = 'images/atlases/ui_atlas.sprites/'
 
 
+# A7d: the CrystalSphere minigame (scenes/events/custom/crystal_sphere/crystal_sphere_screen.tscn).
+# Cells are 20 px on the bottom screen (57 units in the game); the grid's top-left corner sits at
+# CS_GRID on the bottom screen. gfx/bg_crystal_sphere.t3t: the minigame room, top screen at (0, 0)
+# (5:3 crop around the sphere), bottom screen at (0, 256) (the sphere at the grid's scale).
+CS_CELL = 20
+CS_GRID = (6, 10)
+
+
+def bake_crystal_sphere(g, packer, args):
+    d = 'images/events/crystal_sphere/'
+    bg = g.image(d + 'crystal_sphere_minigame_bg.png').convert('RGBA')
+    # Bg: 2560x1200 rect, keep-aspect (0.7426 texture px -> units, 2.7 units side bars); Sphere
+    # centred at anchor (0.424, 0.5635) + offsets, Cells at the sphere centre + (6, 9).
+    k = 1200 / bg.height
+    gx = (0.424 * 2560 + (-394.863 + 397.137) / 2 + 6 - 57 * 11 / 2 - (2560 - bg.width * k) / 2) / k
+    gy = (0.5635 * 1200 + (-396.515 + 391.885) / 2 + 9 - 57 * 11 / 2) / k
+    gw = 57 * 11 / k                      # the grid in texture pixels
+    s = CS_CELL * 11 / gw                 # texture px -> bottom screen px
+    bx, by = gx - CS_GRID[0] / s, gy - CS_GRID[1] / s
+    bottom = bg.crop((round(bx), round(by), round(bx + 320 / s), round(by + 240 / s))).resize((320, 240), Image.LANCZOS)
+    tw = bg.height * 400 / 240
+    cx = min(max(gx + gw / 2, tw / 2), bg.width - tw / 2)
+    top = bg.crop((round(cx - tw / 2), 0, round(cx + tw / 2), bg.height)).resize((400, 240), Image.LANCZOS)
+    canvas = Image.new('RGBA', (512, 512), (0, 0, 0, 255))
+    canvas.paste(top, (0, 0))
+    canvas.paste(bottom, (0, 256))
+    write_t3t(os.path.join(OUT, 'gfx', 'bg_crystal_sphere.t3t'), canvas)
+    if args.preview:
+        canvas.save(os.path.join(ROOT, 'build', 'preview_bg_crystal_sphere.png'))
+    # The fog (ScryMask: scry_reveal.gdshader over crystal_sphere_noise, lavender ramp, pale
+    # borders between tiles), baked once for the whole grid; the UI draws one cell of it per
+    # fogged cell.
+    n = CS_CELL * 11
+    noise = np.asarray(g.image('images/vfx/crystal_sphere_noise.png').convert('L').resize((n, n), Image.BILINEAR), dtype=np.float32) / 255
+    c0, c1 = np.array([0.251, 0.231, 0.855]), np.array([0.541, 0.553, 0.980])
+    rgb = c0 + (c1 - c0) * noise[..., None]
+    fog = np.dstack([rgb * 255, np.full((n, n), 240.0)])
+    edge = (np.arange(n) % CS_CELL == 0) | (np.arange(n) % CS_CELL == CS_CELL - 1)
+    border = np.array([0.871, 0.878, 1.0]) * 255
+    fog[edge, :, :3] = fog[edge, :, :3] * 0.5 + border * 0.5
+    fog[:, edge, :3] = fog[:, edge, :3] * 0.5 + border * 0.5
+    packer.add('crystal/fog', Image.fromarray(fog.clip(0, 255).astype(np.uint8), 'RGBA'))
+    # Items (CrystalSphereItem.TexturePath), stretched into their cells like the Icon TextureRect
+    # (inset 6/4/4/6 of 57 units).
+    def item(name, path, w, h):
+        img = Image.new('RGBA', (w * CS_CELL, h * CS_CELL), (0, 0, 0, 0))
+        l, t, r, b = (round(v * CS_CELL / 57) for v in (6, 4, 4, 6))
+        img.alpha_composite(g.image(d + path).convert('RGBA').resize((w * CS_CELL - l - r, h * CS_CELL - t - b), Image.LANCZOS), (l, t))
+        packer.add('crystal/' + name, img)
+    item('relic', 'crystal_sphere_relic.png', 4, 4)
+    item('curse', 'crystal_sphere_curse.png', 2, 2)
+    for r in ('common', 'uncommon', 'rare'):
+        item('card_' + r, f'crystal_sphere_{r}_card_reward.png', 2, 2)
+    item('potion_common', 'crystal_sphere_common_potion.png', 1, 3)
+    item('potion_rare', 'crystal_sphere_rare_potion.png', 2, 2)
+    item('gold', 'crystal_sphere_gold.png', 1, 1)
+    item('big_gold', 'crystal_sphere_big_gold.png', 2, 1)
+    # The highlighted-cell tile (NCrystalSphereCell Icon) and the divination buttons.
+    packer.add('crystal/highlight', fit(g.image(d + 'crystal_ball_single_square_ui.png'), (CS_CELL, CS_CELL)))
+    packer.add('crystal/button', fit(g.image(d + 'divine_button.png'), (86, 34)))
+    packer.add('crystal/button_outline', fit(g.image(d + 'divine_button_outline.png'), (86, 34)))
+    packer.add('crystal/icon_big', fit(g.image(d + 'big_divination_icon.png'), (26, 26)))
+    packer.add('crystal/icon_small', fit(g.image(d + 'small_divination_icon.png'), (26, 26)))
+
+
 def add_ui_art(g, a, packer, known):
     """Buttons, panels, top bar, controls, reward / rest icons, character orbs and icons.
     Names are ui/<name>; sizes are chosen for the 400x240 / 320x240 screens (docs/UI_STYLE.md)."""
@@ -694,6 +759,7 @@ def build(args):
                       ('TestSubjectBoss', 'images/map/placeholder/test_subject_boss_icon.png')):
         packer.add('map/boss_' + enc, fit_height(g.image(path), 64))
     add_ui_art(g, a, packer, {e[0] for e in packer.entries})
+    bake_crystal_sphere(g, packer, args)  # A7d
     select = g.image('images/packed/character_select/char_select_ironclad.png')
     packer.add('ui/ironclad_select', fit_height(select, 120))
     bake_other_character_art(g, packer, args)  # X1.5-X4.5: ui/<key>_select for the other four
