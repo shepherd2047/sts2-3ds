@@ -1010,6 +1010,8 @@ def build(args):
         packer.add('map/ancient_' + anc, fit(g.image(f'images/packed/map/ancients/ancient_node_{anc}.png'), (40, 40)))
     packer.add('ui/sale_tag', fit(g.image('images/rooms/merchant_room/shop_sales_tag.png'), (28, 28)))
     packer.add('ui/card_removal', fit(g.image('images/rooms/merchant_room/card_removal_00.png'), (40, 40)))
+    # NMapCircleVfx: the ink circle around a travelled map point (last frame of its animation).
+    packer.add('map/circle', fit(a.sprite('images/atlases/compressed.sprites/map/map_circle_4.tres'), (32, 32)))
     packer.add('map/marker', fit(a.sprite('images/atlases/ui_atlas.sprites/map/icons/map_marker_ironclad.tres'), (26, 26)))
     # Boss map nodes (map/boss_<EncounterId>). Ceremonial Beast, The Insatiable and the Queen
     # have Spine map nodes instead; the UI falls back (creature sprite or the elite icon).

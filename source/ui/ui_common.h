@@ -55,7 +55,6 @@ constexpr float kMapS = 0.17f;
 // Virtual y of native y = 0 at scroll 0: row 0 just above the HUD, and no row in the
 // 15 px hinge between the screens in the opening view.
 constexpr float kMapY0 = 337.f;
-constexpr float kMapScrollMin = -60.f, kMapScrollMax = 300.f;  // px
 constexpr float kMapBgW = 260.f, kMapBgH = 552.f;  // bg_map.t3t parchment strip (1527x3240 * kMapS)
 constexpr float kMapBgX = (gfx::kTopW - kMapBgW) / 2.f;
 constexpr float kNodeScale = kMapS * 0.8f;  // node icons: ~9 px, as small as on RGDSplus
