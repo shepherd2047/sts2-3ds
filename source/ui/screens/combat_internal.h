@@ -39,4 +39,39 @@ constexpr float kHandY = 130.f;  // centre card at ~49% of the screen, as on RGD
 constexpr float kPlayLine = 76.f;
 }  // namespace
 
+// ---------------------------------------------------------------- S12 hand select (U14)
+
+// A CardChoice whose options all sit in the hand is the C# NPlayerHand selection mode
+// (CardSelectCmd.FromHand: discard / exhaust / retain / put back / upgrade N): it is shown on
+// the fanned hand with the prompt, a k / N counter and the focused card on the top screen,
+// instead of the card grid used for pile choices. Pure UI state; the rules only see the
+// picked cards when the player confirms.
+struct HandSelect {
+  std::vector<Card*> options;  // the choice this state belongs to (a new choice resets it)
+  std::vector<Card*> picks;    // in pick order (C# _selectedCards)
+  bool confirm = false;        // 确认 pressed on the bottom pass; fired by updateCombat
+  bool has(Card* c) const { return std::find(options.begin(), options.end(), c) != options.end(); }
+  bool picked(Card* c) const { return std::find(picks.begin(), picks.end(), c) != picks.end(); }
+};
+inline HandSelect& handSel() {
+  static HandSelect s;
+  return s;
+}
+inline bool isHandSelect(const Combat& cb) {
+  if (!cb.choice.active || cb.choice.options.empty()) return false;
+  for (Card* c : cb.choice.options)
+    if (std::find(cb.hand.begin(), cb.hand.end(), c) == cb.hand.end()) return false;
+  return true;
+}
+// Legal pick counts, clamped to what can be picked (discard 2 with one card: confirm at 1,
+// as C# FromHand takes the whole list when it holds no more than MinSelect).
+inline int handSelectMax(const Combat& cb) { return std::min(cb.choice.maxCount, (int)cb.choice.options.size()); }
+inline int handSelectMin(const Combat& cb) { return std::clamp(cb.choice.minCount, 0, handSelectMax(cb)); }
+// Picked cards stand raised out of the fan; the focused one lifts a little.
+constexpr float kPickLift = 22.f, kFocusLift = 8.f;
+inline float handSelectLift(const Combat& cb, int i, int sel) {
+  if (handSel().picked(cb.hand[i])) return -kPickLift;
+  return i == sel ? -kFocusLift : 0.f;
+}
+
 }  // namespace ui

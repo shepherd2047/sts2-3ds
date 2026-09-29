@@ -22,12 +22,14 @@ App::HandSlot App::handSlot(int n, int i) const {
 int App::hitHandCard(float tx, float ty) {
   Combat* cb = run_->combat.get();
   int n = (int)cb->hand.size();
-  if (sel_ >= 0 && sel_ < n && !drag_.down) {
+  const bool selecting = isHandSelect(*cb);  // S12: no preview, picked cards stand raised
+  if (!selecting && sel_ >= 0 && sel_ < n && !drag_.down) {
     float cx = std::clamp(handSlot(n, sel_).x, 70.f, kBot - 70.f), cy = kPreviewY + kCardH * kPreviewS / 2;
     if (std::fabs(tx - cx) < kCardW * kPreviewS / 2 && std::fabs(ty - cy) < kCardH * kPreviewS / 2) return sel_;
   }
   for (int i = n - 1; i >= 0; --i) {
     HandSlot h = handSlot(n, i);
+    if (selecting) h.y += handSelectLift(*cb, i, sel_);
     float dx = tx - h.x, dy = ty - h.y;
     float c = std::cos(-h.angle), s = std::sin(-h.angle);
     float lx = dx * c - dy * s, ly = dx * s + dy * c;
@@ -105,6 +107,7 @@ void App::drawFlights(bool top) {
 void App::animateHand(float dt) {
   Combat* cb = run_->combat.get();
   int n = (int)cb->hand.size();
+  const bool selecting = isHandSelect(*cb);
   drawQueue_ = std::max(0.f, drawQueue_ - dt);
   leaveQueue_ = std::max(0.f, leaveQueue_ - dt);
   auto inPile = [](const std::vector<Card*>& v, Card* c) { return std::find(v.begin(), v.end(), c) != v.end(); };
@@ -152,7 +155,7 @@ void App::animateHand(float dt) {
       p.x = drag_.x; p.y = drag_.y; p.angle = 0; p.s = kDragS; p.delay = 0; p.drawT = 1;
       continue;
     }
-    if (i == sel_ && !drag_.down && p.delay <= 0) {
+    if (!selecting && i == sel_ && !drag_.down && p.delay <= 0) {
       p.x = std::clamp(h.x, 70.f, kBot - 70.f); p.y = kPreviewY + kCardH * kPreviewS / 2;
       p.angle = 0; p.s = kPreviewS; p.drawT = 1;
       continue;
@@ -172,7 +175,7 @@ void App::animateHand(float dt) {
       continue;
     }
     p.x = approach(p.x, h.x, 16, dt);
-    p.y = approach(p.y, h.y, 16, dt);
+    p.y = approach(p.y, h.y + (selecting ? handSelectLift(*cb, i, sel_) : 0.f), 16, dt);
     p.angle = approach(p.angle, h.angle, 16, dt);
     p.s = approach(p.s, h.s, 16, dt);
   }
