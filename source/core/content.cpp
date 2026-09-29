@@ -664,6 +664,18 @@ void registerEncounter(const std::string& id, RoomType room, bool weak,
   regEncounter(id, room, weak, std::move(gen));
 }
 
+namespace {
+std::map<std::string, std::function<std::unique_ptr<Monster>()>>& monsterReg() {
+  static std::map<std::string, std::function<std::unique_ptr<Monster>()>> r;
+  return r;
+}
+}  // namespace
+void registerMonster(const std::string& id, std::function<std::unique_ptr<Monster>()> make) { monsterReg()[id] = std::move(make); }
+std::unique_ptr<Monster> monster(const std::string& id) {
+  auto it = monsterReg().find(id);
+  return it == monsterReg().end() ? nullptr : it->second();
+}
+
 
 
 void init() {

@@ -253,6 +253,7 @@ void App::update(const gfx::Input& in, double dt) {
 
   if (autoplay_) autoplay(visualDt);
   if (updateCardLibrary(in)) return;  // M8: over any page (main menu compendium, pause menu)
+  if (updateBestiary(in)) return;     // M10
   if (settingsOpen_) { updateSettings(in); return; }
   if ((in.down & gfx::BTN_SELECT) && scr != Screen::Title) {
     devOpen_ = !devOpen_;
@@ -358,6 +359,7 @@ void App::draw() {
     if (const char* m = getenv("STS_MOCK")) { drawStyleMock(std::atoi(m), top); continue; }
     if (drawBoot(top)) continue;
     if (drawCardLibrary(top)) continue;  // M8
+    if (drawBestiary(top)) continue;     // M10
     if (settingsOpen_) { drawSettings(top); continue; }
     if (devOpen_) { drawDev(top); continue; }
     if (detailCard_ || detailRelic_) { drawDetail(top); continue; }

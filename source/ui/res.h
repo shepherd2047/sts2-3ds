@@ -63,6 +63,9 @@ class Res {
   // Frees every loaded skeleton (and its texture pages) whose key is not in keep.
   // Callers must drop all Skeleton/AnimationState objects built on them first.
   void releaseSkeletons(const std::vector<std::string>& keep);
+  // M10 bestiary: one skeleton at a time (loaded? / free it and its pages).
+  bool skeletonLoaded(const std::string& key) const;
+  void releaseSkeleton(const std::string& key);
 
   const std::string& loc(const std::string& key) const;
   bool hasLoc(const std::string& key) const { return strings_.count(key) > 0; }

@@ -1042,7 +1042,8 @@ def build(args):
 
     take('cards', lambda k: k.split('.')[0] in CARDS)
     take('powers', lambda k: k.split('.')[0] in POWERS)
-    take('monsters', lambda k: k.split('.')[0] in MONSTERS or k.split('.')[0] == 'HATCHLING')
+    # DECIMILLIPEDE_SEGMENT: the segments' shared name and moves (M10's bestiary)
+    take('monsters', lambda k: k.split('.')[0] in MONSTERS or k.split('.')[0] in ('HATCHLING', 'DECIMILLIPEDE_SEGMENT'))
     take('relics', lambda k: k.split('.')[0] in RELICS)
     take('events', lambda k: k.split('.')[0] in EVENTS or k.startswith('GENERIC'))
     take('ancients', lambda k: k.split('.')[0] in EVENTS or k.startswith('PROCEED.'))  # PROCEED: TheArchitect's option
@@ -1058,6 +1059,7 @@ def build(args):
                                                'RELIC_HISTORY.header', 'DEFAULT_EVENT_LOSS_MESSAGE')))  # M6
     take('merchant_room')
     take('card_library')  # M8: the card library's filters, counts and the unseen card's title / text
+    take('bestiary')  # M10: the bestiary's headers, action names and locked / unseen labels
     take('badges')  # M7: the end-of-run badges' names and descriptions (badges.h locKeys)
     take('acts', lambda k: k.endswith('.title'))  # S01: the act banner's name (ActModel.Title)
     take('ascension', lambda k: k.startswith('LEVEL_'))  # S04: the character select's ascension panel
