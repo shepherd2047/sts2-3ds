@@ -1197,6 +1197,7 @@ Task<> Combat::playCard(Card* card, Creature* target, bool autoPlay, bool forceE
     co_await card->onPlay(cp);
     // CardModel.OnPlayWrapper: the enchantment's OnPlay follows the card's own effect.
     if (card->enchantment && player->alive()) co_await card->enchantment->onPlay(cp);
+    ++cardPlaysFinishedThisCombat;
     ++cardPlaysFinishedThisTurn;  // CardPlayFinished entry precedes Hook.AfterCardPlayed
     if (player->alive() && !over) {
       for (Model* m : listeners()) co_await m->afterCardPlayed(cp);

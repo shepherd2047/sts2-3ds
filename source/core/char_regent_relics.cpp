@@ -4,28 +4,13 @@
 // Translated from MegaCrit.Sts2.Core.Models.Relics / .Potions.
 #include "cards.h"
 #include "char_regent.h"
+#include "colorless.h"
 
 namespace sts {
 
 namespace {
 
 bool isCombatRoom(RoomType t) { return t == RoomType::Monster || t == RoomType::Elite || t == RoomType::Boss; }
-
-// GetDistinctForCombat(ColorlessCardPool, n): no colorless card pool is ported yet (see
-// relics_more.cpp / shop.cpp), so this substitutes the Regent's own pool, excluding Basic /
-// Ancient, like potions.cpp's chooseGenerated() already does for the Discovery-style potions.
-// PORT NOTE: OrangeDough and CosmicConcoction should draw from ColorlessCardPool.
-std::vector<std::unique_ptr<Card>> distinctRegentCards(Combat& c, int n) {
-  auto ids = db::characterCards(c.run->characterId,
-                                 [](const Card& k) { return k.rarity != Rarity::Basic && k.rarity != Rarity::Ancient; });
-  c.rng("CombatCardGeneration").shuffle(ids);
-  std::vector<std::unique_ptr<Card>> out;
-  for (size_t i = 0; i < ids.size() && (int)out.size() < n; ++i) {
-    auto k = db::card(ids[i]);
-    if (k) out.push_back(std::move(k));
-  }
-  return out;
-}
 
 // ---------------------------------------------------------------- relics
 
@@ -101,7 +86,7 @@ struct OrangeDough : Relic {
   Task<> afterSideTurnStart(Side, const std::vector<Creature*>& participants) override {
     if (!combat || combat->turnNumber > 1 || !contains(participants, owner())) co_return;
     doFlash();
-    for (auto& k : distinctRegentCards(*combat, val("Cards").toInt()))
+    for (auto& k : colorlessDistinctForCombat(*combat, val("Cards").toInt()))
       co_await cmd::addGeneratedCard(*combat, std::move(k), Pile::Hand);
   }
 };
@@ -153,7 +138,7 @@ struct StarPotion : RegentPotionBase {
 struct CosmicConcoction : RegentPotionBase {
   POTION_HEADER(CosmicConcoction, "COSMIC_CONCOCTION", Rare, CombatOnly, Self) addVar("Cards", 3); }
   Task<> onUse(Creature*) override {
-    for (auto& k : distinctRegentCards(c(), val("Cards").toInt())) {
+    for (auto& k : colorlessDistinctForCombat(c(), val("Cards").toInt())) {
       if (k->upgradable()) k->upgrade();
       co_await cmd::addGeneratedCard(c(), std::move(k), Pile::Hand);
     }

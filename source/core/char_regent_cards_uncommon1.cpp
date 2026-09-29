@@ -3,6 +3,7 @@
 // (char_regent.cpp) via registerRegentUncommonCards1(). Same style as char_regent_cards.cpp.
 #include "cards.h"
 #include "char_regent.h"
+#include "colorless.h"
 
 namespace sts {
 
@@ -358,15 +359,18 @@ struct LunarBlast : IroncladT<LunarBlast> {
 };
 
 // ManifestAuthority.cs: 1 cost, Skill, Self. Block 7, then add a random colorless card to the
-// hand (upgraded if this is).
-// PORT NOTE: no colorless card pool is ported yet (see char_regent_relics.cpp), so the generated
-// colorless card (CardFactory.GetDistinctForCombat(ColorlessCardPool, 1, CombatCardGeneration))
-// is missing; only the block is applied.
+// hand (upgraded if this is): CardFactory.GetDistinctForCombat(ColorlessCardPool, 1, CombatCardGeneration).
 struct ManifestAuthority : IroncladT<ManifestAuthority> {
   CARD_HEADER(ManifestAuthority, "MANIFEST_AUTHORITY", 1, Skill, Uncommon, Self)
     addVar("Block", 7);
   }
-  Task<> onPlay(CardPlay&) override { co_await block(val("Block")); }
+  Task<> onPlay(CardPlay&) override {
+    co_await block(val("Block"));
+    auto made = colorlessDistinctForCombat(*combat, 1);
+    if (made.empty()) co_return;
+    if (upgraded()) cmd::upgradeCard(made[0].get());
+    co_await cmd::addGeneratedCard(*combat, std::move(made[0]), Pile::Hand);
+  }
   void onUpgrade() override { upgradeVar("Block", 1); }
 };
 

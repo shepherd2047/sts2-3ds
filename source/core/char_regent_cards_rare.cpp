@@ -4,6 +4,7 @@
 // char_regent_cards_uncommon1.cpp.
 #include "cards.h"
 #include "char_regent.h"
+#include "colorless.h"
 
 namespace sts {
 
@@ -286,13 +287,15 @@ struct Bombardment : IroncladT<Bombardment> {
 
 // BundleOfJoy.cs: 1 cost, Skill, Self, Exhaust. Add 3 distinct random colorless cards to the
 // hand.
-// PORT NOTE: needs the colorless card pool (A1a), not ported: the card is left unregistered.
 struct BundleOfJoy : IroncladT<BundleOfJoy> {
   CARD_HEADER(BundleOfJoy, "BUNDLE_OF_JOY", 1, Skill, Rare, Self)
     keywords = kwExhaust;
     addVar("Cards", 3);
   }
-  Task<> onPlay(CardPlay&) override { co_return; }
+  Task<> onPlay(CardPlay&) override {
+    for (auto& k : colorlessDistinctForCombat(*combat, val("Cards").toInt()))
+      co_await cmd::addGeneratedCard(*combat, std::move(k), Pile::Hand);
+  }
   void onUpgrade() override { upgradeVar("Cards", 1); }
 };
 
@@ -426,14 +429,12 @@ struct HeavenlyDrill : IroncladT<HeavenlyDrill> {
 
 // HeirloomHammer.cs: 2 cost, Attack, AnyEnemy. Damage 20, then pick a colorless card in the hand
 // and add Repeat (1) copies of it to the hand.
-// PORT NOTE: no colorless card pool is ported (A1a), so no hand card is colorless yet and the
-// selection step never has options; only the attack happens until colorless cards exist.
 struct HeirloomHammer : IroncladT<HeirloomHammer> {
   CARD_HEADER(HeirloomHammer, "HEIRLOOM_HAMMER", 2, Attack, Rare, AnyEnemy)
     addVar("Damage", 20);
     addVar("Repeat", 1);
   }
-  static bool isColorless(Card*) { return false; }  // VisualCardPool.IsColorless
+  static bool isColorless(Card* k) { return db::isColorless(k->id); }  // VisualCardPool.IsColorless
   Task<> onPlay(CardPlay& p) override {
     co_await attack(p.target, val("Damage"));
     std::vector<Card*> options;
@@ -604,7 +605,7 @@ void registerRegentRareCards() {
   registerCardType<BeatIntoShape>();
   registerCardType<BigBang>();
   registerCardType<Bombardment>();
-  // BundleOfJoy: left unregistered (needs the colorless card pool).
+  registerCardType<BundleOfJoy>();
   registerCardType<Comet>();
   registerCardType<CrashLanding>();
   registerCardType<DecisionsDecisions>();

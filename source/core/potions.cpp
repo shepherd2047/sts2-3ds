@@ -3,7 +3,7 @@
 // PotionRewardOdds. Translated from MegaCrit.Sts2.Core.Models.Potions / .Powers,
 // Commands/PotionCmd.cs, Factories/PotionFactory.cs, Odds/PotionRewardOdds.cs.
 //
-// Not registered (so never rolled): ColorlessPotion (no colorless card pool yet).
+// ColorlessPotion lives in colorless_pool.cpp (A1a) with the colorless card pool.
 // Other characters' pools (Silent, Defect, Regent) are not ported. The Necrobinder's 3
 // (PotionOfDoom, PotOfGhouls, BoneBrew; X4.1) are below, using char_necrobinder.h's DoomPower /
 // createSoulsInHand / summonOsty.
