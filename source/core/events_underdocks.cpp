@@ -2,9 +2,9 @@
 // AbyssalBaths, DrowningBeacon, EndlessConveyor, PunchOff (+ PunchOffEventEncounter),
 // SpiralingWhirlpool, SunkenTreasury, DoorsOfLightAndDark, TrashHeap, WaterloggedScriptorium.
 // Also what they hand out: the relics FresnelLens, DarkstonePeriapt, DreamCatcher, HandDrill,
-// MawBank and TheBoot, GlowwaterPotion, the Spiral / Steady enchantments, the event cards
-// FeedingFrenzy, Caltrops, Clash, Distraction, DualWield, Entrench, HelloWorld, Outmaneuver,
-// Rebound, RipAndTear and Stack, and their powers. The Underdocks act itself is A11f.
+// MawBank and TheBoot, GlowwaterPotion and the Spiral / Steady enchantments. The event cards
+// they give (FeedingFrenzy, Caltrops, ...) are A2's, in content_cards_misc.cpp. The Underdocks
+// act itself is A11f.
 // Everything sits in an anonymous namespace: A2 / A3c / X* may add the same ids later.
 #include <algorithm>
 #include <functional>
@@ -37,204 +37,9 @@ void stableShuffleCards(std::vector<Card*>& v, Rng& rng) {
   rng.shuffle(v);
 }
 
-// CardFactory.GetDistinctForCombat over the character's pool: FilterForCombat drops Basic / Ancient,
-// then TakeRandom is a shuffle + take (the port's idiom). PORT NOTE: the CanBeGeneratedInCombat /
-// multiplayer / unlocked filters are not modeled (db::characterCards has none).
-std::vector<std::string> distinctForCombat(Combat& c, std::function<bool(const Card&)> filter, int count) {
-  auto ids = db::characterCards(c.run->characterId, [&](const Card& k) {
-    return k.rarity != Rarity::Basic && k.rarity != Rarity::Ancient && filter(k);
-  });
-  c.rng("CombatCardGeneration").shuffle(ids);
-  if ((int)ids.size() > count) ids.resize((size_t)std::max(0, count));
-  return ids;
-}
-
 // ================================================================ powers
 
-// FeedingFrenzyPower.cs: a TemporaryStrengthPower (Strength until the end of the turn).
-struct FeedingFrenzyPower : Power {
-  POWER_HEADER(FeedingFrenzyPower, "FEEDING_FRENZY_POWER")
-  Task<> beforeApplied(Creature* target, Dec amt, Creature* app, Card* src) override {
-    co_await applyPower<StrengthPower>(target, amt, app, src, true);
-  }
-  Task<> afterPowerAmountChanged(Power* p, Dec amt, Creature* app, Card* src) override {
-    if (!(amt == Dec(amount)) && p == this) co_await applyPower<StrengthPower>(owner, amt, app, src, true);
-  }
-  Task<> afterSideTurnEnd(Side, const std::vector<Creature*>& participants) override {
-    if (contains(participants, owner)) {
-      flash = 1.f;
-      Creature* o = owner;
-      int a = amount;
-      co_await cmd::removePower(this);
-      co_await applyPower<StrengthPower>(o, -a, o, nullptr);
-    }
-  }
-};
-
-// HelloWorldPower.cs: before the hand draw, add AmountOnTurnStart random Common cards of the pool.
-struct HelloWorldPower : Power {
-  POWER_HEADER(HelloWorldPower, "HELLO_WORLD_POWER")
-  Task<> beforeHandDraw() override {
-    if (!owner || !owner->combat || amountOnTurnStart < 1) co_return;
-    flash = 1.f;
-    Combat& c = *owner->combat;
-    auto ids = distinctForCombat(c, [](const Card& k) { return k.rarity == Rarity::Common; }, amountOnTurnStart);
-    for (auto& id : ids) co_await cmd::addGeneratedCard(c, db::card(id), Pile::Hand);
-  }
-};
-
-// ReboundPower.cs: the next card(s) that would be discarded after being played go on top of the draw
-// pile instead; removed at the end of the owner's turn.
-// PORT NOTE: no AfterModifyingCardPlayResultLocation hook; the decrement happens in afterCardPlayed
-// (after the card's effect, before it moves).
-struct ReboundPower : Power {
-  POWER_HEADER(ReboundPower, "REBOUND_POWER")
-  Card* pending = nullptr;
-  Pile modifyCardPlayResultLocation(Card* card, bool, Pile pile) override {
-    if (ownerOf(card) != owner || pile != Pile::Discard) return pile;
-    pending = card;
-    return Pile::Draw;  // top: moveCard's default
-  }
-  Task<> afterCardPlayed(const CardPlay& cp) override {
-    if (!pending || cp.card != pending) co_return;
-    pending = nullptr;
-    flash = 1.f;
-    co_await cmd::decrement(this);
-  }
-  Task<> afterSideTurnEnd(Side, const std::vector<Creature*>& participants) override {
-    if (contains(participants, owner)) co_await cmd::removePower(this);
-  }
-};
-
 // ================================================================ event cards
-
-// FeedingFrenzy.cs (event card, Token here like the other event cards)
-struct FeedingFrenzy : IroncladT<FeedingFrenzy> {
-  CARD_HEADER(FeedingFrenzy, "FEEDING_FRENZY", 0, Skill, Token, Self)
-    addVar("StrengthPower", 5);
-  }
-  Task<> onPlay(CardPlay&) override { co_await applyPower<FeedingFrenzyPower>(me(), val("StrengthPower"), me(), this); }
-  void onUpgrade() override { upgradeVar("StrengthPower", 2); }
-};
-
-// Caltrops.cs (Silent art)
-struct Caltrops : IroncladT<Caltrops> {
-  CARD_HEADER(Caltrops, "CALTROPS", 1, Power, Token, Self)
-    addVar("ThornsPower", 3);
-  }
-  Task<> onPlay(CardPlay&) override {
-    // ThornsPower lives in content_act2a.cpp; applied by id.
-    auto p = db::power("ThornsPower");
-    if (p) co_await cmd::applyPower(std::move(p), me(), val("ThornsPower"), me(), this);
-  }
-  void onUpgrade() override { upgradeVar("ThornsPower", 2); }
-};
-
-// Clash.cs (Ironclad art): only playable while the hand holds nothing but Attacks.
-struct Clash : IroncladT<Clash> {
-  CARD_HEADER(Clash, "CLASH", 0, Attack, Token, AnyEnemy)
-    addVar("Damage", 14);
-  }
-  bool shouldPlay(Card* c) override {  // IsPlayable
-    if (c != this || !combat) return true;
-    for (Card* k : combat->hand) if (k->type != CardType::Attack) return false;
-    return true;
-  }
-  Task<> onPlay(CardPlay& p) override { co_await attack(p.target, val("Damage")); }
-  void onUpgrade() override { upgradeVar("Damage", 4); }
-};
-
-// Distraction.cs (Silent art): Exhaust; a random Skill of the pool, free this turn, into the hand.
-struct Distraction : IroncladT<Distraction> {
-  CARD_HEADER(Distraction, "DISTRACTION", 1, Skill, Token, Self)
-    keywords = kwExhaust;
-  }
-  Task<> onPlay(CardPlay&) override {
-    auto ids = distinctForCombat(*combat, [](const Card& k) { return k.type == CardType::Skill; }, 1);
-    if (ids.empty()) co_return;
-    auto card = db::card(ids[0]);
-    card->setThisTurnOrUntilPlayed(0);  // SetToFreeThisTurn
-    co_await cmd::addGeneratedCard(*combat, std::move(card), Pile::Hand);
-  }
-  void onUpgrade() override { cost -= 1; }
-};
-
-// DualWield.cs (Ironclad art): pick an Attack or Power in hand, add Cards copies of it to the hand.
-struct DualWield : IroncladT<DualWield> {
-  CARD_HEADER(DualWield, "DUAL_WIELD", 1, Skill, Token, Self)
-    addVar("Cards", 1);
-  }
-  Task<> onPlay(CardPlay&) override {
-    std::vector<Card*> opts;
-    for (Card* c : combat->hand) if (c->type == CardType::Attack || c->type == CardType::Power) opts.push_back(c);
-    auto picked = co_await cmd::selectCards(*combat, "DUAL_WIELD", opts, 1, 1);
-    if (picked.empty()) co_return;
-    Card* selection = picked[0];
-    for (int i = 0, n = val("Cards").toInt(); i < n; ++i)
-      co_await cmd::addGeneratedCard(*combat, selection->clone(), Pile::Hand);
-  }
-  void onUpgrade() override { upgradeVar("Cards", 1); }
-};
-
-// Entrench.cs (Ironclad art): double the block (Unpowered | Move).
-struct Entrench : IroncladT<Entrench> {
-  CARD_HEADER(Entrench, "ENTRENCH", 2, Skill, Token, Self)
-  }
-  bool gainsBlock() const override { return true; }
-  Task<> onPlay(CardPlay&) override { co_await cmd::gainBlock(me(), Dec(me()->block), kUnpowered | kMove, this); }
-  void onUpgrade() override { cost -= 1; }
-};
-
-// HelloWorld.cs (Defect art)
-struct HelloWorld : IroncladT<HelloWorld> {
-  CARD_HEADER(HelloWorld, "HELLO_WORLD", 1, Power, Token, Self)
-  }
-  Task<> onPlay(CardPlay&) override { co_await applyPower<HelloWorldPower>(me(), 1, me(), this); }
-  void onUpgrade() override { keywords |= kwInnate; }
-};
-
-// Outmaneuver.cs (Silent art)
-struct Outmaneuver : IroncladT<Outmaneuver> {
-  CARD_HEADER(Outmaneuver, "OUTMANEUVER", 1, Skill, Token, Self)
-    addVar("Energy", 2);
-  }
-  Task<> onPlay(CardPlay&) override { co_await applyPower<EnergyNextTurnPower>(me(), val("Energy"), me(), this); }
-  void onUpgrade() override { upgradeVar("Energy", 1); }
-};
-
-// Rebound.cs (Defect art)
-struct Rebound : IroncladT<Rebound> {
-  CARD_HEADER(Rebound, "REBOUND", 1, Attack, Token, AnyEnemy)
-    addVar("Damage", 9);
-  }
-  Task<> onPlay(CardPlay& p) override {
-    co_await attack(p.target, val("Damage"));
-    co_await applyPower<ReboundPower>(me(), 1, me(), this);
-  }
-  void onUpgrade() override { upgradeVar("Damage", 3); }
-};
-
-// RipAndTear.cs (Defect art)
-struct RipAndTear : IroncladT<RipAndTear> {
-  CARD_HEADER(RipAndTear, "RIP_AND_TEAR", 1, Attack, Token, RandomEnemy)
-    addVar("Damage", 7);
-  }
-  Task<> onPlay(CardPlay&) override { co_await attackRandom(val("Damage"), 2); }
-  void onUpgrade() override { upgradeVar("Damage", 2); }
-};
-
-// Stack.cs (Defect art): block = base + 1 per card in the discard pile.
-struct Stack : IroncladT<Stack> {
-  CARD_HEADER(Stack, "STACK", 1, Skill, Token, Self)
-    addVar("CalculationBase", 0);
-    addVar("CalculationExtra", 1);
-    addVar("CalculatedBlock", 0);
-    calcMultiplier = [](Card* c) { return c->combat ? (int)c->combat->discard.size() : 0; };
-  }
-  bool gainsBlock() const override { return true; }
-  Task<> onPlay(CardPlay&) override { co_await block(calculatedBlock()); }
-  void onUpgrade() override { upgradeVar("CalculationBase", 3); }
-};
 
 // ================================================================ enchantments
 
@@ -758,20 +563,6 @@ struct WaterloggedScriptorium : Event {
 }  // namespace
 
 void registerUnderdocksEvents() {
-  registerPowerType<FeedingFrenzyPower>();
-  registerPowerType<HelloWorldPower>();
-  registerPowerType<ReboundPower>();
-  registerCardType<FeedingFrenzy>();
-  registerCardType<Caltrops>();
-  registerCardType<Clash>();
-  registerCardType<Distraction>();
-  registerCardType<DualWield>();
-  registerCardType<Entrench>();
-  registerCardType<HelloWorld>();
-  registerCardType<Outmaneuver>();
-  registerCardType<Rebound>();
-  registerCardType<RipAndTear>();
-  registerCardType<Stack>();
   db::registerEnchantment(Spiral::kId, [] { return std::unique_ptr<Enchantment>(new Spiral()); });
   db::registerEnchantment(Steady::kId, [] { return std::unique_ptr<Enchantment>(new Steady()); });
   db::registerPotion(GlowwaterPotion::kId, [] { return std::unique_ptr<Potion>(new GlowwaterPotion()); });
