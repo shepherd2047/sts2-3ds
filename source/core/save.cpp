@@ -3,6 +3,7 @@
 // itself: player, deck, relics (+ Relic::persist), potions, map, queues, grab bags, odds
 // and every RNG stream's raw state. Loading builds a fresh run (Run::start for the
 // constant parts), overwrites it from the file and resumes Run::main at the map.
+#include <cmath>
 #include <sstream>
 
 #include "game.h"
@@ -11,7 +12,7 @@ namespace sts {
 
 namespace {
 
-constexpr int kSaveVersion = 5;  // 2: card enchantments, 3: character id, 4: ascension (older saves load as Ironclad / ascension 0), 5: act list (older: Overgrowth, Hive, Glory)
+constexpr int kSaveVersion = 6;  // 2: card enchantments, 3: character id, 4: ascension (older saves load as Ironclad / ascension 0), 5: act list (older: Overgrowth, Hive, Glory), 6: run history path + times (M2; older: empty path)
 
 void ioCard(Archive& a, std::unique_ptr<Card>& c) {
   std::string id = c ? c->id : "";
@@ -170,6 +171,14 @@ void ioRun(Archive& a, Run& r) {
       if (p) p->run = &r;
       r.potions.push_back(std::move(p));
     }
+  }
+  if (version >= 6) {  // run history (history.h): the path so far, start time, milliseconds played
+    a.tag("HISTORY");
+    a.io(r.startTime);
+    int64_t ms = std::llround(r.runTime * 1000.0);
+    a.io(ms);
+    if (a.reading) r.runTime = (double)ms / 1000.0;
+    history::ioPath(a, r.mapHistory);
   }
   a.tag("END");
 }

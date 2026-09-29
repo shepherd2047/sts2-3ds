@@ -10,6 +10,7 @@
 #endif
 
 #include "game.h"
+#include "history.h"
 #include "profiles.h"
 #include "progress.h"
 
@@ -242,6 +243,7 @@ bool remove(int id) {
   if (S().disk) {
     removeWithTmp(runSavePath(id));
     removeWithTmp(progressPath(id));
+    history::removeAll(id);  // M2: profile<N>/history/
   }
   S().file.names[id - 1].clear();
   if (id == current()) progress::reset();
