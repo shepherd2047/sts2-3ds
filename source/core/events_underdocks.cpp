@@ -10,6 +10,7 @@
 #include <functional>
 
 #include "cards.h"
+#include "colorless.h"
 
 namespace sts {
 
@@ -335,8 +336,9 @@ struct EndlessConveyor : Event {
     co_return;
   }
   Task<> friedEel() {
-    // PORT NOTE: CardFactory.CreateForReward over the ColorlessCardPool (A1a) is not possible yet;
-    // the dish is still rolled but gives no card.
+    // CardFactory.CreateForReward(1, ForNonCombatWithDefaultOdds(ColorlessCardPool)) into the deck.
+    auto cards = colorlessRewardCards(*run, 1);
+    if (!cards.empty()) run->addCardToDeck(std::move(cards[0]));
     co_return;
   }
   Task<> goldenFysh() { co_await run->gainGold(val("GoldenFyshGold").toInt()); }

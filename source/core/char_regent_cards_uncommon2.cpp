@@ -3,6 +3,7 @@
 // via registerRegentUncommonCards2(). Same style as char_regent_cards_uncommon1.cpp.
 #include "cards.h"
 #include "char_regent.h"
+#include "colorless.h"
 
 namespace sts {
 
@@ -82,16 +83,12 @@ struct ReflectPower : Power {
 
 // SpectrumShiftPower.cs: before the hand draw each turn, add Amount distinct random colorless
 // cards to the hand.
-// PORT NOTE: no colorless card pool exists yet (package A1a), so nothing is generated and
-// SpectrumShift / Quasar are left unregistered until it does. Once it exists: at beforeHandDraw
-// pick `amount` distinct cards with CardFactory.GetDistinctForCombat over the colorless pool using
-// rng("CombatCardGeneration"), then cmd::addGeneratedCard each to Pile::Hand.
 struct SpectrumShiftPower : Power {
   POWER_HEADER(SpectrumShiftPower, "SPECTRUM_SHIFT_POWER")
   Task<> beforeHandDraw() override {
-    // PORT NOTE: locked on A1a (see above).
+    for (auto& k : colorlessDistinctForCombat(*owner->combat, amount))
+      co_await cmd::addGeneratedCard(*owner->combat, std::move(k), Pile::Hand);
     flash = 1.f;
-    co_return;
   }
 };
 
@@ -169,9 +166,16 @@ struct Prophesize : IroncladT<Prophesize> {
 
 // Quasar.cs: 0 cost, 2 stars, Skill, Self. Choose 1 of 3 distinct random colorless cards (upgraded
 // if this is) to add to the hand, skippable.
-// PORT NOTE: no colorless card pool exists yet (package A1a), so this card is not ported until it
-// does. It needs CardFactory.GetDistinctForCombat(colorless pool, 3, CombatCardGeneration) and a
-// skippable choose-a-card screen that returns the chosen card into the hand.
+struct Quasar : IroncladT<Quasar> {
+  CARD_HEADER(Quasar, "QUASAR", 0, Skill, Uncommon, Self)
+    starCost = 2;
+  }
+  Task<> onPlay(CardPlay&) override {
+    auto options = colorlessDistinctForCombat(*combat, 3);
+    if (upgraded()) for (auto& k : options) cmd::upgradeCard(k.get());
+    co_await chooseGeneratedToHand(*combat, std::move(options), false);
+  }
+};
 
 // Radiate.cs: 0 cost, Attack, AllEnemies. Damage 3, hit once per star gained this turn
 // (CalculatedHits = 0 + 1 * StarsModifiedEntry amounts > 0 this turn).
@@ -252,8 +256,6 @@ struct ShiningStrike : IroncladT<ShiningStrike> {
 };
 
 // SpectrumShift.cs: 2 cost, Power, Self. SpectrumShiftPower (Cards 1).
-// PORT NOTE: the power's effect needs the colorless card pool (package A1a), see
-// SpectrumShiftPower above; the card is defined but not registered until then.
 struct SpectrumShift : IroncladT<SpectrumShift> {
   CARD_HEADER(SpectrumShift, "SPECTRUM_SHIFT", 2, Power, Uncommon, Self)
     addVar("Cards", 1);
@@ -330,12 +332,13 @@ void registerRegentUncommonCards2() {
   registerCardType<ParticleWall>();
   registerCardType<PillarOfCreation>();
   registerCardType<Prophesize>();
-  // Quasar, SpectrumShift: locked on the colorless pool (A1a), not registered.
+  registerCardType<Quasar>();
   registerCardType<Radiate>();
   registerCardType<Reflect>();
   registerCardType<Resonance>();
   registerCardType<RoyalGamble>();
   registerCardType<ShiningStrike>();
+  registerCardType<SpectrumShift>();
   registerCardType<Stardust>();
   registerCardType<SummonForth>();
   registerCardType<Supermassive>();

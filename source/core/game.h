@@ -444,6 +444,7 @@ struct Card : Model {
   virtual ~Card() = default;
   virtual Task<> onPlay(CardPlay&) { return {}; }
   virtual void onUpgrade() {}
+  virtual bool canBeGeneratedInCombat() const { return true; }  // CardModel.CanBeGeneratedInCombat (colorless pool helpers)
   // HasTurnEndInHandEffect / OnTurnEndInHand (Burn, Infection, ...)
   virtual bool hasTurnEndInHandEffect() const { return false; }
   virtual Task<> onTurnEndInHand() { return {}; }
@@ -813,6 +814,7 @@ struct Combat {
   int skillsFinishedThisTurn = 0;  // CardPlaysFinished of Skills this turn (LunarBlast, X3.3a)
   int etherealPlaysFinished = 0;  // CardPlaysFinished with WasEthereal, whole combat (BansheesCry, X4.4)
   int attackPlaysFinishedThisTurn = 0;  // CombatHistory.CardPlaysFinished this turn: Attack plays (Finisher, X1.3a)
+  int cardPlaysFinishedThisCombat = 0;  // CombatHistory.CardPlaysFinished, whole combat (GoldAxe, A1a)
   int cardPlaysFinishedThisTurn = 0;  // CardPlaysFinished of all types this turn, bumped before AfterCardPlayed (PaleBlueDot, X3.3b)
   int starsGainedThisTurn = 0;  // StarsModifiedEntry amounts > 0 this turn (Radiate, X3.3b)
   int cardsGeneratedThisCombat = 0;  // CardGeneratedEntry count (Supermassive, X3.3b)
@@ -1308,6 +1310,10 @@ bool characterPlayable(const std::string& id);
 std::vector<std::string> characterCards(const std::string& characterId, std::function<bool(const Card&)> filter);
 // The character's potions, then the shared pool (registered or not).
 std::vector<std::string> potionPool(const std::string& characterId);
+// The colorless pool (colorless_pool.cpp, C# ColorlessCardPool order): registered cards matching a filter, without the
+// multiplayer-only ones. `isColorless` = the id is in the pool (VisualCardPool.IsColorless). Helpers: colorless.h.
+std::vector<std::string> colorlessCards(std::function<bool(const Card&)> filter);
+bool isColorless(const std::string& id);
 // Ironclad-only shortcuts, kept for old callers: prefer the character versions above.
 const std::vector<std::string>& ironcladPool();
 std::vector<std::string> ironcladCards(std::function<bool(const Card&)> filter);

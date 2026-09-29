@@ -7,6 +7,7 @@
 #include <algorithm>
 
 #include "cards.h"
+#include "colorless.h"
 
 namespace sts {
 
@@ -157,9 +158,15 @@ struct BrainLeech : Event {
     addVar("FromCardChoiceCount", 5);
   }
   std::vector<EventOption> initialOptions() override {
-    // PORT NOTE: RIP needs the colorless card pool (not ported); the option is locked.
     return {option("INITIAL", "SHARE_KNOWLEDGE", [this] { return shareKnowledge(); }),
-            EventOption{page("INITIAL") + ".options.RIP", nullptr}};
+            option("INITIAL", "RIP", [this] { return rip(); })};
+  }
+  Task<> rip() {
+    co_await run->loseHp(val("RipHpLoss").toInt());
+    if (run->died) co_return;
+    // CardReward(ForNonCombatWithDefaultOdds(ColorlessCardPool), 3 cards), RewardCount times.
+    for (int i = 0; i < val("RewardCount").toInt(); ++i) co_await run->chooseCardFor(colorlessRewardCards(*run, 3));
+    setFinished("RIP");
   }
   Task<> shareKnowledge() {
     auto cards = run->cardReward(RoomType::Monster, val("FromCardChoiceCount").toInt());
