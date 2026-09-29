@@ -9,6 +9,7 @@ Everything is read from the local PCK; nothing is downloaded. Output:
 """
 import argparse
 import glob
+import json
 import os
 import re
 import struct
@@ -618,6 +619,28 @@ def add_ui_art(g, a, packer, known):
     put('ui/sub_lock', 'packed/main_menu/submenu_lock.png', (40, 30))
     put('ui/sub_stats', 'packed/main_menu/submenu_stats_icon.png', (44, 25))
     put('ui/sub_history', 'packed/main_menu/submenu_history_icon.png', (40, 25))
+    # M6: stats screen icons (stats_screen_atlas, NGeneralStatsGrid / NCharacterStats), run history
+    # map point icons (NMapPointHistoryEntry: ui/run_history/<type>.png) and badge art (NBadge:
+    # ui/game_over_screen/badge_<id>.png on a badge_<rarity>.png plate).
+    try:
+        sheet = json.loads(g.pck.read('images/atlases/stats_screen_atlas.tpsheet'))['textures'][0]
+        page = g.image('images/atlases/' + sheet['image'])
+        for sp in sheet['sprites']:
+            nm = sp['filename'][:-4]
+            if not nm.startswith('stats_') or 'ui/' + nm in known:
+                continue
+            r = sp['region']
+            packer.add('ui/' + nm, fit(page.crop((r['x'], r['y'], r['x'] + r['w'], r['y'] + r['h'])), (28, 28)))
+            known.add('ui/' + nm)
+    except Exception as e:
+        print('  ui art missing stats_screen_atlas', e)
+    for f in sorted(g.pck.files):
+        m = re.match(r'images/ui/run_history/([a-z_]+)\.png\.import$', f)
+        if m and not m.group(1).endswith('_outline'):
+            put('hist/' + m.group(1), f'ui/run_history/{m.group(1)}.png', (18, 18))
+        m = re.match(r'images/ui/game_over_screen/badge_([a-z_]+)\.png\.import$', f)
+        if m and m.group(1) != 'outline':
+            put('badge/' + m.group(1), f'ui/game_over_screen/badge_{m.group(1)}.png', (30, 30))
     put('ui/end_turn_glow', 'packed/combat_ui/end_turn_button_glow.png', (84, 42))
     put('ui/exhaust_pile', 'packed/combat_ui/exhaust_pile.png', (30, 30))
     put('ui/pile_count', 'packed/combat_ui/pile_button_count.png', (24, 20))
@@ -1024,7 +1047,12 @@ def build(args):
     take('enchantments', lambda k: k.split('.')[0] in ENCHANTMENTS)
     # the enchantment replay line; C11: the map's boss preview (NTopBarBossIcon: BOSS / DOUBLE_BOSS)
     take('static_hover_tips', lambda k: k.startswith(('REPLAY', 'BOSS.', 'DOUBLE_BOSS.')))
-    take('encounters', lambda k: k.endswith('_BOSS.title'))  # C11: boss names (EncounterModel.Title)
+    # C11: boss names (EncounterModel.Title); M6: every encounter's title and loss line (the run
+    # history's killed-by quote, EncounterModel.GetLossMessageFor)
+    take('encounters', lambda k: k.endswith(('.title', '.loss')))
+    take('stats_screen')  # M6: NGeneralStatsGrid / NCharacterStats entries
+    take('run_history', lambda k: k.startswith(('MAP_POINT_HISTORY.', 'INFO.SEED', 'DECK_HISTORY.header',
+                                               'RELIC_HISTORY.header', 'DEFAULT_EVENT_LOSS_MESSAGE')))  # M6
     take('merchant_room')
     take('badges')  # M7: the end-of-run badges' names and descriptions (badges.h locKeys)
     take('acts', lambda k: k.endswith('.title'))  # S01: the act banner's name (ActModel.Title)

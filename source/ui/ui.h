@@ -109,6 +109,15 @@ class App {
   bool drawProfiles(bool top);
   bool updateProfiles(const gfx::Input& in);
   void drawProfileChip(int hitId);  // main menu's NOpenProfileScreenButton (top-left corner)
+  // M6 (U30) stats screen + run history viewer, screens/stats_screen.cpp (state lives there).
+  // openStats(1) the stats page, openStats(2) the run history list; draw / update return false
+  // while it is closed.
+  void openStats(int page);
+  bool drawStats(bool top);
+  bool updateStats(const gfx::Input& in);
+  void drawStatsPage(bool top);
+  void drawHistoryList(bool top);
+  void drawRunDetail(bool top);
 
  public:
   bool quitRequested() const { return quit_; }
