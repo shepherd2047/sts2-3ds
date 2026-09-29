@@ -188,6 +188,19 @@ static uint32_t tagColor(const std::string& tag, uint32_t base) {
 
 // Short [icon:NAME] names -> atlas sprite path; anything with a '/' is used as the sprite
 // name directly (e.g. [icon:relic/BURNING_BLOOD]).
+// Punctuation that must not begin a line (GB/T 15834 避头): CJK closing marks and their ASCII kin.
+static bool closingPunct(uint32_t cp) {
+  switch (cp) {
+    case 0xFF0C: case 0x3002: case 0x3001: case 0xFF1B: case 0xFF1A: case 0xFF01: case 0xFF1F:  // ，。、；：！？
+    case 0xFF09: case 0x300D: case 0x300F: case 0x300B: case 0x3009: case 0x3011: case 0x201D:  // ）」』》〉】”
+    case 0x2019: case 0x2026: case 0xFF05: case 0x00B7: case 0xFF5E:                            // ’…％·～
+    case ',': case '.': case ';': case ':': case '!': case '?': case ')': case ']': case '%':
+      return true;
+    default:
+      return false;
+  }
+}
+
 static const char* iconSpritePath(const std::string& name) {
   if (name == "energy") return "card/energy";
   if (name == "gold") return "ui/reward_money";
@@ -266,8 +279,29 @@ std::vector<Res::Line> Res::layout(const std::string& s, const TextStyle& st) {
     if (lines.back().width + a > maxW && !lines.back().glyphs.empty()) {
       lines.emplace_back();
       if (cp == ' ') continue;
+      // Keep closing punctuation off the start of a line (避头): carry the previous line's last
+      // character (a whole ASCII word, plus any closing marks before it) down with it.
+      if (closingPunct(cp)) {
+        auto& prev = lines[lines.size() - 2].glyphs;
+        auto glyphAdv = [&](uint32_t g) { return g >= kIconBase ? f.lineHeight : adv(g); };
+        auto isWord = [](uint32_t g) { return g < 0x80 && g != ' '; };
+        size_t k = prev.size();
+        while (k > 0 && closingPunct(prev[k - 1].first)) --k;
+        if (k > 0 && isWord(prev[k - 1].first))
+          while (k > 0 && isWord(prev[k - 1].first)) --k;
+        else if (k > 0)
+          --k;
+        if (k > 0) {  // never empty the previous line
+          for (size_t j = k; j < prev.size(); ++j) {
+            float ga = glyphAdv(prev[j].first);
+            lines[lines.size() - 2].width -= ga;
+            lines.back().glyphs.push_back(prev[j]);
+            lines.back().width += ga;
+          }
+          prev.resize(k);
+        }
+      }
     }
-    // Keep closing punctuation off the start of a line.
     lines.back().glyphs.push_back({cp, c});
     lines.back().width += a;
   }
