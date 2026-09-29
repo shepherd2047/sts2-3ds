@@ -112,7 +112,7 @@ check: build/enchant_test build/character_test build/silent_test build/necrobind
 	./build/progress_test
 	./build/settings_test
 	for l in 0 8 9 10; do ./build/ascension_dump $$l > build/asc_dump_$$l.txt; done
-	@if command -v python >/dev/null 2>&1 && [ -d ../sts2-decompiled ]; then python tools/ascension_check.py; else echo "ascension_check skipped (needs python and ../sts2-decompiled)"; fi
+	@PY=$$(command -v python3 || command -v python); if [ -n "$$PY" ] && [ -d ../sts2-decompiled ]; then $$PY tools/ascension_check.py; else echo "ascension_check skipped (needs python3 and ../sts2-decompiled)"; fi
 
 clean:
 	rm -rf build

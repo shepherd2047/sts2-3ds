@@ -16,8 +16,7 @@ Everything accepted is on `main`. State:
   two minions — the game's own art (checked against an offline render). Open: MAD_SCIENCE (event card) has one
   portrait per chosen type (`mad_science_attack/skill/power`), not baked yet.
 - **S04 character select: accepted and merged** (2026-09-28).
-- **X1.3a-X4.3a accepted and merged** (2026-09-28, four subagents). X*.3b, A7a, A7b, A11a, A11b accepted too. **Running:** X*.4, A2, A7c, A11c, A11e. **Then:** X*.4 (Rare +
-  tokens), then the engine order (Y5 + H1/H3 need the real 3DS, A10, A11f, ...).
+- **X1.3a-X4.3a accepted and merged** (2026-09-28, four subagents). X*.3b, A7a, A7b, A11a, A11b accepted too. **Running:** X*.4, A2, A7c, A11c, A11e. **Then:** the engine order (Y5 + H1/H3 need the real 3DS, A10, A11f, ...).
 - **Rules learned today** (also in CLAUDE.md): one class per power id (shared powers in `powers.h`);
   no two .cpp files with the same basename (3DS object names are flattened); `Card::createdByPlayer` is the
   C#'s `creator == Owner` check; subagents in worktrees must export `OS=Windows_NT` on Windows.
