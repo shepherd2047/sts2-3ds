@@ -108,9 +108,9 @@ std::string defaultPath();
 bool save(const std::string& path = defaultPath());
 bool load(const std::string& path = defaultPath());
 
-// The default location of the run save and profile progress files, duplicated here (matching
-// gfx_sdl.cpp's kSaveName + saveDir() and progress::defaultPath()) purely so eraseAllData() below
-// can find them without linking gfx.h. Overridable so tests never touch a real save.
+// The current profile's run save ($STS_RUN_SAVE_PATH, else profiles::runSavePath()), so
+// eraseAllData() below can find it without linking gfx.h. Overridable so tests never touch a
+// real save. ("Delete data" erases the current profile's run and progress, plus settings.sav.)
 std::string defaultRunSavePath();
 
 // "Delete data": removes the run save, the profile progress file and the settings file from disk,

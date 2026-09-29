@@ -19,7 +19,7 @@ endif
 CORE_SRC := $(wildcard source/core/*.cpp)
 EXTRA_PREVIEW_SRC := source/spine/spine.cpp source/gfx/gfx_common.cpp source/platform_sdl/gfx_sdl.cpp $(wildcard source/ui/*.cpp) $(wildcard source/ui/*/*.cpp) source/main.cpp
 SIM_SRC := test/sim.cpp
-TEST_SRC := test/enchant_test.cpp test/character_test.cpp test/silent_test.cpp test/necrobinder_test.cpp test/regent_test.cpp test/colorless_test.cpp test/defect_test.cpp test/ascension_dump.cpp test/ascension_test.cpp test/progress_test.cpp test/settings_test.cpp
+TEST_SRC := test/enchant_test.cpp test/character_test.cpp test/silent_test.cpp test/necrobinder_test.cpp test/regent_test.cpp test/colorless_test.cpp test/defect_test.cpp test/ascension_dump.cpp test/ascension_test.cpp test/progress_test.cpp test/settings_test.cpp test/profile_test.cpp
 
 OBJ_DIR := build/obj
 
@@ -97,6 +97,10 @@ build/settings_test: $(CORE_OBJS) $(OBJ_DIR)/test/settings_test.o
 	@mkdir -p build
 	$(CXX) $(BASE_CXXFLAGS) $^ -o $@
 
+build/profile_test: $(CORE_OBJS) $(OBJ_DIR)/test/profile_test.o
+	@mkdir -p build
+	$(CXX) $(BASE_CXXFLAGS) $^ -o $@
+
 # Monster values per ascension level; compare with the C# through tools/ascension_check.py.
 build/ascension_dump: $(CORE_OBJS) $(OBJ_DIR)/test/ascension_dump.o
 	@mkdir -p build
@@ -105,7 +109,7 @@ build/ascension_dump: $(CORE_OBJS) $(OBJ_DIR)/test/ascension_dump.o
 sim: build/sim
 	./build/sim 200
 
-check: build/enchant_test build/character_test build/silent_test build/necrobinder_test build/regent_test build/colorless_test build/defect_test build/ascension_test build/ascension_dump build/progress_test build/settings_test
+check: build/enchant_test build/character_test build/silent_test build/necrobinder_test build/regent_test build/colorless_test build/defect_test build/ascension_test build/ascension_dump build/progress_test build/settings_test build/profile_test
 	./build/enchant_test
 	./build/character_test
 	./build/silent_test
@@ -116,6 +120,7 @@ check: build/enchant_test build/character_test build/silent_test build/necrobind
 	./build/ascension_test
 	./build/progress_test
 	./build/settings_test
+	./build/profile_test
 	for l in 0 8 9 10; do ./build/ascension_dump $$l > build/asc_dump_$$l.txt; done
 	@PY=$$(command -v python3 || command -v python); if [ -n "$$PY" ] && [ -d ../sts2-decompiled ]; then $$PY tools/ascension_check.py; else echo "ascension_check skipped (needs python3 and ../sts2-decompiled)"; fi
 

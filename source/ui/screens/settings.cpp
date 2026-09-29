@@ -36,7 +36,11 @@ void App::updateSettings(const gfx::Input& in) {
   int id = in.touchDown ? hitAt(in.tx, in.ty) : ID_NONE;
   if (abandonConfirm_) {
     if ((in.down & gfx::BTN_B) || id == ID_ABANDON_CANCEL) { abandonConfirm_ = false; return; }
-    if ((in.down & gfx::BTN_A) || id == ID_ABANDON_CONFIRM) { returnTitle(); return; }
+    if ((in.down & gfx::BTN_A) || id == ID_ABANDON_CONFIRM) {
+      run_->abandon();  // M1: counts as a loss (+ runsAbandoned); returnTitle saves progress.sav
+      returnTitle();
+      return;
+    }
     return;
   }
   if ((in.down & (gfx::BTN_B | gfx::BTN_START)) || id == ID_BACK) { settingsOpen_ = false; return; }

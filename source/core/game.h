@@ -1280,9 +1280,7 @@ struct Run {
   // Profile progress (progress.cpp, package M1): call when the player abandons this run from
   // the pause menu (a run that ends by winning or losing records itself from Run::main). A
   // no-op if the run already ended (died or screen is already GameOver/Victory).
-  // PORT NOTE: not called anywhere yet -- the abandon confirm button lives in source/ui/ (a
-  // separate package's screen); wiring `run_->abandon()` into App::returnTitle before it resets
-  // run_ is a one-line follow-up for that lane.
+  // Called by the pause menu's abandon confirm (ui/screens/settings.cpp) before returnTitle.
   void abandon();
 };
 

@@ -1023,8 +1023,7 @@ Task<> Run::restSite() {
   restOptions.clear();
 }
 
-// Player-initiated abandon (pause menu -> confirm). See the PORT NOTE on the declaration in
-// game.h: nothing calls this yet because the confirm button is in source/ui/, a separate package.
+// Player-initiated abandon (pause menu -> confirm, ui/screens/settings.cpp).
 void Run::abandon() { recordRunEnd(*this, progress::RunOutcome::Abandon); }
 
 }  // namespace sts

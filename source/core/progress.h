@@ -58,9 +58,8 @@ struct Progress {
 namespace progress {
 
 // The process-wide instance. Engine hooks below mutate it in place; nothing here touches disk on
-// its own (matching save.cpp/Run::save() -- core produces and consumes strings only). Whoever
-// owns the profile's directory (Y4) is expected to call save(path)/load(path) with the platform
-// save directory it resolves, through the same file layer run.sav uses.
+// its own (matching save.cpp/Run::save() -- core produces and consumes strings only). The
+// profile layer (profiles.h, Y4) loads the current slot's file into it and saves it back.
 Progress& state();
 void reset();  // test helper: back to a fresh, empty Progress
 
@@ -85,9 +84,8 @@ void onRunEnded(const std::string& characterId, int ascension, RunOutcome outcom
 
 // The path used when save()/load() below are called with no argument: $STS_PROGRESS_PATH if set
 // (tests and the headless sim must set this, or call the string-based Progress::save/load
-// directly, so they never touch a real profile's file), else "saves/progress.sav" -- the same
-// relative default save.cpp's run.sav uses on desktop. A 3DS/profile-aware absolute path
-// (sdmc:/3ds/sts2-3ds/<profile>/progress.sav) is Y4's job; see the PORT NOTE in progress.cpp.
+// directly, so they never touch a real profile's file), else the current profile's file,
+// profiles::progressPath() (saves/profile<N>/progress.sav, 3DS sdmc:/3ds/sts2-3ds/profile<N>/...).
 std::string defaultPath();
 
 // Atomic file I/O for `state()`: write to "<path>.tmp" then rename over `path`, the same

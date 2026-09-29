@@ -1,5 +1,6 @@
 // Split from ui.cpp (F3).
 #include "../core/events_crystal.h"
+#include "../core/profiles.h"
 #include "../core/settings_store.h"
 #include "ui_common.h"
 
@@ -23,9 +24,11 @@ std::string actTexture(const Run& r, const char* kind) {
 
 // Saves: the run is written at every map choice (Run::onSavePoint) and deleted when it
 // ends. Automated previews (STS_HIDDEN) and STS_NO_SAVE neither read nor write it (nor
-// settings.sav / progress.sav -- see App::init/saveSettings below).
+// settings.sav / profile.sav / progress.sav -- see App::init/saveSettings below).
+// Y4: run.sav and progress.sav are per profile (profiles.h: <save dir>/profile<N>/...);
+// progress.sav is written with the run save and when a run ends.
 namespace {
-constexpr const char* kSaveName = "run.sav";
+std::string saveName() { return profiles::runSaveName(); }
 bool savesEnabled() { return !getenv("STS_HIDDEN") && !getenv("STS_NO_SAVE"); }
 }
 
@@ -34,6 +37,9 @@ bool App::init() {
   if (!R().load(loading)) return false;
   run_ = std::make_unique<Run>();
   autoplay_ = getenv("STS_AUTOPLAY") != nullptr;
+  // Y4: profile.sav (current slot, first-launch migration of an old top-level run.sav /
+  // progress.sav into profile 1) and the current slot's progress.sav. Never in automated previews.
+  if (savesEnabled()) profiles::init();
   hasSave_ = hasSave();
   // Y1: settings.sav, loaded once at startup. STS_HIDDEN/STS_NO_SAVE (automated previews, and the
   // headless sim which never links ui.cpp at all) must never touch the real player's file; the
@@ -56,7 +62,21 @@ void App::saveSettings() {
 
 bool App::hasSave() const {
   std::string data;
-  return savesEnabled() && gfx::readSave(kSaveName, data) && !data.empty();
+  return savesEnabled() && gfx::readSave(saveName(), data) && !data.empty();
+}
+
+// Y4 hooks for the profile screen (S03), title only (no run in progress). Renaming needs no
+// App state: call profiles::rename directly.
+bool App::selectProfile(int id) {
+  bool ok = profiles::select(id);
+  hasSave_ = hasSave();
+  return ok;
+}
+
+bool App::deleteProfile(int id) {
+  bool ok = profiles::remove(id);
+  hasSave_ = hasSave();
+  return ok;
 }
 
 void App::startRun(bool resume) {
@@ -64,11 +84,11 @@ void App::startRun(bool resume) {
   bool loaded = false;
   if (resume) {
     std::string data;
-    loaded = gfx::readSave(kSaveName, data) && run_->load(data);
+    loaded = gfx::readSave(saveName(), data) && run_->load(data);
     if (!loaded) { run_ = std::make_unique<Run>(); toast_ = "存档无法读取，开始新游戏"; toastT_ = 2.f; }
   }
   if (!loaded) {
-    if (savesEnabled()) gfx::deleteSave(kSaveName);
+    if (savesEnabled()) gfx::deleteSave(saveName());
     // S04: the character select's choice (Random picks one of the five now), ascension and seed
     // string (RunRngSet: Seed = StringHelper.GetDeterministicHashCode(seed)). Debug: STS_CHAR /
     // STS_SEED (a number) override them.
@@ -79,7 +99,11 @@ void App::startRun(bool resume) {
     if (const char* s = getenv("STS_SEED")) seed = (uint64_t)atoll(s);
     run_->start(seed, character, titleAsc_);
   }
-  if (savesEnabled()) run_->onSavePoint = [](Run& r) { gfx::writeSave(kSaveName, r.save()); };
+  if (savesEnabled())
+    run_->onSavePoint = [](Run& r) {
+      gfx::writeSave(saveName(), r.save());
+      profiles::saveProgress();  // seen cards/relics/monsters so far
+    };
   if (getenv("STS_ALLCARDS")) {  // debug: every pool card in the deck
     run_->deck.clear();
     for (auto& id : run_->character().cardPool)
@@ -111,7 +135,10 @@ void App::returnTitle() {
   // Abandon can happen while Run::main is suspended on a UI signal. Destroy
   // those coroutines before the Run and its cards/creatures they reference.
   Scheduler::get().clear();
-  if (savesEnabled()) gfx::deleteSave(kSaveName);
+  if (savesEnabled()) {
+    gfx::deleteSave(saveName());
+    profiles::saveProgress();  // after Run::abandon() / a finished run
+  }
   visuals_.clear();
   R().releaseSkeletons({});
   run_ = std::make_unique<Run>();
@@ -167,7 +194,11 @@ void App::update(const gfx::Input& in, double dt) {
     mapUserScroll_ = false;
     lastScreen_ = scr;
     // The run is over: its save goes (dying or winning cannot be undone by reloading).
-    if ((scr == Screen::GameOver || scr == Screen::Victory) && savesEnabled()) gfx::deleteSave(kSaveName);
+    // Run::main has recorded the win/loss in progress::state() (M1); persist it (Y4).
+    if ((scr == Screen::GameOver || scr == Screen::Victory) && savesEnabled()) {
+      gfx::deleteSave(saveName());
+      profiles::saveProgress();
+    }
     if (scr == Screen::Title) hasSave_ = hasSave();
   }
   updateActTitle((float)visualDt);
