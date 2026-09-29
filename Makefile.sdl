@@ -17,7 +17,7 @@ SDL_LDFLAGS := $(filter-out -lSDL2main -mwindows,$(SDL_LDFLAGS))
 endif
 
 CORE_SRC := $(wildcard source/core/*.cpp)
-EXTRA_PREVIEW_SRC := source/spine/spine.cpp source/gfx/gfx_common.cpp source/platform_sdl/gfx_sdl.cpp $(wildcard source/ui/*.cpp) $(wildcard source/ui/*/*.cpp) source/main.cpp
+EXTRA_PREVIEW_SRC := source/spine/spine.cpp source/gfx/gfx_common.cpp source/platform_sdl/gfx_sdl.cpp source/audio/audio.cpp source/platform_sdl/audio_sdl.cpp $(wildcard source/ui/*.cpp) $(wildcard source/ui/*/*.cpp) source/main.cpp
 SIM_SRC := test/sim.cpp
 TEST_SRC := test/enchant_test.cpp test/character_test.cpp test/silent_test.cpp test/necrobinder_test.cpp test/regent_test.cpp test/colorless_test.cpp test/defect_test.cpp test/ascension_dump.cpp test/ascension_test.cpp test/progress_test.cpp test/settings_test.cpp
 

@@ -14,7 +14,7 @@ include $(DEVKITARM)/3ds_rules
 
 TARGET      := sts2-3ds
 BUILD       := build3ds
-SOURCES     := source source/core source/ui source/ui/screens source/spine source/gfx source/platform_3ds
+SOURCES     := source source/core source/ui source/ui/screens source/spine source/gfx source/audio source/platform_3ds
 DATA        :=
 INCLUDES    := source
 GRAPHICS    :=
