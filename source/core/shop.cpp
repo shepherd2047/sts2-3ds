@@ -86,10 +86,15 @@ void fillCard(Run& r, ShopItem& it) {
       return db::colorlessCards([&](const Card& c) {
         return c.rarity == want && std::find(onShelf.begin(), onShelf.end(), c.id) == onShelf.end();
       });
-    return db::characterCards(r.characterId, [&](const Card& c) {
+    auto fits = [&](const Card& c) {
       return c.type == it.cardType && c.rarity == want &&
              std::find(onShelf.begin(), onShelf.end(), c.id) == onShelf.end();
-    });
+    };
+    auto ids = db::characterCards(r.characterId, fits);
+    for (auto& ch : r.modifierCardPools())  // CharacterCards.ModifyMerchantCardPool (M11)
+      for (auto& id : db::characterCards(ch, fits))
+        if (std::find(ids.begin(), ids.end(), id) == ids.end()) ids.push_back(id);
+    return ids;
   };
   Rarity want = it.cardRarity;
   std::vector<std::string> ids;
@@ -171,6 +176,7 @@ Task<> Run::enterShop() {
   }
   ShopItem removal;
   removal.kind = ShopItem::Removal;
+  removal.used = hasModifier("Hoarder");  // Hoarder.ShouldAllowMerchantCardRemoval (M11): sold out
   shop.push_back(std::move(removal));
 
   for (Model* m : listeners()) co_await m->afterRoomEntered(RoomType::Shop);
@@ -186,7 +192,9 @@ Task<> Run::enterShop() {
       co_await wait(0.25);
     }
     screen = Screen::Shop;  // a bought relic may have shown its own reward screen
-    auto picked = co_await selectFromDeck("merchant_room.MERCHANT.cardRemovalService.title", nullptr, 1, false);
+    std::vector<Card*> picked;
+    if (!shop.back().used)  // Hoarder: no removal service
+      picked = co_await selectFromDeck("merchant_room.MERCHANT.cardRemovalService.title", nullptr, 1, false);
     screen = Screen::Shop;
     if (!picked.empty()) {
       removeCardFromDeck(picked[0]);

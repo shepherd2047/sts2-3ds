@@ -4,6 +4,7 @@
 #include <algorithm>
 
 #include "cards.h"
+#include "modifiers.h"
 
 namespace sts {
 
@@ -375,6 +376,8 @@ struct Neow : Event {
     ancient = true;
     // DefineDialogues / NEventRoom: the dialogue for this character and visit count.
     dialogue = db::ancientDialogueFor(*run, id);
+    // GenerateInitialOptions with run modifiers (M11): only the modifiers' Neow options.
+    if (!run->modifiers.empty()) return modifiers::neowOptions(*this);
     // GenerateInitialOptions (no run modifiers).
     std::vector<std::string> curses;
     for (auto& id : kCurse) if (allowedAtNeow(id)) curses.push_back(id);

@@ -78,7 +78,9 @@ void App::drawAncient(bool top) {
       R().text(x + 48, y + 19, desc, st);
     } else {  // a text option: greyed out when locked (Orobas without a starter relic); TheArchitect's PROCEED
       std::string k = e->options[i].key;
-      std::string table = R().hasLoc("ancients." + k + ".title") ? "ancients." : "events.";
+      std::string table = R().hasLoc("ancients." + k + ".title") ? "ancients."
+                          : R().hasLoc("modifiers." + k + ".title") ? "modifiers."  // M11: Neow's modifier options
+                          : "events.";
       uint32_t tc = e->options[i].locked() ? col::gray : col::white;
       R().text(x + 8, y + 3, L(table + k + ".title"), ts(F12, tc));
       if (R().hasLoc(table + k + ".description"))

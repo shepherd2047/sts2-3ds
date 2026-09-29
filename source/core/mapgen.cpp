@@ -150,6 +150,7 @@ struct MapBuilder {
   int numOfRests = 0;
   int numOfElites = 5;
   int numOfUnknowns = 0;
+  bool elitesIgnoreRules = false;  // MapPointTypeCounts.PointTypesThatIgnoreRules = {Elite} (BigGameHunter)
 
   MapBuilder(Rng& r, int len) : rng(r), mapLength(len), grid(kMapWidth, std::vector<Node*>(len, nullptr)) {}
 
@@ -293,7 +294,8 @@ struct MapBuilder {
     for (int i = 0; i < count; i++) {
       MPType t = queue.front();
       queue.pop_front();
-      // PointTypesThatIgnoreRules is always empty for us (no override passed in).
+      // PointTypesThatIgnoreRules: only Elite, with BigGameHunter's override (M11).
+      if (t == MPType::Elite && elitesIgnoreRules) return t;
       if (isValidPointType(t, n)) return t;
       queue.push_back(t);
     }
@@ -683,7 +685,22 @@ RoomType toRoomType(MPType t) {
 
 }  // namespace
 
+namespace {
+std::vector<MapNode> buildStandardActMap(Rng& mapRng, int actIndex, int numOfElites, bool hasSecondBoss,
+                                         const MapTypeCounts* counts);
+}  // namespace
+
 std::vector<MapNode> generateStandardActMap(Rng& mapRng, int actIndex, int numOfElites, bool hasSecondBoss) {
+  return buildStandardActMap(mapRng, actIndex, numOfElites, hasSecondBoss, nullptr);
+}
+
+std::vector<MapNode> generateStandardActMap(Rng& mapRng, int actIndex, const MapTypeCounts& counts, bool hasSecondBoss) {
+  return buildStandardActMap(mapRng, actIndex, counts.elites, hasSecondBoss, &counts);
+}
+
+namespace {
+std::vector<MapNode> buildStandardActMap(Rng& mapRng, int actIndex, int numOfElites, bool hasSecondBoss,
+                                         const MapTypeCounts* counts) {
   // BaseNumberOfRooms: Overgrowth 15, Hive 14, Glory 13.
   static const int kRooms[] = {15, 14, 13};
   actIndex = std::clamp(actIndex, 0, 2);
@@ -693,10 +710,17 @@ std::vector<MapNode> generateStandardActMap(Rng& mapRng, int actIndex, int numOf
 
   // <Act>.GetMapPointTypes (before GenerateMap, per the C# constructor order);
   // MapPointTypeCounts.StandardRandomUnknownCount, minus one in Hive and Glory.
-  if (actIndex == 0) b.numOfRests = nextGaussianInt(mapRng, 7, 1, 6, 7);
-  else if (actIndex == 1) b.numOfRests = nextGaussianInt(mapRng, 6, 1, 6, 7);
-  else b.numOfRests = mapRng.nextInt(5, 7);
-  b.numOfUnknowns = nextGaussianInt(mapRng, 12, 1, 10, 14) - (actIndex > 0 ? 1 : 0);
+  // A MapPointTypeCounts override (M11) replaces it without drawing from the Rng.
+  if (counts) {
+    b.numOfRests = counts->rests;
+    b.numOfUnknowns = counts->unknowns;
+    b.elitesIgnoreRules = counts->elitesIgnoreRules;
+  } else {
+    if (actIndex == 0) b.numOfRests = nextGaussianInt(mapRng, 7, 1, 6, 7);
+    else if (actIndex == 1) b.numOfRests = nextGaussianInt(mapRng, 6, 1, 6, 7);
+    else b.numOfRests = mapRng.nextInt(5, 7);
+    b.numOfUnknowns = nextGaussianInt(mapRng, 12, 1, 10, 14) - (actIndex > 0 ? 1 : 0);
+  }
   b.numOfElites = numOfElites;
 
   b.generateMap();
@@ -764,5 +788,6 @@ std::vector<MapNode> generateStandardActMap(Rng& mapRng, int actIndex, int numOf
   nodes.insert(nodes.begin(), start);
   return nodes;
 }
+}  // namespace
 
 }  // namespace sts

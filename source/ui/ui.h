@@ -92,6 +92,13 @@ class App {
   int titleChar_ = 0;             // selected button: db::characterIds() index, or its size for Random
   int titleAsc_ = 0;              // ascension picked on the select screen (0-10, all open per the owner)
   std::string titleSeed_;         // SeedHelper-style 12-character seed shown on the select screen
+  // M11+S05 custom run screen (screens/custom_run.cpp, its state lives there): the next new run's
+  // modifiers (modifiers.h keys) and GameMode.Custom; startRun consumes them.
+  std::vector<std::string> titleModifiers_;
+  bool titleCustom_ = false;
+  void openCustomRun();
+  bool drawCustomRun(bool top);
+  bool updateCustomRun(const gfx::Input& in);
   int titleSelection_ = 0;       // focused main menu button (S02)
   // S02 (U02) main menu, title.cpp.
   int menuSub_ = 0;              // 0 the button list, 1 singleplayer submenu, 2 compendium submenu

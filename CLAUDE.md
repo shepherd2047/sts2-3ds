@@ -209,6 +209,7 @@ scripts drift; delete the debug file afterwards.
 - Ascension: `Run::ascension` / `hasAscension(kToughEnemies)`, monsters use `asc(kToughEnemies, a, b)` for
   every C# `GetValueIfAscension`; `tools/ascension_sweep.py` + `ascension_check.py` (in `make check`) keep the
   numbers honest. `STS_ASCENSION=10`, `SIM_ASC=10`. Details in docs/PLAN.md (C10 notes).
+- Custom runs (M11+S05): `modifiers.h/.cpp` (the 16 modifiers as Models in `Run::modifiers`, run.sav v8, history v3, SeedHelper), `screens/custom_run.cpp`; debug `STS_MODIFIERS=Draft,Midas,CharacterCards:Silent` / `SIM_MODIFIERS=...`, `STS_OPEN_CUSTOM=1` opens the screen.
 - Silent systems: `char_silent.h/.cpp` (Poison, Accuracy, Fan of Knives, Shiv), `cmd::discardCards` (Sly, hooks),
   single-turn Retain / Sly flags on `Card`. Details in docs/PLAN.md (X1.0 notes).
 - Enchantments: `enchantments.cpp` (`Enchantment` Model in `Card::enchantment`, `ENCHANTMENT_HEADER`,

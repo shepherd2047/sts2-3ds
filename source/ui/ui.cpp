@@ -1,5 +1,6 @@
 // Split from ui.cpp (F3).
 #include "../core/events_crystal.h"
+#include "../core/modifiers.h"
 #include "../core/profiles.h"
 #include "../core/settings_store.h"
 #include "music_router.h"
@@ -100,8 +101,16 @@ void App::startRun(bool resume) {
     const auto& ids = db::characterIds();
     std::string character = titleChar_ < (int)ids.size() ? ids[titleChar_] : std::string(Run::kRandomCharacter);
     if (const char* c = getenv("STS_CHAR")) character = c;
-    uint64_t seed = titleSeed_.empty() ? (uint64_t)time(nullptr) : deterministicHash(titleSeed_);
-    if (const char* s = getenv("STS_SEED")) seed = (uint64_t)atoll(s);
+    uint64_t seed = titleSeed_.empty() ? (uint64_t)time(nullptr) : modifiers::seedFromString(titleSeed_);
+    run_->seedText = titleSeed_;
+    if (const char* s = getenv("STS_SEED")) { seed = (uint64_t)atoll(s); run_->seedText.clear(); }
+    // M11: the custom run screen's modifiers; debug STS_MODIFIERS=Draft,Midas,CharacterCards:Silent.
+    std::vector<std::string> mods = titleModifiers_;
+    if (const char* m = getenv("STS_MODIFIERS")) mods = modifiers::parseList(m);
+    run_->setModifiers(mods);
+    run_->customRun = titleCustom_ || !mods.empty();
+    titleModifiers_.clear();
+    titleCustom_ = false;
     run_->start(seed, character, titleAsc_);
   }
   if (savesEnabled())

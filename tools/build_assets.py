@@ -1068,7 +1068,9 @@ def build(args):
         'SETTINGS', 'QUIT', 'QUIT_CONFIRM_POPUP', 'GENERIC_POPUP', 'STANDARD', 'DAILY', 'CUSTOM',
         'COMPENDIUM_CARD_LIBRARY', 'COMPENDIUM_RELIC_COLLECTION', 'COMPENDIUM_POTION_LAB', 'COMPENDIUM_BESTIARY',
         'RUN_HISTORY', 'CONTINUE_RUN_INFO',
-        'PROFILE_SCREEN', 'OPEN_PROFILE_SCREEN'))  # S03: profile screen + the main menu's profile button
+        'PROFILE_SCREEN', 'OPEN_PROFILE_SCREEN',  # S03: profile screen + the main menu's profile button
+        'CUSTOM_RUN_SCREEN'))  # M11+S05: the custom run screen
+    take('modifiers')  # M11: run modifier titles / descriptions (Neow options, custom run screen)
     for t in ('card_keywords', 'gameplay_ui', 'rest_site_ui', 'card_reward_ui', 'map', 'combat_messages',
               'card_selection', 'intents', 'game_over_screen', 'characters'):
         take(t, (lambda k: not k.startswith(('DAILY', 'DISCOVERY'))) if t == 'game_over_screen'

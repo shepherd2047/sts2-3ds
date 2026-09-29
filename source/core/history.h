@@ -13,8 +13,8 @@
 // PORT NOTE: the C# (Saves.Managers/RunHistorySaveManager) writes profile<N>/saves/history/
 // <StartTime>.run JSON files and never prunes them; the port keeps a fixed ring of 50 so the SD
 // card sees one small write per run, and needs no directory listing (3DS SD listing is slow).
-// Dropped vs. the C# RunHistory: platform_type, game_mode (no daily/custom yet, M11 can add it),
-// build_id, modifiers, multiplayer players (single player: the player fields are the record's own),
+// Dropped vs. the C# RunHistory: platform_type, the daily game mode (M12), build_id,
+// multiplayer players (single player: the player fields are the record's own),
 // and most PlayerMapPointHistoryEntry stats (only GoldGained, which the score needs).
 // Badges (RunHistoryPlayer.Badges, ScoreUtility.GetBadges) are computed by badges.h at the end of
 // the run (fromRun) and stored in the record (M7).
@@ -86,7 +86,8 @@ struct BadgeEntry {
 struct RunRecord {
   // 2 (M7): per-point badge inputs (gold spent, damage taken, rest choices), the CCCCOMBO flag and
   // the badges. Version 1 records still load (no badge data: tracked == false on every point).
-  static constexpr int kVersion = 2;
+  // 3 (M11): game mode (custom), the seed text and the modifiers; older records: standard, none.
+  static constexpr int kVersion = 3;
 
   uint64_t seq = 0;          // 1, 2, 3... per profile (set by append); higher = newer
   uint64_t seed = 0;         // Run::seed (the numeric seed; the typed seed text is not kept)
@@ -110,6 +111,9 @@ struct RunRecord {
                                     // (the C# adds no badge bonus to the score)
   bool cccCombo = false;            // ExtraFields.CccomboBadgeUnlocked: 20 cards in one turn
   std::vector<BadgeEntry> badges;   // RunHistoryPlayer.Badges (empty when abandoned); badges.h
+  bool custom = false;                 // RunHistory.GameMode == Custom (M11)
+  std::string seedText;                // RunHistory.Seed (the typed / rolled text; "" = numeric only)
+  std::vector<std::string> modifiers;  // RunHistory.Modifiers (keys, modifiers.h)
 
   std::string save() const;
   bool load(const std::string& data);  // false (and *this unchanged) if empty/garbled/future

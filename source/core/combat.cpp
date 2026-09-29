@@ -5,6 +5,7 @@
 
 #include "badges.h"
 #include "game.h"
+#include "modifiers.h"
 
 namespace sts {
 
@@ -237,6 +238,7 @@ std::vector<Model*> Combat::listeners() {
   for (auto& p : player->powers) out.push_back(p.get());
   if (osty && !osty->removed) for (auto& p : osty->powers) out.push_back(p.get());
   for (auto& r : run->relics) out.push_back(r.get());
+  for (auto& m : run->modifiers) out.push_back(m.get());  // M11: RunState.Modifiers (after the relics)
   for (Card* c : allCards()) {
     out.push_back(c);
     if (c->enchantment) out.push_back(c->enchantment.get());  // card, (affliction,) enchantment

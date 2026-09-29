@@ -12,7 +12,7 @@ namespace sts {
 
 namespace {
 
-constexpr int kSaveVersion = 7;  // 2: card enchantments, 3: character id, 4: ascension (older saves load as Ironclad / ascension 0), 5: act list (older: Overgrowth, Hive, Glory), 6: run history path + times (M2; older: empty path), 7: badge inputs per map point + CCCCOMBO (M7; older: untracked points)
+constexpr int kSaveVersion = 8;  // 2: card enchantments, 3: character id, 4: ascension (older saves load as Ironclad / ascension 0), 5: act list (older: Overgrowth, Hive, Glory), 6: run history path + times (M2; older: empty path), 7: badge inputs per map point + CCCCOMBO (M7; older: untracked points), 8: modifiers, custom mode, seed text, "?" elite odds (M11; older: none)
 
 void ioCard(Archive& a, std::unique_ptr<Card>& c) {
   std::string id = c ? c->id : "";
@@ -191,6 +191,15 @@ void ioRun(Archive& a, Run& r) {
         a.io(p.damageTaken);
         a.io(p.restChoices);
       }
+  }
+  if (version >= 8) {  // M11: RunState.Modifiers (keys, modifiers.h), GameMode.Custom, the seed text
+    a.tag("MODIFIERS");
+    std::vector<std::string> keys = r.modifierKeys();
+    a.io(keys);
+    if (a.reading) r.setModifiers(keys);  // ModifierModel.OnRunLoaded: nothing else to redo
+    a.io(r.customRun);
+    a.io(r.seedText);
+    a.io(r.unknownEliteOdds);
   }
   a.tag("END");
 }
