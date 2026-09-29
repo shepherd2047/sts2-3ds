@@ -105,12 +105,12 @@ def expected(level):
             desc = []
             ok = True
             for a in args[2:]:
-                mm = re.match(r'new (SingleAttackIntent|MultiAttackIntent|StatusIntent)\((.*)\)$', a, re.S)
+                mm = re.match(r'new (SingleAttackIntent|DeathBlowIntent|MultiAttackIntent|StatusIntent)\((.*)\)$', a, re.S)
                 if not mm:
                     continue
                 parts = split_top(mm.group(2))
                 try:
-                    if mm.group(1) == 'SingleAttackIntent':
+                    if mm.group(1) in ('SingleAttackIntent', 'DeathBlowIntent'):  # DeathBlowIntent : SingleAttackIntent
                         desc.append('A%dx1' % c.ev(parts[0], level))
                     elif mm.group(1) == 'MultiAttackIntent':
                         desc.append('A%dx%d' % (c.ev(parts[0], level), c.ev(parts[1], level)))

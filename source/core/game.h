@@ -104,6 +104,7 @@ struct Model {
   virtual Task<> afterPowerAmountChanged(Power*, Dec, Creature*, Card*) { return {}; }
 
   // Added for the full Ironclad pool (names follow Hook.*).
+  virtual Task<> beforeSideTurnEndVeryEarly(Side, const std::vector<Creature*>&) { return {}; }  // AsleepPower
   virtual Task<> beforeSideTurnEndEarly(Side, const std::vector<Creature*>&) { return {}; }
   virtual Task<> afterAutoPostPlayPhaseEntered() { return {}; }  // player's turn is about to end
   virtual Task<> afterCardExhausted(Card*, bool /*causedByEthereal*/) { return {}; }
