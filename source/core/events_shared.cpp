@@ -202,13 +202,18 @@ struct Symbiote : Event {
   EVENT_HEADER(Symbiote, "SYMBIOTE")
   bool isAllowed(Run& r) override { return actIndex(r) > 0; }
   void calculateVars() override {
-    setStr("Enchantment", "腐化");  // PORT NOTE: enchantment titles are not exported
+    setStr("Enchantment", "enchantments.CORRUPTED.title");
     addVar("Cards", 1);
   }
   std::vector<EventOption> initialOptions() override {
-    // PORT NOTE: enchantments are not ported; APPROACH (Corrupted) is locked.
-    return {EventOption{page("INITIAL") + ".options.APPROACH", nullptr},
+    return {run->canEnchantAny("Corrupted") ? option("INITIAL", "APPROACH", [this] { return approach(); })
+                                            : EventOption{page("INITIAL") + ".options.APPROACH_LOCKED", nullptr},
             option("INITIAL", "KILL_WITH_FIRE", [this] { return killWithFire(); })};
+  }
+  Task<> approach() {
+    auto picked = co_await run->selectForEnchantment("Corrupted", 1);
+    if (!picked.empty()) run->enchantCard(picked[0], "Corrupted", 1);
+    setFinished("APPROACH");
   }
   Task<> killWithFire() {
     auto picked = co_await run->selectFromDeck("card_selection.TO_TRANSFORM", [](Card*) { return true; }, val("Cards").toInt());

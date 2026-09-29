@@ -278,13 +278,18 @@ struct MorphicGrove : Event {
   }
 };
 
-// SapphireSeed.cs. PORT NOTE: PLANT (Sown enchantment) is locked, enchantments are not ported.
+// SapphireSeed.cs
 struct SapphireSeed : Event {
   EVENT_HEADER(SapphireSeed, "SAPPHIRE_SEED")
-  void calculateVars() override { setStr("Enchantment", "Sown"); addVar("Heal", 9); }
+  void calculateVars() override { setStr("Enchantment", "enchantments.SOWN.title"); addVar("Heal", 9); }
   std::vector<EventOption> initialOptions() override {
     return {option("INITIAL", "EAT", [this] { return eat(); }),
-            EventOption{page("INITIAL") + ".options.PLANT", nullptr}};
+            option("INITIAL", "PLANT", [this] { return plant(); })};
+  }
+  Task<> plant() {
+    auto picked = co_await run->selectForEnchantment("Sown", 1);
+    if (!picked.empty()) run->enchantCard(picked[0], "Sown", 1);
+    setFinished("PLANT");
   }
   Task<> eat() {
     Creature* p = owner();
@@ -454,12 +459,12 @@ struct WhisperingHollow : Event {
   }
 };
 
-// WoodCarvings.cs. PORT NOTE: SNAKE (Slither enchantment) is locked.
+// WoodCarvings.cs
 struct WoodCarvings : Event {
   EVENT_HEADER(WoodCarvings, "WOOD_CARVINGS")
   void calculateVars() override {
     setStr("BirdCard", "cards.PECK.title");
-    setStr("SnakeEnchantment", "Slither");
+    setStr("SnakeEnchantment", "enchantments.SLITHER.title");
     setStr("ToricCard", "cards.TORIC_TOUGHNESS.title");
   }
   static bool basic(Card* c) { return c->rarity == Rarity::Basic; }
@@ -469,8 +474,14 @@ struct WoodCarvings : Event {
   }
   std::vector<EventOption> initialOptions() override {
     return {option("INITIAL", "BIRD", [this] { return transformTo("BIRD", "Peck"); }),
-            EventOption{page("INITIAL") + ".options.SNAKE_LOCKED", nullptr},
+            run->canEnchantAny("Slither") ? option("INITIAL", "SNAKE", [this] { return snake(); })
+                                          : EventOption{page("INITIAL") + ".options.SNAKE_LOCKED", nullptr},
             option("INITIAL", "TORUS", [this] { return transformTo("TORUS", "ToricToughness"); })};
+  }
+  Task<> snake() {
+    auto picked = co_await run->selectForEnchantment("Slither", 1);
+    if (!picked.empty()) run->enchantCard(picked[0], "Slither", 1);
+    setFinished("SNAKE");
   }
   Task<> transformTo(std::string pageName, std::string cardId) {
     auto picked = co_await run->selectFromDeck("card_selection.TO_TRANSFORM", basic, 1);

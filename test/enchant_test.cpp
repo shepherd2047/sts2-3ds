@@ -161,6 +161,60 @@ int main() {
     pump([&] { return f.c->turnNumber >= 2 && f.c->playerPhase && f.c->actions.waiting(); });
     CHECK(k->costWithLocalMods() == 0);
   }
+  {  // A3b: Sown / Adroit / Corrupted / Inky / Goopy / SoulsPower / Slither
+    Fight f(6, [](Run& r) {
+      cmd::enchant(deckCard(r, "StrikeIronclad", 0), db::enchantment("Sown"), 2);
+      cmd::enchant(deckCard(r, "StrikeIronclad", 1), db::enchantment("Adroit"), 3);
+      cmd::enchant(deckCard(r, "StrikeIronclad", 2), db::enchantment("Corrupted"), 1);
+      cmd::enchant(deckCard(r, "StrikeIronclad", 3), db::enchantment("Inky"), 1);
+      cmd::enchant(deckCard(r, "DefendIronclad", 0), db::enchantment("Goopy"), 1);
+      CHECK(!db::enchantment("SoulsPower")->canEnchant(*deckCard(r, "StrikeIronclad", 4)));  // no Exhaust
+      CHECK(!db::enchantment("Goopy")->canEnchant(*deckCard(r, "StrikeIronclad", 4)));       // not a Defend
+      CHECK(!db::enchantment("Corrupted")->canEnchant(*deckCard(r, "DefendIronclad", 1)));   // Attacks only
+      CHECK(db::enchantment("Slither")->canEnchant(*deckCard(r, "StrikeIronclad", 4)));
+    });
+    Card* sown = f.find("Sown");
+    Card* adroit = f.find("Adroit");
+    Card* corr = f.find("Corrupted");
+    Card* inky = f.find("Inky");
+    Card* goopy = f.find("Goopy");
+    CHECK(sown && adroit && corr && inky && goopy);
+    CHECK(goopy->has(kwExhaust));
+    f.toHand(sown);
+    f.play(sown);
+    CHECK(f.c->energy == 10 - 1 + 2 && sown->enchantment->disabled());
+    f.toHand(adroit);
+    f.c->player->block = 0;
+    CHECK(f.play(adroit) == 6 && f.c->player->block == 3);
+    f.toHand(corr);
+    int hp = f.c->player->hp;
+    CHECK(f.play(corr) == 9 && f.c->player->hp == hp - 2);
+    f.toHand(inky);
+    f.play(inky);
+    Power* weak = f.c->enemies[0]->power("WeakPower");
+    CHECK(weak && weak->amount == 1);
+    f.toHand(goopy);
+    f.c->player->block = 0;
+    Creature* t = f.target();
+    PlayerAction a;
+    a.kind = PlayerAction::PlayCard;
+    a.card = goopy;
+    a.target = t;
+    f.c->energy = 10;
+    f.c->actions.fire(a);
+    pump([&] { return f.c->playerPhase && f.c->actions.waiting(); });
+    CHECK(f.c->player->block == 5);
+    CHECK(goopy->enchantment->amount == 2 && goopy->deckVersion.p->enchantment->amount == 2);
+    // Slither: drawing the card into the hand randomizes its cost to 0-3
+    Card* k = nullptr;
+    for (Card* c2 : f.c->allCards()) if (c2->id == "StrikeIronclad" && !c2->enchantment) { k = c2; break; }
+    CHECK(k && cmd::enchant(k, db::enchantment("Slither"), 1));
+    f.c->removeFromPiles(k);
+    f.c->draw.insert(f.c->draw.begin(), k);
+    Scheduler::get().spawn([](Combat* c) -> Task<> { co_await cmd::drawCards(*c, 1); }(f.c));
+    pump([&] { return f.c->pileOf(k) == Pile::Hand; });
+    CHECK(f.c->pileOf(k) == Pile::Hand && k->costWithLocalMods() >= 0 && k->costWithLocalMods() <= 3);
+  }
   {  // saves keep enchantments (id, amount, status, vars)
     Run r;
     r.start(9);
