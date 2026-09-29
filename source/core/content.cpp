@@ -624,6 +624,7 @@ void registerAct2B();        // content_act2b.cpp
 void registerAct2C();        // content_act2c.cpp: elites + bosses
 void registerAct3A();        // content_act3a.cpp
 void registerAct3B();        // content_act3b.cpp
+void registerUnderdocksB();  // content_underdocks_b.cpp
 void registerAct1Bosses();   // content_bosses.cpp: Ceremonial Beast, The Kin, Fogmog
 void registerRelics();       // relics*.cpp
 void registerEvents();       // events.cpp
@@ -729,6 +730,7 @@ void init() {
   registerAct2C();
   registerAct3A();
   registerAct3B();
+  registerUnderdocksB();
   registerRelic("BurningBlood", [] { return std::unique_ptr<Relic>(new BurningBlood()); });
   registerRelic("Circlet", [] { return std::unique_ptr<Relic>(new Circlet()); });
   registerEnchantments();
