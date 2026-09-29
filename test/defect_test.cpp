@@ -532,6 +532,135 @@ int main() {
     CHECK(hpSum - f.enemyHpSum() == 12 + 6);  // 2x Damage(6) + auto-played StrikeDefect(6)
   }
 
+  // ================================================================ X2.3a: Uncommon cards, first half
+  {  // Capacitor / BulkUp: orb slots.
+    Fight f;
+    Card* cap = f.c->addCard(db::card("Capacitor"));
+    f.toHand(cap);
+    f.play(cap);
+    CHECK(f.c->orbCapacity == 5);
+    Card* bulk = f.c->addCard(db::card("BulkUp"));
+    f.toHand(bulk);
+    f.play(bulk);
+    CHECK(f.c->orbCapacity == 4);
+    CHECK(f.c->player->powerAmount<StrengthPower>() == 2);
+    CHECK(f.c->player->powerAmount<DexterityPower>() == 2);
+  }
+  {  // Chill: one Frost orb per hittable enemy (2 Nibbits).
+    Fight f;
+    Card* k = f.c->addCard(db::card("Chill"));
+    f.toHand(k);
+    f.play(k);
+    CHECK(f.c->orbQueue.size() == 2);
+    CHECK(f.c->orbQueue[0]->id == "FrostOrb");
+  }
+  {  // Darkness: channel Dark, then every Dark orb's passive fires (Dark grows its evoke value).
+    Fight f;
+    runTask(cmd::channelOrb(*f.c, std::make_unique<DarkOrb>()));
+    Card* k = f.c->addCard(db::card("Darkness"));
+    f.toHand(k);
+    f.play(k);
+    CHECK(f.c->orbQueue.size() == 2);
+    CHECK(f.c->orbQueue[0]->evokeVal() == Dec(12));
+    CHECK(f.c->orbQueue[1]->evokeVal() == Dec(12));
+  }
+  {  // DoubleEnergy doubles current energy; Fuel from Compact turns a hand Status into energy.
+    Fight f;
+    Card* de = f.c->addCard(db::card("DoubleEnergy"));
+    f.toHand(de);
+    f.play(de);
+    CHECK(f.c->energy == 10 - 1 + 9);
+  }
+  {
+    Fight f;
+    Card* w = f.c->addCard(db::card("Wound"));
+    f.toHand(w);
+    Card* cp = f.c->addCard(db::card("Compact"));
+    f.toHand(cp);
+    f.play(cp);
+    bool hasWound = false, hasFuel = false;
+    for (Card* c : f.c->hand) { if (c->id == "Wound") hasWound = true; if (c->id == "Fuel") hasFuel = true; }
+    CHECK(!hasWound && hasFuel);
+  }
+  {  // FightThrough: 2 Wounds to discard. Glacier: 2 Frost. Glasswork: Glass. Fusion: Plasma. Null: Weak + Dark.
+    Fight f;
+    Card* ft = f.c->addCard(db::card("FightThrough"));
+    f.toHand(ft);
+    f.play(ft);
+    int wounds = 0;
+    for (Card* c : f.c->discard) if (c->id == "Wound") ++wounds;
+    CHECK(wounds == 2);
+    Card* nl = f.c->addCard(db::card("Null"));
+    f.toHand(nl);
+    int hp = f.enemy()->hp;
+    f.play(nl, f.enemy());
+    CHECK(hp - f.enemy()->hp == 10);
+    CHECK(f.enemy()->powerAmount<WeakPower>() == 1);
+    CHECK(f.c->orbQueue.size() == 1 && f.c->orbQueue[0]->id == "DarkOrb");
+  }
+  {  // Ftl: draws only while fewer than PlayMax cards were played before it this turn.
+    Fight f;
+    Card* a = f.c->addCard(db::card("Ftl"));
+    f.toHand(a);
+    size_t before = f.c->hand.size();
+    f.play(a, f.enemy());
+    CHECK(f.c->hand.size() == before);  // -1 played, +1 drawn
+    f.c->cardsPlayedThisTurn = 3;
+    Card* b = f.c->addCard(db::card("Ftl"));
+    f.toHand(b);
+    before = f.c->hand.size();
+    f.play(b, f.enemy());
+    CHECK(f.c->hand.size() == before - 1);  // 4th play this turn: no draw
+  }
+  {  // Hailstorm: end of turn, with a Frost orb queued, damages every enemy.
+    Fight f;
+    Card* h = f.c->addCard(db::card("Hailstorm"));
+    f.toHand(h);
+    f.play(h);
+    runTask(cmd::channelOrb(*f.c, std::make_unique<FrostOrb>()));
+    int hp = f.enemyHpSum();
+    f.endTurn();
+    CHECK(hp - f.enemyHpSum() >= 12);
+  }
+  {  // Loop: front orb's passive fires at turn start (Dark evoke value 6 -> 12).
+    Fight f;
+    runTask(cmd::channelOrb(*f.c, std::make_unique<DarkOrb>()));
+    Card* l = f.c->addCard(db::card("Loop"));
+    f.toHand(l);
+    f.play(l);
+    f.endTurn();
+    Orb* dark = nullptr;
+    for (auto& o : f.c->orbQueue) if (o->id == "DarkOrb") dark = o.get();
+    CHECK(dark && dark->evokeVal() >= Dec(18));  // end-of-turn passive + Loop passive
+  }
+  {  // Iteration: first Status drawn each turn draws extra.
+    Fight f;
+    Card* it = f.c->addCard(db::card("Iteration"));
+    f.toHand(it);
+    f.play(it);
+    Card* w1 = f.c->addCard(db::card("Wound"));
+    Card* w2 = f.c->addCard(db::card("Wound"));
+    runTask(cmd::moveCard(*f.c, w1, Pile::Draw, true));
+    runTask(cmd::moveCard(*f.c, w2, Pile::Draw, true));
+    size_t before = f.c->hand.size();
+    runTask([](Combat* c) -> Task<> { co_await cmd::drawCards(*c, Dec(1)); }(f.c));
+    CHECK(f.c->hand.size() == before + 3);  // Wound + Iteration's 2 extra cards (the 2nd Wound does not retrigger)
+  }
+  {  // Feral: the first 0-cost attack goes back to hand, the second does not (Amount 1).
+    Fight f;
+    Card* fe = f.c->addCard(db::card("Feral"));
+    f.toHand(fe);
+    f.play(fe);
+    Card* ftl = f.c->addCard(db::card("Ftl"));
+    f.toHand(ftl);
+    f.play(ftl, f.enemy());
+    bool inHand = std::find(f.c->hand.begin(), f.c->hand.end(), ftl) != f.c->hand.end();
+    CHECK(inHand);
+    f.play(ftl, f.enemy());
+    inHand = std::find(f.c->hand.begin(), f.c->hand.end(), ftl) != f.c->hand.end();
+    CHECK(!inHand);
+  }
+
   printf("%d checks, %d failed\n", checks, failures);
   return failures ? 1 : 0;
 }
