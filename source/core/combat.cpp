@@ -393,6 +393,7 @@ Task<std::vector<DamageResult>> damage(std::vector<Creature*> targets, Dec amoun
       c.push({VisualEvent::Blocked, target, 0});
     } else if (r.unblocked + r.overkill > 0 || modified == Dec(0)) {
       c.push({VisualEvent::Damage, target, r.unblocked});
+      if (r.blockBroken && r.unblocked > 0) c.push({VisualEvent::BlockBroken, target, 0});
       if (r.unblocked > 0 && target != dealer) { target->hitFlash = 1.f; target->shake = 1.f; }
     }
   };
@@ -892,6 +893,7 @@ Task<> Attack::execute(Combat& c) {
       valid = c.aliveEnemies();
     }
     if (valid.empty()) break;
+    c.push({VisualEvent::Hit, attacker, i, source ? source->id : ""});  // audio: AttackCommand.HitSfx
     if (i == 0) {
       // amount carries hits * 1000 + damage so the UI can pick heavy/multi-hit animations.
       c.push({VisualEvent::Anim, attacker, hits * 1000 + std::min(999, damagePerHit.toInt()),
@@ -1207,6 +1209,7 @@ Task<> Combat::playCard(Card* card, Creature* target, bool autoPlay, bool forceE
   if (spent > 0) for (Model* m : listeners()) co_await m->afterEnergySpent(card, spent);
   if (starsSpent > 0) for (Model* m : listeners()) co_await m->afterStarsSpent(starsSpent);  // CardModel.SpendStars
 
+  push({VisualEvent::CardPlayed, player, (int)card->type, card->id});
   if (card->type != CardType::Attack) push({VisualEvent::Anim, player, 0, "Cast"});
   co_await wait(autoPlay ? 0.3 : 0.1);
   for (int i = 0; i < playCount; ++i) {

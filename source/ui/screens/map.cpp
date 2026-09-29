@@ -199,6 +199,7 @@ void App::updateMap(const gfx::Input& in) {
     mapTouch_ = {};
   }
   if (pick >= 0) {
+    sfx::mapSelect();
     r.mapChoice.fire(reach[pick]);
     mapSel_ = 0;
     mapUserScroll_ = false;

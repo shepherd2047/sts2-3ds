@@ -110,15 +110,15 @@ void App::updateUpgrade(const gfx::Input& in) {
   if (in.down & gfx::BTN_DOWN) sel_ = std::min(m - 1, sel_ + 5);
   if (in.down & gfx::BTN_UP) sel_ = std::max(0, sel_ - 5);
   if (sel_ >= 0) scroll_ = std::max(0, sel_ / 5 - 1);
-  if ((in.down & gfx::BTN_A) && sel_ >= 0) { r.upgradeChoice.fire(sel_); return; }
+  if ((in.down & gfx::BTN_A) && sel_ >= 0) { (sfx::smith(), r.upgradeChoice.fire(sel_)); return; }
   if (in.down & gfx::BTN_B) { r.upgradeChoice.fire(-1); return; }
   if (in.touchDown) {
     int id = hitAt(in.tx, in.ty);
     if (id >= ID_GRID0 && id - ID_GRID0 < m) {
-      if (sel_ == id - ID_GRID0) { r.upgradeChoice.fire(sel_); return; }
+      if (sel_ == id - ID_GRID0) { (sfx::smith(), r.upgradeChoice.fire(sel_)); return; }
       sel_ = id - ID_GRID0;
     }
-    if (id == ID_CONFIRM && sel_ >= 0) r.upgradeChoice.fire(sel_);
+    if (id == ID_CONFIRM && sel_ >= 0) (sfx::smith(), r.upgradeChoice.fire(sel_));
     if (id == ID_BACK) r.upgradeChoice.fire(-1);
   }
 }

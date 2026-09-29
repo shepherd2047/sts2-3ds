@@ -764,7 +764,8 @@ using PotionFactoryFn = std::unique_ptr<Potion> (*)();
 
 // Things the renderer should animate; commands push them, the UI drains them.
 struct VisualEvent {
-  enum Kind { Damage, Blocked, Block, Heal, PowerUp, PowerDown, Death, CardExhaust, Shuffle, Banner, Anim } kind;
+  enum Kind { Damage, Blocked, Block, Heal, PowerUp, PowerDown, Death, CardExhaust, Shuffle, Banner, Anim,
+              Hit, CardPlayed, BlockBroken } kind;  // Hit/CardPlayed/BlockBroken: only the audio router reads them
   Creature* who = nullptr;
   int amount = 0;
   std::string text;

@@ -97,6 +97,7 @@ void App::updatePotions(const gfx::Input& in) {
   if (fight && !(r.combat->playerPhase && r.combat->actions.waiting())) { close(); return; }
   auto fire = [&](Creature* target) {
     int slot = potionSel_;
+    sfx::potionUsed();
     close();
     if (fight) {
       PlayerAction a;
