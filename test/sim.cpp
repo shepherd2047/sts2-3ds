@@ -341,7 +341,7 @@ int main(int argc, char** argv) {
           break;
         case Screen::RelicOffer:
           if (cur->relicChoice.waiting()) {
-            if (getenv("SIM_FIGHTS") && cur->relicOffer) printf("  relic %s\n", cur->relicOffer->id.c_str());
+            if (getenv("SIM_FIGHTS") && !cur->relicOffers.empty()) printf("  relic %s\n", cur->relicOffers[0]->id.c_str());
             cur->relicChoice.fire(1);
           }
           break;

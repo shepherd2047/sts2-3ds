@@ -698,6 +698,26 @@ def bake_rest_sites(g, args):
         if args.preview:
             canvas.save(os.path.join(ROOT, 'build', f'preview_bg_rest_{act}.png'))
 
+def bake_treasure_chests(g, packer):
+    """S15: the treasure room chest per act (ActModel.ChestSpineResourcePath, skin act<N>) as two
+    static sprites: treasure/chest<N>_closed (frame 0 of 'animation', no stroke / shine / vfx) and
+    treasure/chest<N>_open (the same without the lid slots -- a sprite swap for the opening)."""
+    fx = ('stroke', 'act2_stroke', 'act3_stroke', 'open vfx', 'sparkle', 'chest shine')
+    lids = ('top 1', 'act2_top 1', 'act3_top 0 copy', 'rocks1')
+    for act in (1, 2, 3):
+        skel, atlas, load = g.spine(f'animations/backgrounds/treasure_room/chest_room_act_{act}_skel_data.tres')
+        closed, co = spine_render.render(skel, atlas, load, scale=0.25, skin_names=[f'act{act}'],
+                                         animation='animation', hide=fx)
+        opened, oo = spine_render.render(skel, atlas, load, scale=0.25, skin_names=[f'act{act}'],
+                                         animation='animation', hide=fx + lids)
+        # Same frame for both: pad the open one to the closed one's box so the base stays put.
+        box = Image.new('RGBA', closed.size, (0, 0, 0, 0))
+        box.alpha_composite(opened, (int(round(co[0] - oo[0])), int(round(co[1] - oo[1]))))
+        w = 220
+        h = max(1, round(closed.height * w / closed.width))
+        packer.add(f'treasure/chest{act}_closed', fit(closed, (w, h)))
+        packer.add(f'treasure/chest{act}_open', fit(box, (w, h)))
+
 
 def add_ui_art(g, a, packer, known):
     """Buttons, panels, top bar, controls, reward / rest icons, character orbs and icons.
@@ -1025,6 +1045,7 @@ def build(args):
         packer.add('map/boss_' + enc, fit_height(g.image(path), 64))
     add_ui_art(g, a, packer, {e[0] for e in packer.entries})
     bake_crystal_sphere(g, packer, args)  # A7d
+    bake_treasure_chests(g, packer)  # S15
     select = g.image('images/packed/character_select/char_select_ironclad.png')
     packer.add('ui/ironclad_select', fit_height(select, 120))
     bake_other_character_art(g, packer, args)  # X1.5-X4.5: ui/<key>_select for the other four
