@@ -1310,6 +1310,7 @@ struct Run {
 namespace db {
 void init();
 std::unique_ptr<Card> card(const std::string& id);
+std::vector<std::string> cardIds();  // every registered card id, sorted (M8's card library)
 std::unique_ptr<Power> power(const std::string& id);
 const Encounter* encounter(const std::string& id);
 std::vector<std::string> encounterIds();  // every registered encounter (tests, tools)

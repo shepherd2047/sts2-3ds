@@ -38,13 +38,15 @@ static std::string framePool(const Card* c) {
   return it != owner.end() ? it->second : "colorless";
 }
 
-void App::drawCard(Card* c, float x, float y, float s, bool dim, bool desc, bool selected) {
+void App::drawCard(Card* c, float x, float y, float s, bool dim, bool desc, bool selected, bool unseen) {
   const char* kind = c->type == CardType::Attack ? "attack" : c->type == CardType::Power ? "power" : "skill";
   bool ancient = c->rarity == Rarity::Ancient;
   uint32_t tint = dim ? 0x000000FF : 0xFFFFFFFF;
   float blend = dim ? 0.45f : 0.f;
   if (selected) gfx::rect(x - 3 * s - 1, y - 3 * s - 1, 126 * s + 2, 175 * s + 2, 0xFFE070C0);
-  spr(R().sprite("portrait/" + c->locKey), x + 8 * s, y + 16 * s, 104 * s, 78 * s, tint, blend);
+  // NotSeen (NCard: card_portrait_blur_material): no blur shader here, the art is darkened instead.
+  spr(R().sprite("portrait/" + c->locKey), x + 8 * s, y + 16 * s, 104 * s, 78 * s, unseen ? 0x181820FF : tint,
+      unseen ? 0.85f : blend);
   // X1.5-X4.5 (NCard.UpdateVisuals): the frame takes the colour of the card's own pool
   // (VisualCardPool.FrameMaterial), the portrait border and title banner that of its rarity
   // (CardModel.BannerMaterial). build_assets bakes each combination.
@@ -62,9 +64,9 @@ void App::drawCard(Card* c, float x, float y, float s, bool dim, bool desc, bool
 
   // Title, shrunk to fit the banner. The outline marks rarity (F5); it needs at least a whole
   // pixel of scale to read, so small grid-mini cards skip it.
-  std::string title = cardTitle(c);
+  std::string title = unseen ? L("card_library.UNKNOWN.title") : cardTitle(c);
   FontSize f = s >= 0.8f ? F16 : F12;
-  TextStyle tt = ts(f, c->upgraded() ? col::green : col::white, CENTER);
+  TextStyle tt = ts(f, c->upgraded() && !unseen ? col::green : col::white, CENTER);
   if (s >= 0.55f) tt.outline = rarityOutline(c->rarity);
   float tw = R().measure(title, tt);
   float maxW = 104 * s;
@@ -78,10 +80,10 @@ void App::drawCard(Card* c, float x, float y, float s, bool dim, bool desc, bool
   R().text(x + 60 * s, artTop - th, title, tt);
 
   // Cost orb, or the unplayable icon in its place.
-  if (c->has(kwUnplayable)) {
+  if (c->has(kwUnplayable) && !unseen) {
     float os = 26 * std::max(s, 0.6f);
     spr(R().sprite("card/unplayable"), x - 5 * s, y - 5 * s, os, os, tint, blend);
-  } else if (c->cost >= 0 || c->costsX) {
+  } else if (c->cost >= 0 || c->costsX || unseen) {
     float os = 30 * std::max(s, 0.6f);
     spr(R().sprite(cardEnergySprite(framePool(c))), x - 7 * s, y - 7 * s, os, os, tint, blend);
     bool live = c->combat && c->combat->inProgress;
@@ -89,14 +91,14 @@ void App::drawCard(Card* c, float x, float y, float s, bool dim, bool desc, bool
     uint32_t cc = shownCost < c->canonicalCost ? col::green : shownCost > c->canonicalCost ? col::red : col::white;
     TextStyle ct = ts(F16, cc, CENTER);
     ct.scale = std::max(s, 0.6f) * 1.1f;
-    R().text(x - 7 * s + os / 2, y - 7 * s + (os - R().lineHeight(F16) * ct.scale) / 2, c->costsX ? std::string("X") : num(shownCost), ct);
+    R().text(x - 7 * s + os / 2, y - 7 * s + (os - R().lineHeight(F16) * ct.scale) / 2, unseen ? std::string("?") : c->costsX ? std::string("X") : num(shownCost), ct);
   }
 
   // Enchantment badge (F5, NCard.UpdateEnchantmentVisuals): the enchantment's icon in a small
   // frame at the bottom-left, with its amount when it shows one; dimmed while disabled. Shown at
   // every size (even the common 5-card hand is s ~= 0.5) with a minimum legible pixel size,
   // since the badge is the only sign an enchantment is there at all.
-  if (c->enchantment) {
+  if (c->enchantment && !unseen) {
     Enchantment* e = c->enchantment.get();
     float bs = std::max(s, 0.5f);
     float bw = 28 * bs, bh = 22 * bs, bx = x - 4 * s, by = y + 164 * s - bh;
@@ -117,7 +119,7 @@ void App::drawCard(Card* c, float x, float y, float s, bool dim, bool desc, bool
     dt.scale = s >= 0.95f ? 1.f : std::max(0.75f, s);
     dt.maxWidth = 104 * s;
     float dh;
-    std::string d = describe(c);
+    std::string d = unseen ? L("card_library.UNKNOWN.description") : describe(c);
     R().measure(d, dt, &dh);
     float top = y + 100 * s, bottom = y + 164 * s;
     // Long texts shrink until they fit the text box.

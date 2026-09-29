@@ -174,7 +174,7 @@ std::vector<SubItem> subItems(int sub) {
     const char* spr4[] = {"ui/sub_card_library", "ui/sub_relic_collection", "ui/sub_potion_lab", "ui/sub_bestiary"};
     const char* key4[] = {"COMPENDIUM_CARD_LIBRARY", "COMPENDIUM_RELIC_COLLECTION", "COMPENDIUM_POTION_LAB",
                           "COMPENDIUM_BESTIARY"};
-    for (int i = 0; i < 4; ++i) v.push_back({kSCards + i, x0 + i * (w + gap), y, w, h, spr4[i], key4[i], false, false});
+    for (int i = 0; i < 4; ++i) v.push_back({kSCards + i, x0 + i * (w + gap), y, w, h, spr4[i], key4[i], i == 0, false});
     const float sw = (kBot - 2 * x0 - gap) / 2, sy = y + h + 10;
     v.push_back({kSStats, x0, sy, sw, 44, "ui/sub_stats", "STATISTICS", false, true});
     v.push_back({kSHistory, x0 + sw + gap, sy, sw, 44, "ui/sub_history", "RUN_HISTORY", false, true});
@@ -398,6 +398,7 @@ void App::activateMenu(int id) {
     case kMQuit: menuModal_ = 2; menuModalSel_ = 0; break;
     case kMProfile: openProfiles(); break;
     case kSStandard: titleCharacter_ = true; titleSeed_ = randomSeed(); break;
+    case kSCards: openCardLibrary(); break;  // M8
     case kSBack: menuSub_ = 0; break;
     default:
       for (auto& it : subItems(menuSub_))
