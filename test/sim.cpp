@@ -5,6 +5,7 @@
 #include <algorithm>
 
 #include "../source/core/game.h"
+#include "../source/core/daily.h"
 #include "../source/core/events_crystal.h"
 #include "../source/core/history.h"
 #include "../source/core/modifiers.h"
@@ -37,6 +38,16 @@ int main(int argc, char** argv) {
       cur->setModifiers(modifiers::parseList(m));
       cur->customRun = true;
     }
+    // SIM_DAILY=YYYY-MM-DD: that day's daily run (M12: its character, ascension, seed, modifiers;
+    // every run of the batch is the same run).
+    daily::Date dd;
+    if (getenv("SIM_DAILY") && daily::parseDate(getenv("SIM_DAILY"), dd)) {
+      daily::Params dp = daily::forDate(dd);
+      cur->setModifiers(dp.modifiers);
+      cur->seedText = dp.seedText;
+      cur->dailyDate = daily::key(dd);
+      cur->start(modifiers::seedFromString(dp.seedText), dp.character, dp.ascension);
+    } else
     cur->start((uint64_t)s * 7919, getenv("SIM_CHAR") ? getenv("SIM_CHAR") : "Ironclad",
                 getenv("SIM_ASC") ? atoi(getenv("SIM_ASC")) : 0);  // SIM_CHAR=Silent, SIM_ASC=10
     cur->freeMap = getenv("STS_FREE_MAP") != nullptr;

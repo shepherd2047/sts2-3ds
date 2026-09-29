@@ -1318,6 +1318,7 @@ struct Run {
   std::vector<std::shared_ptr<Modifier>> modifiers;
   bool customRun = false;         // GameMode.Custom: no ascension unlock at the end
   std::string seedText;           // RunRngSet.StringSeed ("" when started from a numeric seed)
+  std::string dailyDate;          // M12 GameMode.Daily: the day ("YYYY-MM-DD", daily.h); "" otherwise
   float unknownEliteOdds = -1.f;  // UnknownMapPointOdds Elite (-1 = never; DeadlyEvents 0.1)
   void setModifiers(const std::vector<std::string>& keys);  // "Draft", "CharacterCards:Silent", ...
   std::vector<std::string> modifierKeys() const;

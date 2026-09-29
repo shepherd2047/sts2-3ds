@@ -6,6 +6,7 @@
 #include <set>
 
 #include "badges.h"
+#include "daily.h"
 #include "game.h"
 #include "history.h"
 #include "modifiers.h"
@@ -19,8 +20,8 @@ namespace {
 void recordRunEnd(Run& r, progress::RunOutcome outcome) {
   if (r.progressRecorded) return;
   r.progressRecorded = true;
-  // ProgressSaveManager.UpdateWithRunData: a custom run never raises the ascension level (M11).
-  int keepAsc = r.customRun ? progress::state().character(r.characterId).maxAscension : -1;
+  // ProgressSaveManager.UpdateWithRunData: a custom or daily run never raises the ascension level (M11).
+  int keepAsc = r.customRun || !r.dailyDate.empty() ? progress::state().character(r.characterId).maxAscension : -1;
   progress::onRunEnded(r.characterId, r.ascension, outcome);
   if (keepAsc >= 0) progress::state().character(r.characterId).maxAscension = keepAsc;
   // UpdateWithRunData: each Ancient map point's first Event room counts a win or a loss (AncientStats).
@@ -34,6 +35,9 @@ void recordRunEnd(Run& r, progress::RunOutcome outcome) {
         }
     }
   history::onRunEnded(r, outcome == progress::RunOutcome::Win, outcome == progress::RunOutcome::Abandon);
+  // M12: the daily's local best (the C# uploads DailyRunUtility.UploadScore here).
+  if (!r.dailyDate.empty())
+    if (const history::RunRecord* rec = history::last()) daily::recordScore(r.dailyDate, rec->score);
 }
 // Run history kinds of the port's room types.
 history::PointType historyPointType(RoomType t) {

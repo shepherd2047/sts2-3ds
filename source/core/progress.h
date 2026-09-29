@@ -36,7 +36,8 @@ struct CharacterProgress {
 };
 
 struct Progress {
-  static constexpr int kVersion = 1;
+  // 2 (M12): the local daily run best scores (older files: none).
+  static constexpr int kVersion = 2;
 
   std::map<std::string, CharacterProgress> characters;  // key: Character::id ("Ironclad", "Silent", ...)
   std::set<std::string> seenCards, seenRelics, seenPotions, seenMonsters;
@@ -44,6 +45,10 @@ struct Progress {
   // (an unknown counter from a newer build round-trips untouched); Progress::load clamps
   // negative values to 0.
   std::map<std::string, int64_t> counters;
+
+  // M12 (daily.h): the best ScoreUtility.CalculateScore per daily date ("YYYY-MM-DD"); the C#'s
+  // leaderboards replaced by a local record.
+  std::map<std::string, int> dailyBest;
 
   CharacterProgress& character(const std::string& id);  // get-or-create
 

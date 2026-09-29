@@ -108,7 +108,9 @@ void App::startRun(bool resume) {
     std::vector<std::string> mods = titleModifiers_;
     if (const char* m = getenv("STS_MODIFIERS")) mods = modifiers::parseList(m);
     run_->setModifiers(mods);
-    run_->customRun = titleCustom_ || !mods.empty();
+    run_->customRun = (titleCustom_ || !mods.empty()) && titleDaily_.empty();
+    run_->dailyDate = titleDaily_;  // M12: a daily run (screens/daily_run.cpp)
+    titleDaily_.clear();
     titleModifiers_.clear();
     titleCustom_ = false;
     run_->start(seed, character, titleAsc_);

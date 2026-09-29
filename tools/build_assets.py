@@ -1074,7 +1074,8 @@ def build(args):
         'POTION_LAB_COLLECTION',  # M9: the potion lab's unseen tip
         'RUN_HISTORY', 'CONTINUE_RUN_INFO',
         'PROFILE_SCREEN', 'OPEN_PROFILE_SCREEN',  # S03: profile screen + the main menu's profile button
-        'CUSTOM_RUN_SCREEN'))  # M11+S05: the custom run screen
+        'CUSTOM_RUN_SCREEN',  # M11+S05: the custom run screen
+        'DAILY_RUN_MENU'))  # M12: the daily run screen
     take('modifiers')  # M11: run modifier titles / descriptions (Neow options, custom run screen)
     for t in ('card_keywords', 'gameplay_ui', 'rest_site_ui', 'card_reward_ui', 'map', 'combat_messages',
               'card_selection', 'intents', 'game_over_screen', 'characters'):

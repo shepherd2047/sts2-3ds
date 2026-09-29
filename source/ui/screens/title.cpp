@@ -167,7 +167,7 @@ std::vector<SubItem> subItems(int sub) {
   if (sub == 1) {  // NSingleplayerSubmenu: standard / daily / custom
     const float w = 96, h = 150, gap = 8, x0 = (kBot - (3 * w + 2 * gap)) / 2, y = 18;
     v.push_back({kSStandard, x0, y, w, h, "ui/sub_standard", "STANDARD", true, false});
-    v.push_back({kSDaily, x0 + (w + gap), y, w, h, "ui/sub_daily", "DAILY", false, false});
+    v.push_back({kSDaily, x0 + (w + gap), y, w, h, "ui/sub_daily", "DAILY", true, false});  // M12
     v.push_back({kSCustom, x0 + 2 * (w + gap), y, w, h, "ui/sub_custom", "CUSTOM", true, false});  // M11+S05
   } else {  // NCompendiumSubmenu: four art cards, then stats and run history
     const float w = 72, h = 116, gap = 6, x0 = (kBot - (4 * w + 3 * gap)) / 2, y = 10;
@@ -262,6 +262,7 @@ void App::drawTitle(bool top) {
   if (drawProfiles(top)) return;  // S03
   if (drawStats(top)) return;     // M6
   if (drawCustomRun(top)) return;  // M11+S05
+  if (drawDailyRun(top)) return;   // M12
   const bool sub = menuSub_ != 0;
   if (top) {
     drawMenuBg(true, sub ? 0.35f : 0.f);
@@ -405,6 +406,7 @@ void App::activateMenu(int id) {
     case kSCards + 2: openRelicCollection(true); break;   // M9
     case kSCards + 3: openBestiary(); break;  // M10
     case kSCustom: openCustomRun(); break;   // M11+S05
+    case kSDaily: openDailyRun(); break;     // M12
     case kSBack: menuSub_ = 0; break;
     case kSStats: openStats(1); break;    // M6
     case kSHistory: openStats(2); break;  // M6
@@ -421,6 +423,7 @@ void App::updateTitle(const gfx::Input& in) {
   if (updateProfiles(in)) return;  // S03
   if (updateStats(in)) return;     // M6
   if (updateCustomRun(in)) return;  // M11+S05
+  if (updateDailyRun(in)) return;   // M12
   int id = in.touchDown ? hitAt(in.tx, in.ty) : ID_NONE;
   if (menuModal_) {
     if (in.down & (gfx::BTN_LEFT | gfx::BTN_RIGHT)) menuModalSel_ = 1 - menuModalSel_;

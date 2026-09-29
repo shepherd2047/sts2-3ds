@@ -9,6 +9,7 @@
 // (SaveProgress()); on this port profiles.cpp (Y4) loads the current slot's file in
 // profiles::init/select, and the app writes it through profiles::saveProgress() at every run
 // save point and when a run ends (ui.cpp). The engine hooks below only update progress::state().
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <sstream>
@@ -69,6 +70,18 @@ void ioProgress(Archive& a, Progress& p) {
   if (a.reading) {
     p.counters.clear();
     for (size_t i = 0; i < names.size() && i < values.size(); ++i) p.counters[names[i]] = values[i];
+  }
+  if (version >= 2) {  // M12: daily run bests
+    a.tag("DAILY");
+    std::vector<std::string> dates;
+    std::vector<int> scores;
+    if (!a.reading) for (auto& [d, v] : p.dailyBest) { dates.push_back(d); scores.push_back(v); }
+    a.io(dates);
+    a.io(scores);
+    if (a.reading) {
+      p.dailyBest.clear();
+      for (size_t i = 0; i < dates.size() && i < scores.size(); ++i) p.dailyBest[dates[i]] = std::max(0, scores[i]);
+    }
   }
   a.tag("END");
 }
