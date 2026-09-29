@@ -2,12 +2,11 @@
 // and the ten Fake* relics (MegaCrit.Sts2.Core.Models.Events / .Encounters / .Monsters / .Relics).
 // The fake shop reuses the shop screen (Screen::Shop, Run::shop, Run::shopChoice) with the six
 // relic entries only.
-// PORT NOTE: the C# fight starts when a Foul Potion is thrown at the merchant. There is no Foul
-// Potion (nor a potion throw on the shop screen) in this build: the shop loop starts the fight
-// when the UI fires shopChoice with kFoulPotionThrow (and consumes a "FoulPotion" from the
-// belt if one exists). STS_FAKE_FIGHT=1 turns leaving the shop into that throw (debug). The
-// merchant's dialogue, the NFakeMerchant scene, the purchase-failure lines and the relic-choice
-// history (OnEventFinished) are not ported.
+// The C# fight starts when a Foul Potion is thrown at the merchant: FoulPotion::onUse (events_shared2.cpp)
+// fires shopChoice with kFoulPotionThrow (the potion is already spent by Run::usePotion; the shop
+// screen has a potion button). STS_FAKE_FIGHT=1 turns leaving the shop into that throw (debug).
+// PORT NOTE: the merchant's dialogue, the NFakeMerchant scene, the purchase-failure lines and the
+// relic-choice history (OnEventFinished) are not ported.
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -33,8 +32,6 @@ Intent attackIntent(int dmg, int hits = 1) { Intent i; i.kind = Intent::Attack; 
 Intent kindIntent(Intent::Kind k) { Intent i; i.kind = k; return i; }
 
 bool inCombat(const Relic* r) { return r->combat && r->combat->inProgress; }
-
-constexpr int kFoulPotionThrow = -2;  // shopChoice value: the Foul Potion is thrown at the merchant
 
 // ================================================================ relics
 
@@ -279,8 +276,6 @@ struct FakeMerchant : Event {
 
   // FoulPotionThrown: the Rug, then every unsold relic, come with the fight.
   Task<> foulPotionThrown() {
-    for (size_t s = 0; s < run->potions.size(); ++s)
-      if (run->potions[s] && run->potions[s]->id == "FoulPotion") { run->discardPotion((int)s); break; }
     startedFight = true;
     run->extraRewardRelics.push_back(db::relic("FakeMerchantsRug"));
     for (auto& it : run->shop)

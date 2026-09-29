@@ -12,6 +12,8 @@ static std::map<std::string, int> played;
 static std::map<std::string, int> potionsUsed;
 static size_t potionCursor = 0;
 
+static int thrownFloor = -1;  // a Foul Potion throw is in flight (the potion has left the belt)
+
 int main(int argc, char** argv) {
   setvbuf(stdout, nullptr, _IONBF, 0);
   int runs = argc > 1 ? atoi(argv[1]) : 50;
@@ -81,6 +83,7 @@ int main(int argc, char** argv) {
         }
       cur->potions.resize(5);
     }
+    thrownFloor = -1;
     Scheduler::get().spawn(cur->main());
     int frames = 0;
     while (cur->screen != Screen::GameOver && cur->screen != Screen::Victory && frames < 2000000) {
@@ -110,6 +113,7 @@ int main(int argc, char** argv) {
         cur->deckChoice.result.fire(picked);
         continue;
       }
+      if (cur->screen != Screen::Shop) thrownFloor = -1;
       switch (cur->screen) {
         case Screen::Map:
           if (cur->mapChoice.waiting()) {
@@ -263,6 +267,17 @@ int main(int argc, char** argv) {
             cur->deckChoice.result.fire({pick});
           } else if (cur->shopChoice.waiting()) {
             int pick = -1;
+            // A Foul Potion on the belt is thrown at the (Fake)Merchant: the FakeMerchant fight starts.
+            static const void* thrownRun = nullptr;  // the throw is in flight (the potion has left the belt)
+            bool threw = thrownFloor == cur->floor && cur->currentEvent;
+            for (int k = 0; k < (int)cur->potions.size() && !threw; ++k)
+              if (cur->potions[k] && cur->potions[k]->id == "FoulPotion" && cur->currentEvent && cur->canUsePotion(k)) {
+                if (getenv("SIM_FIGHTS")) printf("  foul potion thrown\n");
+                Scheduler::get().spawn(cur->usePotion(k, nullptr));
+                threw = true;
+                thrownFloor = cur->floor;
+              }
+            if (threw) break;
             // Cap the buys per visit: with a refilling relic (The Courier) and endless gold the shop never empties.
             static int shopBuys = 0, shopFloor = -1;
             if (shopFloor != cur->floor) { shopFloor = cur->floor; shopBuys = 0; }

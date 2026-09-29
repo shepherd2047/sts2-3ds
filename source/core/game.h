@@ -734,6 +734,7 @@ struct Potion : Model {
 
   virtual bool canBeGeneratedInCombat() const { return true; }
   virtual Task<> onUse(Creature* target) = 0;  // OnUse
+  virtual bool passesCustomUsabilityCheck() const { return true; }  // PassesCustomUsabilityCheck (out of combat)
 
   Creature* owner() const;
   DynVar* var(const char* n) { for (auto& v : vars) if (v.name == n) return &v; return nullptr; }
@@ -1054,9 +1055,14 @@ namespace db { struct ActDef; }
 
 // MerchantInventory entries: five character cards (one on sale), three relics, three
 // potions and the card removal service. `cost` is before Hook.ModifyMerchantPrice.
+// shopChoice value: a Foul Potion was thrown at the FakeMerchant (its fight starts).
+constexpr int kFoulPotionThrow = -2;
+
 struct ShopItem {
   enum Kind { CardItem, RelicItem, PotionItem, Removal } kind = CardItem;
   CardType cardType = CardType::Attack;  // the character card slot's type
+  Rarity cardRarity = Rarity::Uncommon;  // a colorless slot's rarity (Uncommon, Rare)
+  bool colorless = false;                // one of the two colorless card slots
   std::unique_ptr<Card> card;
   std::unique_ptr<Relic> relic;
   std::unique_ptr<Potion> potion;

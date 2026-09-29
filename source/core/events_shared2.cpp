@@ -93,11 +93,19 @@ struct FoulPotion : Potion {
       co_await cmd::damage(all, val("Damage"), kUnpowered, owner(), nullptr);
       co_return;
     }
-    // PORT NOTE: the merchant / FakeMerchant throw (gold 100 at the shop's merchant button) needs
-    // the shop UI target and PassesCustomUsabilityCheck; only the shop screen pays out here, and
-    // anywhere else out of combat the potion is handed back unused.
-    if (run->screen == Screen::Shop) { co_await run->gainGold(val("Gold").toInt()); co_return; }
-    run->procurePotion(db::potion("FoulPotion"));
+    // Out of combat (usable only at a merchant, see passesCustomUsabilityCheck): the merchant pays
+    // 100 gold; the FakeMerchant starts its fight (FakeMerchant.FoulPotionThrown, via shopChoice).
+    // PORT NOTE: ShowPotionVfx / NMerchantRoom.FoulPotionThrown (splat, merchant reaction) dropped.
+    if (run->currentEvent && run->currentEvent->id == "FakeMerchant") {
+      run->shopChoice.fire(kFoulPotionThrow);
+      co_return;
+    }
+    co_await run->gainGold(val("Gold").toInt());
+  }
+  // FoulPotion.PassesCustomUsabilityCheck / GetFoulPotionMerchantTarget: only while the merchant's
+  // shop screen (or the FakeMerchant's) is up and waiting, i.e. its inventory is not being used.
+  bool passesCustomUsabilityCheck() const override {
+    return run && run->screen == Screen::Shop && run->shopChoice.waiting() && !run->deckChoice.active;
   }
 };
 
