@@ -16,7 +16,7 @@ Everything accepted is on `main`. State:
   two minions — the game's own art (checked against an offline render). Open: MAD_SCIENCE (event card) has one
   portrait per chosen type (`mad_science_attack/skill/power`), not baked yet.
 - **S04 character select: accepted and merged** (2026-09-28).
-- **X1.3a-X4.3a accepted and merged** (2026-09-28, four subagents). **Next packages:** X*.3b (running), X*.4 (Rare +
+- **X1.3a-X4.3a accepted and merged** (2026-09-28, four subagents). X*.3b, A7a, A7b, A11a, A11b accepted too. **Running:** X*.4, A2, A7c, A11c, A11e. **Then:** X*.4 (Rare +
   tokens), then the engine order (Y5 + H1/H3 need the real 3DS, A10, A11f, ...).
 - **Rules learned today** (also in CLAUDE.md): one class per power id (shared powers in `powers.h`);
   no two .cpp files with the same basename (3DS object names are flattened); `Card::createdByPlayer` is the
@@ -185,25 +185,25 @@ meta and progression (M), system (Y), audio (U) and hardware/release (H).
 | A1a | Colorless cards 1/3: Alchemize … GoldAxe (22) + the colorless pool, and ColorlessPotion | content | – | todo |
 | A1b | Colorless cards 2/3: HandOfGreed … Purity (22) | content, parallel-safe | A1a | todo |
 | A1c | Colorless cards 3/3: Rally … Volley (19); skip cards the C# marks multiplayer-only | content, parallel-safe | A1a | todo |
-| A2 | Missing curses/status (AscendersBane exists since C10, Debt, Writhe, Beckon, Debris, Void), 13 event cards, quest cards Dowsing and SpoilsMap | content | – | todo |
+| A2 | Missing curses/status (AscendersBane exists since C10, Debt, Writhe, Beckon, Debris, Void), 13 event cards, quest cards Dowsing and SpoilsMap | content | – | in progress (subagent) |
 | A3a | Enchantment engine: enchantment slot on Card, hooks (`Models\EnchantmentModel.cs`), save, card badge + text in the UI, `enchant` event helpers | engine, *Opus* | – | done (engine), accepted 2026-09-28 |
 | A3b | Enchantments 1/2: Sown, Slither, Adroit, Clone (used by CloneRestSiteOption), Corrupted, Goopy, Inky, SoulsPower + unlock SapphireSeed PLANT, WoodCarvings SNAKE, FieldOfManSizedHoles ENTER_YOUR_HOLE (PerfectFit exists), Grave of the Forgotten | content | A3a | todo |
 | A3c | Enchantments 2/2: Instinct, Momentum, Nimble, RoyallyApproved, Spiral, Steady, TezcatarasEmber (needs the Eternal keyword, see notes) + relics that enchant (DingyRug, GnarledHammer, Kifuda, RoyalStamp …) | content | A3b | todo |
 | A4 | Affliction engine + all 7 (Bound, Entangled, Galvanized, Hexed, Ringing, Smog, Tainted); replace the per-power approximations in acts 2/3 | engine | – | todo |
 | A5 | 10 skipped shared relics (DingyRug, FresnelLens, GnarledHammer, Kifuda, MysticLighter, PunchDagger, RoyalStamp, Toolbox, UnsettlingLamp, WingCharm) + `IsBeforeAct3TreasureChest` | content | A1a, A3c | todo |
 | A6 | Locked Ancient relics (Sea Glass, Prismatic Gem, Driftwood, Pael's Wing/Eye/Legion, Golden Compass, Fur Coat, Toy Box, Whispering Earring …) and remaining Neow options (PhialHolster, LostCoffer, NeowsSacrifice …) | content | A3c | todo |
-| A7a | Shared events 1/3: DollRoom, PotionCourier, SelfHelpBook, StoneOfAllTime, TheFutureOfPotions + their relics | content, parallel-safe | – | in progress (subagent) |
-| A7b | Shared events 2/3: TheLegendsWereTrue, WarHistorianRepy, WelcomeToWongos (+ Wongo relics/badge) | content, parallel-safe | – | in progress (subagent) |
-| A7c | Shared events 3/3: FakeMerchant (+ FakeMerchantEventEncounter, 10 Fake* relics, fake shop UI reuse) | content | – | todo |
+| A7a | Shared events 1/3: DollRoom, PotionCourier, SelfHelpBook, StoneOfAllTime, TheFutureOfPotions + their relics | content, parallel-safe | – | done (subagent), accepted 2026-09-28 |
+| A7b | Shared events 2/3: TheLegendsWereTrue, WarHistorianRepy, WelcomeToWongos (+ Wongo relics/badge) | content, parallel-safe | – | done (subagent), accepted 2026-09-28 |
+| A7c | Shared events 3/3: FakeMerchant (+ FakeMerchantEventEncounter, 10 Fake* relics, fake shop UI reuse) | content | – | in progress (subagent) |
 | A7d | CrystalSphere: its minigame (`Events.Custom.CrystalSphereEvent`) + custom bottom-screen UI | content + UI, *Opus* | – | todo |
 | A8 | Remaining event-pool relics whose source already exists (run the pool diff), unlock Wellspring BOTTLE / WhisperingHollow GOLD, BattlewornDummy potion | content | A7a-c | todo |
 | A9 | Shop leftovers: 2 colorless slots, Foul Potion throw at the merchant, event potions Ambergris / Glowwater / Foul | content | A1a | todo |
 | A10 | TheArchitect: the true ending after the act 3 boss (event + TheArchitectEventEncounter), victory flow | content + engine | – | todo |
-| A11a | Underdocks monsters 1/2: CorpseSlugs N/W, Cultists, FossilStalker, GremlinMerc, HauntedShip, LivingFog, PunchConstruct | content, parallel-safe | – | in progress (subagent) |
-| A11b | Underdocks monsters 2/2: Seapunk N/W, SewerClam, SludgeSpinner, Toadpoles, TwoTailedRats | content, parallel-safe | – | in progress (subagent) |
-| A11c | Underdocks elites: PhantasmalGardeners, SkulkingColony, TerrorEel | content | – | todo |
+| A11a | Underdocks monsters 1/2: CorpseSlugs N/W, Cultists, FossilStalker, GremlinMerc, HauntedShip, LivingFog, PunchConstruct | content, parallel-safe | – | done (subagent), accepted 2026-09-28 |
+| A11b | Underdocks monsters 2/2: Seapunk N/W, SewerClam, SludgeSpinner, Toadpoles, TwoTailedRats | content, parallel-safe | – | done (subagent), accepted 2026-09-28 |
+| A11c | Underdocks elites: PhantasmalGardeners, SkulkingColony, TerrorEel | content | – | in progress (subagent) |
 | A11d | Underdocks bosses: WaterfallGiant, SoulFysh, LagavulinMatriarch | content (+engine) | – | todo |
-| A11e | Underdocks events (AbyssalBaths, DrowningBeacon, EndlessConveyor, PunchOff + encounter, SpiralingWhirlpool, SunkenTreasury, DoorsOfLightAndDark, TrashHeap, WaterloggedScriptorium) | content | – | todo |
+| A11e | Underdocks events (AbyssalBaths, DrowningBeacon, EndlessConveyor, PunchOff + encounter, SpiralingWhirlpool, SunkenTreasury, DoorsOfLightAndDark, TrashHeap, WaterloggedScriptorium) | content | – | in progress (subagent) |
 | A11f | Underdocks as act 1: act choice as in `ActModel` / `RunManager` discovery order, map bg, room art, boss icons, per-act music hook | engine | A11a-e | todo |
 
 **A3a notes (enchantment engine, done).** `Enchantment` (game.h) is a `Model` owned by
@@ -338,10 +338,10 @@ and `Models.Powers\`.
 | id | Character | Step 0 systems | Status |
 |---|---|---|---|
 | X0 | All | Character plumbing (see Engine lane order #1) | done (engine), accepted 2026-09-28 |
-| X1.0-X1.5 | Silent | Shiv tokens, Poison, discard triggers (Sly), Retain, Accuracy-style powers | X1.0 done (engine), accepted 2026-09-28; X1.1 done (subagent), accepted 2026-09-28; X1.2 done (subagent), accepted 2026-09-28; X1.5 done, accepted 2026-09-28; X1.3a done (subagent), accepted 2026-09-28 (engine hook Combat::attackPlaysFinishedThisTurn (Finisher)); X1.3b in progress (subagent); X1.4 todo |
-| X2.0-X2.5 | Defect | Orbs (Lightning, Frost, Dark, Plasma, Glass), channel/evoke, Focus, orb slots and their rendering on the top screen | X2.0 done (subagent), accepted 2026-09-28; X2.1 done (subagent), accepted 2026-09-28; X2.2 done (subagent), accepted 2026-09-28; X2.5 done, accepted 2026-09-28; X2.3a done (subagent), accepted 2026-09-28 (Feral/Iteration/Ftl approximate the missing card-play history (PORT NOTEs)); X2.3b in progress (subagent); X2.4 todo |
-| X3.0-X3.5 | Regent | Stars (second resource with a HUD counter), Forge and Sovereign Blade, summons | X3.0 done (subagent), accepted 2026-09-28; X3.1 done (subagent), accepted 2026-09-28; X3.2 done (subagent), accepted 2026-09-28; X3.5 done, accepted 2026-09-28; X3.3a done (subagent), accepted 2026-09-28 (engine hook Combat::skillsFinishedThisTurn (LunarBlast); ManifestAuthority's colorless card waits for A1a); X3.3b in progress (subagent); X3.4 todo |
-| X4.0-X4.5 | Necrobinder | Osty (companion creature with its own HP, targeting, death), Doom, Souls | X4.0 done (subagent), accepted 2026-09-28; X4.1 done (subagent), accepted 2026-09-28; X4.2 done (subagent), accepted 2026-09-28; X4.5 done, accepted 2026-09-28; X4.3a done (subagent), accepted 2026-09-28 (Debilitate doubles Vulnerable/Weak in powers.h (C# order); DeathMarch/DeathsDoor/Fetch keep their own per-turn records); X4.3b in progress (subagent); X4.4 todo |
+| X1.0-X1.5 | Silent | Shiv tokens, Poison, discard triggers (Sly), Retain, Accuracy-style powers | X1.0 done (engine), accepted 2026-09-28; X1.1 done (subagent), accepted 2026-09-28; X1.2 done (subagent), accepted 2026-09-28; X1.5 done, accepted 2026-09-28; X1.3a done (subagent), accepted 2026-09-28 (engine hook Combat::attackPlaysFinishedThisTurn (Finisher)); X1.3b done (subagent), accepted 2026-09-28 (engine hook shivPlaysFinishedThisTurn); X1.4 in progress (subagent) |
+| X2.0-X2.5 | Defect | Orbs (Lightning, Frost, Dark, Plasma, Glass), channel/evoke, Focus, orb slots and their rendering on the top screen | X2.0 done (subagent), accepted 2026-09-28; X2.1 done (subagent), accepted 2026-09-28; X2.2 done (subagent), accepted 2026-09-28; X2.5 done, accepted 2026-09-28; X2.3a done (subagent), accepted 2026-09-28 (Feral/Iteration/Ftl approximate the missing card-play history (PORT NOTEs)); X2.3b done (subagent), accepted 2026-09-28 (status cards now fire the generated-card hook (reviewer fix)); X2.4 in progress (subagent) |
+| X3.0-X3.5 | Regent | Stars (second resource with a HUD counter), Forge and Sovereign Blade, summons | X3.0 done (subagent), accepted 2026-09-28; X3.1 done (subagent), accepted 2026-09-28; X3.2 done (subagent), accepted 2026-09-28; X3.5 done, accepted 2026-09-28; X3.3a done (subagent), accepted 2026-09-28 (engine hook Combat::skillsFinishedThisTurn (LunarBlast); ManifestAuthority's colorless card waits for A1a); X3.3b done (subagent), accepted 2026-09-28 (Quasar/SpectrumShift wait for A1a; hooks cardPlaysFinished/starsGained/cardsGenerated); X3.4 in progress (subagent) |
+| X4.0-X4.5 | Necrobinder | Osty (companion creature with its own HP, targeting, death), Doom, Souls | X4.0 done (subagent), accepted 2026-09-28; X4.1 done (subagent), accepted 2026-09-28; X4.2 done (subagent), accepted 2026-09-28; X4.5 done, accepted 2026-09-28; X4.3a done (subagent), accepted 2026-09-28 (Debilitate doubles Vulnerable/Weak in powers.h (C# order); DeathMarch/DeathsDoor/Fetch keep their own per-turn records); X4.3b done (subagent), accepted 2026-09-28 (hooks afterDamageGiven, afterCardPlayedLate); X4.4 in progress (subagent) |
 | X6 | All characters | ColorfulPhilosophers, cross-character Orobas options, per-character Ancient dialogue lines, Random character, per-character act-transition quotes | todo |
 
 That is 7 packages per character (X*.0, .1, .2, .3a, .3b, .4, .5), X1-X4 in order. X6
