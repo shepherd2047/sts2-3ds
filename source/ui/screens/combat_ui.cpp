@@ -105,6 +105,10 @@ void App::drawCombat(bool top) {
     }
     if (arrow) drawArrow(true, afx, afy, atx, aty, true, arrowAlly);
     drawFlights(true);
+    if (cb->choice.active && combatChooseOne()) {  // S13: the focused offer over the fight
+      gfx::rect(0, 0, kTop, kH, 0x000000B0);
+      chooseOneDraw(combatChooseOneSpec(), true);
+    }
     return;
   }
 
@@ -113,6 +117,11 @@ void App::drawCombat(bool top) {
   gfx::Texture* room = R().texture(actTexture(*run_, "bg_"));
   gfx::image(room, kBotOX, 0, kBot, kH, 0, 0, kBot, kH, 0x000000FF, 0.15f);
 
+  if (cb->choice.active && combatChooseOne()) {  // S13: generated cards -> the choose-one screen
+    gfx::rect(0, 0, kBot, kH, style::kScrim);
+    chooseOneDraw(combatChooseOneSpec(), false);
+    return;
+  }
   if (cb->choice.active) {
     gfx::rect(0, 0, kBot, kH, 0x000000A0);
     const CardChoice& ch = cb->choice;
@@ -270,6 +279,12 @@ void App::updateCombat(const gfx::Input& in) {
     aiming_ = false;
     int m = (int)cb->choice.options.size();
     if (!cb->choice.result.waiting()) return;
+    if (combatChooseOne()) {  // S13 choose-one (a potion's / card's generated offers)
+      int pick = chooseOneUpdate(combatChooseOneSpec(), in);
+      if (pick == -1) cb->choice.result.fire({});
+      else if (pick >= 0 && pick < m) cb->choice.result.fire({cb->choice.options[pick]});
+      return;
+    }
     if (in.down & gfx::BTN_RIGHT) sel_ = std::min(m - 1, sel_ + 1);
     if (in.down & gfx::BTN_LEFT) sel_ = std::max(0, sel_ - 1);
     if (in.down & gfx::BTN_DOWN) sel_ = std::min(m - 1, sel_ + 5);
