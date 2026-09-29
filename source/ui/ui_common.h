@@ -109,6 +109,9 @@ enum : int {
   ID_ABANDON_CONFIRM,
   ID_ABANDON_CANCEL,
   ID_TITLE,
+  ID_ASC_DOWN,
+  ID_ASC_UP,
+  ID_SEED,
   ID_POTION0 = 900,  // + belt slot
   ID_TARGET0 = 100,   // + enemy index
   ID_HAND0 = 200,     // + hand index
@@ -118,6 +121,7 @@ enum : int {
   ID_DEV0 = 600,      // + developer action
   ID_DEVITEM0 = 700,  // + developer picker row/cell
   ID_GRID0 = 1000,    // + grid index
+  ID_CHAR0 = 1900,    // + character select button (S04)
 };
 
 inline Res& R() { return res(); }

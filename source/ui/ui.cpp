@@ -68,9 +68,15 @@ void App::startRun(bool resume) {
   }
   if (!loaded) {
     if (savesEnabled()) gfx::deleteSave(kSaveName);
-    const char* seed = getenv("STS_SEED");
-    const char* character = getenv("STS_CHAR");  // debug: STS_CHAR=Silent (the character select is S04)
-    run_->start(seed ? (uint64_t)atoll(seed) : (uint64_t)time(nullptr), character ? character : "Ironclad");
+    // S04: the character select's choice (Random picks one of the five now), ascension and seed
+    // string (RunRngSet: Seed = StringHelper.GetDeterministicHashCode(seed)). Debug: STS_CHAR /
+    // STS_SEED (a number) override them.
+    const auto& ids = db::characterIds();
+    std::string character = titleChar_ < (int)ids.size() ? ids[titleChar_] : ids[(size_t)time(nullptr) % ids.size()];
+    if (const char* c = getenv("STS_CHAR")) character = c;
+    uint64_t seed = titleSeed_.empty() ? (uint64_t)time(nullptr) : deterministicHash(titleSeed_);
+    if (const char* s = getenv("STS_SEED")) seed = (uint64_t)atoll(s);
+    run_->start(seed, character, titleAsc_);
   }
   if (savesEnabled()) run_->onSavePoint = [](Run& r) { gfx::writeSave(kSaveName, r.save()); };
   if (getenv("STS_ALLCARDS")) {  // debug: every pool card in the deck
@@ -97,7 +103,7 @@ void App::startRun(bool resume) {
   titleCharacter_ = false;
   titleSelection_ = 0;
   R().releaseTexture("gfx/bg_menu.t3t");
-  R().releaseTexture("gfx/bg_character_ironclad.t3t");
+  for (auto& id : db::characterIds()) R().releaseTexture("gfx/bg_character_" + db::character(id).energyColor + ".t3t");
 }
 
 void App::returnTitle() {

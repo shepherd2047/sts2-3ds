@@ -82,6 +82,8 @@ std::string App::describe(Card* c) {
       else if (rest.rfind("energyIcons", 0) == 0) {
         // Energy icons: "{Energy:energyIcons()}" -> "2点能量"; "{energyPrefix:energyIcons(1)}" -> "点能量".
         out += name == "energyPrefix" ? std::string("点能量") : "[gold]" + value(name) + "点能量[/gold]";
+      } else if (rest.rfind("starIcons", 0) == 0) {
+        out += value(name) + "[icon:star]";  // {Stars:starIcons()}: the amount and a star (X3)
       } else if (rest.rfind("percentMore", 0) == 0) {
         out += num(((raw(name) - Dec(1)) * Dec(100)).toInt());
       } else if (rest.rfind("percentLess", 0) == 0) {
@@ -181,6 +183,7 @@ std::string expandSmart(const std::string& src, const std::vector<DynVar>& vars,
         out += expand(chosen);
       } else if (rest.rfind("energyIcons", 0) == 0)
         out += name == "energyPrefix" ? std::string("点能量") : "[gold]" + num(raw(name).toInt()) + "点能量[/gold]";
+      else if (rest.rfind("starIcons", 0) == 0) out += num(raw(name).toInt()) + "[icon:star]";
       else if (rest.rfind("percentMore", 0) == 0) out += num(((raw(name) - Dec(1)) * Dec(100)).toInt());
       else if (rest.rfind("percentLess", 0) == 0) out += num(((Dec(1) - raw(name)) * Dec(100)).toInt());
       else if (rest.rfind("plural:", 0) == 0) out += choose(rest.substr(7), raw(name) == Dec(1));

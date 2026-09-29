@@ -72,7 +72,10 @@ class App {
   void returnTitle();
   bool hasSave() const;
   bool hasSave_ = false;  // the title offers 继续
-  bool titleCharacter_ = false;  // title menu -> Ironclad selection
+  bool titleCharacter_ = false;  // title menu -> character select (S04)
+  int titleChar_ = 0;             // selected button: db::characterIds() index, or its size for Random
+  int titleAsc_ = 0;              // ascension picked on the select screen (0-10, all open per the owner)
+  std::string titleSeed_;         // SeedHelper-style 12-character seed shown on the select screen
   int titleSelection_ = 0;       // continue (when present) or new game
   Visual* visual(sts::Creature* c);
   void trigger(sts::Creature* c, const std::string& what, int amount);
@@ -82,6 +85,8 @@ class App {
 
   // screens
   void drawTitle(bool top);
+  void drawCharacterSelect(bool top);
+  void updateCharacterSelect(const gfx::Input& in);
   void drawMap(bool top);
   void drawCombat(bool top);
   void drawReward(bool top);

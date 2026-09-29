@@ -15,8 +15,8 @@ Everything accepted is on `main`. State:
   the game's hsv.gdshader params (NCard.UpdateVisuals). The Regent's "dark tower" is his stone throne carried by
   two minions — the game's own art (checked against an offline render). Open: MAD_SCIENCE (event card) has one
   portrait per chosen type (`mad_science_attack/skill/power`), not baked yet.
-- **Next packages** (the owner asked for character art first): S04 character select
-  (the baked select art is waiting for it), then X1.3a-X4.3a (Uncommon cards, first half), X*.3b, X*.4 (Rare +
+- **S04 character select: accepted and merged** (2026-09-28).
+- **Next packages:** X1.3a-X4.3a (Uncommon cards, first half), X*.3b, X*.4 (Rare +
   tokens), then the engine order (Y5 + H1/H3 need the real 3DS, A10, A11f, ...).
 - **Rules learned today** (also in CLAUDE.md): one class per power id (shared powers in `powers.h`);
   no two .cpp files with the same basename (3DS object names are flattened); `Card::createdByPlayer` is the
@@ -263,8 +263,7 @@ version 4). What each level does now:
 - **DoubleBoss:** `Run::secondBossId` (another boss of act 3, UpFront stream) is fought right after the first
   boss, which gives no rewards, as in the C# (RewardsSet skips every boss of the last act). PORT NOTE: the C#
   makes the second boss a map node; C11 replaces the chained fight with that node and the boss preview.
-- Not ported: the ascension text in the character select (S04 uses `ascension.LEVEL_nn` loc) and the
-  modifier-run rules.
+- Not ported: the modifier-run rules. (The character select shows `ascension.LEVEL_nn`, S04.)
 
 ### Track F: UI foundation (do this before redoing any screen)
 
@@ -293,7 +292,7 @@ screenshots of both screens, and tick the U table at the end of this file.
 | S01 | U01 | Boot splash, loading, act transition title card ("第二幕 蜂巢") | F3 | todo |
 | S02 | U02 | Main menu: tall background across both screens, logo on top, buttons at 1.65× on the bottom (继续 / 单人 / 图鉴 / 统计 / 设置 / 退出), submenus | F3 | partial (native art, e2c9023) |
 | S03 | U03 | Profiles: 3 slots, rename (3DS software keyboard), delete + warning | Y4 | todo |
-| S04 | U04 | Character select: art and description on top; the 5 characters + Random, ascension, seed and start/back on the bottom; locked characters | F3, C10 | partial (Ironclad only) |
+| S04 | U04 | Character select: art and description on top; the 5 characters + Random, ascension, seed and start/back on the bottom; locked characters | F3, C10 | done, accepted 2026-09-28 (Mac): `drawCharacterSelect` in `title.cpp`; ascension 0-10 all open and the seed shown only (Y / tap re-rolls), both owner decisions; no locked characters (everything unlocked) |
 | S05 | U05 | Custom run: modifier list, character, seed, confirm | M11 | todo |
 | S06 | U06 | Neow / Ancient dialogue and relic choice (polish only) | F4 | todo |
 | S07 | U07 | Map: legend, boss icon, path highlight, scroll bounds, top-screen preview, node pulse | F3 | todo |
@@ -582,6 +581,8 @@ Any new relic with a C# `[SavedProperty]` needs `persist`.
 - **Audio: ADPCM** (3DS DSP-ADPCM, played by ndsp without a decoder). Watch romfs size:
   use mono or a lower sample rate for long music tracks if needed (U1, H3).
 - **New 3DS only.**
+- **Ascension 0-10 is open for every character** from the start (no win-to-unlock); the character
+  select shows the run's seed but has no seed entry (custom runs, U05, get one).
 
 ---
 
@@ -641,7 +642,7 @@ animation name is unusual, extend the fallback in `App::trigger`.
 | U01 | Boot, act transition | S01 | todo |
 | U02 | Main menu | S02 | partial |
 | U03 | Profiles | S03 | todo |
-| U04 | Character select | S04 | partial (Ironclad) |
+| U04 | Character select | S04 | done |
 | U05 | Custom run | S05 | todo |
 | U06 | Neow / Ancients | S06 | works, polish in S06 |
 | U07 | Map | S07 | works, polish in S07 |

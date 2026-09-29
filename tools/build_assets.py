@@ -697,6 +697,9 @@ def build(args):
     select = g.image('images/packed/character_select/char_select_ironclad.png')
     packer.add('ui/ironclad_select', fit_height(select, 120))
     bake_other_character_art(g, packer, args)  # X1.5-X4.5: ui/<key>_select for the other four
+    # S04: the Random button and the selected-button outline (scenes/screens/char_select/char_select_button.tscn).
+    packer.add('ui/random_select', fit_height(g.image('images/packed/character_select/char_select_random.png'), 120))
+    packer.add('ui/char_select_outline', fit_height(g.image('images/packed/character_select/char_select_outline.png'), 120))
     icon = Image.new('RGBA', (48, 48), (40, 10, 10, 255))
     head = select.crop((0, 0, select.width, select.width)).resize((48, 48), Image.LANCZOS)
     icon.alpha_composite(head)
@@ -814,10 +817,11 @@ def build(args):
     take('enchantments', lambda k: k.split('.')[0] in ENCHANTMENTS)
     take('static_hover_tips', lambda k: k.startswith('REPLAY'))  # the enchantment replay line
     take('merchant_room')
+    take('ascension', lambda k: k.startswith('LEVEL_'))  # S04: the character select's ascension panel
     for t in ('card_keywords', 'gameplay_ui', 'rest_site_ui', 'card_reward_ui', 'map', 'combat_messages',
               'card_selection', 'intents', 'game_over_screen', 'characters'):
         take(t, (lambda k: not k.startswith(('DAILY', 'DISCOVERY'))) if t == 'game_over_screen'
-             else (lambda k: k.split('.')[0] in ('IRONCLAD', 'SILENT', 'DEFECT', 'REGENT', 'NECROBINDER')) if t == 'characters' else (lambda k: True))
+             else (lambda k: k.split('.')[0] in ('IRONCLAD', 'SILENT', 'DEFECT', 'REGENT', 'NECROBINDER', 'RANDOM_CHARACTER')) if t == 'characters' else (lambda k: True))
     with open(os.path.join(OUT, 'loc.txt'), 'w', encoding='utf-8', newline='\n') as f:
         for k in sorted(strings):
             v = strings[k].replace('\\', '\\\\').replace('\n', '\\n').replace('\t', ' ')
