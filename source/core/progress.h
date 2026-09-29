@@ -37,7 +37,8 @@ struct CharacterProgress {
 
 struct Progress {
   // 2 (M12): the local daily run best scores (older files: none).
-  static constexpr int kVersion = 2;
+  // 3 (M5): unlocked achievements + unlock times, monsters defeated (older files: none).
+  static constexpr int kVersion = 3;
 
   std::map<std::string, CharacterProgress> characters;  // key: Character::id ("Ironclad", "Silent", ...)
   std::set<std::string> seenCards, seenRelics, seenPotions, seenMonsters;
@@ -49,6 +50,14 @@ struct Progress {
   // M12 (daily.h): the best ScoreUtility.CalculateScore per daily date ("YYYY-MM-DD"); the C#'s
   // leaderboards replaced by a local record.
   std::map<std::string, int> dailyBest;
+
+  // M5 (achievements.h): ProgressState.UnlockedAchievements, keyed by the C#'s snake_case name
+  // ("ironclad_win") -> unlock time (unix seconds). Unknown names round-trip untouched (the C#
+  // keeps them in _unknownUnlockedAchievements).
+  std::map<std::string, int64_t> achievements;
+  // M5: every monster id ever beaten in a won fight (the C#'s EnemyStats with a win), for the
+  // DefeatAll<Act>Enemies achievements.
+  std::set<std::string> defeatedMonsters;
 
   CharacterProgress& character(const std::string& id);  // get-or-create
 

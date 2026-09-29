@@ -15,10 +15,11 @@
 //
 // PORT NOTE: progress.sav keeps no playtime, kill count, event discovery or overall streak (see
 // progress.h), so playtime and fastest win are summed from the stored run history (the last 50
-// runs), the overall best streak is the best character streak, and the kill / event / achievement /
+// runs), the overall best streak is the best character streak, and the kill / event /
 // unlock entries are left out. "Discovered" counts have no denominator (everything is unlocked).
 #include <cstring>
 
+#include "../../core/achievements.h"
 #include "../../core/badges.h"
 #include "../../core/history.h"
 #include "../../core/profiles.h"
@@ -32,6 +33,7 @@ enum Page { kClosed, kStatsPage, kListPage, kRunPage };
 // Touch ids (the main menu's are 2001-2399).
 constexpr int kStatRow0 = 3001;  // + 0 overview, 1.. characters
 constexpr int kToHistory = 3020, kBackId = 3021, kPageUp = 3022, kPageDn = 3023, kOpenRun = 3024;
+constexpr int kToAchievements = 3025;  // M5
 constexpr int kRunRow0 = 3100;   // + run index
 constexpr int kTab0 = 3170;      // + tab
 constexpr int kItem0 = 20000;    // + item index in the open tab
@@ -340,6 +342,7 @@ int tabCount(const State& s, const history::RunRecord& r, int tab) {
 bool App::drawStats(bool top) {
   State& s = S();
   if (s.page == kClosed) return false;
+  if (drawAchievements(top)) return true;  // M5: the achievements page, over the stats page
   drawMenuBg(top, top ? 0.6f : 0.55f);  // B07: the menu's own background
   if (s.page == kStatsPage) drawStatsPage(top);
   else if (s.page == kListPage) drawHistoryList(top);
@@ -452,6 +455,13 @@ void App::drawStatsPage(bool top) {
   if (hi) spr(hi, hx + 6, kBarY + (kBarH - 20) / 2, 32, 20);
   R().text(hx + 42, kBarY + (kBarH - R().lineHeight(F16)) / 2, L("main_menu_ui.RUN_HISTORY.title"), ts(F16, col::white));
   hits_.push_back({hx, kBarY, hw, kBarH, kToHistory});
+  // M5: NStatsScreen's achievements tab (成就 + the unlocked count), between back and history.
+  const float aw = 78, ax = (8 + 96 + hx - aw) / 2;
+  widgets::panel("ui/btn_back", ax, kBarY, aw, kBarH);
+  R().text(ax + aw / 2, kBarY + (kBarH - R().lineHeight(F12)) / 2,
+           ss("TAB_ACHIEVEMENT.header") + " " + num(achievements::unlockedCount()) + "/" + num(achievements::totalCount()),
+           ts(F12, col::white, CENTER));
+  hits_.push_back({ax, kBarY, aw, kBarH, kToAchievements});
 }
 
 void App::drawHistoryList(bool top) {
@@ -729,6 +739,7 @@ void App::drawRunDetail(bool top) {
 bool App::updateStats(const gfx::Input& in) {
   State& s = S();
   if (s.page == kClosed) return false;
+  if (updateAchievements(in)) return true;  // M5
   int id = in.touchDown ? hitAt(in.tx, in.ty) : ID_NONE;
   const uint32_t d = in.down;
 
@@ -738,6 +749,7 @@ bool App::updateStats(const gfx::Input& in) {
     if (d & gfx::BTN_DOWN) s.statSel = (s.statSel + 1) % rows;
     if (id >= kStatRow0 && id < kStatRow0 + rows) s.statSel = id - kStatRow0;
     if (id == kBackId || (d & gfx::BTN_B)) { s.page = kClosed; return true; }
+    if (id == kToAchievements || (d & gfx::BTN_Y)) { openAchievements(); return true; }  // M5
     if (id == kToHistory || (d & gfx::BTN_X)) {
       s.page = kListPage;
       s.fromStats = true;

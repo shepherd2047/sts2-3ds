@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstdio>
 
+#include "achievements.h"
 #include "badges.h"
 #include "game.h"
 #include "modifiers.h"
@@ -248,6 +249,7 @@ std::vector<Model*> Combat::listeners() {
     for (auto& p : e->powers) out.push_back(p.get());
     out.push_back(e->monster.get());
   }
+  out.push_back(achievements::combatListener(*this));  // M5: the AchievementModels (after the monsters)
   return out;
 }
 
@@ -688,7 +690,10 @@ Task<> discardCards(Combat& c, std::vector<Card*> cards, int drawAfter) {
     for (Model* m : c.listeners()) co_await m->afterCardDiscarded(k);
   }
   if (drawAfter > 0) co_await drawCards(c, drawAfter);
-  for (Card* k : sly) co_await autoPlay(c, k);  // AutoPlayType.SlyDiscard
+  for (Card* k : sly) {
+    achievements::beforeSlyAutoPlay(c, k);  // Hook.BeforeCardAutoPlayed(SlyDiscard) (M5)
+    co_await autoPlay(c, k);  // AutoPlayType.SlyDiscard
+  }
 }
 
 Task<> discardCard(Combat& c, Card* card) { co_await discardCards(c, {card}); }

@@ -800,6 +800,15 @@ def add_ui_art(g, a, packer, known):
         m = re.match(r'images/ui/game_over_screen/badge_([a-z_]+)\.png\.import$', f)
         if m and m.group(1) != 'outline':
             put('badge/' + m.group(1), f'ui/game_over_screen/badge_{m.group(1)}.png', (30, 30))
+    # M5: achievement icons (NAchievementHolder: packed/achievements/unlocked/<snake>.png in the
+    # achievement_border frame, achievement_lock over locked ones); the list page draws them at up
+    # to 96 px on the top screen.
+    for f in sorted(g.pck.files):
+        m = re.match(r'images/packed/achievements/unlocked/([a-z0-9_]+)\.png\.import$', f)
+        if m:
+            put('ach/' + m.group(1), f'packed/achievements/unlocked/{m.group(1)}.png', (64, 64))
+    put('ach/border', 'packed/achievements/achievement_border.png', (64, 64))
+    put('ach/lock', 'packed/achievements/achievement_lock.png', (32, 32))
     put('ui/end_turn_glow', 'packed/combat_ui/end_turn_button_glow.png', (84, 42))
     put('ui/exhaust_pile', 'packed/combat_ui/exhaust_pile.png', (30, 30))
     put('ui/pile_count', 'packed/combat_ui/pile_button_count.png', (24, 20))
@@ -1220,6 +1229,7 @@ def build(args):
     take('relic_collection')  # M9: the relic collection's category headers
     take('potion_lab')  # M9: the potion lab's category headers
     take('bestiary')  # M10: the bestiary's headers, action names and locked / unseen labels
+    take('achievements')  # M5: achievement titles / descriptions, LOCKED, UNLOCK_DATE
     take('badges')  # M7: the end-of-run badges' names and descriptions (badges.h locKeys)
     take('acts', lambda k: k.endswith('.title'))  # S01: the act banner's name (ActModel.Title)
     take('ascension', lambda k: k.startswith('LEVEL_'))  # S04: the character select's ascension panel

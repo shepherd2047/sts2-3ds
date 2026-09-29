@@ -153,6 +153,13 @@ class App {
   void drawStatsPage(bool top);
   void drawHistoryList(bool top);
   void drawRunDetail(bool top);
+  // M5 achievements (screens/achievements_ui.cpp, state lives there): the list page, a page of the
+  // stats screen (NStatsScreen's achievements tab), and the unlock toast over every screen.
+  void openAchievements();
+  bool drawAchievements(bool top);
+  bool updateAchievements(const gfx::Input& in);
+  void updateAchievementToast(float dt);
+  void drawAchievementToast();
 
  public:
   bool quitRequested() const { return quit_; }

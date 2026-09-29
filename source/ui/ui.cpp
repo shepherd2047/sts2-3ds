@@ -207,6 +207,7 @@ void App::update(const gfx::Input& in, double dt) {
     if (std::abs(shownHp_ - hpNow) < 0.5f) shownHp_ = hpNow;
   }
   if (toastT_ > 0) toastT_ -= (float)visualDt;
+  updateAchievementToast((float)visualDt);  // M5
   for (auto& f : floats_) f.t += (float)visualDt;
   floats_.erase(std::remove_if(floats_.begin(), floats_.end(), [](const Float& f) { return f.t > 1.2f; }), floats_.end());
 
@@ -412,6 +413,7 @@ void App::draw() {
     if (pauseOpen_) drawPause(top);  // Y2: over the room, under the fade and toasts
     // F6: fade through black on a screen change (style::kFade seconds).
     if (transitionT_ > 0) gfx::rect(0, 0, top ? kTop : kBot, kH, 0x000000FF & (0xFFFFFF00 | (uint32_t)(transitionT_ * 255)));
+    if (top) drawAchievementToast();  // M5: over everything on the top screen
     if (!top && toastT_ > 0) {
       float a = std::min(1.f, toastT_ * 3);
       float w = R().measure(toast_, ts(F12)) + 16;

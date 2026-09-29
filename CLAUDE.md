@@ -211,6 +211,7 @@ scripts drift; delete the debug file afterwards.
   numbers honest. `STS_ASCENSION=10`, `SIM_ASC=10`. Details in docs/PLAN.md (C10 notes).
 - Custom runs (M11+S05): `modifiers.h/.cpp` (the 16 modifiers as Models in `Run::modifiers`, run.sav v8, history v3, SeedHelper), `screens/custom_run.cpp`; debug `STS_MODIFIERS=Draft,Midas,CharacterCards:Silent` / `SIM_MODIFIERS=...`, `STS_OPEN_CUSTOM=1` opens the screen.
 - Daily run (M12): `daily.h/.cpp` (date -> character/ascension/seed/modifiers as NDailyRunScreen, local best in progress.sav v2, run.sav v9, history v4), `screens/daily_run.cpp`; `STS_DAILY_DATE=YYYY-MM-DD` fakes today, `STS_OPEN_DAILY=1` opens the screen, `SIM_DAILY=YYYY-MM-DD` in the sim.
+- Achievements (M5): `achievements.h/.cpp` (22, checks in `Combat::listeners` / after a won fight / `recordRunEnd`, progress.sav v3, locked in custom/daily), `screens/achievements_ui.cpp` (toast + list page, 成就 / Y on the 统计 page); debug `STS_ACHIEVE_TOAST=DefeatOneBoss` toasts, `STS_ACHIEVEMENTS=IroncladWin,..` unlocks in memory (with STS_HIDDEN), `STS_OPEN_ACHIEVEMENTS=1` opens the list.
 - Silent systems: `char_silent.h/.cpp` (Poison, Accuracy, Fan of Knives, Shiv), `cmd::discardCards` (Sly, hooks),
   single-turn Retain / Sly flags on `Card`. Details in docs/PLAN.md (X1.0 notes).
 - Enchantments: `enchantments.cpp` (`Enchantment` Model in `Card::enchantment`, `ENCHANTMENT_HEADER`,

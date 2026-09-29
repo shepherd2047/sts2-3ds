@@ -5,6 +5,7 @@
 #include <ctime>
 #include <set>
 
+#include "achievements.h"
 #include "badges.h"
 #include "daily.h"
 #include "game.h"
@@ -34,6 +35,7 @@ void recordRunEnd(Run& r, progress::RunOutcome outcome) {
           break;
         }
     }
+  achievements::afterRunEnded(r, outcome == progress::RunOutcome::Win);  // M5: AchievementsHelper.AfterRunEnded
   history::onRunEnded(r, outcome == progress::RunOutcome::Win, outcome == progress::RunOutcome::Abandon);
   // M12: the daily's local best (the C# uploads DailyRunUtility.UploadScore here).
   if (!r.dailyDate.empty())
@@ -956,6 +958,7 @@ Task<bool> Run::fight(const std::string& encounterId) {
   for (Model* m : c.listeners()) co_await m->afterRoomEntered(enc->room);
   co_await c.runCombat();
   bool won = c.won && player->alive();
+  if (won) achievements::afterCombatWon(*this, c);  // M5: CombatManager's achievement checks after a win
   co_await wait(won ? 0.8 : 1.2);
   player->block = 0;
   player->powers.clear();
