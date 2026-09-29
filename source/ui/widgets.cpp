@@ -62,7 +62,7 @@ int navigate(uint32_t downBtn) {
     float vx = bx - cx, vy = by - cy;
     float along = vx * dx + vy * dy;       // distance in the requested direction
     float across = std::abs(vx * dy - vy * dx);  // perpendicular drift, penalised
-    if (!cur) { along = -(std::abs(vx) + std::abs(vy)); across = 0; }  // no focus yet: nearest to origin-ish
+    if (!cur) { along = std::abs(vx) + std::abs(vy); across = 0; }  // no focus yet: nearest to origin-ish
     else if (along <= 0.5f) continue;
     float score = along + across * 2.5f;
     if (score < bestScore) { bestScore = score; best = &b; }
