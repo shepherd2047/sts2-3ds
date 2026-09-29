@@ -1,14 +1,15 @@
 // Package A5: the shared-pool relics that were skipped until the colorless pool, enchantments and
-// Hook.ModifyPowerAmountGiven existed: DingyRug, Toolbox, UnsettlingLamp (SharedRelicPool) and
-// LeadPaperweight (Event pool, colorless pool). Translated from MegaCrit.Sts2.Core.Models.Relics.
+// Hook.ModifyPowerAmountGiven existed: DingyRug, Toolbox, UnsettlingLamp (SharedRelicPool).
+// Translated from MegaCrit.Sts2.Core.Models.Relics.
 // Also: RelicModel.IsAllowed / IsBeforeAct3TreasureChest (Run::removeDisallowedRelics in run.cpp).
 //
 // Pool diff (SharedRelicPool + the five character pools + Event pool vs RELIC_HEADER): every shared and
-// character relic is now registered. Event-pool relics still skipped (systems that are not built, see
-// relics_event.cpp): Byrdpip, PaelsLegion (pets), DowsingRod (quest cards), Driftwood (reward reroll),
-// FurCoat (map marks), GoldenCompass (golden path), Kaleidoscope, MassiveScroll (multiplayer only),
-// PaelsEye (extra turn), PaelsGrowth (CloneRestSiteOption), PaelsWing (sacrificing card rewards),
-// PrismaticGem, ScrollBoxes, SeaGlass, ToyBox (wax relics), WhisperingEarring, WingedBoots (free travel).
+// character relic is now registered; the Ancient-ish ones (SeaGlass, PrismaticGem, PaelsGrowth,
+// LeadPaperweight, Kaleidoscope, WhisperingEarring) are in relics_ancient2.cpp (A6). Still skipped
+// (systems that are not built): Byrdpip, PaelsLegion (pets), DowsingRod (quest cards), Driftwood (reward
+// reroll), FurCoat (map marks), GoldenCompass (golden path), MassiveScroll (multiplayer only), PaelsEye
+// (extra turn), PaelsWing (sacrificing card rewards), ScrollBoxes (bundle screen), ToyBox (wax relics),
+// WingedBoots (free travel).
 #include "colorless.h"
 #include "game.h"
 
@@ -36,13 +37,6 @@ struct Toolbox : Relic {
     auto cards = colorlessDistinctForCombat(*combat, val("Cards").toInt());
     co_await chooseGeneratedToHand(*combat, std::move(cards), false);
   }
-};
-
-// LeadPaperweight.cs (Ancient rarity, Event pool): choose 1 of 2 colorless reward cards for the deck.
-// PORT NOTE: CardChoiceHistory of the skipped cards is run history (not tracked).
-struct LeadPaperweight : Relic {
-  RELIC_HEADER(LeadPaperweight, "LEAD_PAPERWEIGHT", Ancient) }
-  Task<> afterObtained() override { co_await run->chooseCardFor(colorlessRewardCards(*run, 2)); }
 };
 
 // The C# `power is ITemporaryPower` and its InternallyAppliedPower id (Strength / Dexterity / Focus).
@@ -108,7 +102,6 @@ void registerRelicsShared2() {
   reg<DingyRug>();
   reg<Toolbox>();
   reg<UnsettlingLamp>();
-  reg<LeadPaperweight>();
 }
 
 }  // namespace sts
