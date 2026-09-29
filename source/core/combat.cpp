@@ -747,7 +747,9 @@ Task<> gainEnergy(Combat& c, int amount) {
 Task<> gainStars(Combat& c, int amount) {
   if (c.ending) co_return;
   for (Model* m : c.listeners()) if (!m->shouldGainStars(amount)) co_return;
+  int before = c.stars;
   c.stars = std::max(0, c.stars + amount);
+  if (c.stars > before) c.starsGainedThisTurn += c.stars - before;
   for (Model* m : c.listeners()) co_await m->afterStarsGained(amount);
 }
 
@@ -780,6 +782,7 @@ Task<> loseMaxHp(Creature* cr, int amount) {
 
 Task<Card*> addGeneratedCard(Combat& c, std::unique_ptr<Card> card, Pile to, bool top) {
   Card* raw = c.addCard(std::move(card));
+  ++c.cardsGeneratedThisCombat;  // CombatHistory.CardGenerated
   co_await moveCard(c, raw, to, top);
   for (Model* m : c.listeners()) co_await m->afterCardEnteredCombat(raw);
   co_return raw;
@@ -1002,6 +1005,8 @@ Task<> Combat::setupPlayerTurn() {
   cardsPlayedThisTurn = 0;
   skillsFinishedThisTurn = 0;
   attackPlaysFinishedThisTurn = 0;
+  cardPlaysFinishedThisTurn = 0;
+  starsGainedThisTurn = 0;
   for (Model* m : listeners()) co_await m->afterEnergyReset();
   for (Model* m : listeners()) co_await m->beforeHandDraw();
   Dec handDraw = 5;
@@ -1185,6 +1190,7 @@ Task<> Combat::playCard(Card* card, Creature* target, bool autoPlay, bool forceE
     co_await card->onPlay(cp);
     // CardModel.OnPlayWrapper: the enchantment's OnPlay follows the card's own effect.
     if (card->enchantment && player->alive()) co_await card->enchantment->onPlay(cp);
+    ++cardPlaysFinishedThisTurn;  // CardPlayFinished entry precedes Hook.AfterCardPlayed
     if (player->alive() && !over)
       for (Model* m : listeners()) co_await m->afterCardPlayed(cp);
     if (card->type == CardType::Skill) ++skillsFinishedThisTurn;  // CardPlayFinishedEntry (LunarBlast)

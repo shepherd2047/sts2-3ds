@@ -803,6 +803,9 @@ struct Combat {
   int cardsPlayedThisTurn = 0;  // CombatHistory.CardPlaysStarted this turn (player)
   int skillsFinishedThisTurn = 0;  // CardPlaysFinished of Skills this turn (LunarBlast, X3.3a)
   int attackPlaysFinishedThisTurn = 0;  // CombatHistory.CardPlaysFinished this turn: Attack plays (Finisher, X1.3a)
+  int cardPlaysFinishedThisTurn = 0;  // CardPlaysFinished of all types this turn, bumped before AfterCardPlayed (PaleBlueDot, X3.3b)
+  int starsGainedThisTurn = 0;  // StarsModifiedEntry amounts > 0 this turn (Radiate, X3.3b)
+  int cardsGeneratedThisCombat = 0;  // CardGeneratedEntry count (Supermassive, X3.3b)
   Side currentSide = Side::Player;
   bool inProgress = false, ending = false, over = false, won = false;
   bool playerPhase = false;  // UI may submit actions

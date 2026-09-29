@@ -489,6 +489,105 @@ int main() {
     CHECK(bombs == 2);
   }
 
+  // ---- X3.3b: uncommon cards, second half
+  {  // Orbit: every 4 energy spent grants 1 energy.
+    Fight f;
+    f.play(fresh(f, "Orbit"), nullptr);  // its own cost is spent before the power exists
+    f.play(fresh(f, "Prophesize"), nullptr);  // 2 spent (not yet 4)
+    f.c->energy = 10;
+    Card* a = fresh(f, "Prophesize");    // 2 more -> 4 total: trigger
+    PlayerAction pa;
+    pa.kind = PlayerAction::PlayCard;
+    pa.card = a;
+    f.c->actions.fire(pa);
+    pump([&] { return f.c->playerPhase && f.c->actions.waiting(); });
+    CHECK(f.c->energy == 10 - 2 + 1);
+  }
+  {  // PaleBlueDot: the 5th card finished this turn queues a draw for next turn (once).
+    Fight f;
+    f.play(fresh(f, "PaleBlueDot"), nullptr);
+    for (int i = 0; i < 3; ++i) f.play(fresh(f, "DefendRegent"), nullptr);
+    CHECK(f.c->player->powerAmount<DrawCardsNextTurnPower>() == 0);
+    f.play(fresh(f, "DefendRegent"), nullptr);
+    CHECK(f.c->player->powerAmount<DrawCardsNextTurnPower>() == 1);
+    f.play(fresh(f, "DefendRegent"), nullptr);
+    CHECK(f.c->player->powerAmount<DrawCardsNextTurnPower>() == 1);
+  }
+  {  // ParticleWall returns to the hand; ShiningStrike goes on top of the draw pile.
+    Fight f;
+    Card* pw = fresh(f, "ParticleWall");
+    f.c->stars = 4;
+    f.play(pw, nullptr);
+    CHECK(f.c->pileOf(pw) == Pile::Hand && f.c->player->block == 9 && f.c->stars == 2);
+    Card* ss = fresh(f, "ShiningStrike");
+    f.play(ss, f.enemy(0));
+    CHECK(!f.c->draw.empty() && f.c->draw.front() == ss && f.c->stars == 4);
+  }
+  {  // Radiate: hits once per star gained this turn, on every enemy.
+    Fight f;
+    runTask(cmd::gainStars(*f.c, 3));
+    Card* rd = fresh(f, "Radiate");
+    int hp = f.enemy(0)->hp;
+    f.play(rd, nullptr);
+    CHECK(f.enemy(0)->hp == hp - 9);
+  }
+  {  // Reflect: blocked damage from powered attacks is dealt back.
+    Fight f;
+    f.c->stars = 3;
+    f.play(fresh(f, "Reflect"), nullptr);
+    CHECK(f.c->player->block == 15 && f.c->player->powers.size() == 1);
+    CHECK(f.c->stars == 0);
+  }
+  {  // Resonance: +1 Strength for the player, -1 for every enemy.
+    Fight f;
+    f.c->stars = 2;
+    f.play(fresh(f, "Resonance"), nullptr);
+    CHECK(f.c->player->powerAmount<StrengthPower>() == 1);
+    CHECK(f.enemy(0)->powerAmount<StrengthPower>() == -1);
+  }
+  {  // RoyalGamble: gain 9 stars for 5; exhausts.
+    Fight f;
+    f.c->stars = 5;
+    Card* rg = fresh(f, "RoyalGamble");
+    f.play(rg, nullptr);
+    CHECK(f.c->stars == 9 && f.c->pileOf(rg) == Pile::Exhaust);
+  }
+  {  // Stardust: 5 damage per star spent, spread on random enemies.
+    Fight f;
+    f.c->stars = 3;
+    int hp = 0;
+    for (Creature* e : f.c->enemies) hp += e->hp;
+    f.play(fresh(f, "Stardust"), nullptr);
+    int now = 0;
+    for (Creature* e : f.c->enemies) now += e->hp;
+    CHECK(f.c->stars == 0 && hp - now == 15);
+  }
+  {  // SummonForth: blades outside the hand return, then Forge 8.
+    Fight f;
+    std::vector<Card*> blades;
+    runTask(doForge(f.c, 0, &blades));
+    Card* blade = blades[0];
+    f.c->removeFromPiles(blade);
+    f.c->exhaust.push_back(blade);
+    f.play(fresh(f, "SummonForth"), nullptr);
+    CHECK(f.c->pileOf(blade) == Pile::Hand && blade->val("Damage") == Dec(18));
+  }
+  {  // Supermassive: 5 + 3 per generated card; PillarOfCreation: block per generated card.
+    Fight f;
+    Card* sm = fresh(f, "Supermassive");
+    std::vector<Card*> blades;
+    runTask(doForge(f.c, 0, &blades));  // generates the Sovereign Blade
+    int hp = f.enemy(0)->hp;
+    f.play(sm, f.enemy(0));
+    CHECK(f.enemy(0)->hp == hp - 8);
+    f.play(fresh(f, "PillarOfCreation"), nullptr);
+    int b = f.c->player->block;
+    runTask(doForge(f.c, 0, &blades));  // a blade is already alive: no generation
+    CHECK(f.c->player->block == b);
+    f.play(fresh(f, "Terraforming"), nullptr);
+    CHECK(f.c->player->powerAmount<VigorPower>() == 7);
+  }
+
   printf("%d checks, %d failed\n", checks, failures);
   return failures ? 1 : 0;
 }
