@@ -5,6 +5,7 @@
 #include <algorithm>
 
 #include "../source/core/game.h"
+#include "../source/core/events_crystal.h"
 
 using namespace sts;
 #include <map>
@@ -239,7 +240,20 @@ int main(int argc, char** argv) {
           if (cur->upgradeChoice.waiting()) cur->upgradeChoice.fire(cur->upgradeOptions.empty() ? -1 : 0);
           break;
         case Screen::Event:
-          if (cur->deckChoice.active && cur->deckChoice.result.waiting()) {
+          if (CrystalSphereGame* g = crystalSphereGame(*cur); g && g->cellChoice.waiting()) {
+            // CrystalSphere minigame: the big tool, except the small one on the last divination
+            // when the seed is odd; cells walked with a seed-dependent stride, first fogged one.
+            const int n = CrystalSphereGame::kSize;
+            g->tool = (g->divinations == 1 && s % 2) ? CrystalSphereGame::Tool::Small : CrystalSphereGame::Tool::Big;
+            int pick = 0;
+            for (int k = 0; k < n * n; ++k) {
+              int c = (s * 37 + (g->divinations + k) * 53) % (n * n);
+              if (g->hidden[c % n][c / n]) { pick = c; break; }
+            }
+            if (getenv("SIM_FIGHTS")) printf("  crystal sphere: divine (%d,%d) %s, %d left\n", pick % n, pick / n,
+                                             g->tool == CrystalSphereGame::Tool::Big ? "big" : "small", g->divinations - 1);
+            g->cellChoice.fire(pick);
+          } else if (cur->deckChoice.active && cur->deckChoice.result.waiting()) {
             std::vector<Card*> picked;
             for (int k = 0; k < cur->deckChoice.count && k < (int)cur->deckChoice.options.size(); ++k)
               picked.push_back(cur->deckChoice.options[k]);

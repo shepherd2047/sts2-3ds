@@ -1,4 +1,5 @@
 // Split from ui.cpp (F3).
+#include "../../core/events_crystal.h"
 #include "../ui_common.h"
 
 namespace ui {
@@ -89,6 +90,7 @@ void App::drawAncient(bool top) {
 void App::drawEvent(bool top) {
   Event* e = run_->currentEvent.get();
   if (e && e->ancient) { drawAncient(top); return; }
+  if (e && crystalSphereGame(*run_)) { drawCrystalSphere(top); return; }
   drawSceneBg(top, 0.6f);
   if (!e) return;
   if (top) {
@@ -146,6 +148,7 @@ void App::drawEvent(bool top) {
 void App::updateEvent(const gfx::Input& in) {
   Run& r = *run_;
   Event* e = r.currentEvent.get();
+  if (e && crystalSphereGame(r)) { updateCrystalSphere(in); return; }
   if (!e || !r.eventChoice.waiting()) return;
   if (e->ancient && ancientTalking(e)) {  // dialogue: A / tap advances a line
     if ((in.down & gfx::BTN_A) || (in.touchDown && hitAt(in.tx, in.ty) == ID_DEVITEM0)) e->dialogueLine++;
