@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "badges.h"
 #include "game.h"
 
 namespace sts {
@@ -235,6 +236,7 @@ Task<> Run::enterShop() {
         break;
       }
     }
+    badges::noteGoldSpent(*this, spent);  // PlayerMapPointHistoryEntry.GoldSpent (M7, KACHING)
     for (Model* m : listeners()) co_await m->afterItemPurchased(spent);
   }
   shop.clear();

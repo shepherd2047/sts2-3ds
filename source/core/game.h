@@ -1200,6 +1200,7 @@ struct Run {
   history::Path mapHistory;
   int64_t startTime = 0;
   double runTime = 0;
+  bool cccCombo = false;  // ExtraFields.CccomboBadgeUnlocked (badges.h; not in run.sav)
   void historyPoint(history::PointType type);  // RunState.AppendToMapPointHistory (rooms follow)
   void historyRoom(history::RoomKind type, const std::string& model = "");  // CurrentMapPointHistoryEntry.Rooms.Add
   // A room that is not ported yet (events, shops): Screen::Placeholder shows this text.

@@ -10,6 +10,7 @@
 #include <unistd.h>
 #endif
 
+#include "badges.h"
 #include "game.h"
 #include "history.h"
 #include "profiles.h"
@@ -42,6 +43,26 @@ void ioRecord(Archive& a, RunRecord& r) {
   a.io(r.score);
   a.tag("PATH");
   ioPath(a, r.path);
+  if (version >= 2) {
+    a.tag("BADGES");
+    a.io(r.cccCombo);
+    for (auto& act : r.path)
+      for (auto& p : act) {
+        a.io(p.tracked);
+        a.io(p.goldSpent);
+        a.io(p.damageTaken);
+        a.io(p.restChoices);
+      }
+    int nb = (int)r.badges.size();
+    a.io(nb);
+    if (a.reading) r.badges.assign((size_t)std::clamp(nb, 0, 64), BadgeEntry{});
+    for (auto& b : r.badges) {
+      a.io(b.id);
+      a.io(b.rarity);
+    }
+  } else if (a.reading) {
+    for (auto& act : r.path) for (auto& p : act) p.tracked = false;
+  }
   a.tag("DECK");
   int n = (int)r.deck.size();
   a.io(n);
@@ -131,6 +152,7 @@ void ioPath(Archive& a, Path& path) {
       a.io(type);
       p.type = (PointType)type;
       a.io(p.goldGained);
+      if (a.reading) p.tracked = false;  // run.sav does not carry the badge inputs
       int rooms = (int)p.rooms.size();
       a.io(rooms);
       if (a.reading) p.rooms.assign((size_t)std::clamp(rooms, 0, 16), Room{});
@@ -237,6 +259,8 @@ RunRecord fromRun(const Run& run, bool win, bool abandoned) {
   r.gold = run.gold;
   if (run.player) { r.hp = std::max(0, run.player->hp); r.maxHp = run.player->maxHp; }
   r.score = score(r.path, r.ascension, win);
+  r.cccCombo = run.cccCombo;
+  r.badges = badges::compute(r);  // ScoreUtility.GetBadges (none when abandoned)
   return r;
 }
 
