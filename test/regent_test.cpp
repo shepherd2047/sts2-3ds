@@ -586,6 +586,103 @@ int main() {
     CHECK(f.c->player->block == b);
     f.play(fresh(f, "Terraforming"), nullptr);
     CHECK(f.c->player->powerAmount<VigorPower>() == 7);
+  // ---- X3.4: rare cards
+  {  // BeatIntoShape: Forge 5 + 5 per powered hit on the target this turn (not counting its own).
+    Fight f;
+    Creature* e = f.enemy(0);
+    f.play(fresh(f, "BeatIntoShape"), e);
+    Card* blade = nullptr;
+    for (Card* k : f.c->hand) if (k->id == "SovereignBlade") blade = k;
+    CHECK(blade && blade->val("Damage") == Dec(15));  // 10 + 5
+    f.play(fresh(f, "BeatIntoShape"), e);
+    CHECK(blade->val("Damage") == Dec(25));  // + 5 + 5*1 earlier hit on the target
+  }
+  {  // SwordSage: Sovereign Blades replay once more, existing and newly generated ones.
+    Fight f;
+    std::vector<Card*> out;
+    runTask(doForge(f.c, Dec(5), &out));
+    CHECK(out.size() == 1 && out[0]->baseReplayCount == 0);
+    f.play(fresh(f, "SwordSage"), nullptr);
+    CHECK(out[0]->baseReplayCount == 1);
+    runTask([](Combat* c) -> Task<> { co_await cmd::addGeneratedCard(*c, db::card("SovereignBlade"), Pile::Hand); }(f.c));
+    CHECK(f.c->hand.back()->baseReplayCount == 1);
+  }
+  {  // VoidForm: the turn ends; next turn the first 2 cards cost 0 energy.
+    Fight f;
+    f.play(fresh(f, "VoidForm"), nullptr);
+    CHECK(f.c->turnNumber == 2 && f.c->playerPhase);
+    Card* a = f.c->hand[0];
+    Card* b = f.c->hand[1];
+    Card* d = f.c->hand[2];
+    CHECK(f.c->energyCost(a) == 0 && f.c->energyCost(b) == 0);
+    f.c->energy = 3;
+    PlayerAction pa;
+    pa.kind = PlayerAction::PlayCard;
+    pa.card = a;
+    pa.target = f.enemy(0);
+    f.c->actions.fire(pa);
+    pump([&] { return f.c->playerPhase && f.c->actions.waiting(); });
+    CHECK(f.c->energy == 3);
+    CHECK(f.c->energyCost(d) == 0);
+  }
+  {  // MonarchsGaze: powered attack damage gives the target temporary Strength loss.
+    Fight f;
+    Creature* e = f.enemy(0);
+    f.play(fresh(f, "MonarchsGaze"), nullptr);
+    f.play(fresh(f, "StrikeRegent"), e);
+    CHECK(e->powerAmount<StrengthPower>() == -1);
+    f.endTurn();
+    CHECK(e->powerAmount<StrengthPower>() == 0);
+  }
+  {  // Arsenal + CrashLanding: Strength per generated Debris, hand filled to 10.
+    Fight f;
+    f.play(fresh(f, "Arsenal"), nullptr);
+    Card* cl = fresh(f, "CrashLanding");
+    int space = 10 - ((int)f.c->hand.size() - 1);
+    f.play(cl, nullptr);
+    CHECK(f.c->hand.size() == 10);
+    CHECK(f.c->player->powerAmount<StrengthPower>() == space);
+  }
+  {  // Royalties: extra gold reward after the fight.
+    Fight f;
+    f.play(fresh(f, "Royalties", true), nullptr);
+    CHECK(f.c->extraRewardGold == 40);
+  }
+  {  // HeavenlyDrill: X hits, doubled at X >= 4.
+    Fight f;
+    Creature* e = f.enemy(0);
+    int hp = e->hp;
+    f.play(fresh(f, "HeavenlyDrill"), e);  // energy 10 -> 20 hits of 8
+    CHECK(hp - e->hp == 160);
+  }
+  {  // MakeItSo: back to the hand on every 3rd Skill finished this turn.
+    Fight f;
+    Card* m = f.c->addCard(db::card("MakeItSo"));
+    f.c->removeFromPiles(m);
+    f.c->discard.push_back(m);
+    f.play(fresh(f, "DefendRegent"), nullptr);
+    f.play(fresh(f, "DefendRegent"), nullptr);
+    CHECK(f.c->pileOf(m) == Pile::Discard);
+    f.play(fresh(f, "DefendRegent"), nullptr);
+    CHECK(f.c->pileOf(m) == Pile::Hand);
+  }
+  {  // Guards: chosen hand cards become MinionSacrifice.
+    Fight f;
+    Card* g = fresh(f, "Guards");
+    Card* x = f.c->hand[0];
+    Card* y = f.c->hand[1];
+    PlayerAction a;
+    a.kind = PlayerAction::PlayCard;
+    a.card = g;
+    f.c->energy = 10;
+    f.c->actions.fire(a);
+    pump([&] { return f.c->choice.active && f.c->choice.result.waiting(); });
+    CHECK(f.c->choice.minCount == 0);
+    f.c->choice.result.fire(std::vector<Card*>{x, y});
+    pump([&] { return f.c->playerPhase && f.c->actions.waiting(); });
+    int n = 0;
+    for (Card* k : f.c->hand) if (k->id == "MinionSacrifice") ++n;
+    CHECK(n == 2);
   }
 
   printf("%d checks, %d failed\n", checks, failures);

@@ -797,6 +797,10 @@ struct Combat {
     return n;
   }
 
+  // CombatHistory.DamageReceived entries (BeatIntoShape); one per DamageResult.
+  struct DamageEntry { int round; Side side; Creature* receiver; Creature* dealer; int props; };
+  std::vector<DamageEntry> damageHistory;
+  int extraRewardGold = 0;  // CombatRoom.AddExtraReward(GoldReward) (RoyaltiesPower); Run::combatRewards adds the row
   int energy = 0, maxEnergy = 3;
   int stars = 0;  // PlayerCombatState.Stars (Regent's second resource; char_regent.h/.cpp)
   // The Defect's orb queue (Entities.Players.PlayerCombatState.OrbQueue): capacity comes from

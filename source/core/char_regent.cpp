@@ -10,6 +10,7 @@ void registerRegentPotions();  // char_regent_relics.cpp
 void registerRegentCards();    // char_regent_cards.cpp: the Regent's common cards (X3.2)
 void registerRegentUncommonCards1();  // char_regent_cards_uncommon1.cpp (X3.3a)
 void registerRegentUncommonCards2();  // char_regent_cards_uncommon2.cpp (X3.3b)
+void registerRegentRareCards();  // char_regent_cards_rare.cpp (X3.4)
 
 namespace {
 
@@ -140,6 +141,7 @@ void registerRegent() {
   registerRegentCards();
   registerRegentUncommonCards1();
   registerRegentUncommonCards2();
+  registerRegentRareCards();
 }
 
 }  // namespace sts

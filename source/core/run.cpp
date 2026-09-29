@@ -277,6 +277,7 @@ Task<> Run::combatRewards(RoomType type) {
   bool finalBoss = type == RoomType::Boss && actIndex + 1 >= kActs;
   // The fight is freed and the screen leaves it in the same step (nothing may wait in
   // between: the UI still shows Screen::Combat until then).
+  int royaltiesGold = combat ? combat->extraRewardGold : 0;
   combat.reset();
   player->combat = nullptr;
   for (auto& rel : relics) rel->combat = nullptr;
@@ -284,6 +285,8 @@ Task<> Run::combatRewards(RoomType type) {
 
   rewardItems.clear();
   { RewardItem g; g.kind = RewardKind::Gold; g.gold = baseGold; rewardItems.push_back(std::move(g)); }
+
+  if (royaltiesGold > 0) { RewardItem g; g.kind = RewardKind::Gold; g.gold = royaltiesGold; rewardItems.push_back(std::move(g)); }  // RoyaltiesPower
 
   if (rollPotionReward(type)) {  // RollForPotionAndAddTo / PotionReward.Populate
     RewardItem item;
