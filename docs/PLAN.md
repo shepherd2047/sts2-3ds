@@ -292,7 +292,7 @@ screenshots of both screens, and tick the U table at the end of this file.
 | S02 | U02 | Main menu: tall background across both screens, logo on top, buttons at 1.65× on the bottom (继续 / 单人 / 图鉴 / 统计 / 设置 / 退出), submenus | F3 | done (subagent, Opus), accepted 2026-09-29: main menu per NMainMenu (logo top, run info when a save exists, 继续游戏/放弃当前游戏 replace 单人模式 as in the game), singleplayer + compendium submenus (unported entries locked "未完成"), quit |
 | S03 | U03 | Profiles: 3 slots, rename (3DS software keyboard), delete + warning | Y4 | done (subagent, Opus), accepted 2026-09-29: profile_screen.cpp (3 slot cards, rename, delete confirm; profile chip on the main menu, B opens it); gfx::textInput (3DS swkbd, preview STS_TEXT_INPUT) — keyboard not tried on hardware yet |
 | S04 | U04 | Character select: art and description on top; the 5 characters + Random, ascension, seed and start/back on the bottom; locked characters | F3, C10 | done, accepted 2026-09-28 (Mac): `drawCharacterSelect` in `title.cpp`; ascension 0-10 all open and the seed shown only (Y / tap re-rolls), both owner decisions; no locked characters (everything unlocked) |
-| S05 | U05 | Custom run: modifier list, character, seed, confirm | M11 | in progress (subagent, with M11) |
+| S05 | U05 | Custom run: modifier list, character, seed, confirm | M11 | done with M11, accepted 2026-09-29: `custom_run.cpp` |
 | S06 | U06 | Neow / Ancient dialogue and relic choice (polish only) | F4 | todo |
 | S07 | U07 | Map: legend, boss icon, path highlight, scroll bounds, top-screen preview, node pulse | F3 | todo |
 | S08 | U08/U10 | Combat HUD: hand fan, energy orb, piles with counts, end turn, HP/block bars, power icons, intents with numbers, turn banner | F5, F6 | todo |
@@ -302,7 +302,7 @@ screenshots of both screens, and tick the U table at the end of this file.
 | S12 | U14 | Hand select (discard/exhaust/retain N): counter, confirm/cancel | F5 | todo |
 | S13 | U15/U16 | Deck grid select (upgrade/remove/transform with preview) and choose-one | F5 | todo |
 | S14 | U17/U18 | **Reward list** (gold, potion, relic, card rows: claim or skip, then proceed) + card reward with skip / Singing Bowl | F5 | done (subagent), accepted 2026-09-28: RewardsSet generate-then-offer (C# order gold, potion, card, relic), rows claimed in any order, Proceed forfeits the rest; CardRewardAlternative options besides Skip not yet |
-| S15 | U19/U23 | Relic choice and treasure chest (chest opening, relic on top) | F3 | todo |
+| S15 | U19/U23 | Relic choice and treasure chest (chest opening, relic on top) | F3 | in progress (subagent) |
 | S16 | U20 | Shop: goods grid, price tags, sale, removal service, focused item on top | F5 | done (subagent), accepted 2026-09-29: RGDSplus U20 split by default (no owner note on the layout); tap to focus, tap again / A to buy, X detail |
 | S17 | U21 | Events: art and text on top, large option buttons on the bottom, locked options shown with the reason | F4 | in progress (subagent) |
 | S18 | U22 | Rest site: campfire and character on top, option buttons with descriptions | F3 | in progress (subagent) |
@@ -311,8 +311,8 @@ screenshots of both screens, and tick the U table at the end of this file.
 | S21 | U26 | Settings and pause menus (screens only; logic in Y1/Y2) | Y1 | partial (START page) |
 | S22 | U27 | Tutorials, confirmations, errors | M13 | todo |
 | S23 | U28 | Death / victory: score, badges, continue | M7 | partial (summary, menu/restart) |
-| S24 | U29 | Compendium: cards, relics, potions, bestiary | M8-M10 | todo |
-| S25 | U30 | Stats and run history | M6 | todo |
+| S24 | U29 | Compendium: cards, relics, potions, bestiary | M8-M10 | done: built by M8, M9, M10 |
+| S25 | U30 | Stats and run history | M6 | done: built by M6 |
 | S26 | U31 | Credits (scroll across both screens) | F3 | todo |
 | – | U32 | Daily run: offline only (M12); leaderboards n/a | – | n/a |
 | – | U33 | Unknown or mod pages | – | n/a |
@@ -417,9 +417,9 @@ their `clone()` must call `adoptEnchantment()`.
 | M7 | Score and badges at the end of a run (28 badges, `Models.Badges`), used by S23 | content | M2 | done (subagent), accepted 2026-09-29: badges.h/.cpp, 19 single-player badges (the C# pool has 23, 4 multiplayer), stored in the history record (v2); no score bonus in the C#; per-point badge data is in run.sav since version 7 |
 | M8 | Card library: filters by character, type and rarity; upgrade toggle; seen/locked | UI | M1, F5 | done (subagent), accepted 2026-09-29; also opened from the pause menu's 百科大全 |
 | M9 | Relic collection + potion lab | UI | M1 | done (subagent), accepted 2026-09-29: `relic_collection.cpp` (both screens, C# grouping incl. per-Ancient grids); only ported relics/potions listed; `STS_SEEN_ALL=1` |
-| M10 | Bestiary: monster list, Spine viewer, moves | UI | M1 | in progress (subagent) |
-| M11 | Custom run: 16 modifiers (`Models.Modifiers`), seed entry with the 3DS keyboard, seeded runs | engine + UI | M1 | in progress (subagent, with S05) |
-| M12 | Daily run, offline: seed and modifiers from the date as in `Daily\`, local best score only | engine | M11 | todo |
+| M10 | Bestiary: monster list, Spine viewer, moves | UI | M1 | done (subagent), accepted 2026-09-29: `bestiary.cpp`, one skeleton loaded at a time; seen = fought (C#: killed); `db::monster` registry |
+| M11 | Custom run: 16 modifiers (`Models.Modifiers`), seed entry with the 3DS keyboard, seeded runs | engine + UI | M1 | done (subagent, with S05), accepted 2026-09-29: `modifiers.cpp`, all 16 (PORT NOTEs: Hoarder vs transform, NightTerrors rest text, SealedDeck tie order); run.sav v8, history v3; `STS_MODIFIERS`, `SIM_MODIFIERS` |
+| M12 | Daily run, offline: seed and modifiers from the date as in `Daily\`, local best score only | engine | M11 | in progress (subagent) |
 | M13 | Tutorials (`Nodes.Ftue`): first-run tips, reset from settings | UI | F3 | todo |
 
 ### Track Y: system
