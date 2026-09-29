@@ -299,10 +299,10 @@ screenshots of both screens, and tick the U table at the end of this file.
 | S09 | U09/U12 | Targeting arrow and potion aim; enemy highlight | S08 | todo |
 | S10 | U11 | Combat inspect: a 信息 button, cycle through creatures, power list with descriptions on top | S08 | todo |
 | S11 | U13 | Draw, discard and exhaust piles and deck view: grid on the bottom, focused card on top, sort | F5 | partial (combat pile tabs) |
-| S12 | U14 | Hand select (discard/exhaust/retain N): counter, confirm/cancel | F5 | todo |
+| S12 | U14 | Hand select (discard/exhaust/retain N): counter, confirm/cancel | F5 | in progress (subagent) |
 | S13 | U15/U16 | Deck grid select (upgrade/remove/transform with preview) and choose-one | F5 | in progress (subagent) |
 | S14 | U17/U18 | **Reward list** (gold, potion, relic, card rows: claim or skip, then proceed) + card reward with skip / Singing Bowl | F5 | done (subagent), accepted 2026-09-28: RewardsSet generate-then-offer (C# order gold, potion, card, relic), rows claimed in any order, Proceed forfeits the rest; CardRewardAlternative options besides Skip not yet |
-| S15 | U19/U23 | Relic choice and treasure chest (chest opening, relic on top) | F3 | in progress (subagent) |
+| S15 | U19/U23 | Relic choice and treasure chest (chest opening, relic on top) | F3 | done (subagent), accepted 2026-09-29: baked chest sprites per act, `Run::relicOffers` + `chooseRelic` (RelicSelectCmd); no single-player caller offers N relics, `STS_TREASURE_RELICS=N` to test |
 | S16 | U20 | Shop: goods grid, price tags, sale, removal service, focused item on top | F5 | done (subagent), accepted 2026-09-29: RGDSplus U20 split by default (no owner note on the layout); tap to focus, tap again / A to buy, X detail |
 | S17 | U21 | Events: art and text on top, large option buttons on the bottom, locked options shown with the reason | F4 | done (subagent), accepted 2026-09-29: paged text, option focus previews offered card/relic/potion/enchantment (parsed from the option text), tap to focus + tap again to pick; Ancient layout unchanged |
 | S18 | U22 | Rest site: campfire and character on top, option buttons with descriptions | F3 | done (subagent), accepted 2026-09-29: baked `gfx/bg_rest_<act>.t3t` + flickering fire, character Spine, result held until 继续; `STS_HP=N` debug |
@@ -412,14 +412,14 @@ their `clone()` must call `adoptEnchantment()`.
 | M2 | Run history store: the last 50 runs (seed, character, ascension, path, deck, relics, floor reached, killed by, time, score) | engine | M1 | done (subagent, Opus), accepted 2026-09-29: history.h/.cpp; profile<N>/history/NN.run ring of 50 (Archive, versioned); Run::mapHistory + play time (run.sav version 6); recorded once at death / TheArchitect win / abandon; ScoreUtility ported (badges -> M7) |
 | M3 | Timeline / epochs engine | – | – | n/a (owner: everything unlocked) |
 | M4 | Timeline screen + unlock reveals | – | – | n/a (owner: everything unlocked) |
-| M5 | Achievements (22, `Achievements\`): checks, toast, achievement list page | content + UI | M1 | todo |
+| M5 | Achievements (22, `Achievements\`): checks, toast, achievement list page | content + UI | M1 | in progress (subagent) |
 | M6 | Stats screen: general and per-character stats (`Nodes.Screens.StatsScreen`) + run history viewer | UI | M2, F3 | done (subagent), accepted 2026-09-29 |
 | M7 | Score and badges at the end of a run (28 badges, `Models.Badges`), used by S23 | content | M2 | done (subagent), accepted 2026-09-29: badges.h/.cpp, 19 single-player badges (the C# pool has 23, 4 multiplayer), stored in the history record (v2); no score bonus in the C#; per-point badge data is in run.sav since version 7 |
 | M8 | Card library: filters by character, type and rarity; upgrade toggle; seen/locked | UI | M1, F5 | done (subagent), accepted 2026-09-29; also opened from the pause menu's 百科大全 |
 | M9 | Relic collection + potion lab | UI | M1 | done (subagent), accepted 2026-09-29: `relic_collection.cpp` (both screens, C# grouping incl. per-Ancient grids); only ported relics/potions listed; `STS_SEEN_ALL=1` |
 | M10 | Bestiary: monster list, Spine viewer, moves | UI | M1 | done (subagent), accepted 2026-09-29: `bestiary.cpp`, one skeleton loaded at a time; seen = fought (C#: killed); `db::monster` registry |
 | M11 | Custom run: 16 modifiers (`Models.Modifiers`), seed entry with the 3DS keyboard, seeded runs | engine + UI | M1 | done (subagent, with S05), accepted 2026-09-29: `modifiers.cpp`, all 16 (PORT NOTEs: Hoarder vs transform, NightTerrors rest text, SealedDeck tie order); run.sav v8, history v3; `STS_MODIFIERS`, `SIM_MODIFIERS` |
-| M12 | Daily run, offline: seed and modifiers from the date as in `Daily\`, local best score only | engine | M11 | in progress (subagent) |
+| M12 | Daily run, offline: seed and modifiers from the date as in `Daily\`, local best score only | engine | M11 | done (subagent), accepted 2026-09-29: `daily.cpp` checked against the game's sts2.dll for 5 dates; local date (C#: server/UTC); best per date in progress.sav v2; run.sav v9, history v4; `STS_DAILY_DATE`; history screen doesn't show daily/custom yet |
 | M13 | Tutorials (`Nodes.Ftue`): first-run tips, reset from settings | UI | F3 | todo |
 
 ### Track Y: system
