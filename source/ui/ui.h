@@ -295,8 +295,10 @@ class App {
   int mapSel_ = 0;
   int mapLegend_ = -1;  // C11: the map legend item tapped (NMapLegendItem focus: highlight + tip), -1 none
   int scroll_ = 0;
-  float mapScroll_ = 0;        // rows; see kMapBase in ui.cpp
+  float mapScroll_ = 0;        // px, clamped to the parchment (mapScrollRange in screens/map.cpp)
   bool mapUserScroll_ = false;  // dragged by hand: stop auto-following the current row
+  std::vector<int> mapRoute_;   // S07: D-pad route preview above the focused next node (each a child of the one before)
+  int mapInspect_ = -1;         // S07: a node tapped for its room info (not enterable), -1 none
   struct MapTouch { bool down = false, dragged = false; int node = -1; float startY = 0, lastY = 0; } mapTouch_;
   sts::Combat* lastCombat_ = nullptr;
   std::map<sts::Creature*, Visual> visuals_;
