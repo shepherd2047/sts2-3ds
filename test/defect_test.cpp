@@ -661,6 +661,118 @@ int main() {
     CHECK(!inHand);
   }
 
+  {  // X2.3b: Sunder gains energy only on a kill.
+    Fight f;
+    Card* s = f.c->addCard(db::card("Sunder"));
+    f.toHand(s);
+    f.enemy()->hp = 5;
+    f.play(s, f.enemy());
+    CHECK(f.c->energy == 10 - 3 + 3);
+    Card* s2 = f.c->addCard(db::card("Sunder"));
+    f.toHand(s2);
+    f.play(s2, f.enemy(1));
+    CHECK(f.c->energy == 10 - 3);
+  }
+  {  // Storm: playing a Power channels a Lightning orb.
+    Fight f;
+    Card* st = f.c->addCard(db::card("Storm"));
+    f.toHand(st);
+    f.play(st);
+    CHECK(f.c->orbQueue.empty());  // Storm itself started before the power existed
+    Card* lp = f.c->addCard(db::card("Loop"));
+    f.toHand(lp);
+    f.play(lp);
+    CHECK(f.c->orbQueue.size() == 1 && f.c->orbQueue[0]->id == "LightningOrb");
+  }
+  {  // Subroutine: playing a Power gains 1 energy.
+    Fight f;
+    Card* sr = f.c->addCard(db::card("Subroutine"));
+    f.toHand(sr);
+    f.play(sr);
+    Card* lp = f.c->addCard(db::card("Loop"));
+    f.toHand(lp);
+    f.play(lp);
+    CHECK(f.c->energy == 10 - 1 + 1);  // play() resets energy to 10 first
+  }
+  {  // Synchronize: Focus = number of distinct orb types (1 base extra, upgraded 2).
+    Fight f;
+    runTask(cmd::channelOrb(*f.c, std::make_unique<FrostOrb>()));
+    runTask(cmd::channelOrb(*f.c, std::make_unique<FrostOrb>()));
+    runTask(cmd::channelOrb(*f.c, std::make_unique<DarkOrb>()));
+    Card* sy = f.c->addCard(db::card("Synchronize"));
+    f.toHand(sy);
+    f.play(sy);
+    CHECK(f.c->player->powerAmount<FocusPower>() == 2);
+    f.endTurn();
+    CHECK(f.c->player->powerAmount<FocusPower>() == 0);
+  }
+  {  // Synthesis: the next Power costs 0.
+    Fight f;
+    Card* sn = f.c->addCard(db::card("Synthesis"));
+    f.toHand(sn);
+    f.play(sn, f.enemy());
+    Card* th = f.c->addCard(db::card("Thunder"));
+    f.toHand(th);
+    CHECK(f.c->energyCost(th) == 0);
+    Card* th2 = f.c->addCard(db::card("Thunder"));
+    f.toHand(th2);
+    f.play(th);
+    CHECK(f.c->energyCost(th2) == 1);
+  }
+  {  // Tempest: X orbs (+1 upgraded); TeslaCoil triggers Lightning passives; Thunder hits on evoke.
+    Fight f;
+    Card* t = f.c->addCard(db::card("Tempest"));
+    f.toHand(t);
+    f.c->energy = 2;
+    PlayerAction a;
+    a.kind = PlayerAction::PlayCard;
+    a.card = t;
+    f.c->actions.fire(a);
+    pump([&] { return f.c->playerPhase && f.c->actions.waiting(); });
+    CHECK(f.c->orbQueue.size() == 2);
+    Card* tc = f.c->addCard(db::card("TeslaCoil"));
+    f.toHand(tc);
+    int hp = f.enemy()->hp;
+    f.play(tc, f.enemy());
+    CHECK(hp - f.enemy()->hp == 3 + 3 + 3);
+    Card* th = f.c->addCard(db::card("Thunder"));
+    f.toHand(th);
+    f.play(th);
+    hp = f.enemy()->hp;
+    int hp1 = f.enemy(1)->hp;
+    runTask(cmd::evokeNextOrb(*f.c));
+    CHECK(f.enemy(0)->hp < hp || f.enemy(1)->hp < hp1);
+    CHECK((hp - f.enemy(0)->hp) + (hp1 - f.enemy(1)->hp) == 8 + 8);
+  }
+  {  // Overclock adds a Burn; Smokestack punishes it; RocketPunch gets cheaper.
+    Fight f;
+    Card* sm = f.c->addCard(db::card("Smokestack"));
+    f.toHand(sm);
+    f.play(sm);
+    Card* rp = f.c->addCard(db::card("RocketPunch"));
+    f.toHand(rp);
+    Card* oc = f.c->addCard(db::card("Overclock"));
+    f.toHand(oc);
+    int hp = f.enemyHpSum();
+    f.play(oc);
+    CHECK(hp - f.enemyHpSum() == 10);  // 5 per enemy, two enemies
+    CHECK(f.c->energyCost(rp) == 1);
+  }
+  {  // Scrape discards drawn cards that cost energy.
+    Fight f;
+    f.c->hand.clear();
+    f.c->draw.clear();
+    Card* z = f.c->addCard(db::card("Zap"));       // cost 1 -> discarded
+    Card* fl = f.c->addCard(db::card("Ftl"));      // cost 0 -> kept
+    f.c->draw.push_back(z);
+    f.c->draw.push_back(fl);
+    Card* sc = f.c->addCard(db::card("Scrape"));
+    f.toHand(sc);
+    f.play(sc, f.enemy());
+    CHECK(std::find(f.c->hand.begin(), f.c->hand.end(), fl) != f.c->hand.end());
+    CHECK(std::find(f.c->hand.begin(), f.c->hand.end(), z) == f.c->hand.end());
+  }
+
   printf("%d checks, %d failed\n", checks, failures);
   return failures ? 1 : 0;
 }
