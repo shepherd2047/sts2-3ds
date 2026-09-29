@@ -11,7 +11,7 @@ namespace sts {
 
 namespace {
 
-constexpr int kSaveVersion = 4;  // 2: card enchantments, 3: character id, 4: ascension (older saves load as Ironclad / ascension 0)
+constexpr int kSaveVersion = 5;  // 2: card enchantments, 3: character id, 4: ascension (older saves load as Ironclad / ascension 0), 5: act list (older: Overgrowth, Hive, Glory)
 
 void ioCard(Archive& a, std::unique_ptr<Card>& c) {
   std::string id = c ? c->id : "";
@@ -111,6 +111,13 @@ void ioRun(Archive& a, Run& r) {
   a.io(r.seed);
   if (version >= 3) a.io(r.characterId);
   if (version >= 4) a.io(r.ascension);
+  if (version >= 5) a.io(r.actIds);
+  else if (a.reading) r.actIds = {"Overgrowth", "Hive", "Glory"};
+  if (a.reading && (r.actIds.size() != (size_t)Run::kActs || !std::all_of(r.actIds.begin(), r.actIds.end(),
+                                                                          [](auto& id) { return db::act(id); }))) {
+    a.ok = false;
+    return;
+  }
   a.io(r.player->hp); a.io(r.player->maxHp);
   a.io(r.gold); a.io(r.floor); a.io(r.actIndex); a.io(r.fightsThisAct);
   a.io(r.eliteQueue); a.io(r.normalQueue); a.io(r.weakQueue); a.io(r.bossId);

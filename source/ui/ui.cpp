@@ -7,14 +7,13 @@ namespace ui {
 // Per-act art: gfx/bg_<act>.t3t (room) and gfx/bg_map_<act>.t3t (map paper). The previous
 // act's textures are freed when the act changes (3DS linear memory is small).
 std::string actTexture(const Run& r, const char* kind) {
-  static int loadedAct = -1;
-  if (loadedAct != r.actIndex) {
-    if (loadedAct >= 0) {
-      const char* old = db::acts()[loadedAct].key;
-      R().releaseTexture(std::string("gfx/bg_") + old + ".t3t");
-      R().releaseTexture(std::string("gfx/bg_map_") + old + ".t3t");
+  static std::string loadedAct;
+  if (loadedAct != r.act().key) {
+    if (!loadedAct.empty()) {
+      R().releaseTexture("gfx/bg_" + loadedAct + ".t3t");
+      R().releaseTexture("gfx/bg_map_" + loadedAct + ".t3t");
     }
-    loadedAct = r.actIndex;
+    loadedAct = r.act().key;
   }
   return std::string("gfx/") + kind + r.act().key + ".t3t";
 }

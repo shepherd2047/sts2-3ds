@@ -691,7 +691,10 @@ def build(args):
                       ('KaiserCrabBoss', 'images/map/placeholder/kaiser_crab_boss_icon.png'),
                       ('KnowledgeDemonBoss', 'images/map/placeholder/knowledge_demon_boss_icon.png'),
                       ('AeonglassBoss', 'images/map/placeholder/aeonglass_boss_icon.png'),
-                      ('TestSubjectBoss', 'images/map/placeholder/test_subject_boss_icon.png')):
+                      ('TestSubjectBoss', 'images/map/placeholder/test_subject_boss_icon.png'),
+                      ('WaterfallGiantBoss', 'images/map/placeholder/waterfall_giant_boss_icon.png'),
+                      ('SoulFyshBoss', 'images/map/placeholder/soul_fysh_boss_icon.png'),
+                      ('LagavulinMatriarchBoss', 'images/map/placeholder/lagavulin_matriarch_boss_icon.png')):
         packer.add('map/boss_' + enc, fit_height(g.image(path), 64))
     add_ui_art(g, a, packer, {e[0] for e in packer.entries})
     select = g.image('images/packed/character_select/char_select_ironclad.png')
@@ -721,13 +724,31 @@ def build(args):
     print('backgrounds')
     bake_title_art(g, args)
     # Per act (ActModel.FilePathIdentifier): gfx/bg_<act>.t3t (room) and gfx/bg_map_<act>.t3t.
-    for act in ('overgrowth', 'hive', 'glory'):
-        # Combat room: all layers composited (StS2 layers are full-frame images).
-        layers = [g.image(f'images/rooms/{act}/{act}_{n}.png') for n in ('00', '01_a', '02_a', '03_a', '04_a')]
-        W, H = layers[0].size
+    # Underdocks' layers are not all full-frame: (image, scene rect) from the
+    # scenes/backgrounds/underdocks/layers/*_a.tscn TextureRects (scene units, centred,
+    # 2764.8x1296; None = full frame). 03_a draws underdocks_03_c with its water shadow behind.
+    UNDERDOCKS_LAYERS = [('00', None), ('01_a', None), ('02_a', None),
+                         ('03_c_shadow', (-1384.0, -10.0, 1380.8, 629.0)), ('03_c', (-1383.4, -647.0, 1381.4, 119.0)),
+                         ('04_a', (-1382.0, -198.0, 1382.8, 626.0))]
+    for act in ('overgrowth', 'underdocks', 'hive', 'glory'):
+        # Combat room: all layers composited (StS2 layers are mostly full-frame images).
+        if act == 'underdocks':
+            layers = [(g.image(f'images/rooms/{act}/{act}_{n}.png'), r) for n, r in UNDERDOCKS_LAYERS]
+        else:
+            layers = [(g.image(f'images/rooms/{act}/{act}_{n}.png'), None) for n in ('00', '01_a', '02_a', '03_a', '04_a')]
+        W, H = layers[0][0].size
         scene = Image.new('RGBA', (W, H), (0, 0, 0, 255))
-        for im in layers:
-            scene.alpha_composite(im.resize((W, H)))
+        for im, r in layers:
+            if r is None:
+                scene.alpha_composite(im.resize((W, H)))
+            else:
+                u = W / 2764.8
+                x0, y0 = round((r[0] + 1382.4) * u), round((r[1] + 648) * u)
+                w, h = round((r[2] - r[0]) * u), round((r[3] - r[1]) * u)
+                piece = im.resize((w, h), Image.LANCZOS)
+                sx, sy = max(0, -x0), max(0, -y0)
+                piece = piece.crop((sx, sy, min(w, W - x0), min(h, H - y0)))
+                scene.alpha_composite(piece, (max(0, x0), max(0, y0)))
         # Top: the camera's view (1920x1080 of the 2764.8x1296 scene), cropped to 5:3.
         k = W / 2764.8
         cw = 1920 * k

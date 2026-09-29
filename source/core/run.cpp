@@ -535,12 +535,32 @@ void Run::start(uint64_t s, const std::string& charId, int ascensionLevel) {
     }
   }
   freeMap = getenv("STS_PATH_ONLY") == nullptr;
+  // StartRunLobby.BeginRunLocally: the run's acts, ActModel.GetRandomList(Rng(seed,
+  // "act_selection")). Debug: STS_ACT1=Underdocks|Overgrowth forces act 1 after the roll,
+  // like the lobby's Act1 setting (list[0] = GetAct(Act1) ?? list[0]).
+  {
+    Rng actRng(seed, "act_selection");
+    actIds = db::randomActList(actRng);
+    if (const char* a1 = getenv("STS_ACT1"))
+      if (const db::ActDef* d = db::act(a1); d && d->index == 0) actIds[0] = d->name;
+  }
   // Debug: STS_ACT=2|3 starts the run in that act.
   const char* startAct = getenv("STS_ACT");
   enterAct(startAct ? std::atoi(startAct) - 1 : 0);
 }
 
-const db::ActDef& Run::act() const { return db::acts()[actIndex]; }
+const db::ActDef& Run::act() const {
+  if (actIndex >= 0 && actIndex < (int)actIds.size())
+    if (const db::ActDef* d = db::act(actIds[actIndex])) return *d;
+  for (auto& a : db::acts()) if (a.index == actIndex && a.isDefault) return a;
+  return db::acts()[0];
+}
+
+std::string Run::actMusic() const {
+  const auto& options = act().music;
+  if (options.empty()) return "";
+  return options[Rng(seed, "bg_music").nextInt(0, (int)options.size())];
+}
 
 // RunManager.EnterAct + ActModel.GenerateRooms for one act. PORT NOTE: C# generates every
 // act's rooms up front from Rng.UpFront; here each act draws from the Encounters/Events
