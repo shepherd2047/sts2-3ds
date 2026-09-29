@@ -23,10 +23,11 @@ void App::drawRest(bool top) {
     return;
   }
   drawSceneBg(false, 0.5f);
-  // Options (RestSiteRoom): heal, smith, and Lift / Dig with Girya / Shovel; up to 2 per row.
+  // Options (RestSiteRoom): heal, smith, and Lift / Dig / Cook / Kindle / Clone from relics; 2 per row.
   auto& opts = r.restOptions;
   int n = (int)opts.size();
-  const float bw = 138, bh = n > 4 ? 36 : n > 2 ? 64 : 100, gapY = n > 4 ? 4 : 8;
+  // Four rows (7 options: all relic extras + PaelsGrowth's Clone) must end above the bottom buttons (y 196).
+  const float bw = 138, bh = n > 6 ? 26 : n > 4 ? 36 : n > 2 ? 64 : 100, gapY = n > 6 ? 1 : n > 4 ? 4 : 8;
   for (int i = 0; i < n; ++i) {
     int o = opts[i];
     float x = i % 2 ? 166 : 16, y = 20 + (i / 2) * (bh + gapY + 16);
