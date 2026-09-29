@@ -780,6 +780,23 @@ def build(args):
     for anc in ('orobas', 'pael', 'tezcatara', 'nonupeipe', 'tanx', 'vakuu', 'darv'):
         bake_ancient(g, anc, args)
 
+    # A10 TheArchitect (the ending, drawn with the Ancient layout): its victory room
+    # (images/rooms/architect_victory/architect_victory_bg.png) with the Architect's Spine
+    # standing on the right, centred 5:3 crop.
+    bg = g.image('images/rooms/architect_victory/architect_victory_bg.png').convert('RGBA')
+    ch = bg.height
+    cw = min(bg.width, round(ch * 400 / 240))
+    scene = bg.crop(((bg.width - cw) // 2, 0, (bg.width - cw) // 2 + cw, ch)).resize((400, 240), Image.LANCZOS)
+    skel_res, vscale, hide = creature_skeleton(g, 'ARCHITECT')
+    skel, atlas, load = g.spine(skel_res)
+    img, origin = spine_render.render(skel, atlas, load, scale=vscale * CREATURE_SCALE * 1.3, hide=hide)
+    scene.alpha_composite(img, (max(0, min(400 - img.width, round(280 - origin[0]))), max(0, round(185 - origin[1]))))
+    canvas = Image.new('RGBA', (512, 256), (0, 0, 0, 255))
+    canvas.paste(scene, (0, 0))
+    write_t3t(os.path.join(OUT, 'gfx', 'bg_thearchitect.t3t'), canvas)
+    if args.preview:
+        canvas.save(os.path.join(ROOT, 'build', 'preview_bg_thearchitect.png'))
+
     # Merchant room (scenes/rooms/merchant_room.tscn): the tent (BgContainer, Spine at 0.5,
     # scaled 1.01) and the merchant (MerchantButton's MerchantVisual), centred 5:3 crop.
     S = 0.5
@@ -812,7 +829,7 @@ def build(args):
     take('monsters', lambda k: k.split('.')[0] in MONSTERS or k.split('.')[0] == 'HATCHLING')
     take('relics', lambda k: k.split('.')[0] in RELICS)
     take('events', lambda k: k.split('.')[0] in EVENTS or k.startswith('GENERIC'))
-    take('ancients', lambda k: k.split('.')[0] in EVENTS)
+    take('ancients', lambda k: k.split('.')[0] in EVENTS or k.startswith('PROCEED.'))  # PROCEED: TheArchitect's option
     take('potions', lambda k: k.split('.')[0] in POTIONS)
     take('enchantments', lambda k: k.split('.')[0] in ENCHANTMENTS)
     take('static_hover_tips', lambda k: k.startswith('REPLAY'))  # the enchantment replay line

@@ -29,7 +29,8 @@ void App::drawAncient(bool top) {
     gfx::image(R().texture("gfx/bg_" + bg + ".t3t"), 0, 0, kTop, kH, 0, 0, kTop, kH);
     drawTopBar();
     R().text(12, 22, L("ancients." + who + ".title"), ts(F16, col::gold, LEFT));
-    R().text(12, 42, L("ancients." + who + ".epithet"), ts(F12, col::white, LEFT, 0, 0.85f));
+    if (R().hasLoc("ancients." + who + ".epithet"))  // TheArchitect has none
+      R().text(12, 42, L("ancients." + who + ".epithet"), ts(F12, col::white, LEFT, 0, 0.85f));
     // Selected relic: its description in a box over the lower scene; otherwise the dialogue.
     const Relic* rel = !e->finished && !ancientTalking(e) && sel_ >= 0 && sel_ < (int)e->options.size()
                            ? e->options[sel_].relic.get() : nullptr;
@@ -73,12 +74,13 @@ void App::drawAncient(bool top) {
       R().measure(desc, st, &dh);
       if (dh > h - 20) st.scale *= (h - 20) / dh;
       R().text(x + 48, y + 19, desc, st);
-    } else {  // a locked option (e.g. Orobas without a starter relic): its text, greyed out
+    } else {  // a text option: greyed out when locked (Orobas without a starter relic); TheArchitect's PROCEED
       std::string k = e->options[i].key;
       std::string table = R().hasLoc("ancients." + k + ".title") ? "ancients." : "events.";
-      R().text(x + 8, y + 3, L(table + k + ".title"), ts(F12, col::gray));
+      uint32_t tc = e->options[i].locked() ? col::gray : col::white;
+      R().text(x + 8, y + 3, L(table + k + ".title"), ts(F12, tc));
       if (R().hasLoc(table + k + ".description"))
-        R().text(x + 8, y + 19, L(table + k + ".description"), ts(F12, col::gray, LEFT, w - 16, 0.85f));
+        R().text(x + 8, y + 19, L(table + k + ".description"), ts(F12, tc, LEFT, w - 16, 0.85f));
     }
     if (!e->options[i].locked()) hits_.push_back({x, y, w, h, ID_DEVITEM0 + i});
   }

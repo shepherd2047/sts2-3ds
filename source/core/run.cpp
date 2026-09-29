@@ -790,6 +790,7 @@ Task<> Run::main() {
       if (e) {
         co_await runEvent(std::move(e));
         if (died) { recordRunEnd(*this, progress::RunOutcome::Loss); screen = Screen::GameOver; co_return; }
+        if (runWon) { recordRunEnd(*this, progress::RunOutcome::Win); screen = Screen::Victory; co_return; }  // STS_EVENT=TheArchitect
         continue;
       }
     }
@@ -825,8 +826,8 @@ Task<> Run::main() {
 
       bool won = co_await fight(id);
       if (!won) { recordRunEnd(*this, progress::RunOutcome::Loss); screen = Screen::GameOver; co_return; }
-      // RewardsSet.WithRewardsFromRoom: the last act's boss gives nothing; the run is won.
-      // PORT NOTE: C# then enters TheArchitect event (the ending); not ported yet.
+      // RewardsSet.WithRewardsFromRoom: the last act's boss gives nothing. RunManager.EnterNextAct
+      // on the last act then enters TheArchitect (content_architect.cpp), whose PROCEED is WinRun.
       if (type == RoomType::Boss && actIndex + 1 >= kActs) {
         // DoubleBoss: the second boss follows the first (which, like every boss of the last act, gives no rewards).
         if (!secondBossId.empty()) {
@@ -835,6 +836,15 @@ Task<> Run::main() {
           ++floor;
           if (!co_await fight(second)) { recordRunEnd(*this, progress::RunOutcome::Loss); screen = Screen::GameOver; co_return; }
         }
+        // The fight is freed and the screen leaves it in the same step (as in combatRewards).
+        // PORT NOTE: no save point here (the C# saves the finished boss room); quitting during the
+        // ending resumes at the last map save.
+        combat.reset();
+        player->combat = nullptr;
+        for (auto& rel : relics) rel->combat = nullptr;
+        screen = Screen::Event;
+        if (auto e = db::event("TheArchitect")) co_await runEvent(std::move(e));
+        if (died) { recordRunEnd(*this, progress::RunOutcome::Loss); screen = Screen::GameOver; co_return; }
         recordRunEnd(*this, progress::RunOutcome::Win);
         screen = Screen::Victory;
         co_return;
