@@ -181,9 +181,9 @@ meta and progression (M), system (Y), audio (U) and hardware/release (H).
 
 | id | Package | Kind | Needs | Status |
 |---|---|---|---|---|
-| A1a | Colorless cards 1/3: Alchemize … GoldAxe (22) + the colorless pool, and ColorlessPotion | content | – | in progress (subagent) |
-| A1b | Colorless cards 2/3: HandOfGreed … Purity (22) | content, parallel-safe | A1a | todo |
-| A1c | Colorless cards 3/3: Rally … Volley (19); skip cards the C# marks multiplayer-only | content, parallel-safe | A1a | todo |
+| A1a | Colorless cards 1/3: Alchemize … GoldAxe (22) + the colorless pool, and ColorlessPotion | content | – | done (subagent), accepted 2026-09-28: pool in colorless_pool.cpp (db::colorlessCards / isColorless, helpers in colorless.h); 18 cards (4 multiplayer-only skipped); released the A1a locks (Regent Quasar/SpectrumShift/BundleOfJoy/ManifestAuthority/HeirloomHammer, EndlessConveyor, BrainLeech RIP) |
+| A1b | Colorless cards 2/3: HandOfGreed … Purity (22) | content, parallel-safe | A1a | in progress (subagent) |
+| A1c | Colorless cards 3/3: Rally … Volley (19); skip cards the C# marks multiplayer-only | content, parallel-safe | A1a | in progress (subagent) |
 | A2 | Missing curses/status (AscendersBane exists since C10, Debt, Writhe, Beckon, Debris, Void), 13 event cards, quest cards Dowsing and SpoilsMap | content | – | done (subagent), accepted 2026-09-28: Debt/Writhe/Beckon + 13 event cards in content_cards_misc.cpp; Dowsing/SpoilsMap registered but locked (need CardType::Quest, a "?"-room hook, act-map rewrite) |
 | A3a | Enchantment engine: enchantment slot on Card, hooks (`Models\EnchantmentModel.cs`), save, card badge + text in the UI, `enchant` event helpers | engine, *Opus* | – | done (engine), accepted 2026-09-28 |
 | A3b | Enchantments 1/2: Sown, Slither, Adroit, Clone (used by CloneRestSiteOption), Corrupted, Goopy, Inky, SoulsPower + unlock SapphireSeed PLANT, WoodCarvings SNAKE, FieldOfManSizedHoles ENTER_YOUR_HOLE (PerfectFit exists), Grave of the Forgotten | content | A3a | done (subagent), accepted 2026-09-28: enchantments_b.cpp; also Symbiote APPROACH; Clone's rest option waits for PaelsGrowth (A6) |
@@ -196,7 +196,7 @@ meta and progression (M), system (Y), audio (U) and hardware/release (H).
 | A7c | Shared events 3/3: FakeMerchant (+ FakeMerchantEventEncounter, 10 Fake* relics, fake shop UI reuse) | content | – | done (subagent), accepted 2026-09-28: fake shop reuses the shop screen (relics only; D-pad up/down assumes card slots); the fight needs a Foul Potion throw from the shop (STS_FAKE_FIGHT=1 for tests) |
 | A7d | CrystalSphere: its minigame (`Events.Custom.CrystalSphereEvent`) + custom bottom-screen UI | content + UI, *Opus* | – | todo |
 | A8 | Remaining event-pool relics whose source already exists (run the pool diff), unlock Wellspring BOTTLE / WhisperingHollow GOLD, BattlewornDummy potion | content | A7a-c | done (subagent), accepted 2026-09-28: relics_event.cpp (LostCoffer, PhialHolster, NeowsSacrifice, Ambergris without its extra turn, the 4 refined starters for Touch of Orobas); the rest of the event pool waits for A1a / A3c / pets / map systems (list in the file header) |
-| A9 | Shop leftovers: 2 colorless slots, Foul Potion throw at the merchant, event potions Ambergris / Glowwater / Foul | content | A1a | todo |
+| A9 | Shop leftovers: 2 colorless slots, Foul Potion throw at the merchant, event potions Ambergris / Glowwater / Foul | content | A1a | in progress (subagent) |
 | A10 | TheArchitect: the true ending after the act 3 boss (event + TheArchitectEventEncounter), victory flow | content + engine | – | in progress (subagent) |
 | A11a | Underdocks monsters 1/2: CorpseSlugs N/W, Cultists, FossilStalker, GremlinMerc, HauntedShip, LivingFog, PunchConstruct | content, parallel-safe | – | done (subagent), accepted 2026-09-28 |
 | A11b | Underdocks monsters 2/2: Seapunk N/W, SewerClam, SludgeSpinner, Toadpoles, TwoTailedRats | content, parallel-safe | – | done (subagent), accepted 2026-09-28 |
