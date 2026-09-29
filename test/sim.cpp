@@ -318,8 +318,8 @@ int main(int argc, char** argv) {
     bool win = cur->screen == Screen::Victory;
     wins += win;
     floorsTotal += cur->floor;
-    printf("seed %3d: %s floor %2d hp %d/%d deck %zu\n", s, win ? "WIN " : (cur->screen == Screen::GameOver ? "LOSS" : "STUCK"),
-           cur->floor, cur->player->hp, cur->player->maxHp, cur->deck.size());
+    printf("seed %3d: %s floor %2d hp %d/%d deck %zu act1 %s\n", s, win ? "WIN " : (cur->screen == Screen::GameOver ? "LOSS" : "STUCK"),
+           cur->floor, cur->player->hp, cur->player->maxHp, cur->deck.size(), cur->actIds[0].c_str());
     if (cur->screen != Screen::GameOver && cur->screen != Screen::Victory) return 1;
     // Let the finished root task unwind before the Run goes away.
     Scheduler::get().update(0.05);

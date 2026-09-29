@@ -1098,8 +1098,10 @@ struct Run {
   std::vector<std::unique_ptr<Relic>> relics;
   int gold = 99;
   int floor = 0;                   // total floors climbed (RunState.TotalFloor)
-  int actIndex = 0;                // RunState.CurrentActIndex: 0 Overgrowth, 1 Hive, 2 Glory
+  int actIndex = 0;                // RunState.CurrentActIndex: 0 Overgrowth/Underdocks, 1 Hive, 2 Glory
   static constexpr int kActs = 3;
+  // RunState.Acts: the run's act per index (db::ActDef names), rolled in Run::start.
+  std::vector<std::string> actIds = {"Overgrowth", "Hive", "Glory"};
   int fightsThisAct = 0;           // monster rooms so far: the first weakCount use weak fights
   std::vector<std::string> eliteQueue;
   std::vector<MapNode> nodes;
@@ -1252,6 +1254,9 @@ struct Run {
   void start(uint64_t seed, const std::string& characterId = "Ironclad", int ascension = 0);
   void enterAct(int index);        // RunManager.EnterAct: new map, encounters and events
   const db::ActDef& act() const;
+  // Music hook for the audio lane: NRunMusicController.ResolveMusic picks the act's
+  // BgMusicOptions entry with Rng(seed, "bg_music"). Returns the FMOD event id ("" if none).
+  std::string actMusic() const;
   void generateMap();
   bool devSkipAct = false;         // developer menu: leave for the next act at the next map choice
   // Development build: every node can be entered, not only the next ones on the path.
@@ -1296,14 +1301,25 @@ void registerPotion(const std::string& id, PotionFactoryFn f);
 const std::vector<std::string>& potionPool();  // = potionPool("Ironclad")
 std::vector<std::string> ironcladRewardPool();
 std::vector<std::string> ironcladStarterDeck();
-// acts.cpp: Overgrowth, Hive, Glory with their encounter and event ids as in the C#.
+// acts.cpp: Overgrowth, Underdocks, Hive, Glory (ModelDb.Acts order) with their encounter
+// and event ids as in the C#.
 struct ActDef {
-  const char* name;  // Overgrowth / Hive / Glory
+  const char* name;  // Overgrowth / Underdocks / Hive / Glory (ActModel id)
   const char* key;   // file path identifier: art is gfx/bg_<key>.t3t, gfx/bg_map_<key>.t3t
+  int index;         // ActModel.Index: which act of the run it can be (Underdocks: 0)
+  bool isDefault;    // ActModel.IsDefault (Underdocks: false, the alternative act 1)
   int weakCount;     // ActModel.NumberOfWeakEncounters
   std::vector<std::string> weak, normal, elites, bosses, events;
+  // Audio hooks for the audio lane (no audio yet): ActModel.BgMusicOptions (FMOD event ids,
+  // one picked by Run::actMusic) and ActModel.AmbientSfx.
+  std::vector<std::string> music;
+  const char* ambience;
 };
-const std::vector<ActDef>& acts();
+const std::vector<ActDef>& acts();          // every act, ModelDb.Acts order
+const ActDef* act(const std::string& name);  // by ActModel id; null if unknown
+// ActModel.GetRandomList (StartRunLobby.BeginRunLocally, Rng(seed, "act_selection")): one act
+// per act index, picked among that index's acts in ModelDb.Acts order. Returns the ids.
+std::vector<std::string> randomActList(Rng& rng);
 std::vector<std::string> act1Weak();
 std::vector<std::string> act1Normal();
 std::vector<std::string> act1Elites();

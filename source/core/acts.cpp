@@ -1,14 +1,15 @@
-// The three acts (MegaCrit.Sts2.Core.Models.Acts: Overgrowth, Hive, Glory): encounter
-// and event ids exactly as in each act's GenerateAllEncounters / AllEvents. Content
-// files only register encounters and events; ids that aren't registered yet are
-// skipped at runtime (Run::enterAct).
+// The acts (MegaCrit.Sts2.Core.Models.Acts, ModelDb.Acts order: Overgrowth, Underdocks,
+// Hive, Glory): encounter and event ids exactly as in each act's GenerateAllEncounters /
+// AllEvents. Content files only register encounters and events; ids that aren't
+// registered yet are skipped at runtime (Run::enterAct). Underdocks is the alternative
+// act 1 (Index 0, IsDefault false); Run::start rolls which one a run gets.
 #include "game.h"
 
 namespace sts::db {
 
 const std::vector<ActDef>& acts() {
   static const std::vector<ActDef> v = {
-      {"Overgrowth", "overgrowth", 3,
+      {"Overgrowth", "overgrowth", 0, true, 3,
        {"FuzzyWurmCrawlerWeak", "NibbitsWeak", "ShrinkerBeetleWeak", "SlimesWeak"},
        {"CubexConstructNormal", "FlyconidNormal", "FogmogNormal", "InkletsNormal", "MawlerNormal", "NibbitsNormal",
         "OvergrowthCrawlers", "RubyRaidersNormal", "SlimesNormal", "SlitheringStranglerNormal",
@@ -17,25 +18,57 @@ const std::vector<ActDef>& acts() {
        {"CeremonialBeastBoss", "TheKinBoss", "VantomBoss"},
        {"AromaOfChaos", "ByrdonisNest", "DenseVegetation", "JungleMazeAdventure", "LuminousChoir", "MorphicGrove",
         "SapphireSeed", "SunkenStatue", "TabletOfTruth", "UnrestSite", "Wellspring", "WhisperingHollow",
-        "WoodCarvings"}},
-      {"Hive", "hive", 2,
+        "WoodCarvings"},
+       {"event:/music/act1_a1_v1", "event:/music/act1_a2_v2"}, "event:/sfx/ambience/act1_ambience"},
+      {"Underdocks", "underdocks", 0, false, 3,
+       {"CorpseSlugsWeak", "SeapunkWeak", "SludgeSpinnerWeak", "ToadpolesWeak"},
+       {"CorpseSlugsNormal", "CultistsNormal", "FossilStalkerNormal", "GremlinMercNormal", "HauntedShipNormal",
+        "LivingFogNormal", "PunchConstructNormal", "SeapunkNormal", "SewerClamNormal", "TwoTailedRatsNormal"},
+       {"PhantasmalGardenersElite", "SkulkingColonyElite", "TerrorEelElite"},
+       {"LagavulinMatriarchBoss", "SoulFyshBoss", "WaterfallGiantBoss"},
+       {"AbyssalBaths", "DrowningBeacon", "EndlessConveyor", "PunchOff", "SpiralingWhirlpool", "SunkenStatue",
+        "SunkenTreasury", "DoorsOfLightAndDark", "TrashHeap", "WaterloggedScriptorium"},
+       {"event:/music/act1_b1_v1"}, "event:/sfx/ambience/act3_ambience"},
+      {"Hive", "hive", 1, true, 2,
        {"BowlbugsWeak", "ExoskeletonsWeak", "ThievingHopperWeak", "TunnelerWeak"},
        {"BowlbugsNormal", "ChompersNormal", "ExoskeletonsNormal", "HunterKillerNormal", "LouseProgenitorNormal",
         "MytesNormal", "OvicopterNormal", "SlumberingBeetleNormal", "SpinyToadNormal", "TheObscuraNormal"},
        {"DecimillipedeElite", "EntomancerElite", "InfestedPrismsElite"},
        {"KaiserCrabBoss", "KnowledgeDemonBoss", "TheInsatiableBoss"},
        {"Amalgamator", "Bugslayer", "ColorfulPhilosophers", "ColossalFlower", "FieldOfManSizedHoles",
-        "InfestedAutomaton", "LostWisp", "SpiritGrafter", "TheLanternKey", "ZenWeaver"}},
-      {"Glory", "glory", 2,
+        "InfestedAutomaton", "LostWisp", "SpiritGrafter", "TheLanternKey", "ZenWeaver"},
+       {"event:/music/act2_a1_v2", "event:/music/act2_a2_v2"}, "event:/sfx/ambience/act2_ambience"},
+      {"Glory", "glory", 2, true, 2,
        {"DevotedSculptorWeak", "ScrollsOfBitingWeak", "TurretOperatorWeak"},
        {"AxebotsNormal", "ConstructMenagerieNormal", "FabricatorNormal", "FrogKnightNormal", "GlobeHeadNormal",
         "OwlMagistrateNormal", "ScrollsOfBitingNormal", "SlimedBerserkerNormal", "TheLostAndForgottenNormal"},
        {"KnightsElite", "MechaKnightElite", "SoulNexusElite"},
        {"AeonglassBoss", "QueenBoss", "TestSubjectBoss"},
        {"BattlewornDummy", "GraveOfTheForgotten", "HungryForMushrooms", "Reflections", "RoundTeaParty", "Trial",
-        "TinkerTime"}},
+        "TinkerTime"},
+       {"event:/music/act3_a1_v1", "event:/music/act3_a2_v1"}, "event:/sfx/ambience/act3_ambience"},
   };
   return v;
+}
+
+const ActDef* act(const std::string& name) {
+  for (auto& a : acts()) if (name == a.name) return &a;
+  return nullptr;
+}
+
+// ActModel.GetRandomList. PORT NOTE: every act counts as unlocked (the owner's decision:
+// IsUnlocked -> true) and as discovered: the C# forces an undiscovered non-default act
+// (Underdocks) on a single-player run's first try; with no Timeline / DiscoveredActs here
+// that rule is dropped, so act 1 is always Overgrowth or Underdocks at random.
+std::vector<std::string> randomActList(Rng& rng) {
+  std::vector<std::string> list;
+  for (int i = 0;; ++i) {
+    std::vector<std::string> candidates;  // ModelDb.ActsByIndex[i]
+    for (auto& a : acts()) if (a.index == i) candidates.push_back(a.name);
+    if (candidates.empty()) break;
+    list.push_back(rng.nextItem(candidates));
+  }
+  return list;
 }
 
 std::vector<std::string> act1Weak() { return acts()[0].weak; }
