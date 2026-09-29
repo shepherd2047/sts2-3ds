@@ -995,6 +995,7 @@ Task<> Combat::setupPlayerTurn() {
   cardsPlayedThisTurn = 0;
   skillsFinishedThisTurn = 0;
   attackPlaysFinishedThisTurn = 0;
+  shivPlaysFinishedThisTurn = 0;
   for (Model* m : listeners()) co_await m->afterEnergyReset();
   for (Model* m : listeners()) co_await m->beforeHandDraw();
   Dec handDraw = 5;
@@ -1182,6 +1183,7 @@ Task<> Combat::playCard(Card* card, Creature* target, bool autoPlay, bool forceE
       for (Model* m : listeners()) co_await m->afterCardPlayed(cp);
     if (card->type == CardType::Skill) ++skillsFinishedThisTurn;  // CardPlayFinishedEntry (LunarBlast)
     if (card->type == CardType::Attack) ++attackPlaysFinishedThisTurn;
+    if (card->tags & tagShiv) ++shivPlaysFinishedThisTurn;
   }
   card->clearCostMods(Card::kWhenPlayed);  // AfterCardPlayedCleanup
 

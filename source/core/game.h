@@ -803,6 +803,7 @@ struct Combat {
   int cardsPlayedThisTurn = 0;  // CombatHistory.CardPlaysStarted this turn (player)
   int skillsFinishedThisTurn = 0;  // CardPlaysFinished of Skills this turn (LunarBlast, X3.3a)
   int attackPlaysFinishedThisTurn = 0;  // CombatHistory.CardPlaysFinished this turn: Attack plays (Finisher, X1.3a)
+  int shivPlaysFinishedThisTurn = 0;  // CardPlaysFinished of Shivs this turn (PhantomBlades, X1.3b)
   Side currentSide = Side::Player;
   bool inProgress = false, ending = false, over = false, won = false;
   bool playerPhase = false;  // UI may submit actions
