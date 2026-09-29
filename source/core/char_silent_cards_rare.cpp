@@ -240,7 +240,6 @@ struct Assassinate : IroncladT<Assassinate> {
 };
 
 // BladeOfInk.cs: Shivs in hand, each enchanted with Inky (amount 1).
-// PORT NOTE: the Inky enchantment is not ported yet (A3b); it is applied by id once it is registered.
 struct BladeOfInk : IroncladT<BladeOfInk> {
   CARD_HEADER(BladeOfInk, "BLADE_OF_INK", 1, Skill, Rare, Self)
     addVar("Cards", 2);
