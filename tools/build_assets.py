@@ -298,7 +298,7 @@ class Assets:
         return img, origin
 
 
-def export_spine(g, key, skel_res, skel, atlas, load, scale, hide=(), shift=None):
+def export_spine(g, key, skel_res, skel, atlas, load, scale, hide=(), shift=None, max_page=1024):
     """Skeleton + atlas for the runtime: romfs/spine/KEY.skel, KEY.txt, KEY_N.t3t.
 
     KEY.txt lines:
@@ -321,8 +321,8 @@ def export_spine(g, key, skel_res, skel, atlas, load, scale, hide=(), shift=None
         pw, ph = [int(v) for v in page['size'].split(',')] if 'size' in page else img.size
         if img.size != (pw, ph):
             img = img.resize((pw, ph), Image.LANCZOS)
-        # Largest 3DS texture is 1024; pad to a power of two.
-        s = min(1.0, 1024 / pw, 1024 / ph)
+        # Largest 3DS texture is 1024 (max_page: smaller for art shown small); pad to a power of two.
+        s = min(1.0, max_page / pw, max_page / ph)
         sw, sh = max(1, round(pw * s)), max(1, round(ph * s))
         if s < 1.0:
             img = img.resize((sw, sh), Image.LANCZOS)
@@ -360,6 +360,83 @@ def export_spine(g, key, skel_res, skel, atlas, load, scale, hide=(), shift=None
         lines.append(f'shift {shift[0]:.2f} {shift[1]:.2f}')
     with open(os.path.join(out, key + '.txt'), 'w', newline='\n') as f:
         f.write('\n'.join(lines) + '\n')
+
+
+def game_font(g, res, fallback):
+    """One of the game's own font files (res: e.g. fonts/zhs/SourceHanSerifSC-Bold.otf) as a path
+    under build/, or fallback. Godot stores it in a zstd-compressed (RSCC) .fontdata resource;
+    decompressed with the zstandard module or the zstd CLI when either exists."""
+    import shutil
+    import subprocess
+    cache = os.path.join(ROOT, 'build', 'fonts', os.path.basename(res))
+    if os.path.exists(cache):
+        return cache
+    try:
+        d = g.pck.read(g.imported_path(res))
+    except Exception:  # noqa: BLE001 -- a font the PCK does not have: use the fallback
+        return fallback
+    if d[:4] == b'RSCC':  # FileAccessCompressed: mode, block size, total, block sizes, blocks
+        mode, bs, total = struct.unpack_from('<3I', d, 4)
+        body = d[16 + 4 * (total // bs + 1):]
+        if mode != 2:
+            return fallback
+        try:
+            import zstandard
+            d = zstandard.ZstdDecompressor().decompressobj().decompress(body)
+        except ImportError:
+            if not shutil.which('zstd'):
+                print(f'  (no zstd: {os.path.basename(res)} -> {os.path.basename(fallback)})')
+                return fallback
+            d = subprocess.run(['zstd', '-dc'], input=body, capture_output=True).stdout
+    # The font file sits in the resource as a PackedByteArray: u32 length, then the bytes.
+    for magic in (b'OTTO\x00', b'\x00\x01\x00\x00\x00'):
+        i = d.find(magic)
+        while i >= 4:
+            n = struct.unpack_from('<I', d, i - 4)[0]
+            if 1024 < n <= len(d) - i:
+                os.makedirs(os.path.dirname(cache), exist_ok=True)
+                with open(cache, 'wb') as f:
+                    f.write(d[i:i + n])
+                return cache
+            i = d.find(magic, i + 1)
+    return fallback
+
+
+def text_image(font_path, size, text, rgb, shadow=(0, 0, 0, 0)):
+    """A trimmed RGBA image of text in one colour, with an optional drop shadow (dx, dy, alpha)."""
+    font = ImageFont.truetype(font_path, size, index=0)
+    x0, y0, x1, y1 = font.getbbox(text)
+    dx, dy, sa = shadow
+    img = Image.new('RGBA', (x1 - x0 + 2 + dx, y1 - y0 + 2 + dy), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    if sa:
+        draw.text((1 - x0 + dx, 1 - y0 + dy), text, font=font, fill=(0, 0, 0, sa))
+    draw.text((1 - x0, 1 - y0), text, font=font, fill=rgb + (255,))
+    return img
+
+
+def bake_boot_and_act_titles(g, packer, args):
+    """S01 (RGDSplus U01). Boot: the MegaCrit logo Spine of NLogoAnimation
+    (scenes/screens/main_menu/logo_animation.tscn) -> romfs/spine/LOGO_MEGACRIT.*, page capped at
+    512 px (it is shown ~100 px tall; boot.cpp scales it from its bounds, so scale 1 here).
+    Act banner (NActBanner, scenes/ui/act_banner.tscn): the act name (ActModel.Title =
+    acts.<ID>.title, Spectral Bold 120 -> zhs Source Han Serif SC Bold, #EFC851) and
+    gameplay_ui.ACT_NUMBER (Kreon 40 -> Source Han Serif SC Medium, #87CEEB), pre-rendered in the
+    game's fonts at the 3DS size (1080 -> 240 px: 120 -> 27 px; 40 px would be 9, so 13):
+    act/name_<ID> for every act in the loc table, act/number_<n> for n = 1..4."""
+    skel_res = 'animations/ui/logo/logo_megacrit_animate_skel_data.tres'
+    skel, atlas, load = g.spine(skel_res)
+    export_spine(g, 'LOGO_MEGACRIT', skel_res, skel, atlas, load, 1.0, max_page=512)
+    bold = game_font(g, 'fonts/zhs/SourceHanSerifSC-Bold.otf', args.font)
+    medium = game_font(g, 'fonts/zhs/SourceHanSerifSC-Medium.otf', args.font)
+    for k, v in g.loc('zhs', 'acts').items():
+        act = k.split('.')[0]
+        if k.endswith('.title') and act != 'DEPRECATED_ACT':
+            packer.add('act/name_' + act, text_image(bold, 27, v, (0xEF, 0xC8, 0x51), (1, 1, 60)))
+    number = g.loc('zhs', 'gameplay_ui')['ACT_NUMBER']
+    for n in range(1, 5):
+        packer.add(f'act/number_{n}', text_image(medium, 13, number.replace('{actNumber}', str(n)),
+                                                 (0x87, 0xCE, 0xEB), (1, 1, 60)))
 
 
 def bake_ancient(g, anc, args):
@@ -708,6 +785,9 @@ def build(args):
     icon.alpha_composite(head)
     icon.save(os.path.join(ROOT, 'icon.png'))
 
+    print('boot and act titles')
+    bake_boot_and_act_titles(g, packer, args)
+
     with open(os.path.join(OUT, 'gfx', 'atlas.txt'), 'w', newline='\n') as f:
         for (name, page, x, y, w, h, ax, ay) in packer.entries:
             f.write(f'{name} {page} {x} {y} {w} {h} {ax} {ay}\n')
@@ -855,6 +935,7 @@ def build(args):
     take('enchantments', lambda k: k.split('.')[0] in ENCHANTMENTS)
     take('static_hover_tips', lambda k: k.startswith('REPLAY'))  # the enchantment replay line
     take('merchant_room')
+    take('acts', lambda k: k.endswith('.title'))  # S01: the act banner's name (ActModel.Title)
     take('ascension', lambda k: k.startswith('LEVEL_'))  # S04: the character select's ascension panel
     for t in ('card_keywords', 'gameplay_ui', 'rest_site_ui', 'card_reward_ui', 'map', 'combat_messages',
               'card_selection', 'intents', 'game_over_screen', 'characters'):

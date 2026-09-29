@@ -1,4 +1,5 @@
 #pragma once
+#include <functional>
 #include <map>
 #include <memory>
 #include <string>
@@ -67,6 +68,15 @@ class App {
   struct Ghost { sts::Card* card; Pose from; float t, delay, tx, ty, ts; bool exhaust; };
   void animateHand(float dt);
   void drawGhosts();
+
+  // S01 (U01): loading + boot splash (boot.cpp) and the act title card (act_title.cpp).
+  std::function<void(float)> beginBoot();  // Res::load progress callback, or null (no splash)
+  bool updateBoot(const gfx::Input& in, double dt);  // true while the splash runs
+  bool drawBoot(bool top);
+  void updateActTitle(float dt);
+  void drawActTitle();  // top screen, over the map
+  int actTitleAct_ = -1;  // act whose title card has been triggered this run
+  float actTitleT_ = -1;  // seconds into the card; -1 = not showing
 
   void startRun(bool resume = false);
   void returnTitle();

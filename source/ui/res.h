@@ -1,5 +1,6 @@
 // Loaded assets: sprite atlas, bitmap font, localised strings.
 #pragma once
+#include <functional>
 #include <map>
 #include <memory>
 #include <string>
@@ -50,7 +51,8 @@ struct TextStyle {
 
 class Res {
  public:
-  bool load();
+  // progress (S01 boot): called with 0..1 as the atlas pages load, so the boot can draw frames.
+  bool load(const std::function<void(float)>& progress = nullptr);
   Sprite sprite(const std::string& name) const;
   // Names of all atlas sprites that start with prefix, sorted (asset gallery, tests).
   std::vector<std::string> spriteNames(const std::string& prefix) const;
