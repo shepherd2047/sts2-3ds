@@ -1222,9 +1222,11 @@ struct Run {
   // UnknownMapPointOdds: current odds of the non-event outcomes of a "?" room.
   float unknownMonsterOdds = 0.1f, unknownTreasureOdds = 0.02f, unknownShopOdds = 0.03f;
   RoomType rollUnknownRoom();      // returns Unknown for "event"
-  std::unique_ptr<Relic> relicOffer;  // RelicReward / treasure chest, shown on Screen::RelicOffer
+  // Screen::RelicOffer: one relic (RelicReward, treasure chest, Dig) or a choose-one of several
+  // (RelicSelectCmd.FromChooseARelicScreen). relicChoice: 0 skip, k >= 1 takes relicOffers[k-1].
+  std::vector<std::unique_ptr<Relic>> relicOffers;
   bool relicOfferFromChest = false;
-  Signal<int> relicChoice;           // 1 take, 0 skip
+  Signal<int> relicChoice;
 
   // RelicGrabBag: per-rarity relic ids, shuffled once per run (player bag = shared +
   // Ironclad pools; the shared bag feeds treasure chests).
@@ -1235,6 +1237,7 @@ struct Run {
   std::unique_ptr<Relic> pullRelicFromFront(std::map<RelicRarity, std::vector<std::string>>& bag, RelicRarity r);
   Task<> obtainRelic(std::unique_ptr<Relic> r);   // RelicCmd.Obtain
   Task<> offerRelic(std::unique_ptr<Relic> r, bool fromChest);
+  Task<> chooseRelic(std::vector<std::unique_ptr<Relic>> rs, bool fromChest);
   Task<> gainGold(int amount);                     // PlayerCmd.GainGold
   bool hasRelic(const std::string& id) const;
 

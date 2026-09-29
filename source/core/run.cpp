@@ -173,14 +173,22 @@ Task<> Run::obtainRelic(std::unique_ptr<Relic> rel) {
 }
 
 Task<> Run::offerRelic(std::unique_ptr<Relic> rel, bool fromChest) {
-  if (!rel) co_return;
-  rel->run = this;
-  relicOffer = std::move(rel);
+  std::vector<std::unique_ptr<Relic>> one;
+  if (rel) one.push_back(std::move(rel));
+  co_await chooseRelic(std::move(one), fromChest);
+}
+
+// RelicSelectCmd.FromChooseARelicScreen (and the single-relic offer): take one, or skip.
+Task<> Run::chooseRelic(std::vector<std::unique_ptr<Relic>> rs, bool fromChest) {
+  rs.erase(std::remove(rs.begin(), rs.end(), nullptr), rs.end());
+  if (rs.empty()) co_return;
+  for (auto& rel : rs) rel->run = this;
+  relicOffers = std::move(rs);
   relicOfferFromChest = fromChest;
   screen = Screen::RelicOffer;
   int take = co_await relicChoice.next();
-  if (take == 1) co_await obtainRelic(std::move(relicOffer));
-  relicOffer.reset();
+  if (take >= 1 && take <= (int)relicOffers.size()) co_await obtainRelic(std::move(relicOffers[take - 1]));
+  relicOffers.clear();
 }
 
 // ---------------------------------------------------------------- events
@@ -1020,7 +1028,14 @@ Task<> Run::main() {
       for (auto& rel : relics) generate = generate && rel->shouldGenerateTreasure();
       if (generate) {
         co_await gainGold(rng("Rewards").nextInt(42, 53));
-        co_await offerRelic(pullRelicFromFront(sharedRelicBag, rollRelicRarity(rng("TreasureRoomRelics"))), true);
+        // Debug: STS_TREASURE_RELICS=N offers a choose-one of N chest relics (the multiplayer
+        // shared-relic layout; single player always gets one).
+        int n = 1;
+        if (const char* e = getenv("STS_TREASURE_RELICS")) n = std::clamp(atoi(e), 1, 5);
+        std::vector<std::unique_ptr<Relic>> offer;
+        for (int i = 0; i < n; ++i)
+          offer.push_back(pullRelicFromFront(sharedRelicBag, rollRelicRarity(rng("TreasureRoomRelics"))));
+        co_await chooseRelic(std::move(offer), true);
       }
     } else if (type == RoomType::Rest) {
       historyRoom(history::RoomKind::RestSite);
