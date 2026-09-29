@@ -618,6 +618,9 @@ def add_ui_art(g, a, packer, known):
     put('ui/sub_lock', 'packed/main_menu/submenu_lock.png', (40, 30))
     put('ui/sub_stats', 'packed/main_menu/submenu_stats_icon.png', (44, 25))
     put('ui/sub_history', 'packed/main_menu/submenu_history_icon.png', (40, 25))
+    # M8 card library (NCardLibrary): the Ancients / misc pool filter icons.
+    put('ui/lib_ancient', 'ui/run_history/neow.png', (24, 24))
+    put('ui/lib_misc', 'packed/card_library/pool_filter_other.png', (24, 24))
     put('ui/end_turn_glow', 'packed/combat_ui/end_turn_button_glow.png', (84, 42))
     put('ui/exhaust_pile', 'packed/combat_ui/exhaust_pile.png', (30, 30))
     put('ui/pile_count', 'packed/combat_ui/pile_button_count.png', (24, 20))
@@ -1026,6 +1029,7 @@ def build(args):
     take('static_hover_tips', lambda k: k.startswith(('REPLAY', 'BOSS.', 'DOUBLE_BOSS.')))
     take('encounters', lambda k: k.endswith('_BOSS.title'))  # C11: boss names (EncounterModel.Title)
     take('merchant_room')
+    take('card_library')  # M8: the card library's filters, counts and the unseen card's title / text
     take('badges')  # M7: the end-of-run badges' names and descriptions (badges.h locKeys)
     take('acts', lambda k: k.endswith('.title'))  # S01: the act banner's name (ActModel.Title)
     take('ascension', lambda k: k.startswith('LEVEL_'))  # S04: the character select's ascension panel

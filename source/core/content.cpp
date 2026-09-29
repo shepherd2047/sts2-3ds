@@ -772,6 +772,12 @@ std::unique_ptr<Power> power(const std::string& id) {
   auto it = powerReg().find(id);
   return it == powerReg().end() ? nullptr : it->second();
 }
+std::vector<std::string> cardIds() {
+  std::vector<std::string> ids;
+  ids.reserve(cardReg().size());
+  for (auto& [k, f] : cardReg()) ids.push_back(k);
+  return ids;
+}
 std::vector<std::string> encounterIds() {
   std::vector<std::string> ids;
   for (auto& [k, e] : encounterReg()) ids.push_back(k);

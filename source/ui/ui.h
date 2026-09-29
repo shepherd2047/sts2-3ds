@@ -109,6 +109,14 @@ class App {
   bool drawProfiles(bool top);
   bool updateProfiles(const gfx::Input& in);
   void drawProfileChip(int hitId);  // main menu's NOpenProfileScreenButton (top-left corner)
+  // M8 card library (screens/card_library.cpp, its state lives there): NCardLibrary. Opened from the
+  // compendium submenu (or any page, e.g. the pause menu); draws over whatever is underneath and
+  // returns false from draw / update while closed.
+ public:
+  void openCardLibrary();
+ private:
+  bool drawCardLibrary(bool top);
+  bool updateCardLibrary(const gfx::Input& in);
 
  public:
   bool quitRequested() const { return quit_; }
@@ -194,7 +202,9 @@ class App {
   void drawBossPreview();  // C11: NTopBarBossIcon on the map's top screen
   void drawStatusBar(float y);
   void drawCreature(sts::Creature* c, float x, float feetY, bool targeted);
-  void drawCard(sts::Card* c, float x, float y, float s, bool dim = false, bool desc = false, bool selected = false);
+  // `unseen` (M8 card library, ModelVisibility.NotSeen): darkened portrait, 未知 title, "?" cost, ？？？ text.
+  void drawCard(sts::Card* c, float x, float y, float s, bool dim = false, bool desc = false, bool selected = false,
+                bool unseen = false);
   void drawCardGrid(const std::vector<sts::Card*>& cards, int sel, float y0, float y1, int scrollRow);
   int gridHit(const std::vector<sts::Card*>& cards, float y0, float y1, int scrollRow, int tx, int ty);
   bool button(float x, float y, float w, float h, const std::string& label, int id, bool enabled = true,
