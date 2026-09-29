@@ -868,8 +868,12 @@ Task<> Run::main() {
     } else if (type == RoomType::Treasure) {
       // TreasureRoom: 42-52 gold, then one relic from the shared bag.
       for (Model* m : listeners()) co_await m->afterRoomEntered(type);
-      co_await gainGold(rng("Rewards").nextInt(42, 53));
-      co_await offerRelic(pullRelicFromFront(sharedRelicBag, rollRelicRarity(rng("TreasureRoomRelics"))), true);
+      bool generate = true;  // Hook.ShouldGenerateTreasure: no relic, no gold
+      for (auto& rel : relics) generate = generate && rel->shouldGenerateTreasure();
+      if (generate) {
+        co_await gainGold(rng("Rewards").nextInt(42, 53));
+        co_await offerRelic(pullRelicFromFront(sharedRelicBag, rollRelicRarity(rng("TreasureRoomRelics"))), true);
+      }
     } else if (type == RoomType::Rest) {
       for (Model* m : listeners()) co_await m->afterRoomEntered(type);
       co_await restSite();
