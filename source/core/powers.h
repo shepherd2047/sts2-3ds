@@ -48,6 +48,8 @@ struct VulnerablePower : Power {
     }
     // PaperPhrog.ModifyVulnerableMultiplier: +0.25 against anyone but its owner.
     if (!target->isPlayer && target->combat && target->combat->run->hasRelic("PaperPhrog")) mult += Dec::lit(0.25);
+    // DebilitatePower.ModifyVulnerableMultiplier (Necrobinder, held by the target): doubles the bonus.
+    if (target->power("DebilitatePower")) mult += mult - Dec(1);
     return mult;
   }
   Task<> afterSideTurnEnd(Side side, const std::vector<Creature*>&) override {
@@ -64,6 +66,8 @@ struct WeakPower : Power {
     // PaperKrane.ModifyWeakMultiplier (Silent relic, held by the target): a Weak attacker deals
     // 15% less on top when it hits the relic's owner.
     if (target && target->isPlayer && target->combat && target->combat->run->hasRelic("PaperKrane")) mult -= Dec::lit(0.15);
+    // DebilitatePower.ModifyWeakMultiplier (held by the Weak attacker): doubles the penalty.
+    if (owner->power("DebilitatePower")) mult -= Dec(1) - mult;
     return mult;
   }
   Task<> afterSideTurnEnd(Side side, const std::vector<Creature*>&) override {

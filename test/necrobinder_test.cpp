@@ -596,6 +596,165 @@ int main() {
     CHECK(f.c->osty->hp == ostyHp0 + 6);
   }
 
+  // ---- X4.3a: Uncommon cards, first half
+  {  // BoneShards: Osty hits all enemies, gain Block, then Osty dies; with no Osty nothing happens.
+    Fight f("Necrobinder");
+    Card* card = f.c->addCard(db::card("BoneShards"));
+    f.c->hand.push_back(card);
+    int hp0 = f.enemy(0)->hp, hp1 = f.enemy(1)->hp, b0 = f.c->player->block;
+    f.play(card, nullptr);
+    CHECK(hp0 - f.enemy(0)->hp == 9 && hp1 - f.enemy(1)->hp == 9);
+    CHECK(f.c->player->block - b0 == 9);
+    CHECK(f.c->osty->dead());
+    Card* again = f.c->addCard(db::card("BoneShards"));
+    f.c->hand.push_back(again);
+    b0 = f.c->player->block;
+    f.play(again, nullptr);
+    CHECK(f.c->player->block == b0 && f.enemy(0)->hp == hp0 - 9);
+  }
+  {  // BorrowedTime: +4 energy, every card costs 1 more; gone after the turn.
+    Fight f("Necrobinder");
+    Card* card = f.c->addCard(db::card("BorrowedTime"));
+    Card* other = f.c->addCard(db::card("Bury"));
+    f.c->hand.push_back(card);
+    f.c->hand.push_back(other);
+    CHECK(f.c->energyCost(other) == 4);
+    f.play(card, nullptr);
+    CHECK(f.c->energy == 10 - 1 + 4);
+    CHECK(f.c->energyCost(other) == 5);
+    f.endTurn();
+    CHECK(f.c->player->power("BorrowedTimePower") == nullptr);
+  }
+  {  // Bury / Calcify (+Poke through Osty) / Countdown.
+    Fight f("Necrobinder");
+    Card* bury = f.c->addCard(db::card("Bury"));
+    f.c->hand.push_back(bury);
+    int hp0 = f.enemy(0)->hp;
+    f.play(bury, f.enemy(0));
+    CHECK(hp0 - f.enemy(0)->hp == 52);
+    Card* calcify = f.c->addCard(db::card("Calcify"));
+    f.c->hand.push_back(calcify);
+    f.play(calcify, nullptr);
+    Card* poke = f.c->addCard(db::card("Poke"));
+    f.c->hand.push_back(poke);
+    hp0 = f.enemy(0)->hp;
+    f.play(poke, f.enemy(0));
+    CHECK(hp0 - f.enemy(0)->hp == 6 + 4);
+    Card* cd = f.c->addCard(db::card("Countdown"));
+    f.c->hand.push_back(cd);
+    f.play(cd, nullptr);
+    CHECK(f.c->player->power("CountdownPower")->amount == 6);
+    f.endTurn();
+    int doom = 0;
+    for (Creature* e : f.c->enemies)
+      if (Power* d = e->power("DoomPower")) doom += d->amount;
+    CHECK(doom == 6);
+  }
+  {  // Deathbringer: Doom then Weak on all; DeathsDoor: triple Block once Doom was applied this turn.
+    Fight f("Necrobinder");
+    Card* door = f.c->addCard(db::card("DeathsDoor"));
+    f.c->hand.push_back(door);
+    int b0 = f.c->player->block;
+    f.play(door, nullptr);
+    CHECK(f.c->player->block - b0 == 6);
+    Card* door2 = f.c->addCard(db::card("DeathsDoor"));
+    f.c->hand.push_back(door2);
+    Card* db_ = f.c->addCard(db::card("Deathbringer"));
+    f.c->hand.push_back(db_);
+    f.play(db_, nullptr);
+    for (Creature* e : f.c->enemies)
+      CHECK(e->power("DoomPower")->amount == 21 && e->power("WeakPower")->amount == 1);
+    b0 = f.c->player->block;
+    f.play(door2, nullptr);
+    CHECK(f.c->player->block - b0 == 18);
+  }
+  {  // Debilitate: doubles Vulnerable (6 -> 12 instead of 9) and Weak on the owner.
+    Fight f("Necrobinder");
+    Card* card = f.c->addCard(db::card("Debilitate"));
+    f.c->hand.push_back(card);
+    f.play(card, f.enemy(0));
+    CHECK(f.enemy(0)->power("DebilitatePower")->amount == 2);
+    f.apply<VulnerablePower>(f.enemy(0), 1);
+    Card* strike = f.c->addCard(db::card("StrikeNecrobinder"));
+    f.c->hand.push_back(strike);
+    int hp0 = f.enemy(0)->hp;
+    f.play(strike, f.enemy(0));
+    CHECK(hp0 - f.enemy(0)->hp == 12);
+    hp0 = f.enemy(1)->hp;
+    f.apply<VulnerablePower>(f.enemy(1), 1);
+    Card* strike2 = f.c->addCard(db::card("StrikeNecrobinder"));
+    f.c->hand.push_back(strike2);
+    f.play(strike2, f.enemy(1));
+    CHECK(hp0 - f.enemy(1)->hp == 9);
+  }
+  {  // Delay / Friendship / EnfeeblingTouch.
+    Fight f("Necrobinder");
+    Card* delay = f.c->addCard(db::card("Delay"));
+    f.c->hand.push_back(delay);
+    int b0 = f.c->player->block;
+    f.play(delay, nullptr);
+    CHECK(f.c->player->block - b0 == 11 && f.c->player->power("EnergyNextTurnPower")->amount == 1);
+    Card* fr = f.c->addCard(db::card("Friendship"));
+    f.c->hand.push_back(fr);
+    int max0 = f.c->maxEnergyNow();
+    f.play(fr, nullptr);
+    CHECK(f.c->maxEnergyNow() == max0 + 1);
+    CHECK(f.c->player->power("StrengthPower")->amount == -2);
+    Card* et = f.c->addCard(db::card("EnfeeblingTouch"));
+    f.c->hand.push_back(et);
+    CHECK(et->has(kwEthereal));
+    f.play(et, f.enemy(0));
+    CHECK(f.enemy(0)->power("StrengthPower")->amount == -8);
+    f.endTurn();
+    CHECK(f.enemy(0)->power("StrengthPower") == nullptr || f.enemy(0)->power("StrengthPower")->amount == 0);
+  }
+  {  // Fetch: Osty hit, draws only on the first play each turn. DeathMarch: +4 per non-hand draw.
+    Fight f("Necrobinder");
+    Card* fetch = f.c->addCard(db::card("Fetch"));
+    f.c->hand.push_back(fetch);
+    Card* dm = f.c->addCard(db::card("DeathMarch"));
+    f.c->hand.push_back(dm);
+    int hp0 = f.enemy(0)->hp;
+    size_t hand0 = f.c->hand.size();
+    f.play(fetch, f.enemy(0));
+    CHECK(hp0 - f.enemy(0)->hp == 3);
+    CHECK(f.c->hand.size() == hand0 - 1 + 1);
+    hp0 = f.enemy(0)->hp;
+    runTask([](Combat* c) -> Task<> { co_await cmd::drawCards(*c, Dec(2)); }(f.c));
+    f.play(dm, f.enemy(0));
+    CHECK(hp0 - f.enemy(0)->hp == 8 + 4 * 3);  // Fetch's draw plus the two above
+  }
+  {  // Cleanse (summon + exhaust from draw pile), Dirge (X), CaptureSpirit, Dredge.
+    Fight f("Necrobinder");
+    Card* cl = f.c->addCard(db::card("Cleanse"));
+    f.c->hand.push_back(cl);
+    size_t draw0 = f.c->draw.size(), ex0 = f.c->exhaust.size();
+    int max0 = f.c->osty->maxHp;
+    f.playPick(cl, nullptr, 0);
+    CHECK(f.c->draw.size() == draw0 - 1 && f.c->exhaust.size() == ex0 + 1);
+    CHECK(f.c->osty->maxHp == max0 + 3);
+    Card* dirge = f.c->addCard(db::card("Dirge"));
+    f.c->hand.push_back(dirge);
+    dirge->xValue = 0;
+    draw0 = f.c->draw.size();
+    max0 = f.c->osty->maxHp;
+    f.play(dirge, nullptr);  // Fight::play gives 10 energy: X = 10
+    CHECK(f.c->osty->maxHp == max0 + 3 * 10 && f.c->draw.size() == draw0 + 10);
+    Card* cs = f.c->addCard(db::card("CaptureSpirit"));
+    f.c->hand.push_back(cs);
+    draw0 = f.c->draw.size();
+    int hp0 = f.enemy(0)->hp;
+    f.play(cs, f.enemy(0));
+    CHECK(hp0 - f.enemy(0)->hp == 3 && f.c->draw.size() == draw0 + 3);
+    Card* dr = f.c->addCard(db::card("Dredge"));
+    f.c->hand.push_back(dr);
+    f.c->discard.clear();
+    Card* d1 = f.c->addCard(db::card("Poke"));
+    f.c->discard.push_back(d1);
+    f.playPick(dr, nullptr, 0);
+    CHECK(f.c->discard.empty() && std::find(f.c->hand.begin(), f.c->hand.end(), d1) != f.c->hand.end());
+  }
+
   printf("%d checks, %d failed\n", checks, failures);
   return failures ? 1 : 0;
 }
