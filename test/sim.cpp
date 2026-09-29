@@ -263,10 +263,12 @@ int main(int argc, char** argv) {
             auto& opts = cur->currentEvent->options;
             int pick = 0;
             // Advance per page within one event, so a looping page (SlipperyBridge's HOLD_ON) is left.
-            static const void* lastEvent = nullptr;
+            // Keyed by event id + floor (not the object's address, which a save/load can reuse).
+            static std::string lastEvent;
             static int page = 0;
-            page = lastEvent == cur->currentEvent.get() ? page + 1 : 0;
-            lastEvent = cur->currentEvent.get();
+            std::string key = cur->currentEvent->id + "@" + std::to_string(cur->floor);
+            page = lastEvent == key ? page + 1 : 0;
+            lastEvent = key;
             if (!opts.empty()) {
               pick = (s + cur->floor + page) % (int)opts.size();
               for (int k = 0; k < (int)opts.size() && opts[pick].locked(); ++k) pick = (pick + 1) % (int)opts.size();
