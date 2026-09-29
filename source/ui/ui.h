@@ -79,7 +79,8 @@ class App {
   float actTitleT_ = -1;  // seconds into the card; -1 = not showing
 
   void startRun(bool resume = false);
-  void returnTitle();
+  // keepSave: save & quit (Y2) keeps run.sav, so 继续 resumes at the last map save point.
+  void returnTitle(bool keepSave = false);
   bool hasSave() const;
   // Y4 (for S03's profile screen, from the title): switch / delete a profile slot and refresh
   // hasSave_. Rename: profiles::rename(id, name). Slot info: profiles::info(id).
@@ -138,6 +139,13 @@ class App {
   void drawSettings(bool top);
   void updateSettings(const gfx::Input& in);
   void saveSettings();
+  // Y2 pause menu (START during a run), screens/pause.cpp. Map / deck / settings open over it.
+  void openPause();
+  void drawPause(bool top);
+  void updatePause(const gfx::Input& in);
+  bool pauseOpen_ = false;
+  int pauseSel_ = 0;       // focused entry
+  int pauseModalSel_ = 0;  // abandon confirm: 0 cancel, 1 confirm (abandonConfirm_ is the popup)
   void drawEnd(bool top, bool won);
   void drawRelicOffer(bool top);  // elite relic reward / treasure chest
   void drawRelics(bool top);      // owned relics: grid below, the picked one above
@@ -228,7 +236,7 @@ class App {
   bool abandonConfirm_ = false;
   bool fastMode_ = false;
   bool screenShake_ = true;
-  bool mapView_ = false;  // map opened from another room (START): look only, red 返回 below
+  bool mapView_ = false;  // map opened from another room (pause menu 地图): look only, red 返回 below
   bool devOpen_ = false;
   int devPage_ = 0;  // 0 actions, 1 relics, 2 cards, 3 encounters
   std::vector<std::unique_ptr<sts::Relic>> devRelics_;  // every registered relic, for the picker

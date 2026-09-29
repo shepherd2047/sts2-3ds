@@ -1086,7 +1086,7 @@ Task<> Run::restSite() {
   restOptions.clear();
 }
 
-// Player-initiated abandon (pause menu -> confirm, ui/screens/settings.cpp).
+// Player-initiated abandon (pause menu -> confirm, ui/screens/pause.cpp).
 void Run::abandon() { recordRunEnd(*this, progress::RunOutcome::Abandon); }
 
 }  // namespace sts
