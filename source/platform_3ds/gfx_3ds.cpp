@@ -273,6 +273,8 @@ bool readSave(const std::string& name, std::string& out) { return readWhole(save
 bool writeSave(const std::string& name, const std::string& data) {
   std::string dir = saveDir();
   makeDir(dir);
+  // Y4: per-profile names like "profile1/run.sav" live in a subdirectory.
+  if (size_t slash = name.rfind('/'); slash != std::string::npos) mkdir((dir + name.substr(0, slash)).c_str(), 0777);
   std::string tmp = dir + name + ".tmp";
   FILE* f = fopen(tmp.c_str(), "wb");
   if (!f) return false;

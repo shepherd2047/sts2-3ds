@@ -6,10 +6,9 @@
 //
 // PORT NOTE: nothing here calls save()/load() automatically. The C#'s ProgressSaveManager reads
 // progress.save from a per-profile directory at startup and rewrites it after every change
-// (SaveProgress()); on this port that belongs to Y4 (Profiles: 3 slots on SD, per-profile run
-// save and progress files), which knows the profile's directory the way App/ui.cpp knows
-// gfx::saveDir() for run.sav. Until then the engine hooks below only update the in-memory
-// progress::state(); nothing is written to disk unless a caller explicitly calls progress::save().
+// (SaveProgress()); on this port profiles.cpp (Y4) loads the current slot's file in
+// profiles::init/select, and the app writes it through profiles::saveProgress() at every run
+// save point and when a run ends (ui.cpp). The engine hooks below only update progress::state().
 #include <cstdio>
 #include <cstdlib>
 #include <sstream>
@@ -19,6 +18,7 @@
 #endif
 
 #include "game.h"
+#include "profiles.h"
 #include "progress.h"
 
 namespace sts {
@@ -140,7 +140,7 @@ void onRunEnded(const std::string& characterId, int ascension, RunOutcome outcom
 
 std::string defaultPath() {
   if (const char* p = getenv("STS_PROGRESS_PATH")) return p;
-  return "saves/progress.sav";
+  return profiles::progressPath();  // Y4: <save root>profile<N>/progress.sav
 }
 
 namespace {

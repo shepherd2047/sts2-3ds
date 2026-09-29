@@ -81,6 +81,10 @@ class App {
   void startRun(bool resume = false);
   void returnTitle();
   bool hasSave() const;
+  // Y4 (for S03's profile screen, from the title): switch / delete a profile slot and refresh
+  // hasSave_. Rename: profiles::rename(id, name). Slot info: profiles::info(id).
+  bool selectProfile(int id);
+  bool deleteProfile(int id);
   bool hasSave_ = false;  // the title offers 继续
   bool titleCharacter_ = false;  // title menu -> character select (S04)
   int titleChar_ = 0;             // selected button: db::characterIds() index, or its size for Random

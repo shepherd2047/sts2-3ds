@@ -12,6 +12,7 @@
 #endif
 
 #include "game.h"
+#include "profiles.h"
 #include "progress.h"
 #include "settings_store.h"
 
@@ -116,11 +117,7 @@ std::string defaultPath() {
 
 std::string defaultRunSavePath() {
   if (const char* p = getenv("STS_RUN_SAVE_PATH")) return p;
-#ifdef __3DS__
-  return "sdmc:/3ds/sts2-3ds/run.sav";
-#else
-  return "saves/run.sav";
-#endif
+  return profiles::runSavePath();  // Y4: the current profile's run save
 }
 
 namespace {
