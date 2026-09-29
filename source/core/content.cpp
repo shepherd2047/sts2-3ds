@@ -653,6 +653,11 @@ void registerCard(const std::string& id, CardFactory f) { cardReg()[id] = f; }
 void registerPower(const std::string& id, PowerFactory f) { powerReg()[id] = f; }
 void registerRelic(const std::string& id, RelicFactoryFn f) { relicReg()[id] = f; }
 bool relicRegistered(const std::string& id) { return relicReg().count(id) > 0; }
+std::vector<std::string> relicIds() {
+  std::vector<std::string> ids;
+  for (auto& [k, f] : relicReg()) ids.push_back(k);
+  return ids;
+}
 void registerOrb(const std::string& id, OrbFactory f) { orbReg()[id] = f; }
 
 const std::vector<std::string>& sharedRelicPool() {

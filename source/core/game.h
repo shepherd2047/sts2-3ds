@@ -1316,6 +1316,8 @@ const Encounter* encounter(const std::string& id);
 std::vector<std::string> encounterIds();  // every registered encounter (tests, tools)
 std::unique_ptr<Relic> relic(const std::string& id);
 std::unique_ptr<Potion> potion(const std::string& id);
+std::vector<std::string> relicIds();   // every registered relic id, sorted (M9's relic collection)
+std::vector<std::string> potionIds();  // every registered potion id, sorted (M9's potion lab)
 void registerPotion(const std::string& id, PotionFactoryFn f);
 // IroncladPotionPool + SharedPotionPool ids in the game's order (registered or not).
 const std::vector<std::string>& potionPool();  // = potionPool("Ironclad")

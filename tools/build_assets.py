@@ -1058,6 +1058,8 @@ def build(args):
                                                'RELIC_HISTORY.header', 'DEFAULT_EVENT_LOSS_MESSAGE')))  # M6
     take('merchant_room')
     take('card_library')  # M8: the card library's filters, counts and the unseen card's title / text
+    take('relic_collection')  # M9: the relic collection's category headers
+    take('potion_lab')  # M9: the potion lab's category headers
     take('badges')  # M7: the end-of-run badges' names and descriptions (badges.h locKeys)
     take('acts', lambda k: k.endswith('.title'))  # S01: the act banner's name (ActModel.Title)
     take('ascension', lambda k: k.startswith('LEVEL_'))  # S04: the character select's ascension panel
@@ -1067,6 +1069,7 @@ def build(args):
         'CONTINUE', 'ABANDON_RUN', 'ABANDON_RUN_CONFIRMATION', 'SINGLE_PLAYER', 'COMPENDIUM', 'STATISTICS',
         'SETTINGS', 'QUIT', 'QUIT_CONFIRM_POPUP', 'GENERIC_POPUP', 'STANDARD', 'DAILY', 'CUSTOM',
         'COMPENDIUM_CARD_LIBRARY', 'COMPENDIUM_RELIC_COLLECTION', 'COMPENDIUM_POTION_LAB', 'COMPENDIUM_BESTIARY',
+        'POTION_LAB_COLLECTION',  # M9: the potion lab's unseen tip
         'RUN_HISTORY', 'CONTINUE_RUN_INFO',
         'PROFILE_SCREEN', 'OPEN_PROFILE_SCREEN'))  # S03: profile screen + the main menu's profile button
     for t in ('card_keywords', 'gameplay_ui', 'rest_site_ui', 'card_reward_ui', 'map', 'combat_messages',

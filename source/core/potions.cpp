@@ -541,6 +541,11 @@ std::unique_ptr<Potion> potion(const std::string& id) {
   auto it = potionReg().find(id);
   return it == potionReg().end() ? nullptr : it->second();
 }
+std::vector<std::string> potionIds() {
+  std::vector<std::string> ids;
+  for (auto& [k, f] : potionReg()) ids.push_back(k);
+  return ids;
+}
 // The character's potions (<Character>4Epoch.Potions) then SharedPotionPool, in the game's order.
 std::vector<std::string> potionPool(const std::string& characterId) {
   static const std::vector<std::string> shared = {
