@@ -19,6 +19,7 @@
 // that bus), STS_MUSIC_LOG=1 prints every change.
 #include "music_router.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -101,6 +102,7 @@ const char* ambienceFor(const std::string& act) {
 }
 const char* kAmbMerchant = "sts2_act1_sfx_merchant_amb_v2";  // in every act's ambience event
 const char* kAmbRest = "sts2_act1_sfx_restsite_amb_v2";      // campfire on (update_campfire_ambience 0)
+const char* kAmbRestOut = "sts2_act1_sfx_restsite_amb_nofire_v1";  // TriggerCampfireGoingOut (update_campfire_ambience 1)
 const char* kAmbNeow = "sts2_act1_sfx_neow_amb_v2";          // Neow.AmbientBgm (act1_neow)
 const char* kAmbInsatiable = "sts2_act2_sfx_amb_insaitable_v2";  // TheInsatiableBoss.AmbientSfx
 
@@ -268,8 +270,14 @@ void routeMusic(const sts::Run& run) {
     amb = kAmbInsatiable;
   else if (st.section == Section::Merchant || st.section == Section::MerchantEnd)
     amb = kAmbMerchant;
-  else if (st.section == Section::Rest)  // the map over the rest site keeps the campfire
-    amb = kAmbRest;
+  else if (st.section == Section::Rest) {  // the map over the rest site keeps the campfire
+    // NRestSiteRoom.ExtinguishFireIfAble: the fire goes out once no option is left to take.
+    bool out = !run.restUsed.empty();
+    if (out && run.hasRelic("MiniatureTent"))
+      for (int o : run.restOptions)
+        if (std::find(run.restUsed.begin(), run.restUsed.end(), o) == run.restUsed.end()) out = false;
+    amb = out ? kAmbRestOut : kAmbRest;
+  }
   else if (run.screen == Screen::Event && run.currentEvent && run.currentEvent->id == "Neow")
     amb = kAmbNeow;
   setAmbience(ambPath(amb), kAmbFade);
