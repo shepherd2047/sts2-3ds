@@ -14,8 +14,9 @@ namespace ui {
 // bar (取消 when the selection can be cancelled, 详情, the "已选 k/N" counter, 确认); the focused card
 // previewed on the top screen: upgrade prompts show it before -> after side by side (C#
 // NUpgradePreview), the others show it large (a transform's random result is never shown, RGDSplus U15).
-// One card (MaxSelect 1): the first tap focuses, a tap on the focused card (or A, or 确认) picks it
-// (UI_STYLE fast play; on the 3DS the top screen already is the C# confirm preview). N cards: a tap
+// One card (MaxSelect 1): a tap on a card picks it and opens the review stage (owner decision
+// 2026-09-30: one tap picks; the review is the C# confirm preview, 确认 / 返回); with the D-pad the
+// focused card is previewed on top and A (or 确认) picks it at once. N cards: a tap
 // (or A) toggles a pick; reaching N opens the review stage as the C# PreviewSelection does (every
 // picked card on top, upgraded for upgrade prompts; 确认 / 返回), and an "up to N" choice (minCount <
 // count) can go there early with 确认. Keys: D-pad moves the focus through the grid and down into the
@@ -162,7 +163,10 @@ int App::gridSelectUpdate(const GridSelectSpec& s, const gfx::Input& in, std::ve
     return result;
   };
   auto confirm = [&]() -> int {
-    if (!multi) return g.sel >= 0 ? done(1, {g.sel}) : 0;
+    if (!multi) {
+      if (g.review && g.picks.size() == 1) return done(1, g.picks);  // a tapped card, reviewed
+      return g.sel >= 0 ? done(1, {g.sel}) : 0;
+    }
     if ((int)g.picks.size() < least || (int)g.picks.size() > need) return 0;
     if (g.review || g.picks.empty()) return done(1, g.picks);
     g.review = true;
@@ -177,6 +181,10 @@ int App::gridSelectUpdate(const GridSelectSpec& s, const gfx::Input& in, std::ve
     if ((int)g.picks.size() == need) g.review = true;  // C# OnCardClicked: MaxSelect reached -> PreviewSelection
     return 0;
   };
+  auto leaveReview = [&] {
+    g.review = false;
+    if (!multi) g.picks.clear();  // one card: the review held the tapped card only
+  };
   auto detail = [&](int i) {
     if (i < 0 || i >= n) return;
     inspectCard(*s.cards, i, s.upgrade);
@@ -186,13 +194,13 @@ int App::gridSelectUpdate(const GridSelectSpec& s, const gfx::Input& in, std::ve
   if (int id = g.pending) {
     g.pending = 0;
     if (id == kSelCancel && s.canCancel) return done(-1, {});
-    if (id == kSelBack) { g.review = false; return 0; }
+    if (id == kSelBack) { leaveReview(); return 0; }
     if (id == kSelDetail) { detail(g.sel); return 0; }
     if (id == kSelConfirm) return confirm();
   }
   const uint32_t d = in.down;
   if (g.review) {  // the review stage: only 确认 / 返回
-    if (d & gfx::BTN_B) g.review = false;
+    if (d & gfx::BTN_B) leaveReview();
     else if (d & gfx::BTN_A) return confirm();
     return 0;
   }
@@ -204,7 +212,7 @@ int App::gridSelectUpdate(const GridSelectSpec& s, const gfx::Input& in, std::ve
   }
   if (d & gfx::BTN_X) { detail(g.sel); return 0; }
 
-  // Touch: the grid scrolls on drag; a tap focuses, and picks (one card: the focused one again).
+  // Touch: the grid scrolls on drag; a tap picks (N cards: toggles; one card: opens the review).
   if (in.touchDown && in.ty < kGY1) {
     g.touchDown = true;
     g.dragged = false;
@@ -224,8 +232,10 @@ int App::gridSelectUpdate(const GridSelectSpec& s, const gfx::Input& in, std::ve
       g.zone = 0;
       widgets::setFocus(-1);
       if (multi) { g.sel = i; return toggle(i); }
-      if (g.sel == i) return confirm();
-      g.sel = i;
+      g.sel = i;  // one tap picks: straight to the review stage (确认 / 返回)
+      g.picks = {i};
+      g.review = true;
+      sfx::click();
     }
     return 0;
   }
@@ -289,7 +299,7 @@ void App::gridSelectDraw(const GridSelectSpec& s, bool top) {
       if (multi) R().text(kTop - 10, kH - 18, picked ? counter + tr("  已选择这张", "  Picked") : counter, ts(F12, picked ? col::gold : col::white, RIGHT));
       return;
     }
-    R().text(kTop / 2, 110, multi ? tr("点选 ", "Pick ") + num(need) + tr(" 张牌", " cards") : tr("点选一张牌，再点一次确认", "Tap a card, then tap again to confirm"),
+    R().text(kTop / 2, 110, multi ? tr("点选 ", "Pick ") + num(need) + tr(" 张牌", " cards") : tr("点选一张牌", "Tap a card"),
              ts(F16, col::white, CENTER));
     if (multi) R().text(kTop / 2, 136, counter, ts(F12, col::gold, CENTER));
     return;

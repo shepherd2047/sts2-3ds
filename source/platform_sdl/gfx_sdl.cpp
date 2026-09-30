@@ -42,12 +42,32 @@ int frameCount = 0;
 
 // STS_SCRIPT="30:A,60:T160x120,90:X" presses a button or taps the bottom
 // screen at the given frame, for automated screenshots. Drags: P160x200 presses
-// and holds, M160x120 moves the held touch, U releases.
+// and holds, M160x120 moves the held touch, U releases. "90:L+R" presses L and R
+// in the same frame (the top bar chord).
 struct Scripted { int frame; uint32_t btn; int tx, ty; char kind = 'T'; };
 bool scriptHeld = false;
 int heldX = 0, heldY = 0;
 std::vector<Scripted> script;
 std::vector<std::pair<int, std::string>> shots;  // STS_SHOTS="120:a.bmp,300:b.bmp"
+
+// Button names for STS_SCRIPT; "L+R" (any names joined by '+') presses them in the same frame.
+uint32_t scriptButtons(const std::string& keys) {
+  uint32_t m = 0;
+  size_t p = 0;
+  while (p <= keys.size()) {
+    size_t e = keys.find('+', p);
+    if (e == std::string::npos) e = keys.size();
+    std::string k = keys.substr(p, e - p);
+    p = e + 1;
+    if (k == "A") m |= BTN_A; else if (k == "B") m |= BTN_B; else if (k == "X") m |= BTN_X;
+    else if (k == "Y") m |= BTN_Y; else if (k == "L") m |= BTN_L; else if (k == "R") m |= BTN_R;
+    else if (k == "LEFT") m |= BTN_LEFT; else if (k == "RIGHT") m |= BTN_RIGHT;
+    else if (k == "UP") m |= BTN_UP; else if (k == "DOWN") m |= BTN_DOWN;
+    else if (k == "START") m |= BTN_START; else if (k == "SELECT") m |= BTN_SELECT;
+    else if (k == "ZL") m |= BTN_ZL; else if (k == "ZR") m |= BTN_ZR;
+  }
+  return m;
+}
 
 void parseScript() {
   if (const char* s = getenv("STS_SCRIPT")) {
@@ -64,13 +84,7 @@ void parseScript() {
       std::string k = item.substr(c + 1);
       if (k[0] == 'T' || k[0] == 'P' || k[0] == 'M') { sc.kind = k[0]; sscanf(k.c_str() + 1, "%dx%d", &sc.tx, &sc.ty); }
       else if (k == "U") sc.kind = 'U';
-      else if (k == "A") sc.btn = BTN_A; else if (k == "B") sc.btn = BTN_B; else if (k == "X") sc.btn = BTN_X;
-      else if (k == "Y") sc.btn = BTN_Y; else if (k == "L") sc.btn = BTN_L; else if (k == "R") sc.btn = BTN_R;
-      else if (k == "LEFT") sc.btn = BTN_LEFT; else if (k == "RIGHT") sc.btn = BTN_RIGHT;
-      else if (k == "UP") sc.btn = BTN_UP; else if (k == "DOWN") sc.btn = BTN_DOWN;
-      else if (k == "START") sc.btn = BTN_START;
-      else if (k == "SELECT") sc.btn = BTN_SELECT;
-      else if (k == "ZL") sc.btn = BTN_ZL; else if (k == "ZR") sc.btn = BTN_ZR;
+      else sc.btn = scriptButtons(k);
       script.push_back(sc);
     }
   }
@@ -188,6 +202,11 @@ Input input() {
     if (sc.frame == frameCount - 1 && sc.kind == 'T' && sc.tx >= 0) { cur.touching = false; cur.touchUp = true; }
   }
   return cur;
+}
+
+void consumeButtons(uint32_t mask) {
+  input();  // make sure this frame's reading exists
+  cur.down &= ~mask;
 }
 
 void beginFrame() {

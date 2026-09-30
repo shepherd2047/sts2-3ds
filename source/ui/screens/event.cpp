@@ -18,11 +18,11 @@ bool ancientTalking(const Event* e) { return !e->finished && e->dialogueLine + 1
 // bottom paginator when it is longer than the column). Bottom screen: one large option button
 // per option (title + description, as the C# label "[gold]title[/gold]\n description"); a
 // locked option (C# IsLocked: no action) is dimmed with its title in red and its description,
-// the lock reason, under it, and cannot be focused or picked. Focusing an option (D-pad, or
-// the first tap on it) turns the top screen into the option's page: its full text and the
-// cards / relics / potions / enchantments it names, the C# option HoverTips (a card large at
-// the left, the rest as tips). A (or a second tap) picks it, X opens the card / relic detail,
-// B drops the focus back to the story text.
+// the lock reason, under it, and cannot be focused or picked. A tap on an option picks it
+// (owner decision 2026-09-30: one tap picks). Focusing an option with the D-pad turns the top
+// screen into the option's page: its full text and the cards / relics / potions / enchantments
+// it names, the C# option HoverTips (a card large at the left, the rest as tips). A picks it,
+// X opens the card / relic detail, B drops the focus back to the story text.
 namespace {
 constexpr int kOptId = 2100;              // widget id of option i: kOptId + i
 constexpr int kProceedId = 2090, kPageId = 2080;  // 继续 on a finished event; paginator (+1)
@@ -161,9 +161,9 @@ std::vector<Offer> offersFor(const Event* e, int i, const OptionText& t) {
 // NextButtonText and the whole bottom screen (A, or a tap) advances. On the last line the option
 // buttons come up (C# NEventOptionButton in the ancient style): the relic's icon, name and full
 // description (the cost is never only on the top screen); a locked option is dimmed with its
-// reason in red. Focusing an option (D-pad, or the first tap) shows its relic large on the top
-// screen with name, rarity and description; A or a second tap picks it, X opens the relic
-// detail, B drops the focus. The modifiers' Neow pages (M11) are text options in the same list.
+// reason in red. A tap on an option picks it; focusing one with the D-pad shows its relic large
+// on the top screen with name, rarity and description; A picks it, X opens the relic detail,
+// B drops the focus. The modifiers' Neow pages (M11) are text options in the same list.
 namespace {
 constexpr int kAncOptId = 2200, kAncProceedId = 2190;  // option i: kAncOptId + i
 constexpr float kAncOptMaxH = 60, kAncBubbleW = 300;
@@ -308,7 +308,7 @@ void App::drawAncient(bool top) {
       if (rel) R().text(tx, py + 34, relicRarityName(rel->rarity), ts(F12, col::gold, LEFT, tw, 0.85f));
       R().text(tx, py + head, desc, dt);
       gfx::popClip();
-      std::string hint = widgets::usingPad() ? tr("A 选择   B 返回", "A Select   B Back") : tr("再点一次选择   B 返回", "Tap again to select   B Back");
+      std::string hint = tr("A 选择   B 返回", "A Select   B Back");  // only the D-pad focuses (a tap picks)
       if (rel) hint += tr("   X 详情", "   X Details");
       R().text(kTop / 2, kH - 18, hint, ts(F12, col::gray, CENTER, 0, 0.85f));
       return;
@@ -422,9 +422,8 @@ void App::drawAncient(bool top) {
       bool locked = e->options[i].locked();
       bool focus = i == sel_;
       if (widgets::hit(kAncOptId + i, x, y, w, h, canAct && !locked)) {
-        bool tapFocus = in.touchDown && sel_ != i;  // the first tap only shows the relic on top
-        sel_ = i;
-        if (!tapFocus) pick = i;
+        sel_ = i;  // one tap picks (the D-pad focuses first, then A)
+        pick = i;
       }
       // SetVisuallyLocked: the plate desaturated and darker, the label at 70 %.
       nineTint("ui/btn_ancient", x, y, w, h, locked ? 0x262626B0 : plateCol);
@@ -601,7 +600,7 @@ void App::drawEvent(bool top) {
     float y = kBodyY + ph + 6;
     for (size_t k = 0; k < tips.size() && y < kH - 50; ++k)
       y = drawTip(tips[k], kColX - 4, y, kColW + 4, kH - 24) + 4;
-    std::string hint = widgets::usingPad() ? tr("A 选择   B 返回", "A Select   B Back") : tr("再点一次选择   B 返回", "Tap again to select   B Back");
+    std::string hint = tr("A 选择   B 返回", "A Select   B Back");  // only the D-pad focuses (a tap picks)
     if (!cards.empty() || (!tips.empty() && tips[0].kind == Offer::RelicK)) hint += tr("   X 详情", "   X Details");
     R().text(kColX + kColW / 2, kH - 18, hint, ts(F12, col::gray, CENTER, 0, 0.85f));
     return;
@@ -635,9 +634,8 @@ void App::drawEvent(bool top) {
       bool locked = ot.locked;
       bool focus = i == sel_;
       if (widgets::hit(kOptId + i, x, y, w, h, canAct && !locked)) {
-        bool tapFocus = in.touchDown && sel_ != i;  // the first tap only shows the option on top
-        sel_ = i;
-        if (!tapFocus) pick = i;
+        sel_ = i;  // one tap picks (the D-pad focuses first, then A)
+        pick = i;
       }
       widgets::panel("ui/btn_event", x, y, w, h, locked ? 0x6A6A6AFF : focus ? 0xFFFFFFFF : 0xD8D8D8FF);
       if (focus) {  // the focused option: a soft glow and a pulsing gold outline

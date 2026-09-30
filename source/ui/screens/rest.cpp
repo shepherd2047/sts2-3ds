@@ -12,8 +12,9 @@ namespace ui {
 // Run::restSite offers (Run::restOptions: heal, smith, and Lift / Dig / Cook / Kindle / Clone from
 // relics) as rows on the bottom, each with its icon, name and description. A disabled option
 // stays focusable and says why (C#: "You can still hover it for info"). The focused option's
-// full description is on the top screen. Touch: the first tap focuses, a tap on the focused
-// option chooses it (UI_STYLE fast play); D-pad + A, 确认 chooses the focused one.
+// full description is on the top screen. Touch: a tap on an option chooses it (owner decision
+// 2026-09-30: one tap picks; a tap on a disabled one focuses it, showing why); D-pad + A,
+// 确认 chooses the focused one.
 // After an option the result stays on screen until 继续 (C# ShowProceedButton): heal and
 // clone hold the rules' short post-option wait (the scheduler is paused, then skipped), Lift and
 // Kindle are applied on 继续; smith opens the deck upgrade grid, whose pick is shown the same
@@ -222,7 +223,7 @@ void App::drawRest(bool top) {
     } else if (r.restChoice.waiting()) {
       widgets::panel("ui/hover_tip", px, py, pw, 44);
       R().text(px + pw / 2, py + 7, tr("选择一项行动", "Choose an action"), ts(F12, col::white, CENTER));
-      R().text(px + pw / 2, py + 23, tr("点选查看，再点一次确认", "Tap twice to choose"), ts(F12, col::gray, CENTER));
+      R().text(px + pw / 2, py + 23, tr("点选一项即可选择", "Tap an option to choose it"), ts(F12, col::gray, CENTER));
     }
     return;
   }
@@ -264,9 +265,8 @@ void App::drawRest(bool top) {
     std::string desc = restDescription(r, o, &reason, valid);
     // Disabled options stay focusable for their description; choosing one does nothing.
     if (widgets::hit(kOptId + o, x, y, cw, rh, canAct)) {
-      bool tapFocus = in.touchDown && sel_ != o;
-      sel_ = o;
-      if (!tapFocus && valid) choose = o;
+      sel_ = o;  // one tap chooses (a disabled option only shows its reason on top)
+      if (valid) choose = o;
     }
     // Disabled (or, after a choice, not chosen): the plate fades into the dark scene.
     widgets::panel("ui/btn_row", x, y, cw, rh, bright || chosen ? 0xFFFFFFFF : 0xFFFFFF80);

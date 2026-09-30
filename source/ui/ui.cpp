@@ -247,7 +247,21 @@ void App::returnTitle(bool keepSave) {
 
 // ================================================================ frame
 
-void App::update(const gfx::Input& in, double dt) {
+void App::update(const gfx::Input& frameIn, double dt) {
+  // Top bar fallback (owner decision 2026-09-30): L and R together toggle the top bar's focus mode
+  // like ZL / ZR (New 3DS only). The chord fires on the frame the second of the two goes down
+  // (both held, one of them new this frame); that frame's L and R presses are consumed, here and
+  // for every later gfx::input() call, so no screen also sees a single L or R (pile tabs, inspect
+  // cycling, library categories, settings pages, map scroll). Single presses are unchanged.
+  gfx::Input in = frameIn;
+  {
+    const uint32_t lr = gfx::BTN_L | gfx::BTN_R, now = in.held | in.down;
+    lrChord_ = (in.down & lr) && (now & lr) == lr;
+    if (lrChord_) {
+      in.down &= ~lr;
+      gfx::consumeButtons(lr);
+    }
+  }
   widgets::suspendInput(false);  // S19: updateTopBar suspends the bottom widgets while it owns the input
   if (updateBoot(in, dt)) return;
   // M2: time played (RunManager's active run time; the pause menu stops it).
@@ -360,7 +374,7 @@ void App::update(const gfx::Input& in, double dt) {
   if (deckOpen_) { updateDeck(in); return; }
   if (potionsOpen_) { updatePotions(in); return; }
   if (pauseOpen_) { updatePause(in); return; }
-  if (updateTopBar(in)) return;  // S19: ZL / ZR focus mode on the top screen's status bar
+  if (updateTopBar(in)) return;  // S19: ZL / ZR (or L+R) focus mode on the top screen's status bar
   switch (scr) {
     case Screen::Title: updateTitle(in); break;
     case Screen::Map: updateMap(in); break;

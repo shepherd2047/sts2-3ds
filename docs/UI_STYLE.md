@@ -22,9 +22,11 @@ mock-ups (`STS_MOCK=1|2|3`, `source/ui/style_mock.cpp`) show them on screen: 1 r
   sideways with "+N" chips at the ends; a new or flashing relic scrolls into view); right: run timer
   (always with the ShowRunTimer setting, else only on the map / under a page), deck + count, map, pause.
   The top screen is not touchable, so **ZL / ZR** (New 3DS; preview keys E / R, scripts `ZL` / `ZR`)
-  enters its focus mode: ←→ walk, L / R jump groups, the focused item's hover tip shows under the bar,
-  A opens (potion → the use / discard popup on that slot, relic → detail, deck / map / pause), B / ZL /
-  ZR / a touch leave. Pages opened from it return to it. Shared by every room.
+  or **L + R together** (every 3DS; preview Q + W, scripts `L+R`) enters its focus mode: ←→ walk,
+  L / R jump groups, the focused item's hover tip shows under the bar, A opens (potion → the use /
+  discard popup on that slot, relic → detail, deck / map / pause), B / ZL / ZR / L+R / a touch leave.
+  The chord fires on the frame the second of L / R goes down; `App::update` consumes that frame's L and
+  R, so no screen also takes it as a single L or R. Pages opened from it return to it. Shared by every room.
 - Screen title: F16 at 1.25x (about 20 px), gold, with a 2 px teal line under it. Only one title per
   screen, on the top screen except for pure list pages.
 - Panels: fill `kPanel`, 1 px teal border, a faint 1 px highlight inside the top edge. Square
@@ -43,8 +45,12 @@ mock-ups (`STS_MOCK=1|2|3`, `source/ui/style_mock.cpp`) show them on screen: 1 r
   START pauses / settings, SELECT is the developer menu.
 - Touch: a control is **pressed on release** if the stylus is still on it; it highlights on touch-down.
   Dragging more than 5 px off a control cancels the press. Scroll lists start scrolling after 5 px.
-  In lists a first tap on an item focuses it and a tap on the focused item activates it (fast play);
-  buttons activate on the first tap.
+  **One tap picks** (owner decision 2026-09-30): a tap on an event / Ancient option, a shop item, a
+  rest-site option, an offered relic or a potion target chooses it at once (a refused shop tap plays
+  the merchant's line and leaves the item focused; a single-card deck choice goes to its 确认 / 返回
+  review). The D-pad focuses first, with the preview on the top screen, and A picks. Buttons activate
+  on the first tap. Exceptions: multi-select grids (a tap toggles a pick) and inspection lists (card
+  library, collections, deck view: a tap focuses a card to look at it, a second opens its detail).
 - Long-press (0.35 s) on a card, relic, potion or keyword shows its tooltip / detail; releasing closes it.
 - The focus ring is not shown while the player is using the stylus, and appears at once when a D-pad key
   is pressed.

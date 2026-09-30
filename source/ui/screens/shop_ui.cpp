@@ -12,9 +12,10 @@ namespace ui {
 // service and the leave button on the bottom screen; the merchant's tent on top with the
 // focused item large and described over it. The bottom follows the C# rug: the five character
 // cards in a row, then the two colorless cards, relics above potions, and the removal service
-// at the right. Touch: the first tap on an item focuses it, a tap on the focused item buys it
-// (UI_STYLE fast play); D-pad moves the focus between items and buttons, A buys the focused
-// item, X shows the card / relic detail, B drops the focus. 购买 buys the focused item too.
+// at the right. Touch: a tap on an item buys it (owner decision 2026-09-30: one tap picks) and
+// focuses it, so a refused tap leaves it described on top next to the merchant's line; D-pad
+// moves the focus between items and buttons, A buys the focused item, X shows the card / relic
+// detail, B drops the focus. 购买 buys the focused item too.
 // A purchase the merchant refuses (not enough gold, no potion slot) goes through shopChoice
 // anyway so Run::enterShop sets his refusal line, as the C# plays it on a failed click.
 // The FakeMerchant event (relics only) reuses this screen: without cards, its relics are laid
@@ -149,7 +150,7 @@ void App::drawShop(bool top) {
       if (sel_ < 0) {
         TextStyle ht = ts(F12, col::white, CENTER);
         widgets::panel("ui/hover_tip", 60, kH - 34, kTop - 120, 26);
-        R().text(kTop / 2, kH - 28, tr("点选商品查看，再点一次购买", "Tap an item to inspect, tap again to buy"), ht);
+        R().text(kTop / 2, kH - 28, tr("点选商品即可购买", "Tap an item to buy it"), ht);
       }
       return;
     }
@@ -282,9 +283,8 @@ void App::drawShop(bool top) {
     else R().text(b.x + b.w / 2, priceY, tr("售罄", "Sold out"), ts(F12, col::gray, CENTER, 0, 0.85f));
     // Sold slots stay focusable (for the D-pad path) but do nothing.
     if (widgets::hit(kGoodsId + i, b.x, b.y, b.w, b.h, canAct)) {
-      bool tapFocus = in.touchDown && sel_ != i;  // first tap only focuses
-      sel_ = i;
-      if (!tapFocus && stocked) buy = i;
+      sel_ = i;  // one tap buys (a refusal still plays his line, and the item stays focused)
+      if (stocked) buy = i;
     }
   }
 
