@@ -827,6 +827,12 @@ def add_ui_art(g, a, packer, known):
     put('ui/thought_tail', 'ui/thought_tail.png', (18, 20))
     put('ui/reward_banner', 'ui/reward_screen/reward_banner.png', (300, 54))
     put('ui/reward_chain', 'ui/reward_screen/reward_chain.png', (32, 32))
+    # M13: the FTUE popup plate (bulb in the top-left corner), NFtueConfirmButton's red ribbon and
+    # NCombatRulesFtue's three pictures.
+    put('ui/ftue_popup', 'ftue/ftue_popup.png', (290, 129), (40, 40, 16, 16))
+    put('ui/ftue_btn', 'ftue/ftue_confirm_button.png', (98, 32), (10, 10, 10, 10))
+    for i in range(3):
+        put(f'ui/ftue_combat_{i}', f'ftue/combat_ftue_{i}.png', (150, 117))
     # Tabs, arrows, controls
     put('ui/tab_selected', 'settings_tab_selected.tres', (101, 34), (16, 12, 16, 12))
     put('ui/tab_stroke', 'settings_tab_stroke.tres', (103, 36), (16, 12, 16, 12))
@@ -1247,7 +1253,9 @@ def build(args):
         'RUN_HISTORY', 'CONTINUE_RUN_INFO',
         'PROFILE_SCREEN', 'OPEN_PROFILE_SCREEN',  # S03: profile screen + the main menu's profile button
         'CUSTOM_RUN_SCREEN',  # M11+S05: the custom run screen
-        'DAILY_RUN_MENU'))  # M12: the daily run screen
+        'DAILY_RUN_MENU',  # M12: the daily run screen
+        'ENABLE_TUTORIALS'))  # M13: NAcceptTutorialsFtue's question
+    take('ftues')  # M13: the first-time tips (Nodes.Ftue)
     # S21: the settings screen (tabs, setting names / descriptions, toasts, reset popups)
     take('settings_ui', lambda k: not k.startswith(('INPUT_SETTINGS', 'FEEDBACK', 'MODDING', 'DISCONNECT',
                                                     'ANTI_ALIASING', 'ASPECT_RATIO', 'FULLSCREEN', 'MSAA',

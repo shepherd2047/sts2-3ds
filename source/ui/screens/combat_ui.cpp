@@ -592,6 +592,7 @@ void App::updateCombat(const gfx::Input& in) {
   if (target_ >= (int)alive.size()) target_ = 0;
 
   auto play = [&](Card* c, Creature* t, float x, float y, float s) {
+    tipPlayAttempt(*cb, c);  // M13
     if (!cb->canPlay(c)) return false;
     if (c->target == TargetType::AnyEnemy && (!t || t->dead())) return false;
     PlayerAction a;
@@ -642,6 +643,7 @@ void App::updateCombat(const gfx::Input& in) {
     } else {
       int id = hitAt(in.tx, in.ty);
       if (id == ID_END_TURN) {
+        if (tipBlockEndTurn(*cb)) return;  // M13: NCanPlayCardsFtue
         cb->actions.fire({PlayerAction::EndTurn});
         sel_ = -1;
         aiming_ = false;
@@ -711,6 +713,7 @@ void App::updateCombat(const gfx::Input& in) {
   if (drag_.down) return;
   Card* selCard = sel_ >= 0 ? cb->hand[sel_] : nullptr;
   if (in.down & gfx::BTN_Y) { openCardList(CardListMode::Deck); aiming_ = false; return; }
+  if ((in.down & gfx::BTN_X) && tipBlockEndTurn(*cb)) return;  // M13: NCanPlayCardsFtue
   if (in.down & gfx::BTN_X) { cb->actions.fire({PlayerAction::EndTurn}); sel_ = -1; aiming_ = false; return; }
   if (in.down & gfx::BTN_B) {
     if (aiming_) aiming_ = false;

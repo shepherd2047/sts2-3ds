@@ -118,7 +118,7 @@ void App::updateCharacterSelect(const gfx::Input& in) {
   if ((id == ID_ASC_DOWN || (in.down & gfx::BTN_L)) && titleAsc_ > 0) --titleAsc_;
   if ((id == ID_ASC_UP || (in.down & gfx::BTN_R)) && titleAsc_ < kAscMax) ++titleAsc_;
   if (id == ID_SEED || (in.down & gfx::BTN_Y)) titleSeed_ = randomSeed();
-  if (id == ID_START || (in.down & (gfx::BTN_A | gfx::BTN_START))) startRun(false);
+  if ((id == ID_START || (in.down & (gfx::BTN_A | gfx::BTN_START))) && !tipAskTutorials()) startRun(false);  // M13
 }
 
 // ================================================================ main menu (S02, U02)

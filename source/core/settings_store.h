@@ -86,8 +86,8 @@ namespace settings {
 Settings& state();
 void reset();  // test helper / part of "delete all data": back to fresh defaults
 
-// Mirrors ProgressState.SeenFtue: false immediately if tutorialsEnabled is off, else whether
-// `id` is in the seen set.
+// Mirrors ProgressSaveManager.SeenFtue: true (= don't show it) immediately if tutorialsEnabled is
+// off, else whether `id` is in the seen set. M13 (ui/tutorials.h) shows a tip only while false.
 bool tutorialSeen(const std::string& id);
 void markTutorialSeen(const std::string& id);  // ProgressState.MarkFtueAsComplete
 // "Reset tutorials" (ProgressState.ResetFtues): tutorialsEnabled = true and the seen set cleared;

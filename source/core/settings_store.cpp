@@ -93,7 +93,7 @@ Settings& state() {
 void reset() { state() = Settings{}; }
 
 bool tutorialSeen(const std::string& id) {
-  if (!state().tutorialsEnabled) return false;
+  if (!state().tutorialsEnabled) return true;  // ProgressSaveManager.SeenFtue: all off = all seen
   return state().tutorialsSeen.count(id) != 0;
 }
 

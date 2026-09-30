@@ -133,9 +133,10 @@ int main() {
     settings::markTutorialSeen("combat_intro");
     CHECK(settings::tutorialSeen("combat_intro"));
     CHECK(!settings::tutorialSeen("map_intro"));
-    // Disabling tutorials entirely hides an already-seen one too (ProgressState.SeenFtue).
+    // Disabling tutorials entirely counts every tip as seen, so none shows (ProgressSaveManager.SeenFtue).
     settings::state().tutorialsEnabled = false;
-    CHECK(!settings::tutorialSeen("combat_intro"));
+    CHECK(settings::tutorialSeen("combat_intro"));
+    CHECK(settings::tutorialSeen("map_intro"));
     settings::state().tutorialsEnabled = true;
     CHECK(settings::tutorialSeen("combat_intro"));
     settings::resetTutorials();
