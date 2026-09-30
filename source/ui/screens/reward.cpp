@@ -91,7 +91,7 @@ void App::drawReward(bool top) {
     y += style::kRowH + style::kGap;
   }
   if (widgets::button(999, kBot - 120, style::kActionY, 110, style::kButtonH, "继续", widgets::Kind::Primary) &&
-      r.rewardListChoice.waiting())
+      r.rewardListChoice.waiting() && !tipBlockProceed(n, r.floor))  // M13: NCombatRewardFtue
     r.rewardListChoice.fire(-1);
   widgets::endFrame();
 }

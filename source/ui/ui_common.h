@@ -11,6 +11,7 @@
 #include "res.h"
 #include "sfx_router.h"
 #include "style.h"
+#include "tutorials.h"
 #include "ui.h"
 #include "widgets.h"
 

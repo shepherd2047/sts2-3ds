@@ -277,6 +277,7 @@ void App::update(const gfx::Input& in, double dt) {
   }
 
   if (autoplay_) autoplay(visualDt);
+  if (updateTips(in)) return;  // M13: a first-time tip owns the input while open
   if (detailOpen()) { updateDetail(in); return; }  // S20: the popup over every screen
   if (updateCardLibrary(in)) return;  // M8: over any page (main menu compendium, pause menu)
   if (updateRelicCollection(in)) return;  // M9: relic collection / potion lab
@@ -361,6 +362,7 @@ void App::consumeEvents() {
         toastT_ = 1.2f;
         break;
       case VisualEvent::Shuffle:
+        showTip(Ftue::Shuffle);  // M13: NShuffleFtue
         toast_ = "洗牌";
         toastT_ = 0.8f;
         break;
@@ -423,6 +425,7 @@ void App::draw() {
     }
     if (top && scr == Screen::Map) drawActTitle();
     if (pauseOpen_) drawPause(top);  // Y2: over the room, under the fade and toasts
+    drawTips(top);  // M13
     // F6: fade through black on a screen change (style::kFade seconds).
     if (transitionT_ > 0) gfx::rect(0, 0, top ? kTop : kBot, kH, 0x000000FF & (0xFFFFFF00 | (uint32_t)(transitionT_ * 255)));
     if (top) drawAchievementToast();  // M5: over everything on the top screen

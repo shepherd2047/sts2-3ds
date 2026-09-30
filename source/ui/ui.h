@@ -160,6 +160,9 @@ class App {
   bool updateAchievements(const gfx::Input& in);
   void updateAchievementToast(float dt);
   void drawAchievementToast();
+  // M13 tutorials (tutorials_ui.cpp; queue and seen flags in tutorials.h): first-time tips over any screen.
+  bool updateTips(const gfx::Input& in);  // true while a tip owns the input
+  void drawTips(bool top);
 
  public:
   bool quitRequested() const { return quit_; }
