@@ -288,12 +288,12 @@ screenshots of both screens, and tick the U table at the end of this file.
 
 | id | U | Screen | Needs | Status |
 |---|---|---|---|---|
-| S01 | U01 | Boot splash, loading, act transition title card ("第二幕 蜂巢") | F3 | done (subagent, Opus), accepted 2026-09-29: boot.cpp (MegaCrit logo Spine, loading bar; skipped under STS_HIDDEN/STS_FIXED_STEP/STS_SCRIPT, STS_BOOT=1 forces it), act_title.cpp (NActBanner: game fonts pre-rendered, "阶段N / <act>") |
+| S01 | U01 | Boot splash, loading, act transition title card ("第二幕 蜂巢") | F3 | in progress (subagent) |
 | S02 | U02 | Main menu: tall background across both screens, logo on top, buttons at 1.65× on the bottom (继续 / 单人 / 图鉴 / 统计 / 设置 / 退出), submenus | F3 | done (subagent, Opus), accepted 2026-09-29: main menu per NMainMenu (logo top, run info when a save exists, 继续游戏/放弃当前游戏 replace 单人模式 as in the game), singleplayer + compendium submenus (unported entries locked "未完成"), quit |
 | S03 | U03 | Profiles: 3 slots, rename (3DS software keyboard), delete + warning | Y4 | done (subagent, Opus), accepted 2026-09-29: profile_screen.cpp (3 slot cards, rename, delete confirm; profile chip on the main menu, B opens it); gfx::textInput (3DS swkbd, preview STS_TEXT_INPUT) — keyboard not tried on hardware yet |
 | S04 | U04 | Character select: art and description on top; the 5 characters + Random, ascension, seed and start/back on the bottom; locked characters | F3, C10 | done, accepted 2026-09-28 (Mac): `drawCharacterSelect` in `title.cpp`; ascension 0-10 all open and the seed shown only (Y / tap re-rolls), both owner decisions; no locked characters (everything unlocked) |
 | S05 | U05 | Custom run: modifier list, character, seed, confirm | M11 | done with M11, accepted 2026-09-29: `custom_run.cpp` |
-| S06 | U06 | Neow / Ancient dialogue and relic choice (polish only) | F4 | in progress (subagent) |
+| S06 | U06 | Neow / Ancient dialogue and relic choice (polish only) | F4 | done (subagent), accepted 2026-09-29: Ancient layout on the kit, C# dialogue bubbles (slide-in, no typewriter in the C#), per-Ancient tinted option plates, relic preview on focus |
 | S07 | U07 | Map: legend, boss icon, path highlight, scroll bounds, top-screen preview, node pulse | F3 | done (subagent), accepted 2026-09-29: visited ink circles, pulsing next nodes, red route preview (D-pad follows paths), node info panel on top, scroll bounds from the parchment |
 | S08 | U08/U10 | Combat HUD: hand fan, energy orb, piles with counts, end turn, HP/block bars, power icons, intents with numbers, turn banner | F5, F6 | in progress (subagent) |
 | S09 | U09/U12 | Targeting arrow and potion aim; enemy highlight | S08 | todo |
