@@ -99,6 +99,7 @@ void endFrame() {
 
 int focused() { return focusId; }
 void setFocus(int id) { focusId = id; }
+void focusByPad(int id) { focusId = id; padMode = true; }
 bool usingPad() { return padMode; }
 
 bool hit(int id, float x, float y, float w, float h, bool enabled) {

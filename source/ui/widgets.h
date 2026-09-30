@@ -34,6 +34,9 @@ void suspendInput(bool on);
 // The currently focused control id (-1 if none; set by touch too, so the ring follows).
 int focused();
 void setFocus(int id);
+// A button press that moves focus (L/R page switches, ...) puts the kit in pad mode, as a
+// D-pad press does, so A works on the new focus right away.
+void focusByPad(int id);
 // True while the player is using the D-pad (shows the focus ring); touch hides it.
 bool usingPad();
 

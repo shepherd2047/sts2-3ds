@@ -400,7 +400,7 @@ void App::updateSettings(const gfx::Input& in) {
   if (in.down & gfx::BTN_R) t = (tab_ + 1) % kTabCount;
   if (t != tab_) {
     tab_ = t;
-    widgets::setFocus(kRowId + firstItem(tab_));
+    widgets::focusByPad(kRowId + firstItem(tab_));  // A works on the first row at once
   }
 }
 
