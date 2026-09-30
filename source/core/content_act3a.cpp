@@ -38,13 +38,21 @@ struct StockPower : Power {
   bool shouldStopCombatFromEnding() override { return true; }
 };
 
-// GalvanicPower.cs: every Power card is afflicted with Galvanized and hurts its owner
-// when played. PORT NOTE: no per-card affliction system; every Power card counts, which is
-// what the source ends up doing anyway (BeforeCombatStart + AfterCardEnteredCombat).
+// GalvanicPower.cs: every Power card is afflicted with Galvanized (A4 afflictions;
+// BeforeCombatStart + AfterCardEnteredCombat) and hurts its owner when played.
 struct GalvanicPower : Power {
   POWER_HEADER(GalvanicPower, "GALVANIC_POWER")
+  Task<> beforeCombatStart() override {
+    for (Card* c : owner->combat->allCards())
+      if (c->type == CardType::Power) cmd::afflict(c, "Galvanized", amount);
+    co_return;
+  }
+  Task<> afterCardEnteredCombat(Card* c) override {
+    if (!c->affliction && c->type == CardType::Power) cmd::afflict(c, "Galvanized", amount);
+    co_return;
+  }
   Task<> afterCardPlayed(const CardPlay& p) override {
-    if (p.card->type != CardType::Power) co_return;
+    if (!p.card->afflictedWith("Galvanized")) co_return;
     Creature* pl = owner->combat->player;
     flash = 1.f;
     co_await cmd::damage(pl, amount, kUnpowered | kMove, nullptr, nullptr);

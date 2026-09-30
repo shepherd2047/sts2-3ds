@@ -29,6 +29,7 @@ struct Orb;
 struct Combat;
 struct Run;
 struct Modifier;  // M11 run modifiers (modifiers.h)
+struct Affliction;  // A4 (afflictions.cpp)
 
 // AscensionLevel (Entities.Ascension): a run at level N has every level <= N (Run::hasAscension).
 enum AscensionLevel : int {
@@ -128,6 +129,7 @@ struct Model {
   virtual bool shouldStopCombatFromEnding() { return false; }
   virtual Task<> afterCreatureAddedToCombat(Creature*) { return {}; }
   virtual bool shouldPlay(Card*) { return true; }  // Hook.ShouldPlay (RingingPower, ...)
+  virtual bool shouldAfflict(Card*, Affliction*) { return true; }  // Hook.ShouldAfflict (A4)
   // Illusions stay in the room (dead) with their buffs and revive.
   virtual bool shouldCreatureBeRemovedFromCombatAfterDeath(Creature*) { return true; }
   virtual bool shouldPowerBeRemovedOnDeath(Power*) { return true; }
@@ -417,6 +419,57 @@ struct EnchantSlot {
   explicit operator bool() const { return p != nullptr; }
 };
 
+// ---------------------------------------------------------------- afflictions
+
+// AfflictionModel (A4): the combat-scoped counterpart of an enchantment (Bound, Entangled,
+// Galvanized, Hexed, Ringing, Smog, Tainted). Monsters' powers put them on the player's combat
+// cards (cmd::afflict) and read them back (most of the logic lives in those powers, as in the
+// C#); like an enchantment it hears the combat hooks while its card is in combat. Afflictions
+// only exist on combat cards, which die with the combat, so they are never saved (the C#'s
+// SerializableCard has no affliction either).
+struct Affliction : Model {
+  std::string id;      // class name, e.g. "Hexed"
+  std::string locKey;  // e.g. "HEXED" (afflictions.<key>.title / description / extraCardText)
+  Card* card = nullptr;
+  int amount = 0;
+
+  virtual bool hasExtraCardText() const { return false; }  // shown purple under the card text
+  virtual bool isStackable() const { return false; }
+  virtual bool canAfflictUnplayableCards() const { return true; }
+  virtual bool canAfflictCardType(CardType) const { return true; }
+  // CanAfflict: subclasses call Affliction::canAfflict first and only add restrictions.
+  virtual bool canAfflict(const Card& c) const;
+  virtual void afterApplied() {}   // AfterApplied (also after a downgrade)
+  virtual void beforeRemoved() {}  // BeforeRemoved (ClearInternal)
+  virtual Task<> onPlay(CardPlay&) { return {}; }  // OnPlay, after the enchantment's, per play
+  // Keywords the affliction's power adds while the card is afflicted (HexPower's
+  // TryModifyKeywordsInCombat); Card::has() reads them.
+  virtual int addedKeywords() const { return 0; }
+  virtual std::unique_ptr<Affliction> clone() const = 0;
+};
+
+template <class Derived> struct AfflictionT : Affliction {
+  std::unique_ptr<Affliction> clone() const override { return std::make_unique<Derived>(static_cast<const Derived&>(*this)); }
+};
+
+// AFFLICTION_HEADER(Hexed, "HEXED") { ... }
+#define AFFLICTION_HEADER(Name, Key)  \
+  static constexpr const char* kId = #Name; \
+  Name() { id = #Name; locKey = Key;
+using AfflictionFactory = std::unique_ptr<Affliction> (*)();
+
+// Card::affliction: copying a card deep-copies its affliction (CardModel.DeepCloneFields);
+// the back pointer is fixed by Card::adoptEnchantment.
+struct AfflictSlot {
+  std::unique_ptr<Affliction> p;
+  AfflictSlot() = default;
+  AfflictSlot(const AfflictSlot& o) : p(o.p ? o.p->clone() : nullptr) {}
+  AfflictSlot& operator=(const AfflictSlot& o) { p = o.p ? o.p->clone() : nullptr; return *this; }
+  Affliction* get() const { return p.get(); }
+  Affliction* operator->() const { return p.get(); }
+  explicit operator bool() const { return p != nullptr; }
+};
+
 // CardModel.DeckVersion: the run's deck card a combat card was made from. A copy of a card
 // never inherits it (CardModel.DeepCloneFields clears it).
 struct DeckLink {
@@ -454,6 +507,7 @@ struct Card : Model {
   std::vector<DynVar> vars;
   Combat* combat = nullptr;
   EnchantSlot enchantment;  // CardModel.Enchantment (null = none)
+  AfflictSlot affliction;   // CardModel.Affliction (null = none; combat cards only)
   DeckLink deckVersion;     // CardModel.DeckVersion (combat cards only)
 
   // Hand-view calculation for CalculatedDamageVar (Body Slam, Perfected Strike).
@@ -495,12 +549,17 @@ struct Card : Model {
   bool upgraded() const { return upgradeLevel > 0; }
   bool upgradable() const { return upgradeLevel < maxUpgradeLevel; }
   void upgrade() { if (upgradable()) { ++upgradeLevel; onUpgrade(); } }
-  bool has(int kw) const { return (keywords & kw) != 0; }
+  // CardModel.Keywords: the card's own keywords plus those its affliction's power adds (Hexed).
+  bool has(int kw) const { return (keywords & kw) != 0 || (affliction && (affliction->addedKeywords() & kw) != 0); }
+  bool afflictedWith(const char* afflictionId) const { return affliction && affliction->id == afflictionId; }
   void addKeyword(int kw) { keywords |= kw; }      // CardModel.AddKeyword
   void removeKeyword(int kw) { keywords &= ~kw; }  // CardCmd.RemoveKeyword
-  // A copied card owns a copy of the enchantment that still points at the original card:
-  // every clone() (CardT, IroncladT, ...) must call this on the new card.
-  void adoptEnchantment() { if (enchantment) enchantment->card = this; }
+  // A copied card owns a copy of the enchantment (and affliction) that still points at the
+  // original card: every clone() (CardT, IroncladT, ...) must call this on the new card.
+  void adoptEnchantment() {
+    if (enchantment) enchantment->card = this;
+    if (affliction) affliction->card = this;
+  }
   // CardModel.GetEnchantedReplayCount: extra plays from BaseReplayCount and the enchantment.
   // CardModel.HasSingleTurnRetain / HasSingleTurnSly: set by effects, cleared at the end of the turn.
   bool singleTurnRetain = false, singleTurnSly = false;
@@ -818,6 +877,17 @@ struct Combat {
   std::vector<std::unique_ptr<Card>> cardStore;
   std::vector<std::unique_ptr<Power>> graveyard;  // removed powers, freed with the combat
   std::vector<std::unique_ptr<Enchantment>> enchantGraveyard;  // cleared enchantments (listener snapshots may still hold them)
+  std::vector<std::unique_ptr<Affliction>> afflictGraveyard;   // cleared afflictions (same reason)
+  // CombatHistory.CardAfflicted entries (round + side), for ChainsOfBindingPower's per-turn count.
+  struct AfflictEntry { int round; Side side; Card* card; std::string afflictionId; };
+  std::vector<AfflictEntry> afflictHistory;
+  int afflictionsThisTurn(const char* afflictionId) const {
+    int n = 0;
+    for (auto& e : afflictHistory) if (e.round == roundNumber && e.side == currentSide && e.afflictionId == afflictionId) ++n;
+    return n;
+  }
+  int skillPlaysStartedThisTurn = 0;  // CombatHistory.CardPlaysStarted of Skills this turn (SmoggyPower)
+  bool debugAfflictDone = false;      // STS_AFFLICT / SIM_AFFLICT applied (combat.cpp)
   std::vector<Creature*> stayingDead;             // being killed but not leaving (illusions)
   std::vector<Card*> draw, hand, discard, exhaust, play;
   // CombatHistory.CardDiscarded entries (round + side they happened in), for "discarded this turn".
@@ -950,6 +1020,15 @@ Task<Creature*> addMonster(Combat& c, std::unique_ptr<Monster> m);
 // same stackable enchantment again adds to its amount. CardCmd.ClearEnchantment.
 Enchantment* enchant(Card* card, std::unique_ptr<Enchantment> e, int amount);
 void clearEnchantment(Card* card);
+// CardCmd.Afflict (A4, afflictions.cpp): null if it can't (combat ending, not a combat card,
+// Hook.ShouldAfflict, CanAfflict); the same stackable affliction adds to its amount.
+// CardCmd.ClearAffliction.
+Affliction* afflict(Card* card, std::unique_ptr<Affliction> a, int amount);
+Affliction* afflict(Card* card, const char* afflictionId, int amount);
+void clearAffliction(Card* card);
+// Debug (A4): STS_AFFLICT=Hexed:2,Tainted puts each listed affliction on the first fitting combat
+// card (hand first) at the start of the first turn; SIM_AFFLICT=1 spreads every registered one.
+void debugAfflictions(Combat& c);
 
 // OrbCmd (X2.0): channel/evoke and orb slots. `channelOrb` takes ownership of a freshly made
 // orb (e.g. `cmd::channelOrb(*combat, std::make_unique<LightningOrb>())`), evicting the oldest
@@ -1393,6 +1472,10 @@ void registerEvent(const std::string& id, EventFactory f);
 void registerEnchantment(const std::string& id, EnchantmentFactory f);
 std::unique_ptr<Enchantment> enchantment(const std::string& id);
 const std::vector<std::string>& enchantmentIds();
+// Afflictions (afflictions.cpp, A4).
+void registerAffliction(const std::string& id, AfflictionFactory f);
+std::unique_ptr<Affliction> affliction(const std::string& id);
+const std::vector<std::string>& afflictionIds();
 std::unique_ptr<Event> event(const std::string& id);
 // Overgrowth.AllEvents in the game's order (registered or not).
 const std::vector<std::string>& act1Events();

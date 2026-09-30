@@ -104,31 +104,30 @@ struct PainfulStabsPower : Power {
   }
 };
 
-// HexPower.cs: every card of the player is Ethereal while it lasts (the Hexed affliction).
-// PORT NOTE: no affliction system; Ethereal is set on the cards directly and taken back
-// off only from the cards that did not have it.
+// HexPower.cs: every card of the player is Hexed (A4 afflictions), and a Hexed card is
+// Ethereal while the power lasts (TryModifyKeywordsInCombat: Hexed::addedKeywords checks
+// for this power, so Ethereal from other sources is left alone). The afflictions go with it.
 struct HexPower : Power {
   POWER_HEADER(HexPower, "HEX_POWER")
   PowerType type() const override { return PowerType::Debuff; }
   StackType stackType() const override { return StackType::Single; }
-  std::set<Card*> marked;
-  void mark(Card* c) {
-    if (c->has(kwEthereal) || marked.count(c)) return;
-    c->keywords |= kwEthereal;
-    marked.insert(c);
-  }
+  void hex(Card* c) { if (!c->affliction) cmd::afflict(c, "Hexed", amount); }
   Task<> afterApplied(Creature*, Card*) override {
-    for (Card* c : owner->combat->allCards()) mark(c);
+    for (Card* c : owner->combat->allCards()) hex(c);
     flash = 1.f;
     co_return;
   }
-  Task<> afterCardEnteredCombat(Card* c) override { mark(c); co_return; }
+  Task<> afterCardEnteredCombat(Card* c) override {
+    if (ownerOf(c) == owner) hex(c);
+    co_return;
+  }
   Task<> afterDeath(Creature* c) override {
     if (c == applier) co_await cmd::removePower(this);
   }
-  Task<> afterRemoved(Creature*) override {
-    for (Card* c : marked) c->keywords &= ~kwEthereal;
-    marked.clear();
+  Task<> afterRemoved(Creature* oldOwner) override {
+    if (oldOwner->combat)
+      for (Card* c : oldOwner->combat->allCards())
+        if (c->afflictedWith("Hexed")) cmd::clearAffliction(c);
     co_return;
   }
 };
@@ -172,29 +171,34 @@ struct DampenPower : Power {
   }
 };
 
-// ChainsOfBindingPower.cs: up to Amount cards drawn each turn are Bound; once one Bound
-// card has been played the other Bound cards cannot be. Cleared at the end of the turn.
+// ChainsOfBindingPower.cs: up to Amount cards drawn each turn are Bound (A4 afflictions);
+// once one Bound card has been played the other Bound cards cannot be. The Bound
+// afflictions are cleared at the end of the turn.
 struct ChainsOfBindingPower : Power {
   POWER_HEADER(ChainsOfBindingPower, "CHAINS_OF_BINDING_POWER")
   PowerType type() const override { return PowerType::Debuff; }
-  std::set<Card*> bound;
   bool boundCardPlayed = false;
   Task<> afterCardDrawn(Card* c, bool) override {
-    if (owner->combat->currentSide != Side::Player || (int)bound.size() >= amount) co_return;
-    bound.insert(c);
-    flash = 1.f;
-    co_return;
+    Combat* cb = owner->combat;
+    if (ownerOf(c) != owner || cb->currentSide != owner->side) co_return;
+    auto probe = db::affliction("Bound");
+    if (!probe || !probe->canAfflict(*c)) co_return;
+    // CardAfflictedEntry count: Bound afflictions on the owner's cards this turn.
+    if (cb->afflictionsThisTurn("Bound") < amount && cmd::afflict(c, std::move(probe), amount)) flash = 1.f;
   }
   Task<> beforeCardPlayed(const CardPlay& p) override {
-    if (!p.card->isDupe && bound.count(p.card)) boundCardPlayed = true;
+    if (!p.card->isDupe && ownerOf(p.card) == owner && p.card->afflictedWith("Bound")) boundCardPlayed = true;
     co_return;
   }
-  bool shouldPlay(Card* c) override { return !(bound.count(c) && boundCardPlayed); }
+  bool shouldPlay(Card* c) override {
+    if (ownerOf(c) != owner || !c->afflictedWith("Bound")) return true;
+    return !boundCardPlayed;
+  }
   Task<> beforeSideTurnEnd(Side, const std::vector<Creature*>& participants) override {
     if (!contains(participants, owner)) co_return;
     boundCardPlayed = false;
-    bound.clear();
-    co_return;
+    for (Card* c : owner->combat->allCards())
+      if (c->afflictedWith("Bound")) cmd::clearAffliction(c);
   }
 };
 

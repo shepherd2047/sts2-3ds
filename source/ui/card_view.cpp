@@ -94,6 +94,21 @@ void App::drawCard(Card* c, float x, float y, float s, bool dim, bool desc, bool
     R().text(x - 7 * s + os / 2, y - 7 * s + (os - R().lineHeight(F16) * ct.scale) / 2, unseen ? std::string("?") : c->costsX ? std::string("X") : num(shownCost), ct);
   }
 
+  // Affliction overlay (A4, NCard's cards/overlays/afflictions/<id> scene). PORT NOTE: the game's
+  // overlays are animated shader scenes; here a purple wash over the art and a tag with the
+  // affliction's name (and its amount when it stacks) along the art's bottom edge.
+  if (c->affliction && !unseen) {
+    Affliction* a = c->affliction.get();
+    gfx::rectGradient(x + 8 * s, y + 16 * s, 104 * s, 78 * s, dim ? 0x30104010 : 0x7020A018, dim ? 0x30104060 : 0x7020A0B0);
+    std::string tag = L("afflictions." + a->locKey + ".title");
+    if (a->isStackable()) tag += " " + num(a->amount);
+    TextStyle at = ts(F12, dim ? col::gray : 0xF0D8FFFF, CENTER);
+    at.scale = std::max(0.6f, s * 0.9f);
+    at.outline = 0x3A0A5AFF;
+    float lh = R().lineHeight(F12) * at.scale;
+    R().text(x + 60 * s, y + 93 * s - lh, tag, at);
+  }
+
   // Enchantment badge (F5, NCard.UpdateEnchantmentVisuals): the enchantment's icon in a small
   // frame at the bottom-left, with its amount when it shows one; dimmed while disabled. Shown at
   // every size (even the common 5-card hand is s ~= 0.5) with a minimum legible pixel size,
