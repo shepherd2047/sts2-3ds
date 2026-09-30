@@ -292,8 +292,10 @@ void App::update(const gfx::Input& in, double dt) {
     aiming_ = false;
     floats_.clear();
     target_ = 0;
+    vfxReset();  // F7
   }
   consumeEvents();
+  updateVfx((float)visualDt);  // F7
   sfx::frame(*run_);
   if (in.touchDown && hitAt(in.tx, in.ty) != ID_NONE) sfx::click();
   if (run_->combat) {
@@ -367,6 +369,7 @@ void App::consumeEvents() {
   if (!c) return;
   for (auto& e : c->events) {
     sfx::combatEvent(e, *c, *run_);
+    vfxEvent(e);  // F7 light combat VFX
     float dx = (float)((int)(floats_.size() * 13) % 21) - 10;
     switch (e.kind) {
       case VisualEvent::Damage:

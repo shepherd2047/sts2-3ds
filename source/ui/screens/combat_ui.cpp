@@ -235,7 +235,10 @@ void App::drawCombat(bool top) {
     // draws its idle animation, HP bar and powers (it treats any non-player Creature the same
     // way), and fades it out on death (c->dead() -> "if (dying) return;" after the die anim), so
     // no separate dead-state drawing is needed here.
-    if (cb->osty && !cb->osty->removed) drawCreature(cb->osty, 150, feet, false);
+    if (cb->osty && !cb->osty->removed) {
+      center(cb->osty, 150);  // F7: VFX anchor (targeting only looks up enemies)
+      drawCreature(cb->osty, 150, feet, false);
+    }
     // X2.5: the Defect's orb slots (Combat::orbQueue / orbCapacity), laid out like NOrbManager's
     // arc around the player but simplified to a row above the top bar for the 400px screen.
     // Filled slots show the queued orb (id "<Name>Orb" -> sprite orb/<name>), empty ones
@@ -263,6 +266,7 @@ void App::drawCombat(bool top) {
       center(enemies[i], x);
       drawCreature(enemies[i], x, feet, enemies[i] == tgt || (markAll && enemies[i]->alive()), reticleTint);
     }
+    drawVfx(*cb);  // F7: over the creatures, under the damage numbers
     for (auto& f : floats_) {
       if (f.t < 0) continue;
       float x = 95, y = feet - 60;

@@ -311,6 +311,12 @@ class App {
   void drawStatusBar(float y);
   // S09: `targeted` shows the NSelectionReticle around the body, tinted `reticleTint`.
   void drawCreature(sts::Creature* c, float x, float feetY, bool targeted, uint32_t reticleTint = 0xFFFFFFFF);
+  // F7 light combat VFX (vfx.h; wiring in combat_scene.cpp): reset on a new fight, tick with the
+  // visual dt, spawn from the VisualEvent hook, draw (plus orb / star / Osty diffs) on the top screen.
+  void vfxReset();
+  void updateVfx(float dt);
+  void vfxEvent(const sts::VisualEvent& e);
+  void drawVfx(sts::Combat& cb);
   bool drawCreatureBody(sts::Creature* c, float x, float feetY, float scale, bool live);
   // S10 (RGDSplus U11): combat inspect, screens/combat_scene.cpp. ↑ or 信息 in combat opens it:
   // the creature large on top with HP / block, its intents and powers explained (hover tips),
