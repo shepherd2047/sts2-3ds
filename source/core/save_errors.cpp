@@ -5,21 +5,17 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "safe_file.h"
+
 namespace sts {
 namespace saveerr {
 
 namespace {
 constexpr int kKinds = (int)Kind::Count;
 bool queued[kKinds] = {};
+bool storageOk = true;
 int order[kKinds];  // report order, so the dialogs come up as the errors happened
 int count = 0;
-
-bool exists(const std::string& path) {
-  FILE* f = fopen(path.c_str(), "rb");
-  if (!f) return false;
-  fclose(f);
-  return true;
-}
 }  // namespace
 
 void report(Kind k) {
@@ -49,7 +45,7 @@ void clear() {
 bool faked(Kind k) {
   const char* env = getenv("STS_FAKE_SAVE_ERROR");
   if (!env || !*env) return false;
-  static const char* const names[kKinds] = {"run", "progress", "settings", "write"};
+  static const char* const names[kKinds] = {"run", "progress", "settings", "write", "sd"};
   const char* name = names[(int)k];
   const size_t n = strlen(name);
   for (const char* p = env; *p;) {
@@ -74,12 +70,17 @@ std::string quarantine(const std::string& path) {
 }
 
 Load loadChecked(const std::string& path, bool (*load)(const std::string&), Kind kind) {
-  if (!exists(path)) return Load::Missing;
-  if (load(path)) return Load::Ok;
+  const bool have = safefile::exists(path);
+  // Y5: a good file, or the complete copy an interrupted write left in .tmp / .bak.
+  if (safefile::recover(path, load) != safefile::Recover::None) return Load::Ok;
+  if (!have) return Load::Missing;
   quarantine(path);
   report(kind);
   return Load::Corrupt;
 }
+
+void setStorageAvailable(bool ok) { storageOk = ok; }
+bool storageAvailable() { return storageOk; }
 
 }  // namespace saveerr
 }  // namespace sts

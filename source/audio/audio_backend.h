@@ -79,6 +79,7 @@ bool playSound(const std::string& path, float gain);
 bool streamOpen(int slot, const std::string& path);
 void streamClose(int slot);
 void streamGain(int slot, float gain);
+void setPaused(bool paused);  // Y5: see audio::setPaused
 }  // namespace backend
 
 }  // namespace audio

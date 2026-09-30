@@ -102,9 +102,8 @@ void resetTutorials();
 // defined by devkitARM) so this module stays gfx-free and linkable into the headless sim/tests.
 std::string defaultPath();
 
-// Atomic file I/O for `state()`: write to "<path>.tmp" then rename over `path`, the same
-// tmp-then-rename approach as gfx::writeSave / progress::save so a crash or power loss mid-write
-// leaves the previous file intact instead of a truncated one.
+// Atomic file I/O for `state()` through core/safe_file.h (Y5), like gfx::writeSave /
+// progress::save, so a crash or power loss mid-write leaves the previous file intact.
 bool save(const std::string& path = defaultPath());
 bool load(const std::string& path = defaultPath());
 

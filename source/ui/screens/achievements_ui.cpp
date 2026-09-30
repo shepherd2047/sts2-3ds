@@ -19,6 +19,7 @@
 
 #include "../../core/achievements.h"
 #include "../../core/profiles.h"
+#include "../../core/save_errors.h"
 #include "../ui_common.h"
 
 namespace ui {
@@ -80,7 +81,7 @@ std::string dateText(int64_t t) {
   return s.replace(p, 6, std::string(" ") + buf);
 }
 
-bool savesOn() { return !getenv("STS_HIDDEN") && !getenv("STS_NO_SAVE"); }
+bool savesOn() { return !getenv("STS_HIDDEN") && !getenv("STS_NO_SAVE") && sts::saveerr::storageAvailable(); }  // Y5: SD check
 
 void forEachId(const char* list, const std::function<void(achievements::Id)>& f) {
   std::string s = list;

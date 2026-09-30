@@ -2,6 +2,7 @@
 #include "../core/events_crystal.h"
 #include "../core/modifiers.h"
 #include "../core/profiles.h"
+#include "../core/safe_file.h"
 #include "../core/save_errors.h"
 #include "../core/settings_store.h"
 #include "confirm.h"
@@ -33,7 +34,8 @@ std::string actTexture(const Run& r, const char* kind) {
 // progress.sav is written with the run save and when a run ends.
 namespace {
 std::string saveName() { return profiles::runSaveName(); }
-bool savesEnabled() { return !getenv("STS_HIDDEN") && !getenv("STS_NO_SAVE"); }
+// Y5: also off for the session when the startup SD check failed (App::init).
+bool savesEnabled() { return !getenv("STS_HIDDEN") && !getenv("STS_NO_SAVE") && saveerr::storageAvailable(); }
 // S22: a failed SD write (or STS_FAKE_SAVE_ERROR=write) queues the write-error dialog.
 bool noteWrite(bool ok) {
   if (!ok || saveerr::faked(saveerr::Kind::WriteFailed)) saveerr::report(saveerr::Kind::WriteFailed);
@@ -46,6 +48,13 @@ bool App::init() {
   if (!R().load(loading)) return false;
   run_ = std::make_unique<Run>();
   autoplay_ = getenv("STS_AUTOPLAY") != nullptr;
+  // Y5: the SD card missing, locked or full at startup: one notice, then the game runs without
+  // reading or writing any save (savesEnabled() is false from here on). STS_FAKE_SAVE_ERROR=sd.
+  if (savesEnabled() && !safefile::probeWritable(profiles::defaultRoot())) {
+    saveerr::setStorageAvailable(false);
+    saveerr::report(saveerr::Kind::SdUnavailable);
+  }
+  if (saveerr::faked(saveerr::Kind::SdUnavailable)) saveerr::report(saveerr::Kind::SdUnavailable);
   // Y4: profile.sav (current slot, first-launch migration of an old top-level run.sav /
   // progress.sav into profile 1) and the current slot's progress.sav. Never in automated previews.
   if (savesEnabled()) profiles::init();
@@ -79,6 +88,13 @@ void App::saveSettings() {
 // S22: probe-load the current slot's run.sav; one that is there but no longer loads is reported
 // (the dialog offers to delete it) and 继续 is hidden. STS_FAKE_SAVE_ERROR=run fakes it.
 void App::checkRunSave() {
+  // Y5: a run.sav whose last write was cut off comes back from run.sav.tmp / .bak first.
+  if (savesEnabled())
+    safefile::recover(profiles::runSavePath(), [](const std::string& p) {
+      std::string d;
+      Run probe;
+      return safefile::readWhole(p, d) && !d.empty() && probe.load(d);
+    });
   std::string data;
   bool bad = saveerr::faked(saveerr::Kind::RunCorrupt);
   if (!bad && readRunSave(data)) {

@@ -15,6 +15,9 @@ bool init();
 void shutdown();  // before gfx::shutdown
 bool available();  // index loaded and the backend is running
 void update(double dt);  // once per frame: fades
+// Y5: freezes every voice and stream where it is (3DS HOME menu / sleep) and lets them go on.
+// Safe from another thread (the APT hook).
+void setPaused(bool paused);
 
 // Names below: an index event name, a file id, or a file's path under the audio directory
 // ("music/sts2_merchant_act1_v2.adpcm", stable across re-extractions unlike the numeric ids).

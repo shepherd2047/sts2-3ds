@@ -21,6 +21,7 @@
 #include "game.h"
 #include "profiles.h"
 #include "progress.h"
+#include "safe_file.h"
 
 namespace sts {
 
@@ -191,44 +192,11 @@ std::string defaultPath() {
   return profiles::progressPath();  // Y4: <save root>profile<N>/progress.sav
 }
 
-namespace {
-void makeParentDir(const std::string& path) {
-  size_t slash = path.find_last_of("/\\");
-  if (slash == std::string::npos) return;
-  std::string dir = path.substr(0, slash);
-  if (dir.empty()) return;
-#ifdef _WIN32
-  _mkdir(dir.c_str());
-#else
-  mkdir(dir.c_str(), 0777);
-#endif
-}
+using safefile::readWhole;
 
-bool readWhole(const std::string& path, std::string& out) {
-  FILE* f = fopen(path.c_str(), "rb");
-  if (!f) return false;
-  fseek(f, 0, SEEK_END);
-  long n = ftell(f);
-  fseek(f, 0, SEEK_SET);
-  out.resize(n > 0 ? (size_t)n : 0);
-  size_t got = n > 0 ? fread(&out[0], 1, (size_t)n, f) : 0;
-  fclose(f);
-  return got == out.size();
-}
-}  // namespace
-
-bool save(const std::string& path) {
-  makeParentDir(path);
-  std::string data = state().save();
-  std::string tmp = path + ".tmp";
-  FILE* f = fopen(tmp.c_str(), "wb");
-  if (!f) return false;  // the previous file (if any) is untouched
-  bool ok = fwrite(data.data(), 1, data.size(), f) == data.size();
-  ok = fclose(f) == 0 && ok;
-  if (!ok) { remove(tmp.c_str()); return false; }  // fallback: keep whatever was already there
-  remove(path.c_str());
-  return rename(tmp.c_str(), path.c_str()) == 0;
-}
+// Y5: safe_file.h's atomic replace (a power loss never leaves a truncated file; loading goes
+// through saveerr::loadChecked, which recovers the .tmp / .bak an interrupted write left).
+bool save(const std::string& path) { return safefile::writeAtomic(path, state().save()); }
 
 bool load(const std::string& path) {
   std::string data;

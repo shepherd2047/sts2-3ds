@@ -14,6 +14,7 @@
 #include "game.h"
 #include "history.h"
 #include "profiles.h"
+#include "safe_file.h"
 
 namespace sts {
 namespace history {
@@ -97,41 +98,8 @@ std::string slotName(int slot) {
   return buf;
 }
 
-void makeParentDirs(const std::string& path) {
-  for (size_t i = path.find('/'); i != std::string::npos; i = path.find('/', i + 1)) {
-    std::string d = path.substr(0, i);
-    if (d.empty() || d.back() == ':') continue;
-#ifdef _WIN32
-    _mkdir(d.c_str());
-#else
-    mkdir(d.c_str(), 0777);
-#endif
-  }
-}
-
-bool readWhole(const std::string& path, std::string& out) {
-  FILE* f = fopen(path.c_str(), "rb");
-  if (!f) return false;
-  fseek(f, 0, SEEK_END);
-  long n = ftell(f);
-  fseek(f, 0, SEEK_SET);
-  out.resize(n > 0 ? (size_t)n : 0);
-  size_t got = n > 0 ? fread(&out[0], 1, (size_t)n, f) : 0;
-  fclose(f);
-  return got == out.size();
-}
-
-bool writeAtomic(const std::string& path, const std::string& data) {
-  makeParentDirs(path);
-  std::string tmp = path + ".tmp";
-  FILE* f = fopen(tmp.c_str(), "wb");
-  if (!f) return false;
-  bool ok = fwrite(data.data(), 1, data.size(), f) == data.size();
-  ok = fclose(f) == 0 && ok;
-  if (!ok) { std::remove(tmp.c_str()); return false; }
-  std::remove(path.c_str());
-  return std::rename(tmp.c_str(), path.c_str()) == 0;
-}
+using safefile::readWhole;
+using safefile::writeAtomic;  // Y5: tmp -> (bak) -> rename, safe_file.h
 
 std::unique_ptr<RunRecord>& lastRecord() {
   static std::unique_ptr<RunRecord> r;
@@ -295,6 +263,16 @@ std::string slotPath(int profileId, int slot) { return dir(profileId) + slotName
 std::vector<RunRecord> load(int profileId) {
   std::vector<RunRecord> out;
   if (!profiles::diskEnabled()) return out;
+  // Y5: a record whose write was interrupted is completed from its .tmp / .bak first (one
+  // directory listing instead of probing all 50 slots' leftovers).
+  for (const std::string& name : safefile::leftovers(dir(profileId))) {
+    std::string main = dir(profileId) + name.substr(0, name.size() - 4);
+    safefile::recover(main, [](const std::string& p) {
+      std::string data;
+      RunRecord r;
+      return readWhole(p, data) && r.load(data);
+    });
+  }
   for (int slot = 0; slot < kMax; ++slot) {
     std::string data;
     RunRecord r;
@@ -317,8 +295,7 @@ bool append(int profileId, RunRecord& rec) {
 void removeAll(int profileId) {
   for (int slot = 0; slot < kMax; ++slot) {
     std::string p = slotPath(profileId, slot);
-    std::remove(p.c_str());
-    std::remove((p + ".tmp").c_str());
+    safefile::removeAll(p);
   }
   std::string d = dir(profileId);
   d.pop_back();

@@ -110,11 +110,9 @@ void onRunEnded(const std::string& characterId, int ascension, RunOutcome outcom
 // profiles::progressPath() (saves/profile<N>/progress.sav, 3DS sdmc:/3ds/sts2-3ds/profile<N>/...).
 std::string defaultPath();
 
-// Atomic file I/O for `state()`: write to "<path>.tmp" then rename over `path`, the same
-// tmp-then-rename approach as gfx::writeSave (gfx_sdl.cpp / gfx_3ds.cpp) so a crash or power
-// loss mid-write leaves the previous file intact instead of a truncated one. Implemented with
-// plain <cstdio> here (not gfx::writeSave) so this module stays gfx-free and testable without
-// linking a platform backend, exactly like save.cpp/Run::save() do for run.sav's Archive format.
+// Atomic file I/O for `state()` through core/safe_file.h (Y5: "<path>.tmp", then rename or a
+// .bak swap), like gfx::writeSave, so a crash or power loss mid-write leaves the previous file
+// intact instead of a truncated one. gfx-free, so the sim and tests link it.
 bool save(const std::string& path = defaultPath());
 bool load(const std::string& path = defaultPath());
 
