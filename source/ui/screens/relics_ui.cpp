@@ -17,9 +17,9 @@ namespace ui {
 // relic rising out of the chest, which then fades to half like NTreasureButton.AnimOut.
 // Relic choice (one relic from Dig / Lava Rock, or a choose-one of several, Run::chooseRelic):
 // the options in a row on the bottom, the focused one's name, rarity and description large on
-// top; 跳过 / 拿取 in the action bar. Touch: the first tap on a relic focuses it, a tap on the
-// focused one takes it (fast play); D-pad moves the focus, A presses, B skips, X shows the
-// relic detail page.
+// top; 跳过 / 拿取 in the action bar. Touch: a tap on a relic takes it (owner decision
+// 2026-09-30: one tap picks); D-pad moves the focus (the focused relic is described on top),
+// A presses, B skips, X shows the relic detail page.
 namespace {
 constexpr int kChestId = 300, kOpenId = 301, kSkipId = 302, kTakeId = 303, kOptId = 310;
 constexpr float kChestW = 220, kChestY = 50;  // bottom-screen chest (the art is baked 220 wide)
@@ -179,9 +179,8 @@ void App::drawRelicOffer(bool top) {
     drawRelicIcon(r.relicOffers[i].get(), x + o, y + o, kSlotIcon);
     widgets::focusRing(kOptId + i, x - 2, y - 2, kSlot + 4, kSlot + 4);
     if (widgets::hit(kOptId + i, x, y, kSlot, kSlot, takeReady)) {
-      bool tapFocus = in.touchDown && focus_ != i;  // first tap only focuses
-      focus_ = i;
-      if (!tapFocus) take = i;
+      focus_ = i;  // one tap takes it
+      take = i;
     }
   }
   if (widgets::usingPad()) {
@@ -192,7 +191,7 @@ void App::drawRelicOffer(bool top) {
   if (rel)  // the focused relic's name under the row (its description is on top)
     R().text(kBot / 2, rowY + kSlot + 6, L("relics." + rel->locKey + ".title"), ts(F16, col::white, CENTER, kBot - 20));
   if (!chest && n > 1)
-    R().text(kBot / 2, rowY + kSlot + 30, tr("点选遗物查看，再点一次拿取", "Tap a relic to inspect, tap again to take it"), ts(F12, col::gray, CENTER));
+    R().text(kBot / 2, rowY + kSlot + 30, tr("点选遗物即可拿取", "Tap a relic to take it"), ts(F12, col::gray, CENTER));
 
   bool skip = widgets::button(kSkipId, style::kMargin, style::kActionY, 96, style::kButtonH, tr("跳过", "Skip"),
                               widgets::Kind::Secondary, canAct);

@@ -34,6 +34,10 @@ double dt();  // seconds since the previous frame
 // calls). The time spent suspended never reaches dt(). The SDL preview never calls it.
 void onSystemPause(void (*fn)(bool paused));
 Input input();
+// Clears `mask` from this frame's `down` presses: every later input() call in the same frame
+// reports them as not pressed (the L+R top-bar chord consumes L and R, so no screen also sees
+// a single L or R that frame).
+void consumeButtons(uint32_t mask);
 
 void beginFrame();
 void screen(Screen s, uint32_t clearRgba);

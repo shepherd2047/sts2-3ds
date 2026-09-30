@@ -35,11 +35,31 @@ int frameCount = 0;
 // Shots are written to sdmc:/sts2-shots/<name>.bmp.
 std::vector<std::pair<int, std::string>> shots;
 
-// STS_SCRIPT, same syntax as the SDL preview: "30:A,60:T160x120,90:P160x200,95:M160x150,100:U".
+// STS_SCRIPT, same syntax as the SDL preview: "30:A,60:T160x120,90:P160x200,95:M160x150,100:U",
+// "110:L+R" presses both in one frame.
 struct Scripted { int frame; uint32_t btn; int tx, ty; char kind; };
 std::vector<Scripted> script;
 bool scriptHeld = false;
 int heldX = 0, heldY = 0;
+
+// Button names for STS_SCRIPT; "L+R" (any names joined by '+') presses them in the same frame.
+uint32_t scriptButtons(const std::string& keys) {
+  uint32_t m = 0;
+  size_t p = 0;
+  while (p <= keys.size()) {
+    size_t e = keys.find('+', p);
+    if (e == std::string::npos) e = keys.size();
+    std::string k = keys.substr(p, e - p);
+    p = e + 1;
+    if (k == "A") m |= BTN_A; else if (k == "B") m |= BTN_B; else if (k == "X") m |= BTN_X;
+    else if (k == "Y") m |= BTN_Y; else if (k == "L") m |= BTN_L; else if (k == "R") m |= BTN_R;
+    else if (k == "LEFT") m |= BTN_LEFT; else if (k == "RIGHT") m |= BTN_RIGHT;
+    else if (k == "UP") m |= BTN_UP; else if (k == "DOWN") m |= BTN_DOWN;
+    else if (k == "START") m |= BTN_START; else if (k == "SELECT") m |= BTN_SELECT;
+    else if (k == "ZL") m |= BTN_ZL; else if (k == "ZR") m |= BTN_ZR;
+  }
+  return m;
+}
 
 void parseScript(const char* s) {
   std::string str(s);
@@ -55,12 +75,7 @@ void parseScript(const char* s) {
     std::string k = item.substr(c + 1);
     if (k[0] == 'T' || k[0] == 'P' || k[0] == 'M') { sc.kind = k[0]; sscanf(k.c_str() + 1, "%dx%d", &sc.tx, &sc.ty); }
     else if (k == "U") sc.kind = 'U';
-    else if (k == "A") sc.btn = BTN_A; else if (k == "B") sc.btn = BTN_B; else if (k == "X") sc.btn = BTN_X;
-    else if (k == "Y") sc.btn = BTN_Y; else if (k == "L") sc.btn = BTN_L; else if (k == "R") sc.btn = BTN_R;
-    else if (k == "LEFT") sc.btn = BTN_LEFT; else if (k == "RIGHT") sc.btn = BTN_RIGHT;
-    else if (k == "UP") sc.btn = BTN_UP; else if (k == "DOWN") sc.btn = BTN_DOWN;
-    else if (k == "START") sc.btn = BTN_START;
-    else if (k == "ZL") sc.btn = BTN_ZL; else if (k == "ZR") sc.btn = BTN_ZR;
+    else sc.btn = scriptButtons(k);
     script.push_back(sc);
   }
 }
@@ -268,6 +283,11 @@ Input input() {
   cur.held &= 0xFFF | BTN_ZL | BTN_ZR;
   cur.up &= 0xFFF | BTN_ZL | BTN_ZR;
   return cur;
+}
+
+void consumeButtons(uint32_t mask) {
+  input();  // make sure this frame's reading exists
+  cur.down &= ~mask;
 }
 
 void beginFrame() {

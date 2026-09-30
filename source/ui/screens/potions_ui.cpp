@@ -59,7 +59,7 @@ void App::drawPotions(bool top) {
   drawSceneBg(false, 0.75f);
   if (potionAim_ && fight && p) {
     // S09 potion aim (NTargetManager for a potion): the potion and its text at the top, one tile per
-    // enemy (tap to pick, tap again to throw; ←→ on the D-pad), the arrow running from the potion to
+    // enemy (a tap throws at it -- one tap picks; ←→ on the D-pad, then A), the arrow running from the potion to
     // the target's reticle on the top screen, 取消 / 使用 below.
     auto alive = r.combat->aliveEnemies();
     const int m = (int)alive.size();
@@ -67,7 +67,7 @@ void App::drawPotions(bool top) {
     drawPotionIcon(p, kPotionAimX - 20, kPotionAimY + 2, 40);
     R().text(62, 20, L("potions." + p->locKey + ".title"), ts(F16, col::gold));
     R().text(62, 40, describePotion(p), ts(F12, col::white, LEFT, kBot - 70, 0.9f));
-    R().text(kBot / 2, 94, m > 1 ? tr("选择目标（←→ 或点选）", "Choose a target (←→ or tap)") : tr("目标", "Target"), ts(F12, col::gold, CENTER));
+    R().text(kBot / 2, 94, m > 1 ? tr("点选目标即可使用（或 ←→ 再按 A）", "Tap a target to use it (or ←→ then A)") : tr("目标", "Target"), ts(F12, col::gold, CENTER));
     const float gap = 6, tw = m ? std::min(110.f, (kBot - 16 - gap * (m - 1)) / m) : 0, th = 64, ty = 112;
     float tx = (kBot - (tw * m + gap * (m - 1))) / 2;
     for (int i = 0; i < m; ++i, tx += tw + gap) {
@@ -158,10 +158,11 @@ void App::updatePotions(const gfx::Input& in) {
     if (m == 0 || (in.down & gfx::BTN_B) || id == ID_BACK) { potionAim_ = false; return; }
     if (in.down & (gfx::BTN_LEFT | gfx::BTN_L)) target_ = (target_ + m - 1) % m;
     if (in.down & (gfx::BTN_RIGHT | gfx::BTN_R)) target_ = (target_ + 1) % m;
-    if (id >= ID_GRID0 && id < ID_GRID0 + m) {  // a tile: pick it, or throw at the picked one
-      if (id - ID_GRID0 == target_) { fire(alive[target_]); return; }
+    if (id >= ID_GRID0 && id < ID_GRID0 + m) {  // a tile: throw at it (one tap picks)
       target_ = id - ID_GRID0;
       sfx::click();
+      fire(alive[target_]);
+      return;
     }
     if ((in.down & gfx::BTN_A) || id == ID_CONFIRM) fire(alive[std::min(target_, m - 1)]);
     return;

@@ -8,11 +8,13 @@
 // (NTopBarMapButton, NTopBarPauseButton).
 //
 // The top screen cannot be touched, so, as on RGDSplus ("top bar and its local menus stay on the
-// upper screen, the controller is the main entry"), ZL / ZR puts the bar into a focus mode:
+// upper screen, the controller is the main entry"), ZL / ZR (New 3DS) or L+R pressed together
+// (every 3DS; App::update detects the chord and consumes that frame's L / R) puts the bar into a
+// focus mode:
 // ←→ walk the items, L / R jump between the groups, the focused item shows its hover tip under
 // the bar (the C#'s static_hover_tips / relic / potion tips), A opens it -- a potion opens the
 // existing use / discard popup on that slot, a relic its detail page, deck / map / pause their
-// pages (which fall back to the bar when closed) -- and B, ZL / ZR or a touch on the bottom screen
+// pages (which fall back to the bar when closed) -- and B, ZL / ZR, L+R or a touch on the bottom screen
 // leave it. Touch play keeps its own bottom-screen entries (药水 / 遗物 / 牌组 / 暂停), so nothing
 // here is duplicated there.
 #include "../core/settings_store.h"
@@ -316,15 +318,17 @@ void App::drawTopBar() {
     case Kind::Map: tip("MAP"); break;
     case Kind::Pause: tip("SETTINGS"); break;
   }
+  // Every hint names the way out: B, or L+R (the chord every 3DS has; ZL / ZR on a New 3DS).
+  if (size_t b = hint.find("[gold]B[/gold]"); b != std::string::npos) hint.insert(b + 14, " / [gold]L+R[/gold]");
   widgets::keywordTip(title, desc.empty() ? hint : desc + "\n" + hint, fx + fw / 2, 0, true);
 }
 
 bool App::updateTopBar(const gfx::Input& in) {
   Run& r = *run_;
   if (!barScreen(r.screen) || !r.player) { topBarFocus_ = false; return false; }
-  const uint32_t toggle = gfx::BTN_ZL | gfx::BTN_ZR;
+  const bool toggle = (in.down & (gfx::BTN_ZL | gfx::BTN_ZR)) || lrChord_;
   if (!topBarFocus_) {
-    if (!(in.down & toggle)) return false;
+    if (!toggle) return false;
     topBarFocus_ = true;
     drag_ = {};  // the bar takes over: a card being dragged or aimed is dropped (P0D-09)
     aiming_ = false;
@@ -333,8 +337,8 @@ bool App::updateTopBar(const gfx::Input& in) {
     return true;
   }
   widgets::suspendInput(true);
-  // A touch (the bottom screen always wins) or B / ZL / ZR leaves; the touch is consumed.
-  if (in.touchDown || (in.down & (toggle | gfx::BTN_B))) {
+  // A touch (the bottom screen always wins) or B / ZL / ZR / L+R leaves; the touch is consumed.
+  if (in.touchDown || toggle || (in.down & gfx::BTN_B)) {
     topBarFocus_ = false;
     return true;
   }
