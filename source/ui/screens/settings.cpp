@@ -40,7 +40,7 @@ enum Item {
   kFast, kLongPress, kTooltips, kLanguage,       // 游戏设置
   kShake, kTextFx, kRunTimer, kHandCount,        // 显示
   kBgm, kSfx, kAmbience,                         // 音频设置
-  kResetTutorials, kDeleteData,                  // 数据
+  kResetTutorials, kCredits, kDeleteData,        // 数据 (S26: 制作人员)
   kItemCount
 };
 
@@ -72,6 +72,7 @@ const Def kDefs[kItemCount] = {
     {kSfx, kTabSound, kSlider, "SFX_VOLUME", nullptr, true},
     {kAmbience, kTabSound, kSlider, "AMBIENCE_VOLUME", nullptr, true},
     {kResetTutorials, kTabData, kAction, "TUTORIAL_RESET", "TUTORIAL_RESET_POPUP_DESCRIPTION", true},
+    {kCredits, kTabData, kAction, nullptr, nullptr, true},
     {kDeleteData, kTabData, kAction, nullptr, nullptr, true},
 };
 
@@ -97,6 +98,7 @@ std::string tabLabel(int t) {
 
 std::string itemTitle(const Def& d, bool inRun) {
   if (d.item == kDeleteData) return "删除档案数据";
+  if (d.item == kCredits) return "制作人员";
   if (d.item == kLanguage && inRun) return S("LANGUAGE_IN_RUN");
   return S(d.title);
 }
@@ -104,6 +106,7 @@ std::string itemTitle(const Def& d, bool inRun) {
 std::string itemDesc(const Def& d) {
   switch (d.item) {
     case kLanguage: return "切换游戏语言。英文版尚未提供，目前只有简体中文。";
+    case kCredits: return "查看游戏的制作人员名单，以及本移植的说明。";
     case kBgm: return "调节背景音乐的音量。";
     case kSfx: return "调节战斗与界面音效的音量。";
     case kAmbience: return "调节房间环境音的音量。";
@@ -286,10 +289,11 @@ void App::drawSettings(bool top) {
       case kAction: {
         const float bw = 84, bx = x + w - 5 - bw;
         const bool danger = d.item == kDeleteData;
-        std::string label = danger ? "删除" : S("TUTORIAL_RESET_BUTTON_LABEL");
+        std::string label = danger ? "删除" : d.item == kCredits ? "查看" : S("TUTORIAL_RESET_BUTTON_LABEL");
         if (widgets::button(id, bx, y + 1, bw, style::kRowH - 2, label,
                             danger ? widgets::Kind::Danger : widgets::Kind::Secondary, rowEnabled)) {
-          askFor = danger ? kModalDelete : kModalTutorials;
+          if (d.item == kCredits) openCredits();
+          else askFor = danger ? kModalDelete : kModalTutorials;
         }
         if (!rowEnabled) R().text(bx - 6, y + (style::kRowH - R().lineHeight(F12)) / 2, "仅可在主菜单操作",
                                   ts(F12, col::red, RIGHT, 0, 0.85f));

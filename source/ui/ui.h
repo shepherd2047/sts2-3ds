@@ -139,6 +139,9 @@ class App {
   bool updateRelicCollection(const gfx::Input& in);
   // M10 bestiary (screens/bestiary.cpp, its state lives there): NBestiary, from the compendium
   // submenu. Same contract as the card library; one monster's Spine loaded at a time.
+  void openCredits();  // S26 (screens/credits.cpp, its state lives there): from 设置 -> 数据
+  bool drawCredits(bool top);
+  bool updateCredits(const gfx::Input& in);
   void openBestiary();
   bool drawBestiary(bool top);
   bool updateBestiary(const gfx::Input& in);
