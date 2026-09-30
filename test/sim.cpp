@@ -352,7 +352,8 @@ int main(int argc, char** argv) {
       if (cur->combat) {
         if (verbose)
           for (auto& e : cur->combat->events) {
-            static const char* names[] = {"Damage", "Blocked", "Block", "Heal", "PowerUp", "PowerDown", "Death", "Exhaust", "Shuffle", "Banner", "Anim"};
+            static const char* names[] = {"Damage", "Blocked", "Block", "Heal", "PowerUp", "PowerDown", "Death", "Exhaust", "Shuffle", "Banner", "Anim",
+                                           "Hit", "CardPlayed", "BlockBroken"};  // = CombatEvent::Kind
             printf("    [%s] %s %d %s | hp=%d blk=%d\n", names[e.kind], e.who ? e.who->name.c_str() : "-", e.amount, e.text.c_str(),
                    e.who ? e.who->hp : 0, e.who ? e.who->block : 0);
           }
