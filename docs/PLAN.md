@@ -450,10 +450,29 @@ their `clone()` must call `adoptEnchantment()`.
 | H2 | Memory: a full run with each character on hardware and a sim soak (1000 runs per character), no leaks, linear memory within limits | 3DS | X* | in progress (subagent: sim soak + sanitizers; hardware part later) |
 | H3 | Romfs budget with all characters and audio; texture and audio quality checks on the device | tools | U1, X* | todo |
 | H4 | Packaging: icon, banner (with its sound), title id, `.3dsx` + `.cia` builds | tools | – | done (subagent), accepted 2026-09-29: `make cia` (makerom/ctrtool/bannertool in ~/.local/bin), title id 000400000FA57200, banner + icon + 3 s banner sound baked at build time; New 3DS 124MB mode |
-| H5 | Balance and bugs: compare numbers with the C# for every character (script), fix known PORT NOTEs | content | X* | in progress (subagent: number-check script + fixes) |
+| H5 | Balance and bugs: compare numbers with the C# for every character (script), fix known PORT NOTEs | content | X* | first half done (subagent), accepted 2026-09-29: tools/balance_check.py + test/model_dump.cpp in `make check` (555 cards, 286 relics, 64 potions; 71 mismatches → 53 fixed, 18 allowlisted in tools/balance_allowlist.txt); 19 PORT NOTEs fixed. Second half: the E packages below |
 | H6 | Release checklist: every character wins a run on the device, every U page ticked, every package done, no PORT NOTE left without an n/a reason | QA | all | todo |
 
 ---
+
+### Track E: engine gaps left after H5 (2026-09-29)
+
+H5 grouped the remaining ~208 PORT NOTEs by the engine feature that would unlock them. Each
+group is one engine package; file:line lists are in the H5 merge commit report.
+
+| id | Package | Unlocks |
+|---|---|---|
+| E1 | `CardFactory.FilterForCombat` for every in-combat card generator (no Basic / Ancient / Event / CanBeGeneratedInCombat=false; InfernalBlade could make a Strike) | correctness bug |
+| E2 | Quest card type + "?"-room / act-map hooks + deck cards as run-level listeners (AfterCombatEnd ...) | Dowsing, SpoilsMap, LanternKey, ByrdonisEgg, DowsingRod, WingedBoots, ScrollBoxes, Guilty |
+| E3 | CombatHistory log (draws, plays, damage, powers, attacks) | ~15 Ironclad / Necrobinder / Defect cards and relics |
+| E4 | Target-aware `calcMultiplier` for hand previews | 5 cards |
+| E5 | Card downgrade (AfterDowngraded) | 6 cards / relics |
+| E6 | Instanced powers + ITemporaryPower marker | ~15 powers, events, relics |
+| E7 | Missing hooks: damage cap, BeforeDamageReceived, AttackCommand before/after, AfterModifyingCardPlayResultLocation, ShouldAllowHitting, Early/Late variants, AfterBlockBroken order, RelicCmd OnRemoved, HasUponPickupEffect, extra turn (Ambergris) | ~25 notes |
+| E8 | Card-reward creation options, transformCard running the added-to-deck hook, Player.CanUseOrRemovePotions, custom reward screens / special rewards | ~15 notes |
+| E9 | Card-text formatter: `{CardType:choose}`, `{TargetType:choose}`, recursive string vars, Calculated* display | 4 notes + in-combat numbers |
+
+UI/VFX-only, single-player-only, owner-decision and reviewed RNG notes stay as they are (n/a for H6).
 
 ## Order
 
