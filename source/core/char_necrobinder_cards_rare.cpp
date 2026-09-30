@@ -14,25 +14,22 @@ namespace {
 // ---------------------------------------------------------------- powers
 
 // CallOfTheVoidPower.cs: Buff, Counter. Before each hand draw, add Amount random Ethereal cards
-// from the character's pool (not Basic / Ancient) to the hand.
-// PORT NOTE: CardFactory.GetDistinctForCombat is approximated by drawing an id per card from
-// CombatCardGeneration (like BigHat's shuffle approximation). Unlike the C#, the cards are not
-// guaranteed distinct from each other.
+// from the character's pool (not Basic / Ancient) to the hand: one GetDistinctForCombat(pool, 1,
+// CombatCardGeneration) per card (a full shuffle each), so the cards may repeat.
 struct CallOfTheVoidPower : Power {
   POWER_HEADER(CallOfTheVoidPower, "CALL_OF_THE_VOID_POWER")
   Task<> beforeHandDraw() override {
     Combat* c = owner->combat;
-    auto ids = db::characterCards(c->run->characterId, [](const Card& k) {
-      return k.rarity != Rarity::Basic && k.rarity != Rarity::Ancient && k.canBeGeneratedInCombat();
+    auto ids = db::characterPool(c->run->characterId, [](const Card& k) {
+      return k.rarity != Rarity::Basic && k.rarity != Rarity::Ancient;
     });
     if (ids.empty()) co_return;
     std::vector<std::unique_ptr<Card>> made;
-    for (int i = 0; i < amount; ++i) {
-      auto card = db::card(c->rng("CombatCardGeneration").nextItem(ids));
-      if (!card) continue;
-      card->addKeyword(kwEthereal);  // CardCmd.ApplyKeyword
-      made.push_back(std::move(card));
-    }
+    for (int i = 0; i < amount; ++i)
+      for (auto& card : distinctForCombat(*c, ids, 1)) {
+        card->addKeyword(kwEthereal);  // CardCmd.ApplyKeyword
+        made.push_back(std::move(card));
+      }
     flash = 1.f;
     for (auto& card : made) co_await cmd::addGeneratedCard(*c, std::move(card), Pile::Hand);
   }

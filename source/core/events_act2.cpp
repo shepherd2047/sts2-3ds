@@ -113,13 +113,10 @@ struct Metamorphosis : IroncladT<Metamorphosis> {
     addVar("Cards", 3);
   }
   Task<> onPlay(CardPlay&) override {
-    auto pool = db::characterCards(combat->run->characterId, [](const Card& c) {
-      return c.type == CardType::Attack &&
-             (c.rarity == Rarity::Basic || c.rarity == Rarity::Common || c.rarity == Rarity::Uncommon || c.rarity == Rarity::Rare);
-    });
-    if (pool.empty()) co_return;
-    for (int i = 0, n = val("Cards").toInt(); i < n; ++i) {
-      auto card = db::card(combat->rng("CombatCardGeneration").nextItem(pool));
+    // CardFactory.GetForCombat over your pool's Attacks (FilterForCombat: no Basic / Ancient).
+    auto made = randomForCombat(*combat, db::characterPool(combat->run->characterId, [](const Card& c) { return c.type == CardType::Attack; }),
+                                val("Cards").toInt());
+    for (auto& card : made) {
       card->setThisCombat(0);  // SetToFreeThisCombat
       Card* c = combat->addCard(std::move(card));
       co_await cmd::moveCard(*combat, c, Pile::Draw);

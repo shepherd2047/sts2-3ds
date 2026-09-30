@@ -63,26 +63,6 @@ bool isColorless(const std::string& id) {
 
 }  // namespace db
 
-std::vector<std::unique_ptr<Card>> distinctForCombat(Combat& c, std::vector<std::string> ids, int n) {
-  std::vector<std::string> keep;
-  for (auto& id : ids) {
-    auto k = db::card(id);
-    if (k && k->canBeGeneratedInCombat() && k->rarity != Rarity::Basic && k->rarity != Rarity::Ancient) keep.push_back(id);
-  }
-  c.rng("CombatCardGeneration").shuffle(keep);  // TakeRandom(n) = UnstableShuffle(rng).Take(n)
-  std::vector<std::unique_ptr<Card>> out;
-  for (size_t i = 0; i < keep.size() && (int)out.size() < n; ++i) {
-    auto k = db::card(keep[i]);
-    k->combat = &c;
-    out.push_back(std::move(k));
-  }
-  return out;
-}
-
-std::vector<std::unique_ptr<Card>> colorlessDistinctForCombat(Combat& c, int n) {
-  return distinctForCombat(c, db::colorlessCards([](const Card&) { return true; }), n);
-}
-
 Task<> chooseGeneratedToHand(Combat& c, std::vector<std::unique_ptr<Card>> options, bool free) {
   std::vector<Card*> opts;
   for (auto& k : options) opts.push_back(k.get());

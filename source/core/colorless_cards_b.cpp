@@ -175,20 +175,8 @@ struct Jackpot : IroncladT<Jackpot> {
   Task<> onPlay(CardPlay& p) override {
     co_await attack(p.target, val("Damage"));
     Combat& c = *combat;
-    // CardFactory.GetForCombat: FilterForCombat (no Basic / Ancient, generable in combat), then rng.NextItem per card.
-    auto ids = db::characterCards(c.run->characterId, [](const Card& k) { return k.canonicalCost == 0 && !k.costsX; });
-    std::vector<std::string> options;
-    for (auto& id : ids) {
-      auto k = db::card(id);
-      if (k && k->canBeGeneratedInCombat() && k->rarity != Rarity::Basic && k->rarity != Rarity::Ancient) options.push_back(id);
-    }
-    if (options.empty()) co_return;
-    std::vector<std::unique_ptr<Card>> made;
-    for (int i = 0; i < val("Cards").toInt(); ++i) {
-      auto k = db::card(c.rng("CombatCardGeneration").nextItem(options));
-      k->combat = &c;
-      made.push_back(std::move(k));
-    }
+    auto made = randomForCombat(c, db::characterPool(c.run->characterId, [](const Card& k) { return k.canonicalCost == 0 && !k.costsX; }),
+                                val("Cards").toInt());
     for (auto& k : made) {
       if (upgraded()) cmd::upgradeCard(k.get());
       co_await cmd::addGeneratedCard(c, std::move(k), Pile::Hand);

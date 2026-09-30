@@ -9,23 +9,18 @@ namespace sts {
 namespace {
 
 // BigHat.cs: at the start of turn 1, add up to 2 distinct Ethereal cards from the character's
-// pool to hand. PORT NOTE: CardFactory.GetDistinctForCombat is approximated by shuffling the
-// (already-distinct, id-unique) pool and taking the first N.
+// pool to hand (CardFactory.GetDistinctForCombat, CombatCardGeneration).
 struct BigHat : Relic {
   RELIC_HEADER(BigHat, "BIG_HAT", Rare)
     addVar("Cards", 2);
   }
   Task<> afterSideTurnStart(Side side, const std::vector<Creature*>& participants) override {
     if (side != Side::Player || !combat || combat->turnNumber > 1 || !contains(participants, owner())) co_return;
-    auto pool = db::characterCards(run->characterId, [](const Card& c) { return c.has(kwEthereal); });
+    auto pool = db::characterPool(run->characterId, [](const Card& c) { return c.has(kwEthereal); });
     if (pool.empty()) co_return;
-    combat->rng("CombatCardGeneration").shuffle(pool);
     doFlash();
-    int n = std::min(val("Cards").toInt(), (int)pool.size());
-    for (int i = 0; i < n; ++i) {
-      auto card = db::card(pool[i]);
-      if (card) co_await cmd::addGeneratedCard(*combat, std::move(card), Pile::Hand);
-    }
+    for (auto& card : distinctForCombat(*combat, pool, val("Cards").toInt()))
+      co_await cmd::addGeneratedCard(*combat, std::move(card), Pile::Hand);
   }
 };
 

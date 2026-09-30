@@ -285,12 +285,8 @@ struct Stoke : IroncladT<Stoke> {
     std::vector<Card*> handCopy = combat->hand;
     int n = (int)handCopy.size();
     for (Card* c : handCopy) co_await cmd::exhaustCard(*combat, c);
-    auto pool = db::characterCards(combat->run->characterId, [](const Card&) { return true; });  // Owner.Character.CardPool
-    for (int i = 0; i < n; ++i) {
-      if (pool.empty()) break;
-      std::string id = combat->rng("CombatCardGeneration").nextItem(pool);
-      auto card = db::card(id);
-      if (!card) continue;
+    // CardFactory.GetForCombat(Owner.Character.CardPool, exhaustCount, CombatCardGeneration)
+    for (auto& card : randomForCombat(*combat, db::characterPool(combat->run->characterId), n)) {
       if (upgraded() && card->upgradable()) card->upgrade();
       co_await cmd::addGeneratedCard(*combat, std::move(card), Pile::Hand);
     }

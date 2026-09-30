@@ -253,10 +253,9 @@ struct InfernalBlade : IroncladT<InfernalBlade> {
     keywords = kwExhaust;
   }
   Task<> onPlay(CardPlay&) override {
-    auto pool = db::characterCards(combat->run->characterId, [](const Card& c) { return c.type == CardType::Attack; });  // Owner.Character.CardPool
-    if (!pool.empty()) {
-      std::string id = combat->rng("CombatCardGeneration").nextItem(pool);
-      auto card = db::card(id);
+    // GetDistinctForCombat(Owner.Character.CardPool.Where(Attack), 1, CombatCardGeneration).FirstOrDefault()
+    auto card = oneDistinctForCombat(*combat, [](const Card& c) { return c.type == CardType::Attack; });
+    if (card) {
       card->setThisTurnOrUntilPlayed(0);
       co_await cmd::addGeneratedCard(*combat, std::move(card), Pile::Hand);
     }

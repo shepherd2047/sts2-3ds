@@ -51,20 +51,7 @@ struct CalamityPower : Power {
     if (it == played.end()) co_return;
     played.erase(it);
     Combat& c = *owner->combat;
-    // CardFactory.GetForCombat: FilterForCombat (distinct, no Basic / Ancient), then rng.NextItem per card.
-    auto ids = db::characterCards(c.run->characterId, [](const Card& k) { return k.type == CardType::Attack; });
-    std::vector<std::string> options;
-    for (auto& id : ids) {
-      auto k = db::card(id);
-      if (k && k->canBeGeneratedInCombat() && k->rarity != Rarity::Basic && k->rarity != Rarity::Ancient) options.push_back(id);
-    }
-    if (options.empty()) co_return;
-    std::vector<std::unique_ptr<Card>> made;
-    for (int i = 0; i < amount; ++i) {
-      auto k = db::card(c.rng("CombatCardGeneration").nextItem(options));
-      k->combat = &c;
-      made.push_back(std::move(k));
-    }
+    auto made = randomForCombat(c, db::characterPool(c.run->characterId, [](const Card& k) { return k.type == CardType::Attack; }), amount);
     for (auto& k : made) co_await cmd::addGeneratedCard(c, std::move(k), Pile::Hand);
   }
 };
