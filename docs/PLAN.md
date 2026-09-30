@@ -288,7 +288,7 @@ screenshots of both screens, and tick the U table at the end of this file.
 
 | id | U | Screen | Needs | Status |
 |---|---|---|---|---|
-| S01 | U01 | Boot splash, loading, act transition title card ("第二幕 蜂巢") | F3 | in progress (subagent) |
+| S01 | U01 | Boot splash, loading, act transition title card ("第二幕 蜂巢") | F3 | done (subagent), accepted 2026-09-29: loading bar (fonts/loc first), C# NActBanner timings on the top screen; no character quote (none in the C#); `STS_BOOT=1` |
 | S02 | U02 | Main menu: tall background across both screens, logo on top, buttons at 1.65× on the bottom (继续 / 单人 / 图鉴 / 统计 / 设置 / 退出), submenus | F3 | done (subagent, Opus), accepted 2026-09-29: main menu per NMainMenu (logo top, run info when a save exists, 继续游戏/放弃当前游戏 replace 单人模式 as in the game), singleplayer + compendium submenus (unported entries locked "未完成"), quit |
 | S03 | U03 | Profiles: 3 slots, rename (3DS software keyboard), delete + warning | Y4 | done (subagent, Opus), accepted 2026-09-29: profile_screen.cpp (3 slot cards, rename, delete confirm; profile chip on the main menu, B opens it); gfx::textInput (3DS swkbd, preview STS_TEXT_INPUT) — keyboard not tried on hardware yet |
 | S04 | U04 | Character select: art and description on top; the 5 characters + Random, ascension, seed and start/back on the bottom; locked characters | F3, C10 | done, accepted 2026-09-28 (Mac): `drawCharacterSelect` in `title.cpp`; ascension 0-10 all open and the seed shown only (Y / tap re-rolls), both owner decisions; no locked characters (everything unlocked) |
@@ -309,11 +309,11 @@ screenshots of both screens, and tick the U table at the end of this file.
 | S19 | U24 | Top bar: HP, gold, potion belt, relic strip with scroll, floor/act, run timer, deck/map buttons | F3 | done (subagent), accepted 2026-09-29: game top-bar icons in one 18 px row, relic strip with counters and scroll, NRunTimer rules; ZL/ZR focus mode (New 3DS only; old 3DS uses the bottom-screen buttons) |
 | S20 | U25 | Detail popups for card/relic/potion: large on top with keywords, controls (upgrade preview, close) on the bottom | F5 | done (subagent), accepted 2026-09-29: one popup for card/relic/potion (`inspectCard/Relic(s)/Potion`), C# hover tips via tools/gen_hover_tips.py, prev/next from lists, upgrade preview |
 | S21 | U26 | Settings and pause menus (screens only; logic in Y1/Y2) | Y1 | done (subagent), accepted 2026-09-29: 4 pages (游戏设置/显示/音频设置/数据), volumes applied (part of U5), reset tutorials hook `settings::resetTutorials()`; graphics/input tabs left out (fixed 3DS hardware) |
-| S22 | U27 | Tutorials, confirmations, errors | M13 | todo |
-| S23 | U28 | Death / victory: score, badges, continue | M7 | in progress (subagent) |
+| S22 | U27 | Tutorials, confirmations, errors | M13 | in progress (subagent) |
+| S23 | U28 | Death / victory: score, badges, continue | M7 | done (subagent), accepted 2026-09-29: C# banners + quotes, ScoreUtility lines with count-up, badges, achievements this run, daily/custom marker; ArchitectDamage approximated from history (PORT NOTE) |
 | S24 | U29 | Compendium: cards, relics, potions, bestiary | M8-M10 | done: built by M8, M9, M10 |
 | S25 | U30 | Stats and run history | M6 | done: built by M6 |
-| S26 | U31 | Credits (scroll across both screens) | F3 | todo |
+| S26 | U31 | Credits (scroll across both screens) | F3 | in progress (subagent) |
 | – | U32 | Daily run: offline only (M12); leaderboards n/a | – | n/a |
 | – | U33 | Unknown or mod pages | – | n/a |
 
@@ -420,7 +420,7 @@ their `clone()` must call `adoptEnchantment()`.
 | M10 | Bestiary: monster list, Spine viewer, moves | UI | M1 | done (subagent), accepted 2026-09-29: `bestiary.cpp`, one skeleton loaded at a time; seen = fought (C#: killed); `db::monster` registry |
 | M11 | Custom run: 16 modifiers (`Models.Modifiers`), seed entry with the 3DS keyboard, seeded runs | engine + UI | M1 | done (subagent, with S05), accepted 2026-09-29: `modifiers.cpp`, all 16 (PORT NOTEs: Hoarder vs transform, NightTerrors rest text, SealedDeck tie order); run.sav v8, history v3; `STS_MODIFIERS`, `SIM_MODIFIERS` |
 | M12 | Daily run, offline: seed and modifiers from the date as in `Daily\`, local best score only | engine | M11 | done (subagent), accepted 2026-09-29: `daily.cpp` checked against the game's sts2.dll for 5 dates; local date (C#: server/UTC); best per date in progress.sav v2; run.sav v9, history v4; `STS_DAILY_DATE`; history screen doesn't show daily/custom yet |
-| M13 | Tutorials (`Nodes.Ftue`): first-run tips, reset from settings | UI | F3 | in progress (subagent) |
+| M13 | Tutorials (`Nodes.Ftue`): first-run tips, reset from settings | UI | F3 | done (subagent), accepted 2026-09-29: tutorials.cpp, 11 C# FTUE tips with auto-retire rules; seen flags in settings; off in scripted previews unless `STS_TIPS=1`; merchant/ascension/multiplayer tips left out |
 
 ### Track Y: system
 
@@ -449,7 +449,7 @@ their `clone()` must call `adoptEnchantment()`.
 | H1 | Performance on the New 3DS: frame time (Spine skinning, text layout, atlas binds), load times, hot spots | 3DS | – | todo |
 | H2 | Memory: a full run with each character on hardware and a sim soak (1000 runs per character), no leaks, linear memory within limits | 3DS | X* | todo |
 | H3 | Romfs budget with all characters and audio; texture and audio quality checks on the device | tools | U1, X* | todo |
-| H4 | Packaging: icon, banner (with its sound), title id, `.3dsx` + `.cia` builds | tools | – | todo |
+| H4 | Packaging: icon, banner (with its sound), title id, `.3dsx` + `.cia` builds | tools | – | in progress (subagent) |
 | H5 | Balance and bugs: compare numbers with the C# for every character (script), fix known PORT NOTEs | content | X* | todo |
 | H6 | Release checklist: every character wins a run on the device, every U page ticked, every package done, no PORT NOTE left without an n/a reason | QA | all | todo |
 
