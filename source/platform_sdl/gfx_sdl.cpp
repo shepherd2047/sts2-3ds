@@ -16,6 +16,7 @@
 #include <sstream>
 #include <vector>
 
+#include "../core/safe_file.h"
 #include "../gfx/gfx.h"
 
 namespace gfx {
@@ -135,6 +136,7 @@ void shutdown() {
 }
 
 bool running() { return !quit; }
+void onSystemPause(void (*)(bool)) {}  // Y5: no HOME menu / sleep on the desktop
 double dt() { return frameDt; }
 
 // One reading per frame: main.cpp reads it before App::update, and screens that draw kit widgets
@@ -250,13 +252,6 @@ Texture* whiteTexture() {
 
 namespace {
 std::string saveDir() { return "saves/"; }
-void makeDir(const std::string& d) {
-#ifdef _WIN32
-  _mkdir(d.c_str());
-#else
-  mkdir(d.c_str(), 0777);
-#endif
-}
 }  // namespace
 
 // ---------------------------------------------------------------- saves
@@ -325,21 +320,12 @@ bool textInput(const char* hint, const std::string& initial, std::string& out, i
 bool readSave(const std::string& name, std::string& out) { return readWhole(saveDir() + name, out); }
 
 bool writeSave(const std::string& name, const std::string& data) {
-  std::string dir = saveDir();
-  makeDir(dir);
-  // Y4: per-profile names like "profile1/run.sav" live in a subdirectory.
-  if (size_t slash = name.rfind('/'); slash != std::string::npos) makeDir(dir + name.substr(0, slash));
-  std::string tmp = dir + name + ".tmp";
-  FILE* f = fopen(tmp.c_str(), "wb");
-  if (!f) return false;
-  bool ok = fwrite(data.data(), 1, data.size(), f) == data.size();
-  ok = fclose(f) == 0 && ok;
-  if (!ok) return false;
-  remove((dir + name).c_str());
-  return rename(tmp.c_str(), (dir + name).c_str()) == 0;
+  // Y5: atomic tmp -> (bak) -> rename (core/safe_file.h); per-profile names like
+  // "profile1/run.sav" get their subdirectory created there.
+  return sts::safefile::writeAtomic(saveDir() + name, data);
 }
 
-void deleteSave(const std::string& name) { remove((saveDir() + name).c_str()); }
+void deleteSave(const std::string& name) { sts::safefile::removeAll(saveDir() + name); }
 
 bool readFile(const std::string& path, std::string& out) {
   std::ifstream f("romfs/" + path, std::ios::binary);

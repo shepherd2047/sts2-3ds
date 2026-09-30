@@ -27,8 +27,12 @@ struct Input {
 
 bool init();
 void shutdown();
-bool running();
+bool running();  // false = quit (3DS: HOME menu -> Close, or the power button)
 double dt();  // seconds since the previous frame
+// Y5: the system suspends the game (3DS: HOME menu, lid closed -> sleep): fn(true) before,
+// fn(false) after it resumes (it may run on the system's APT thread: keep it to flag / audio
+// calls). The time spent suspended never reaches dt(). The SDL preview never calls it.
+void onSystemPause(void (*fn)(bool paused));
 Input input();
 
 void beginFrame();

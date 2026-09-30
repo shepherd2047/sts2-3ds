@@ -146,6 +146,7 @@ Stream streams[kStreams];
 LightLock lock;
 Thread thread = nullptr;
 volatile bool threadRun = false;
+volatile bool paused = false;  // Y5: HOME menu / sleep: channels paused, no SD reads
 
 int streamCh(int slot, int c) { return kStreamChannel + slot * 2 + c; }
 
@@ -214,9 +215,11 @@ void closeLocked(int slot) {
 
 void threadMain(void*) {
   while (threadRun) {
-    LightLock_Lock(&lock);
-    for (int i = 0; i < kStreams; i++) pump(i);
-    LightLock_Unlock(&lock);
+    if (!paused) {
+      LightLock_Lock(&lock);
+      for (int i = 0; i < kStreams; i++) pump(i);
+      LightLock_Unlock(&lock);
+    }
     svcSleepThread(20 * 1000 * 1000ULL);  // 20 ms; each stream holds >= 2.5 s of audio
   }
 }
@@ -258,6 +261,12 @@ void shutdown() {
 }
 
 void update() {}
+
+void setPaused(bool p) {
+  if (!on || paused == p) return;
+  paused = p;
+  for (int ch = 0; ch < kStreamChannel + kStreams * 2; ch++) ndspChnSetPaused(ch, p);
+}
 
 bool playSound(const std::string& path, float gain) {
   auto it = cache.find(path);

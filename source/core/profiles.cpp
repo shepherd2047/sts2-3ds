@@ -13,6 +13,7 @@
 #include "history.h"
 #include "profiles.h"
 #include "progress.h"
+#include "safe_file.h"
 #include "save_errors.h"
 
 namespace sts {
@@ -55,55 +56,11 @@ void ioProfiles(Archive& a, profiles::ProfileFile& p) {
   a.tag("END");
 }
 
-// Creates every directory along `path` up to its last '/' (errors ignored: most already exist,
-// and "sdmc:" itself is not a directory).
-void makeParentDirs(const std::string& path) {
-  for (size_t i = path.find('/'); i != std::string::npos; i = path.find('/', i + 1)) {
-    std::string d = path.substr(0, i);
-    if (d.empty() || d.back() == ':') continue;
-#ifdef _WIN32
-    _mkdir(d.c_str());
-#else
-    mkdir(d.c_str(), 0777);
-#endif
-  }
-}
-
-bool fileExists(const std::string& path) {
-  FILE* f = fopen(path.c_str(), "rb");
-  if (!f) return false;
-  fclose(f);
-  return true;
-}
-
-bool readWhole(const std::string& path, std::string& out) {
-  FILE* f = fopen(path.c_str(), "rb");
-  if (!f) return false;
-  fseek(f, 0, SEEK_END);
-  long n = ftell(f);
-  fseek(f, 0, SEEK_SET);
-  out.resize(n > 0 ? (size_t)n : 0);
-  size_t got = n > 0 ? fread(&out[0], 1, (size_t)n, f) : 0;
-  fclose(f);
-  return got == out.size();
-}
-
-bool writeAtomic(const std::string& path, const std::string& data) {
-  makeParentDirs(path);
-  std::string tmp = path + ".tmp";
-  FILE* f = fopen(tmp.c_str(), "wb");
-  if (!f) return false;
-  bool ok = fwrite(data.data(), 1, data.size(), f) == data.size();
-  ok = fclose(f) == 0 && ok;
-  if (!ok) { remove(tmp.c_str()); return false; }
-  remove(path.c_str());
-  return rename(tmp.c_str(), path.c_str()) == 0;
-}
-
-void removeWithTmp(const std::string& path) {
-  remove(path.c_str());
-  remove((path + ".tmp").c_str());
-}
+using safefile::exists;
+using safefile::makeParentDirs;
+using safefile::readWhole;
+using safefile::writeAtomic;
+void removeWithTmp(const std::string& path) { safefile::removeAll(path); }  // Y5: also .bak
 
 struct State {
   bool disk = false;
@@ -168,8 +125,11 @@ void init(const std::string& root) {
   if (!s.root.empty() && s.root.back() != '/') s.root += '/';
   s.disk = true;
   s.file = ProfileFile{};
-  std::string data;
-  bool have = readWhole(profileFilePath(), data) && s.file.load(data);
+  // Y5: profile.sav, or the complete copy an interrupted write left in profile.sav.tmp / .bak.
+  bool have = safefile::recover(profileFilePath(), [](const std::string& p) {
+                std::string data;
+                return readWhole(p, data) && S().file.load(data);
+              }) != safefile::Recover::None;
   if (!have) migrateLegacy();  // first launch with profiles: an older top-level save becomes slot 1's
   writeProfileFile();
   loadProgress(s.file.current);
@@ -195,7 +155,7 @@ int migrateLegacy() {
   int moved = 0;
   for (const char* name : {"run.sav", "progress.sav"}) {
     std::string from = S().root + name, to = dir(1) + name;
-    if (!fileExists(from) || fileExists(to)) continue;
+    if (!exists(from) || exists(to)) continue;
     makeParentDirs(to);
     if (std::rename(from.c_str(), to.c_str()) == 0) ++moved;
   }
@@ -211,12 +171,12 @@ Info info(int id) {
   bool haveProgress = false;
   if (id == current()) {
     p = progress::state();
-    haveProgress = S().disk ? fileExists(progressPath(id)) : false;
+    haveProgress = S().disk ? exists(progressPath(id)) : false;
   } else if (S().disk) {
     std::string data;
     haveProgress = readWhole(progressPath(id), data) && p.load(data);
   }
-  r.hasRun = S().disk && fileExists(runSavePath(id));
+  r.hasRun = S().disk && exists(runSavePath(id));
   for (auto& [c, cp] : p.characters) { r.wins += cp.wins; r.losses += cp.losses; }
   r.used = r.hasRun || haveProgress;
   return r;

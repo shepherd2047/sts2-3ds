@@ -9,6 +9,12 @@ int main() {
   ui::App app;
   bool ok = app.init();
   audio::init();  // silent no-op when the audio folder is missing
+  // Y5: HOME menu / lid closed. The loop itself is blocked in gfx::running() (aptMainLoop) while
+  // suspended, and the suspended time never reaches gfx::dt(), so the run timer and the
+  // scheduler just stop; only the audio (streamed by a background thread) needs pausing.
+  // gfx::running() turns false on HOME -> Close: the loop ends and nothing is saved (run.sav
+  // only changes at a map save point, so an exit can never leave a half-updated save).
+  gfx::onSystemPause([](bool paused) { audio::setPaused(paused); });
   // Music and ambience follow the game state (ui/music_router.cpp, called from App::update).
   while (gfx::running() && !app.quitRequested()) {  // 退出 on the main menu (S02)
     gfx::Input in = gfx::input();

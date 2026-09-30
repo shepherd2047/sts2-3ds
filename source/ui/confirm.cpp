@@ -113,7 +113,7 @@ void clear() { queue.clear(); }
 // ---------------------------------------------------------------- save errors
 
 namespace {
-bool savesOn() { return !getenv("STS_HIDDEN") && !getenv("STS_NO_SAVE"); }
+bool savesOn() { return !getenv("STS_HIDDEN") && !getenv("STS_NO_SAVE") && sts::saveerr::storageAvailable(); }  // Y5: SD check
 
 // The C#'s INVALID_SAVE_POPUP text when baked, else `fallback`. Only its first paragraph: the
 // second asks for a bug report to MegaCrit, which does not apply to this port.
@@ -177,6 +177,12 @@ void App::openSaveError(int kind) {
     case Kind::WriteFailed:  // no C# text (Steam / the OS report it there)
       confirm::notice("存档失败",
                       "无法写入SD卡，这次的进度没有保存。\n\n请检查SD卡是否插好、没有锁定，并且还有剩余空间。",
+                      L("main_menu_ui.GENERIC_POPUP.ok").rfind("main_menu_ui.", 0) == 0 ? "了解了"
+                                                                                       : L("main_menu_ui.GENERIC_POPUP.ok"));
+      break;
+    case Kind::SdUnavailable:  // Y5: no C# text either; the game goes on without saving
+      confirm::notice("无法使用SD卡",
+                      "无法写入SD卡，这次游戏的进度不会保存。\n\n请检查SD卡是否插好、没有锁定，并且还有剩余空间。",
                       L("main_menu_ui.GENERIC_POPUP.ok").rfind("main_menu_ui.", 0) == 0 ? "了解了"
                                                                                        : L("main_menu_ui.GENERIC_POPUP.ok"));
       break;

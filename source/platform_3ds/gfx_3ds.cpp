@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 
+#include "../core/safe_file.h"
 #include "../gfx/gfx.h"
 #include "mesh_shbin.h"
 
@@ -155,9 +156,45 @@ u32 c2d(uint32_t rgba) { return C2D_Color32(rgba >> 24, (rgba >> 16) & 255, (rgb
 inline u32 morton8(u32 x, u32 y) {
   return (x & 1) | ((y & 1) << 1) | ((x & 2) << 1) | ((y & 2) << 2) | ((x & 4) << 2) | ((y & 4) << 3);
 }
+// ---- Y5: HOME menu / sleep (APT hooks)
+// libctru calls these from aptMainLoop (HOME menu) or its APT thread (sleep); the game loop is
+// blocked meanwhile. Suspend and sleep can overlap (the lid closed while in the HOME menu), so
+// the game counts as paused while either lasts, and the callback only sees the transitions.
+aptHookCookie aptCookie;
+void (*pauseFn)(bool) = nullptr;
+volatile bool inHome = false, asleep = false, pausedNow = false;
+volatile bool resumed = false;  // the next beginFrame restarts the frame clock
+
+void applyPause() {
+  bool p = inHome || asleep;
+  if (p == pausedNow) return;
+  pausedNow = p;
+  if (!p) resumed = true;
+  if (pauseFn) pauseFn(p);
+}
+
+void onApt(APT_HookType hook, void*) {
+  switch (hook) {
+    case APTHOOK_ONSUSPEND: inHome = true; break;
+    case APTHOOK_ONRESTORE: inHome = false; break;
+    case APTHOOK_ONSLEEP: asleep = true; break;
+    case APTHOOK_ONWAKEUP: asleep = false; break;
+    case APTHOOK_ONEXIT: inHome = true; break;  // closing from the HOME menu: stay silent
+    default: break;
+  }
+  applyPause();
+}
+
+// Saves are written synchronously on the main thread, so the HOME button (handled in
+// aptMainLoop, same thread) can never interrupt one; sleep requests arrive on APT's thread, so
+// they are refused while a save is being written. Re-allowing sleep with the lid already closed
+// makes libctru put the system to sleep right then (APT_SleepIfShellClosed).
+void saveGuard(bool writing) { aptSetSleepAllowed(!writing); }
 }  // namespace
 
 void flushMesh();
+
+void onSystemPause(void (*fn)(bool)) { pauseFn = fn; }
 
 bool init() {
   romfsInit();
@@ -171,10 +208,19 @@ bool init() {
   lastMs = osGetTime();
   initMesh();
   loadDebugConfig();
+  // Y5: closing the lid sleeps, HOME opens the HOME menu (both pause audio and the run timer via
+  // onSystemPause); HOME -> Close makes aptMainLoop (running()) return false and main() exit
+  // without writing anything: run.sav only changes at a map save point.
+  aptSetSleepAllowed(true);
+  aptSetHomeAllowed(true);
+  aptHook(&aptCookie, onApt, nullptr);
+  sts::safefile::setWriteGuard(saveGuard);
   return true;
 }
 
 void shutdown() {
+  sts::safefile::setWriteGuard(nullptr);
+  aptUnhook(&aptCookie);
   C2D_Fini();
   C3D_Fini();
   gfxExit();
@@ -226,6 +272,10 @@ Input input() {
 
 void beginFrame() {
   u64 now = osGetTime();
+  if (resumed) {  // Y5: back from the HOME menu / sleep: that time is not game time
+    resumed = false;
+    lastMs = now - 1000 / 60;
+  }
   frameDt = (now - lastMs) / 1000.0;
   if (frameDt > 0.1) frameDt = 0.1;
   lastMs = now;
@@ -257,10 +307,6 @@ void endFrame() {
 
 namespace {
 std::string saveDir() { return "sdmc:/3ds/sts2-3ds/"; }
-void makeDir(const std::string&) {
-  mkdir("sdmc:/3ds", 0777);
-  mkdir("sdmc:/3ds/sts2-3ds", 0777);
-}
 }  // namespace
 
 // ---------------------------------------------------------------- text input (S03)
@@ -320,21 +366,12 @@ bool readWhole(const std::string& path, std::string& out) {
 bool readSave(const std::string& name, std::string& out) { return readWhole(saveDir() + name, out); }
 
 bool writeSave(const std::string& name, const std::string& data) {
-  std::string dir = saveDir();
-  makeDir(dir);
-  // Y4: per-profile names like "profile1/run.sav" live in a subdirectory.
-  if (size_t slash = name.rfind('/'); slash != std::string::npos) mkdir((dir + name.substr(0, slash)).c_str(), 0777);
-  std::string tmp = dir + name + ".tmp";
-  FILE* f = fopen(tmp.c_str(), "wb");
-  if (!f) return false;
-  bool ok = fwrite(data.data(), 1, data.size(), f) == data.size();
-  ok = fclose(f) == 0 && ok;
-  if (!ok) return false;
-  remove((dir + name).c_str());
-  return rename(tmp.c_str(), (dir + name).c_str()) == 0;
+  // Y5: atomic tmp -> (bak) -> rename (core/safe_file.h); per-profile names like
+  // "profile1/run.sav" get their subdirectory created there.
+  return sts::safefile::writeAtomic(saveDir() + name, data);
 }
 
-void deleteSave(const std::string& name) { remove((saveDir() + name).c_str()); }
+void deleteSave(const std::string& name) { sts::safefile::removeAll(saveDir() + name); }
 
 bool readFile(const std::string& path, std::string& out) {
   FILE* f = fopen(("romfs:/" + path).c_str(), "rb");

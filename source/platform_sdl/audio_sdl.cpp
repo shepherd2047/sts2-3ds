@@ -189,6 +189,10 @@ bool init() {
   return true;
 }
 
+void setPaused(bool paused) {
+  if (dev) SDL_PauseAudioDevice(dev, paused ? 1 : 0);
+}
+
 void shutdown() {
   if (!dev) return;
   SDL_CloseAudioDevice(dev);

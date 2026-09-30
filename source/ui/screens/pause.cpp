@@ -3,6 +3,7 @@
 // adds 地图 (the look-only map from another room, what START used to open) and 牌组. The room
 // stays drawn underneath; the scheduler is frozen and the run timer stops while it is open
 // (RunManager.IsPaused). Map, deck and settings open on top of it and fall back to it on close.
+#include "../../core/save_errors.h"
 #include "../confirm.h"
 #include "../ui_common.h"
 
@@ -26,7 +27,7 @@ std::string mm(const char* key) { return L(std::string("main_menu_ui.") + key); 
 // The run save is written at the map choice only (Run::onSavePoint); save & quit keeps the last
 // one, so a run that has not reached its first save point yet (Neow) has nothing to resume. With
 // saves off (automated previews / STS_NO_SAVE) it just returns to the menu.
-bool savesOff() { return getenv("STS_HIDDEN") || getenv("STS_NO_SAVE"); }
+bool savesOff() { return getenv("STS_HIDDEN") || getenv("STS_NO_SAVE") || !sts::saveerr::storageAvailable(); }  // Y5: SD check
 
 void outline(float x, float y, float w, float h, uint32_t c = col::gold, float t = 2) {
   gfx::rect(x - t, y - t, w + 2 * t, t, c);

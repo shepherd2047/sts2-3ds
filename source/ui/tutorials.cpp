@@ -7,6 +7,7 @@
 #include <string>
 
 #include "../core/game.h"
+#include "../core/save_errors.h"
 #include "../core/settings_store.h"
 
 namespace ui {
@@ -42,7 +43,7 @@ int idleEndTurns_ = 0;      // NEndTurnButton._endTurnWithNoPlayableCardsCount
 // settings.sav is written when a flag changes, except in automated previews / STS_NO_SAVE
 // (the same rule as App::saveSettings; tests set STS_NO_SAVE).
 void persist() {
-  if (!getenv("STS_HIDDEN") && !getenv("STS_NO_SAVE")) settings::save();
+  if (!getenv("STS_HIDDEN") && !getenv("STS_NO_SAVE") && sts::saveerr::storageAvailable()) settings::save();  // Y5: SD check
 }
 
 void markSeen(Ftue t) {

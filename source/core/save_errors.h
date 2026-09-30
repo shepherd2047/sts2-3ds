@@ -13,7 +13,9 @@
 namespace sts {
 namespace saveerr {
 
-enum class Kind { RunCorrupt, ProgressCorrupt, SettingsCorrupt, WriteFailed, Count };
+// Y5: SdUnavailable = the SD card is missing or not writable at startup (the game runs on
+// without saving; storageAvailable() is then false).
+enum class Kind { RunCorrupt, ProgressCorrupt, SettingsCorrupt, WriteFailed, SdUnavailable, Count };
 enum class Load { Ok, Missing, Corrupt };
 
 // Queue a report (at most one pending per kind). The UI takes them one at a time.
@@ -22,15 +24,20 @@ bool pending(Kind k);
 bool take(Kind& out);  // false when nothing is queued
 void clear();
 
-// Debug for previews: STS_FAKE_SAVE_ERROR=run|progress|settings|write (comma list) makes that
-// error happen: the UI reports run / progress / settings at startup and write at every save.
+// Debug for previews: STS_FAKE_SAVE_ERROR=run|progress|settings|write|sd (comma list) makes that
+// error happen: the UI reports run / progress / settings / sd at startup and write at every save.
 bool faked(Kind k);
 
-// Reads `path` through `load` (e.g. progress::load, settings::load): Ok, Missing (no file:
+// Reads `path` through `load` (e.g. progress::load, settings::load): Ok (Y5: also when the file
+// was recovered from the .tmp / .bak an interrupted write left, safe_file.h), Missing (no file:
 // the caller keeps its defaults), or Corrupt (the file is there but `load` rejected it: it is
 // renamed to <path without .sav>.corrupt, `kind` is reported and the caller must reset to
 // defaults). Never throws, never crashes on garbage.
 Load loadChecked(const std::string& path, bool (*load)(const std::string&), Kind kind);
+
+// Y5: false after the startup SD check failed (App::init); saves are then skipped for the session.
+void setStorageAvailable(bool ok);
+bool storageAvailable();
 
 // <dir>/<stem>.sav -> <dir>/<stem>.corrupt (any older .corrupt of that name is replaced).
 // Returns the new path, or "" when the rename failed (the file then stays where it was).

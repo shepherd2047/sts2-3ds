@@ -178,6 +178,10 @@ void shutdown() {
 
 bool available() { return ready; }
 
+void setPaused(bool paused) {
+  if (ready) backend::setPaused(paused);
+}
+
 void update(double dt) {
   if (!ready) return;
   for (int i = 0; i < backend::kStreams; i++) {
