@@ -20,6 +20,7 @@
 #include "../../audio/audio.h"
 #include "../../core/progress.h"
 #include "../../core/settings_store.h"
+#include "../confirm.h"
 #include "../ui_common.h"
 
 namespace ui {
@@ -43,8 +44,8 @@ enum Item {
   kItemCount
 };
 
-// Widget ids. Row controls are kRowId + item; the modal uses widgets::modal(kModalId) -> 2*id, 2*id+1.
-enum : int { kTabsId = 2600, kRowId = 2620, kBackId = 2650, kResetId = 2651, kModalId = 1330 };
+// Widget ids. Row controls are kRowId + item.
+enum : int { kTabsId = 2600, kRowId = 2620, kBackId = 2650, kResetId = 2651 };
 
 // Y3 hook: the language cycler is shown but locked until English loc + fonts are baked.
 constexpr bool kLanguageReady = false;
@@ -74,11 +75,10 @@ const Def kDefs[kItemCount] = {
     {kDeleteData, kTabData, kAction, nullptr, nullptr, true},
 };
 
-enum Modal { kNoModal, kModalReset, kModalTutorials, kModalDelete };
+enum Modal { kNoModal, kModalReset, kModalTutorials, kModalDelete };  // which confirmation to ask
 
 // Screen state (one settings screen exists; it lives here rather than in App).
 int tab_ = kTabGeneral;
-Modal modal_ = kNoModal;
 bool live_ = false;       // false on the frame the screen opens: the opening A press must not act
 bool volDirty_ = false;   // a volume changed; saved once the stylus lifts (no SD write per frame)
 std::string note_;       // the C# NSettingsToast line, shown on the top screen
@@ -175,8 +175,6 @@ void App::drawSettings(bool top) {
     const float px = 24, pw = kTop - 48, py = 52, ph = 130;
     widgets::panel("ui/panel_popup", px, py, pw, ph);
     const Def* d = focusedDef();
-    if (!d && modal_ == kModalTutorials) d = &kDefs[kResetTutorials];  // the modal's subject stays up
-    if (!d && modal_ == kModalDelete) d = &kDefs[kDeleteData];
     if (d && d->tab == tab_) {
       R().text(px + 14, py + 12, itemTitle(*d, inRun), ts(F16, col::gold, LEFT, pw - 28));
       R().text(px + 14, py + 40, itemDesc(*d), ts(F12, col::white, LEFT, pw - 28));
@@ -199,17 +197,16 @@ void App::drawSettings(bool top) {
   if (!live_) {  // opening frame: start on the first tab, first setting; ignore the A that opened us
     in = gfx::Input{};
     tab_ = kTabGeneral;
-    modal_ = kNoModal;
     widgets::setFocus(kRowId + firstItem(tab_));
   }
-  const Modal modalBefore = modal_;
+  if (confirm::inputTaken()) in = gfx::Input{};  // S22: this frame's input went to the modal
+  Modal askFor = kNoModal;
   const Def* fd = focusedDef();
   const uint32_t lr = gfx::BTN_LEFT | gfx::BTN_RIGHT;
   const int dir = (in.down & gfx::BTN_RIGHT) ? 1 : (in.down & gfx::BTN_LEFT) ? -1 : 0;
   gfx::Input navIn = in;
   // Left/right on a row belongs to its control (slider / cycler), not to focus navigation.
   if (fd) navIn.down &= ~lr;
-  if (modal_ != kNoModal) navIn = gfx::Input{};  // the page under a modal is inert
   widgets::beginFrame(navIn);
 
   const float x = style::kMargin, w = kBot - 2 * style::kMargin;
@@ -234,7 +231,7 @@ void App::drawSettings(bool top) {
         const float cx = x + w - 6 - style::kIconBtn, cy = y + (style::kRowH - style::kIconBtn) / 2;
         bool nv = widgets::toggle(id, cx, cy, v);
         // The whole row is the tick box's label: a tap anywhere on it toggles too.
-        if (nv == v && rowTap && modal_ == kNoModal && !(in.tx >= cx && in.tx < cx + style::kIconBtn)) {
+        if (nv == v && rowTap && !(in.tx >= cx && in.tx < cx + style::kIconBtn)) {
           nv = !v;
           widgets::setFocus(id);
         }
@@ -257,7 +254,7 @@ void App::drawSettings(bool top) {
       case kSlider: {
         float* f = volumeField(d.item);
         float v = *f;
-        if (fd == &d && dir && modal_ == kNoModal) v = stepVolume(v, dir);
+        if (fd == &d && dir) v = stepVolume(v, dir);
         const float sx = x + 150, sw = w - 150 - 52;
         v = widgets::slider(id, sx, y + (style::kRowH - style::kIconBtn) / 2, sw, v);
         R().text(x + w - 8, y + (style::kRowH - R().lineHeight(F12)) / 2, num((int)std::lround(v * 100)) + "%",
@@ -272,7 +269,7 @@ void App::drawSettings(bool top) {
       case kCycler: {  // "‹ value ›"; A / tap / left-right cycle through the options
         const float cw = 130, cx = x + w - 6 - cw;
         bool act = widgets::hit(id, cx, y + 2, cw, style::kRowH - 4, rowEnabled);
-        int step = act ? 1 : (fd == &d && rowEnabled && modal_ == kNoModal) ? dir : 0;
+        int step = act ? 1 : (fd == &d && rowEnabled) ? dir : 0;
         if (step) {
           s.language = s.language == Language::ZhCN ? Language::En : Language::ZhCN;
           saveSettings();
@@ -292,7 +289,7 @@ void App::drawSettings(bool top) {
         std::string label = danger ? "删除" : S("TUTORIAL_RESET_BUTTON_LABEL");
         if (widgets::button(id, bx, y + 1, bw, style::kRowH - 2, label,
                             danger ? widgets::Kind::Danger : widgets::Kind::Secondary, rowEnabled)) {
-          modal_ = danger ? kModalDelete : kModalTutorials;
+          askFor = danger ? kModalDelete : kModalTutorials;
         }
         if (!rowEnabled) R().text(bx - 6, y + (style::kRowH - R().lineHeight(F12)) / 2, "仅可在主菜单操作",
                                   ts(F12, col::red, RIGHT, 0, 0.85f));
@@ -307,87 +304,77 @@ void App::drawSettings(bool top) {
   bool back = widgets::button(kBackId, style::kMargin, style::kActionY, 90, style::kButtonH, "返回");
   if (tab_ != kTabData &&
       widgets::button(kResetId, kBot - style::kMargin - 120, style::kActionY, 120, style::kButtonH, S("RESET_DEFAULT")))
-    modal_ = kModalReset;
+    askFor = kModalReset;
 
-  if (modal_ != kNoModal) {
-    // The modal alone takes this frame's input (its hits replace the page's); on the frame it
-    // opens, none, so the A / tap that opened it cannot also press one of its buttons.
-    widgets::beginFrame(modalBefore == kNoModal ? gfx::Input{} : in);
+  if (askFor != kNoModal) {  // S22: the shared confirmation modal (confirm.h)
     std::string title, body;
-    switch (modal_) {
-      case kModalReset:
+    switch (askFor) {
+      case kModalReset:  // NResetGameplayButton
         title = S("RESET_CONFIRMATION.header");
         body = "要将「" + tabLabel(tab_) + "」中的设置恢复为默认吗？";
         break;
       case kModalTutorials:
         title = S("TUTORIAL_RESET_POPUP_HEADER");
         body = S("TUTORIAL_RESET_POPUP_DESCRIPTION");
-        for (size_t p; (p = body.find("\n\n")) != std::string::npos;) body.erase(p, 1);  // fit the modal
         break;
       default:
         title = "删除档案数据？";
         body = itemDesc(kDefs[kDeleteData]);
         break;
     }
-    int f = widgets::focused();
-    if (f != kModalId * 2 && f != kModalId * 2 + 1) widgets::setFocus(kModalId * 2);  // default: cancel
-    int r = widgets::modal(kModalId, title, body, modal_ != kModalReset);
-    if (r != 0) {
-      Modal m = modal_;
-      modal_ = kNoModal;
-      widgets::setFocus(m == kModalReset ? kResetId : kRowId + (int)(m == kModalDelete ? kDeleteData : kResetTutorials));
-      if (r > 0) {
-        const Settings def;
-        switch (m) {
-          case kModalReset:  // NResetGameplayButton: this page's settings back to their defaults
-            if (tab_ == kTabGeneral) {
-              fastMode_ = def.fastMode;
-              s.longPressConfirm = def.longPressConfirm;
-              s.commonTooltips = def.commonTooltips;
-            } else if (tab_ == kTabDisplay) {
-              screenShake_ = def.screenShake;
-              s.textEffects = def.textEffects;
-              s.runTimerEnabled = def.runTimerEnabled;
-              s.handCardCountDisplay = def.handCardCountDisplay;
-            } else {
-              s.bgmVolume = def.bgmVolume;
-              s.sfxVolume = def.sfxVolume;
-              s.ambienceVolume = def.ambienceVolume;
-            }
-            Scheduler::get().speed = fastMode_ ? 1.75 : 1.0;
-            applyVolumes();
-            saveSettings();
-            showToast("已恢复默认设置。");
-            break;
-          case kModalTutorials:
-            // ProgressState.ResetFtues. M13 (tutorials) reads settings::tutorialSeen(), so this is
-            // all it needs; nothing else to refresh here.
-            settings::resetTutorials();
-            saveSettings();
-            showToast("教程已重置。");
-            break;
-          default:
-            // Y1 "delete data". Automated previews (STS_HIDDEN / STS_NO_SAVE) never touch a file:
-            // there it only resets the in-memory state.
-            if (getenv("STS_HIDDEN") || getenv("STS_NO_SAVE")) {
-              progress::reset();
-              settings::reset();
-            } else {
-              settings::eraseAllData();
-            }
-            fastMode_ = settings::state().fastMode;
-            screenShake_ = settings::state().screenShake;
-            Scheduler::get().speed = fastMode_ ? 1.75 : 1.0;
-            applyVolumes();
-            hasSave_ = hasSave();
-            showToast("档案数据已删除。");
-            break;
-        }
+    const int page = tab_;
+    confirm::ask(title, body, [this, askFor, page] {
+      Settings& s = settings::state();
+      const Settings def;
+      switch (askFor) {
+        case kModalReset:  // NResetGameplayButton: this page's settings back to their defaults
+          if (page == kTabGeneral) {
+            fastMode_ = def.fastMode;
+            s.longPressConfirm = def.longPressConfirm;
+            s.commonTooltips = def.commonTooltips;
+          } else if (page == kTabDisplay) {
+            screenShake_ = def.screenShake;
+            s.textEffects = def.textEffects;
+            s.runTimerEnabled = def.runTimerEnabled;
+            s.handCardCountDisplay = def.handCardCountDisplay;
+          } else {
+            s.bgmVolume = def.bgmVolume;
+            s.sfxVolume = def.sfxVolume;
+            s.ambienceVolume = def.ambienceVolume;
+          }
+          Scheduler::get().speed = fastMode_ ? 1.75 : 1.0;
+          applyVolumes();
+          saveSettings();
+          showToast("已恢复默认设置。");
+          break;
+        case kModalTutorials:
+          // ProgressState.ResetFtues. M13 (tutorials) reads settings::tutorialSeen(), so this is
+          // all it needs; nothing else to refresh here.
+          settings::resetTutorials();
+          saveSettings();
+          showToast("教程已重置。");
+          break;
+        default:
+          // Y1 "delete data". Automated previews (STS_HIDDEN / STS_NO_SAVE) never touch a file:
+          // there it only resets the in-memory state.
+          if (getenv("STS_HIDDEN") || getenv("STS_NO_SAVE")) {
+            progress::reset();
+            settings::reset();
+          } else {
+            settings::eraseAllData();
+          }
+          fastMode_ = settings::state().fastMode;
+          screenShake_ = settings::state().screenShake;
+          Scheduler::get().speed = fastMode_ ? 1.75 : 1.0;
+          applyVolumes();
+          hasSave_ = hasSave();
+          showToast("档案数据已删除。");
+          break;
       }
-    }
+    });
   }
   widgets::endFrame();
-  if (back && modal_ == kNoModal) {
+  if (back) {
     if (volDirty_) { saveSettings(); volDirty_ = false; }
     live_ = false;
     settingsOpen_ = false;
@@ -398,10 +385,6 @@ void App::updateSettings(const gfx::Input& in) {
   const bool wasLive = live_;
   live_ = true;
   if (!wasLive) return;
-  if (modal_ != kNoModal) {
-    if (in.down & gfx::BTN_B) modal_ = kNoModal;
-    return;
-  }
   if (in.down & (gfx::BTN_B | gfx::BTN_START)) {
     if (volDirty_) { saveSettings(); volDirty_ = false; }
     live_ = false;

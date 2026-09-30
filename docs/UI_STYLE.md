@@ -168,7 +168,8 @@ D-pad/A/B/L/R with a focus ring (`widgets::beginFrame(in)` / `endFrame()` once p
 widget takes a stable `id`, draws, registers its hit box, returns whether it fired). Controls:
 `button` (Primary/Secondary/Danger/Row/Event/Ancient), `iconButton`, `row`, `optionButton`
 (locked reason line), `tabs`, `toggle`, `slider`, `paginator`, `ScrollList` (drag + clip;
-inertia and a thumb), `modal` (confirm), `toast`, `banner`. D-pad focus moves to the nearest
+inertia and a thumb), `toast`, `banner`; confirmations and error popups use the one shared modal in
+`source/ui/confirm.h` (S22). D-pad focus moves to the nearest
 control in the pressed direction using the previous frame's hit boxes; touch always wins and
 hides the ring. `STS_MOCK=6` exercises all of it. Screen files in `source/ui/screens/*.cpp`
 adopt this kit as each S package rebuilds that screen; until then they keep using `App::panel`/

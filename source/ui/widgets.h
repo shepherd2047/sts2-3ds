@@ -85,9 +85,7 @@ struct ScrollList {
   void end();
 };
 
-// A confirm modal (danger action). Draws over the whole bottom screen; returns 1 = confirmed,
-// -1 = cancelled, 0 = still open. Call every frame while `open` is true.
-int modal(int id, const std::string& title, const std::string& message, bool danger = true);
+// Confirmations and error popups: the shared modal in confirm.h (S22), not a kit widget.
 
 // A toast queued for `style::kToast` seconds, drawn centred near the top of the bottom screen.
 void toast(const std::string& text);

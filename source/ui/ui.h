@@ -109,8 +109,6 @@ class App {
   // S02 (U02) main menu, title.cpp.
   int menuSub_ = 0;              // 0 the button list, 1 singleplayer submenu, 2 compendium submenu
   int subSel_ = 0;               // focused submenu card
-  int menuModal_ = 0;            // 0 none, 1 abandon-run confirm, 2 quit confirm
-  int menuModalSel_ = 0;         // 0 cancel, 1 confirm
   float reticleY_ = -1;          // eased y of the focus reticles
   bool quit_ = false;            // 退出 confirmed: main() leaves its loop
   std::string continueInfo_, continueIcon_;  // NContinueRunInfo text, cleared when the save may change
@@ -163,6 +161,11 @@ class App {
   // M13 tutorials (tutorials_ui.cpp; queue and seen flags in tutorials.h): first-time tips over any screen.
   bool updateTips(const gfx::Input& in);  // true while a tip owns the input
   void drawTips(bool top);
+  // S22 shared confirmation / error modal (confirm.h / confirm.cpp): over every screen, owns the input.
+  bool updateConfirm(const gfx::Input& in);
+  void drawConfirm(bool top);
+  void openSaveError(int kind);  // saveerr::Kind -> its dialog
+  void checkRunSave();           // S22: a run.sav that no longer loads -> the delete-it dialog
 
  public:
   bool quitRequested() const { return quit_; }
@@ -212,7 +215,6 @@ class App {
   void updatePause(const gfx::Input& in);
   bool pauseOpen_ = false;
   int pauseSel_ = 0;       // focused entry
-  int pauseModalSel_ = 0;  // abandon confirm: 0 cancel, 1 confirm (abandonConfirm_ is the popup)
   void drawEnd(bool top, bool won);
   void drawRelicOffer(bool top);  // elite relic reward / treasure chest
   void drawRelics(bool top);      // owned relics: grid below, the picked one above
@@ -351,7 +353,6 @@ class App {
   int detailKeyword_ = -1;      // unused since S20 (tips sit beside the item); kept for old callers
   bool relicsOpen_ = false;
   bool settingsOpen_ = false;
-  bool abandonConfirm_ = false;
   bool fastMode_ = false;
   bool screenShake_ = true;
   bool mapView_ = false;  // map opened from another room (pause menu 地图): look only, red 返回 below
