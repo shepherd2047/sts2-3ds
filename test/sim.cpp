@@ -24,7 +24,8 @@ int main(int argc, char** argv) {
   int runs = argc > 1 ? atoi(argv[1]) : 50;
   bool verbose = argc > 2;
   int wins = 0, floorsTotal = 0;
-  int startSeed = getenv("SIM_SEED") ? atoi(getenv("SIM_SEED")) : 1;
+  // SIM_FIRST=k: seeds k..N (tools/soak.sh resumes after a crash with it).
+  int startSeed = getenv("SIM_SEED") ? atoi(getenv("SIM_SEED")) : getenv("SIM_FIRST") ? atoi(getenv("SIM_FIRST")) : 1;
   int endSeed = getenv("SIM_SEED") ? startSeed : runs;
   // SIM_HISTORY_ROOT=<scratch dir>: turn saves on under that root so each finished run is written
   // to its profile 1 run history (M2); never point it at a real save directory.

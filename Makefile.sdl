@@ -29,7 +29,7 @@ SIM_EXTRA_OBJS := $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(SIM_SRC))
 TEST_EXTRA_OBJS := $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(TEST_SRC))
 
 ALL_OBJS := $(CORE_OBJS) $(PREVIEW_EXTRA_OBJS) $(SIM_EXTRA_OBJS) $(TEST_EXTRA_OBJS)
-DEPS := $(ALL_OBJS:.o=.d)
+DEPS := $(ALL_OBJS:.o=.d) $(foreach d,asan ubsan,$(patsubst %.cpp,build/$(d)/%.d,$(CORE_SRC) $(SIM_SRC)))
 
 all: build/sts2-preview build/sim
 
@@ -139,6 +139,25 @@ build/ascension_dump: $(CORE_OBJS) $(OBJ_DIR)/test/ascension_dump.o
 sim: build/sim
 	./build/sim 200
 
+# H2: sanitizer builds of the headless sim (host only; tools/soak.sh runs them), own object dirs.
+# sim-ubsan is UBSan alone: ASan's runtime hangs at start-up on macOS 27 (both Apple clang 17 and
+# LLVM 21), so there the soak pairs it with libmalloc's scribble/guard checks and `leaks`.
+SAN_BASE := -fno-omit-frame-pointer -fno-sanitize-recover=undefined
+ASAN_OBJS := $(patsubst %.cpp,build/asan/%.o,$(CORE_SRC) $(SIM_SRC))
+UBSAN_OBJS := $(patsubst %.cpp,build/ubsan/%.o,$(CORE_SRC) $(SIM_SRC))
+build/asan/%.o: %.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(BASE_CXXFLAGS) -O1 -fsanitize=address,undefined $(SAN_BASE) -c $< -o $@
+build/ubsan/%.o: %.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(BASE_CXXFLAGS) -O1 -fsanitize=undefined $(SAN_BASE) -c $< -o $@
+build/sim-asan: $(ASAN_OBJS)
+	$(CXX) $(BASE_CXXFLAGS) -fsanitize=address,undefined $(SAN_BASE) $^ -o $@
+build/sim-ubsan: $(UBSAN_OBJS)
+	$(CXX) $(BASE_CXXFLAGS) -fsanitize=undefined $(SAN_BASE) $^ -o $@
+sim-asan: build/sim-asan
+sim-ubsan: build/sim-ubsan
+
 check: build/enchant_test build/character_test build/silent_test build/necrobinder_test build/regent_test build/colorless_test build/defect_test build/ascension_test build/ascension_dump build/progress_test build/settings_test build/profile_test build/history_test build/badges_test build/modifiers_test build/daily_test build/achievements_test build/tutorials_test build/save_errors_test
 	./build/enchant_test
 	./build/character_test
@@ -164,6 +183,6 @@ check: build/enchant_test build/character_test build/silent_test build/necrobind
 clean:
 	rm -rf build
 
-.PHONY: all sim check clean
+.PHONY: all sim sim-asan sim-ubsan check clean
 
 -include $(DEPS)
