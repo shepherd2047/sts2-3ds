@@ -515,9 +515,13 @@ void App::autoplay(double dt) {
       } else acted = false;
       break;
     case Screen::RestUpgrade:
+      // Linger once so the grid is visible, then upgrade the 10th card (or the last one). The
+      // grid select (S13) owns sel_ and resets it, so the linger has its own flag.
       if (r.upgradeChoice.waiting()) {
-        if (sel_ < 0) { sel_ = 9; autoT_ = -0.6; return; }
-        r.upgradeChoice.fire(sel_);
+        static bool lingered = false;
+        if (!lingered) { lingered = true; autoT_ = -0.6; return; }
+        lingered = false;
+        r.upgradeChoice.fire(std::min(9, (int)r.upgradeOptions.size() - 1));
       } else acted = false;
       break;
     default: acted = false; break;
