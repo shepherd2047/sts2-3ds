@@ -19,7 +19,7 @@ endif
 CORE_SRC := $(wildcard source/core/*.cpp)
 EXTRA_PREVIEW_SRC := source/spine/spine.cpp source/gfx/gfx_common.cpp source/platform_sdl/gfx_sdl.cpp source/audio/audio.cpp source/platform_sdl/audio_sdl.cpp $(wildcard source/ui/*.cpp) $(wildcard source/ui/*/*.cpp) source/main.cpp
 SIM_SRC := test/sim.cpp
-TEST_SRC := test/enchant_test.cpp test/character_test.cpp test/silent_test.cpp test/necrobinder_test.cpp test/regent_test.cpp test/colorless_test.cpp test/defect_test.cpp test/ascension_dump.cpp test/ascension_test.cpp test/progress_test.cpp test/settings_test.cpp test/profile_test.cpp test/history_test.cpp test/modifiers_test.cpp test/daily_test.cpp test/achievements_test.cpp test/tutorials_test.cpp test/save_errors_test.cpp
+TEST_SRC := test/enchant_test.cpp test/character_test.cpp test/silent_test.cpp test/necrobinder_test.cpp test/regent_test.cpp test/colorless_test.cpp test/defect_test.cpp test/ascension_dump.cpp test/ascension_test.cpp test/progress_test.cpp test/settings_test.cpp test/profile_test.cpp test/history_test.cpp test/modifiers_test.cpp test/daily_test.cpp test/achievements_test.cpp test/tutorials_test.cpp test/save_errors_test.cpp test/model_dump.cpp
 
 OBJ_DIR := build/obj
 
@@ -136,10 +136,15 @@ build/ascension_dump: $(CORE_OBJS) $(OBJ_DIR)/test/ascension_dump.o
 	@mkdir -p build
 	$(CXX) $(BASE_CXXFLAGS) $^ -o $@
 
+# Card / relic / potion numbers; compare with the C# through tools/balance_check.py (H5).
+build/model_dump: $(CORE_OBJS) $(OBJ_DIR)/test/model_dump.o
+	@mkdir -p build
+	$(CXX) $(BASE_CXXFLAGS) $^ -o $@
+
 sim: build/sim
 	./build/sim 200
 
-check: build/enchant_test build/character_test build/silent_test build/necrobinder_test build/regent_test build/colorless_test build/defect_test build/ascension_test build/ascension_dump build/progress_test build/settings_test build/profile_test build/history_test build/badges_test build/modifiers_test build/daily_test build/achievements_test build/tutorials_test build/save_errors_test
+check: build/enchant_test build/character_test build/silent_test build/necrobinder_test build/regent_test build/colorless_test build/defect_test build/ascension_test build/ascension_dump build/progress_test build/settings_test build/profile_test build/history_test build/badges_test build/modifiers_test build/daily_test build/achievements_test build/tutorials_test build/save_errors_test build/model_dump
 	./build/enchant_test
 	./build/character_test
 	./build/silent_test
@@ -160,6 +165,8 @@ check: build/enchant_test build/character_test build/silent_test build/necrobind
 	./build/save_errors_test
 	for l in 0 8 9 10; do ./build/ascension_dump $$l > build/asc_dump_$$l.txt; done
 	@PY=$$(command -v python3 || command -v python); if [ -n "$$PY" ] && [ -d ../sts2-decompiled ]; then $$PY tools/ascension_check.py; else echo "ascension_check skipped (needs python3 and ../sts2-decompiled)"; fi
+	./build/model_dump > build/model_dump.txt
+	@PY=$$(command -v python3 || command -v python); if [ -n "$$PY" ] && [ -d ../sts2-decompiled ]; then $$PY tools/balance_check.py; else echo "balance_check skipped (needs python3 and ../sts2-decompiled)"; fi
 
 clean:
 	rm -rf build
