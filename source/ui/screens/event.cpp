@@ -8,84 +8,9 @@ namespace ui {
 
 // ================================================================ events
 
-// AncientEventModel (Neow): the Ancient's scene and dialogue on the top screen, the relic
-// choices (icon, name, description) on the bottom. A dialogue line with a ".next" key waits
-// for a tap before the next one; the last line stays up with the options.
+// AncientEventModel: true while the dialogue has lines left before the options.
 namespace {
 bool ancientTalking(const Event* e) { return !e->finished && e->dialogueLine + 1 < e->dialogue.size(); }
-}
-
-void App::drawAncient(bool top) {
-  Event* e = run_->currentEvent.get();
-  std::string who = e->locKey;
-  // The engine lists every line an Ancient may say; keep the ones with text.
-  e->dialogue.erase(std::remove_if(e->dialogue.begin(), e->dialogue.end(),
-                                   [](const std::string& k) { return !R().hasLoc("ancients." + k); }),
-                    e->dialogue.end());
-  if (top) {
-    std::string bg = e->id;  // gfx/bg_<ancient id, lower case>.t3t
-    for (char& c : bg) c = (char)std::tolower((unsigned char)c);
-    gfx::image(R().texture("gfx/bg_" + bg + ".t3t"), 0, 0, kTop, kH, 0, 0, kTop, kH);
-    drawTopBar();
-    R().text(12, 22, L("ancients." + who + ".title"), ts(F16, col::gold, LEFT));
-    if (R().hasLoc("ancients." + who + ".epithet"))  // TheArchitect has none
-      R().text(12, 42, L("ancients." + who + ".epithet"), ts(F12, col::white, LEFT, 0, 0.85f));
-    // Selected relic: its description in a box over the lower scene; otherwise the dialogue.
-    const Relic* rel = !e->finished && !ancientTalking(e) && sel_ >= 0 && sel_ < (int)e->options.size()
-                           ? e->options[sel_].relic.get() : nullptr;
-    gfx::rect(0, kH - 62, kTop, 62, 0x000000B0);
-    if (rel) {
-      Sprite ic = R().sprite("relic/" + rel->locKey);
-      if (ic) spr(ic, 10, kH - 56, 40, 40);
-      R().text(58, kH - 58, L("relics." + rel->locKey + ".title"), ts(F16, col::gold, LEFT));
-      R().text(58, kH - 38, describeRelic(const_cast<Relic*>(rel)), ts(F12, col::white, LEFT, kTop - 66, 0.9f));
-    } else if (!e->dialogue.empty()) {
-      size_t line = std::min(e->dialogueLine, e->dialogue.size() - 1);
-      const std::string& k = e->dialogue[line];
-      bool player = k.size() > 5 && k.compare(k.size() - 5, 5, ".char") == 0;  // the character answers
-      // The event's vars fill the line (Vakuu's {Visits}).
-      R().text(kTop / 2, kH - 52, expandSmart(L("ancients." + k), e->vars, false, &e->strVars), ts(F16, player ? col::gold : 0xB8E8FFFF, CENTER, kTop - 24));
-    }
-    return;
-  }
-  drawSceneBg(false, 0.7f);
-  if (e->finished || ancientTalking(e)) {
-    std::string label = "继续";
-    if (!e->finished && R().hasLoc("ancients." + e->dialogue[e->dialogueLine].substr(0, e->dialogue[e->dialogueLine].rfind('.')) + ".next"))
-      label = L("ancients." + e->dialogue[e->dialogueLine].substr(0, e->dialogue[e->dialogueLine].rfind('.')) + ".next");
-    button((kBot - 140) / 2, 180, 140, 36, label, ID_DEVITEM0, true, true);
-    return;
-  }
-  int n = (int)e->options.size();
-  const float h = 52, gap = 8, w = 300;
-  float y0 = (kH - n * h - (n - 1) * gap) / 2, x = (kBot - w) / 2;
-  for (int i = 0; i < n; ++i) {
-    float y = y0 + i * (h + gap);
-    bool hl = i == sel_;
-    panel(x, y, w, h, hl ? 0x1E4A5AF0 : 0x14283AF0, hl ? 0xFFD870FF : 0x6AA8C0FF);
-    Relic* rel = e->options[i].relic.get();
-    if (rel) {
-      Sprite ic = R().sprite("relic/" + rel->locKey);
-      if (ic) spr(ic, x + 6, y + (h - 36) / 2, 36, 36);
-      R().text(x + 48, y + 3, L("relics." + rel->locKey + ".title"), ts(F12, col::gold));
-      TextStyle st = ts(F12, col::white, LEFT, w - 54, 0.8f);
-      std::string desc = describeRelic(rel);
-      float dh;
-      R().measure(desc, st, &dh);
-      if (dh > h - 20) st.scale *= (h - 20) / dh;
-      R().text(x + 48, y + 19, desc, st);
-    } else {  // a text option: greyed out when locked (Orobas without a starter relic); TheArchitect's PROCEED
-      std::string k = e->options[i].key;
-      std::string table = R().hasLoc("ancients." + k + ".title") ? "ancients."
-                          : R().hasLoc("modifiers." + k + ".title") ? "modifiers."  // M11: Neow's modifier options
-                          : "events.";
-      uint32_t tc = e->options[i].locked() ? col::gray : col::white;
-      R().text(x + 8, y + 3, L(table + k + ".title"), ts(F12, tc));
-      if (R().hasLoc(table + k + ".description"))
-        R().text(x + 8, y + 19, L(table + k + ".description"), ts(F12, tc, LEFT, w - 16, 0.85f));
-    }
-    if (!e->options[i].locked()) hits_.push_back({x, y, w, h, ID_DEVITEM0 + i});
-  }
 }
 
 // S17 (RGDSplus U21, C# NEventLayout / NEventOptionButton): a regular event page. Top screen:
@@ -226,6 +151,327 @@ std::vector<Offer> offersFor(const Event* e, int i, const OptionText& t) {
 }
 
 }  // namespace
+
+// S06 (RGDSplus U06, C# NAncientEventLayout / NAncientDialogueLine / NAncientNameBanner): the
+// Ancient layout. Top screen: the Ancient's scene, its name banner, and the dialogue as speech
+// bubbles in the speaker's colour (C# DialogueColor) with the speaker's icon and name -- the
+// Ancient at the left, the character answering at the right. A new line fades in and pushes
+// the older ones up (content tween: 1 s expo-out; the C# has no typewriter), older lines stay at
+// 25 % alpha. While a line is waiting, the bottom screen shows the "next" button with the line's
+// NextButtonText and the whole bottom screen (A, or a tap) advances. On the last line the option
+// buttons come up (C# NEventOptionButton in the ancient style): the relic's icon, name and full
+// description (the cost is never only on the top screen); a locked option is dimmed with its
+// reason in red. Focusing an option (D-pad, or the first tap) shows its relic large on the top
+// screen with name, rarity and description; A or a second tap picks it, X opens the relic
+// detail, B drops the focus. The modifiers' Neow pages (M11) are text options in the same list.
+namespace {
+constexpr int kAncOptId = 2200, kAncProceedId = 2190;  // option i: kAncOptId + i
+constexpr float kAncOptMaxH = 60, kAncBubbleW = 300;
+constexpr double kAncSlide = 1.0, kAncFade = 0.2, kAncOptDelay = 0.3;
+
+// Reveal clock: when the current dialogue line / the options appeared.
+const Event* ancEv_ = nullptr;
+size_t ancLine_ = (size_t)-1;
+bool ancOpts_ = false, ancAutoFocus_ = false;  // ancAutoFocus_: the first option still to take the pad focus
+double ancLineT_ = 0, ancOptsT_ = 0;
+
+uint32_t hexColor(uint32_t rgb, uint32_t a) { return (rgb << 8) | a; }
+// A white 9-slice art recoloured to `rgba` (Godot Modulate / SelfModulate on white art).
+void nineTint(const std::string& sprite, float x, float y, float w, float h, uint32_t rgba) {
+  Sprite s = R().sprite(sprite);
+  if (!s) { gfx::rect(x, y, w, h, rgba); return; }
+  gfx::nineSlice(s.tex, s.x, s.y, s.w, s.h, (float)s.nl, (float)s.nt, (float)s.nr, (float)s.nb, x, y, w, h, rgba, 1.f);
+}
+// AncientEventModel.ButtonColor (the option plate's Modulate), alpha raised a little: the
+// bottom screen is small and the scene under it busy.
+uint32_t ancientButtonColor(const std::string& id) {
+  static const std::map<std::string, uint32_t> kCol = {
+      {"Neow", 0x001A3380}, {"Nonupeipe", 0x001A29BF}, {"Darv", 0x0F001480}, {"Tezcatara", 0x140A00BF},
+      {"Orobas", 0x0D001A59}, {"Pael", 0x081400BF}, {"Tanx", 0x0D050080}, {"Vakuu", 0x0D0F1FCC}};
+  auto it = kCol.find(id);
+  uint32_t c = it == kCol.end() ? 0x00000059 : it->second;
+  uint32_t a = std::min<uint32_t>(0xE6u, (c & 0xFFu) + 0x50u);
+  return (c & 0xFFFFFF00u) | a;
+}
+// AncientEventModel.DialogueColor (TheArchitect keeps the default).
+uint32_t ancientDialogueColor(const std::string& id) {
+  static const std::map<std::string, uint32_t> kCol = {
+      {"Neow", 0x28454F}, {"Vakuu", 0x3C1931}, {"Tezcatara", 0x33251E}, {"Pael", 0x332C29},
+      {"Tanx", 0x731717}, {"Nonupeipe", 0x0A494D}, {"Orobas", 0x5C5F7A}, {"Darv", 0x512E66}};
+  auto it = kCol.find(id);
+  return it == kCol.end() ? 0x28454F : it->second;
+}
+// CharacterModel.DialogueColor.
+uint32_t characterDialogueColor(const std::string& id) {
+  static const std::map<std::string, uint32_t> kCol = {
+      {"Ironclad", 0x590700}, {"Silent", 0x284719}, {"Defect", 0x13446B}, {"Regent", 0x52371D},
+      {"Necrobinder", 0x6B4658}};
+  auto it = kCol.find(id);
+  return it == kCol.end() ? 0x28454F : it->second;
+}
+std::string lowerId(std::string s) {
+  for (char& c : s) c = (char)std::tolower((unsigned char)c);
+  return s;
+}
+bool isCharLine(const std::string& k) { return k.size() > 5 && k.compare(k.size() - 5, 5, ".char") == 0; }
+// The line's NextButtonText ("<line base>.next"), empty if none.
+std::string nextLabel(const std::string& k) {
+  std::string key = "ancients." + k.substr(0, k.rfind('.')) + ".next";
+  return R().hasLoc(key) ? L(key) : "";
+}
+float easeOutExpo(float t) { return t >= 1 ? 1.f : 1.f - std::pow(2.f, -10.f * t); }
+
+std::string relicRarityName(RelicRarity r) {
+  switch (r) {
+    case RelicRarity::Starter: return L("gameplay_ui.RELIC_RARITY.STARTER");
+    case RelicRarity::Common: return L("gameplay_ui.RELIC_RARITY.COMMON");
+    case RelicRarity::Uncommon: return L("gameplay_ui.RELIC_RARITY.UNCOMMON");
+    case RelicRarity::Rare: return L("gameplay_ui.RELIC_RARITY.RARE");
+    case RelicRarity::Shop: return L("gameplay_ui.RELIC_RARITY.SHOP");
+    case RelicRarity::Event: return L("gameplay_ui.RELIC_RARITY.EVENT");
+    case RelicRarity::Ancient: return L("gameplay_ui.RELIC_RARITY.ANCIENT");
+    default: return L("gameplay_ui.RELIC_RARITY.NONE");
+  }
+}
+
+// A text option's loc table: the Ancient's own, the modifiers' (M11 Neow pages), else events.
+std::string ancientOptionTable(const std::string& k) {
+  return R().hasLoc("ancients." + k + ".title")     ? "ancients."
+         : R().hasLoc("modifiers." + k + ".title") ? "modifiers."
+                                                   : "events.";
+}
+}  // namespace
+
+void App::drawAncient(bool top) {
+  Event* e = run_->currentEvent.get();
+  std::string who = e->locKey;
+  // The engine lists every line an Ancient may say; keep the ones with text.
+  e->dialogue.erase(std::remove_if(e->dialogue.begin(), e->dialogue.end(),
+                                   [](const std::string& k) { return !R().hasLoc("ancients." + k); }),
+                    e->dialogue.end());
+  bool talking = ancientTalking(e);
+  bool options = !e->finished && !talking;
+  int n = e->finished ? 1 : (int)e->options.size();
+  if (!options || sel_ >= n || (sel_ >= 0 && e->options[sel_].locked())) sel_ = -1;
+  // Reveal clock.
+  if (ancEv_ != e) { ancEv_ = e; ancLine_ = (size_t)-1; ancOpts_ = false; }
+  if (ancLine_ != e->dialogueLine) { ancLine_ = e->dialogueLine; ancLineT_ = time_; }
+  if (options != ancOpts_) { ancOpts_ = options; ancOptsT_ = time_; ancAutoFocus_ = options; }
+  float age = (float)(time_ - ancLineT_);
+
+  // An option's relic and its title / description (relic or text option).
+  auto optionRelic = [&](int i) -> Relic* {
+    return !e->finished && i >= 0 && i < (int)e->options.size() ? e->options[i].relic.get() : nullptr;
+  };
+  auto optionTitle = [&](int i) -> std::string {
+    if (Relic* rel = optionRelic(i)) return L("relics." + rel->locKey + ".title");
+    const std::string& k = e->options[i].key;
+    return L(ancientOptionTable(k) + k + ".title");
+  };
+  auto optionDesc = [&](int i) -> std::string {
+    if (Relic* rel = optionRelic(i)) return describeRelic(rel);
+    const std::string& k = e->options[i].key;
+    std::string t = ancientOptionTable(k);
+    return R().hasLoc(t + k + ".description") ? expandSmart(L(t + k + ".description"), e->vars, false, &e->strVars)
+                                              : "";
+  };
+  gfx::Texture* scene = R().texture("gfx/bg_" + lowerId(e->id) + ".t3t");
+
+  if (top) {
+    gfx::image(scene, 0, 0, kTop, kH, 0, 0, kTop, kH);
+    drawTopBar();
+    // NAncientNameBanner: the name large, the epithet under it (TheArchitect has none).
+    gfx::gradient(0, 18, kTop, 44, 0x000000A0, 0x00000000, 0x00000060, 0x00000000);
+    R().text(style::kMargin + 4, 20, L("ancients." + who + ".title"), ts(F16, col::gold, LEFT, 0, 1.25f));
+    if (R().hasLoc("ancients." + who + ".epithet"))
+      R().text(style::kMargin + 4, 43, L("ancients." + who + ".epithet"), ts(F12, col::white, LEFT, 0, 0.85f));
+
+    if (options && sel_ >= 0) {  // ---- the focused option, large
+      // Sized to its text and standing on the hint line, so the scene stays visible above it.
+      const float px = style::kMargin, pw = kTop - 2 * style::kMargin, maxH = kH - 24 - 62, ic = 72;
+      Relic* rel = optionRelic(sel_);
+      float tx = rel ? px + 10 + ic + 10 : px + 12, tw = px + pw - 12 - tx;
+      float head = rel ? 52 : 34;
+      std::string desc = optionDesc(sel_);
+      TextStyle dt = ts(F12, col::white, LEFT, tw);
+      float dh = 0;
+      if (!desc.empty()) R().measure(desc, dt, &dh);
+      if (head + dh + 16 > maxH) {
+        dt.scale = std::max(0.85f, (maxH - head - 16) / dh);
+        R().measure(desc, dt, &dh);
+      }
+      float ph = std::min(maxH, std::max(rel ? ic + 20 : 0.f, head + dh + 16)), py = kH - 24 - ph;
+      widgets::panel("ui/hover_tip", px, py, pw, ph);
+      gfx::pushClip(px, py, pw, ph);
+      if (rel) spr(R().sprite("relic/" + rel->icon), px + 10, py + 10, ic, ic);  // no counter: not owned yet
+      R().text(tx, py + 8, optionTitle(sel_), ts(F16, col::gold, LEFT, tw, 1.25f));
+      if (rel) R().text(tx, py + 34, relicRarityName(rel->rarity), ts(F12, col::gold, LEFT, tw, 0.85f));
+      R().text(tx, py + head, desc, dt);
+      gfx::popClip();
+      std::string hint = widgets::usingPad() ? "A 选择   B 返回" : "再点一次选择   B 返回";
+      if (rel) hint += "   X 详情";
+      R().text(kTop / 2, kH - 18, hint, ts(F12, col::gray, CENTER, 0, 0.85f));
+      return;
+    }
+
+    // ---- the dialogue, newest at the bottom
+    if (e->dialogue.empty()) return;
+    size_t cur = std::min(e->dialogueLine, e->dialogue.size() - 1);
+    const Character& ch = run_->character();
+    const float clipY = 60, bottom = kH - 8, gap = 6;
+    struct Bubble { std::string text; bool player; float w, h; };
+    auto bubble = [&](size_t i) {
+      Bubble b;
+      const std::string& k = e->dialogue[i];
+      b.player = isCharLine(k);
+      b.text = expandSmart(L("ancients." + k), e->vars, false, &e->strVars);  // Vakuu's {Visits}
+      float th = 0, tw = R().measure(b.text, ts(F16, col::white, LEFT, kAncBubbleW - 24), &th);
+      b.w = std::max(120.f, std::min(kAncBubbleW, tw + 24));
+      b.h = th + 16 + 14;  // the speaker's name over the text
+      return b;
+    };
+    Bubble last = bubble(cur);
+    float slide = (1.f - easeOutExpo(age / (float)kAncSlide)) * (last.h + gap);
+    float y = bottom + slide;
+    Sprite tail = R().sprite("ui/dialogue_tail");
+    gfx::pushClip(0, clipY, kTop, kH - clipY);
+    for (size_t i = cur + 1; i-- > 0 && y > clipY;) {
+      Bubble b = i == cur ? last : bubble(i);
+      y -= b.h;
+      gfx::pushAlpha(i == cur ? std::min(1.f, age / (float)kAncFade) : 0.25f);
+      uint32_t bcol = hexColor(b.player ? characterDialogueColor(ch.id) : ancientDialogueColor(e->id), 0xEE);
+      const float ic = 32;
+      // Ancient: icon left, bubble right of it, tail pointing left; the character mirrored.
+      float bx = b.player ? kTop - style::kMargin - ic - 10 - b.w : style::kMargin + ic + 10;
+      float icx = b.player ? kTop - style::kMargin - ic : style::kMargin;
+      Sprite icon = b.player ? R().sprite("ui/char_" + ch.energyColor) : R().sprite("map/ancient_" + lowerId(e->id));
+      if (icon) spr(icon, icx, y + b.h - ic - 2, ic, ic);
+      nineTint("ui/nine_dialogue", bx, y, b.w, b.h, bcol);
+      if (tail) {
+        float ty = y + b.h - tail.h - 6;
+        if (b.player) {  // the tail mirrored about the bubble's right edge
+          gfx::Affine m;
+          m.a = -1;
+          m.tx = 2 * (bx + b.w);
+          gfx::pushTransform(m);
+          spr(tail, bx + b.w - tail.w + 2, ty, tail.w, tail.h, bcol, 1.f);
+          gfx::popTransform();
+        } else {
+          spr(tail, bx - tail.w + 2, ty, tail.w, tail.h, bcol, 1.f);
+        }
+      }
+      std::string name = b.player ? L("characters." + ch.key + ".title") : L("ancients." + who + ".title");
+      R().text(bx + 12, y + 5, name, ts(F12, col::gold, LEFT, b.w - 24, 0.85f));
+      R().text(bx + 12, y + 19, b.text, ts(F16, col::white, LEFT, kAncBubbleW - 24));
+      gfx::popAlpha();
+      y -= gap;
+    }
+    gfx::popClip();
+    return;
+  }
+
+  // ---- bottom: the scene continues, dimmed (RGDSplus U06 reuses the scene background)
+  gfx::image(scene, kBotOX, 0, kBot, kH, 0, 0, kBot, kH);
+  gfx::rect(0, 0, kBot, kH, 0x000000B4);
+  bool canAct = run_->eventChoice.waiting() && !pauseOpen_;
+  // The options take input once they are up (C# grabs focus 0.8 s after the last line).
+  gfx::Input in = pauseOpen_ || (options && time_ - ancOptsT_ < kAncOptDelay) ? gfx::Input{} : gfx::input();
+  {  // focus left over from another screen: drop it
+    int fo = widgets::focused();
+    bool ours = (fo >= kAncOptId && fo < kAncOptId + n) || fo == kAncProceedId;
+    if (!ours) widgets::setFocus(-1);
+  }
+  widgets::beginFrame(in);
+  const float x = style::kMargin, w = kBot - 2 * style::kMargin;
+  int pick = -1;
+  const uint32_t plateCol = ancientButtonColor(e->id);
+  float pulse = 0.75f + 0.25f * std::sin((float)time_ * 5.f);
+  uint32_t ringCol = (style::kFocus & 0xFFFFFF00u) | (uint32_t)(0xFF * pulse);
+  if (talking) {
+    // NAncientDialogueHitbox + FakeNextButton: the whole screen advances (updateEvent); the
+    // button shows the line's reply.
+    std::string label = nextLabel(e->dialogue[e->dialogueLine]);
+    if (label.empty()) label = "继续";
+    const float bw = 180, bh = 44, bx = (kBot - bw) / 2, by = kH - bh - 30;
+    nineTint("ui/btn_ancient", bx, by, bw, bh, plateCol);
+    nineTint("ui/btn_ancient_outline", bx, by, bw, bh, ringCol);  // the only thing to press
+    R().text(kBot / 2, by + (bh - R().lineHeight(F16)) / 2, label, ts(F16, col::white, CENTER, bw - 16));
+    R().text(kBot / 2, kH - 22, "A / 点击屏幕 继续", ts(F12, col::gray, CENTER, 0, 0.85f));
+  } else if (e->finished) {
+    float h = 44, y = (kH - h) / 2, bx = x + 40, bw = w - 80;
+    if (widgets::hit(kAncProceedId, bx, y, bw, h, canAct)) pick = 0;
+    nineTint("ui/btn_ancient", bx, y, bw, h, plateCol);
+    nineTint("ui/btn_ancient_outline", bx, y, bw, h,
+             widgets::usingPad() && widgets::focused() == kAncProceedId ? ringCol : style::kPanelEdge);
+    R().text(kBot / 2, y + (h - R().lineHeight(F16)) / 2, "继续", ts(F16, col::white, CENTER));
+  } else {
+    // C# DefaultFocusedControl: with the D-pad the first open option takes the focus.
+    if (ancAutoFocus_ && widgets::usingPad() && widgets::focused() < 0)
+      for (int i = 0; i < n; ++i)
+        if (!e->options[i].locked()) { widgets::setFocus(kAncOptId + i); break; }
+    if (widgets::focused() >= 0) ancAutoFocus_ = false;
+    int f = widgets::focused() - kAncOptId;
+    if (widgets::usingPad() && f >= 0 && f < n) sel_ = f;
+    const float top0 = style::kMargin, bot0 = kH - style::kMargin;
+    float h = std::min(kAncOptMaxH, (bot0 - top0 - (n - 1) * style::kGap) / std::max(1, n));
+    float y0 = top0 + (bot0 - top0 - (n * h + (n - 1) * style::kGap)) / 2;
+    float appear = std::min(1.f, (float)(time_ - ancOptsT_) / 0.25f);  // AnimateButtonsIn
+    gfx::pushAlpha(appear);
+    for (int i = 0; i < n; ++i) {
+      float y = y0 + i * (h + style::kGap) + (1 - appear) * 12;
+      bool locked = e->options[i].locked();
+      bool focus = i == sel_;
+      if (widgets::hit(kAncOptId + i, x, y, w, h, canAct && !locked)) {
+        bool tapFocus = in.touchDown && sel_ != i;  // the first tap only shows the relic on top
+        sel_ = i;
+        if (!tapFocus) pick = i;
+      }
+      // SetVisuallyLocked: the plate desaturated and darker, the label at 70 %.
+      nineTint("ui/btn_ancient", x, y, w, h, locked ? 0x262626B0 : plateCol);
+      if (focus) {  // NEventOptionButton focus: a lighter plate and the outline
+        nineTint("ui/btn_ancient", x, y, w, h, 0xFFD87030);
+        nineTint("ui/btn_ancient_outline", x - 2, y - 2, w + 4, h + 4, ringCol);
+      }
+      if (locked) gfx::pushAlpha(0.7f);
+      gfx::pushClip(x, y, w, h);
+      Relic* rel = optionRelic(i);
+      float tx = x + 10;
+      if (rel) {
+        float ic = std::min(40.f, h - 10);
+        spr(R().sprite("relic/" + rel->icon), x + 6, y + (h - ic) / 2, ic, ic, locked ? 0x808080FF : 0xFFFFFFFF);
+        tx = x + 6 + ic + 6;
+      }
+      float tw = x + w - 8 - tx;
+      std::string desc = optionDesc(i);
+      float titleH = R().lineHeight(F16);
+      TextStyle st = ts(F12, locked ? col::red : col::white, LEFT, tw);  // a locked option's text is its reason
+      float dh = 0;
+      if (!desc.empty()) R().measure(desc, st, &dh);
+      float room = h - titleH - 6;
+      if (dh > room) {
+        st.scale = std::max(0.85f, room / dh);
+        R().measure(desc, st, &dh);
+      }
+      float ty = desc.empty() ? y + (h - titleH) / 2 : y + 3 + (dh < room ? (room - dh) / 2 : 0);
+      bool centred = desc.empty() && !rel;  // a title-only option (TheArchitect's PROCEED)
+      R().text(centred ? x + w / 2 : tx, ty, optionTitle(i),
+               ts(F16, locked ? col::red : col::gold, centred ? CENTER : LEFT, tw));  // C# [red] / [gold]
+      if (!desc.empty()) R().text(tx, ty + titleH, desc, st);
+      gfx::popClip();
+      if (locked) {
+        spr(R().sprite("ui/stats_lock_m"), x + w - 22, y + 4, 16, 16);
+        gfx::popAlpha();
+      }
+    }
+    gfx::popAlpha();
+  }
+  widgets::endFrame();
+  if (pick >= 0 && canAct && (e->finished || !e->options[pick].locked())) {
+    sel_ = -1;
+    widgets::setFocus(-1);
+    run_->eventChoice.fire(pick);
+  }
+}
 
 void App::drawEvent(bool top) {
   Event* e = run_->currentEvent.get();
@@ -443,24 +689,18 @@ void App::updateEvent(const gfx::Input& in) {
   Event* e = r.currentEvent.get();
   if (e && crystalSphereGame(r)) { updateCrystalSphere(in); return; }
   if (!e || !r.eventChoice.waiting()) return;
-  if (e->ancient) {  // the Ancient layout keeps its own input (drawAncient's hit boxes)
-    if (ancientTalking(e)) {  // dialogue: A / tap advances a line
-      if ((in.down & gfx::BTN_A) || (in.touchDown && hitAt(in.tx, in.ty) == ID_DEVITEM0)) e->dialogueLine++;
+  if (e->ancient) {  // the Ancient layout (drawAncient) picks with the widgets; the extra keys here
+    if (ancientTalking(e)) {  // NAncientDialogueHitbox: A or a tap anywhere advances a line
+      if ((in.down & gfx::BTN_A) || in.touchDown) e->dialogueLine++;
       return;
     }
-    int n = e->finished ? 1 : (int)e->options.size();
-    if (in.down & gfx::BTN_DOWN) sel_ = std::min(n - 1, sel_ + 1);
-    if (in.down & gfx::BTN_UP) sel_ = std::max(0, sel_ - 1);
-    int pick = -1;
-    if ((in.down & gfx::BTN_A) && sel_ >= 0) pick = sel_;
-    if (in.touchDown) {
-      int id = hitAt(in.tx, in.ty);
-      if (id >= ID_DEVITEM0 && id < ID_DEVITEM0 + n) pick = id - ID_DEVITEM0;
+    int n = e->finished ? 0 : (int)e->options.size();
+    if ((in.down & gfx::BTN_X) && sel_ >= 0 && sel_ < n && e->options[sel_].relic) {
+      detailRelic_ = previewRelic(e->options[sel_].relic->id);
+      detailUpgrade_ = false;
+      return;
     }
-    if (pick >= 0 && (e->finished || !e->options[pick].locked())) {
-      sel_ = -1;
-      r.eventChoice.fire(pick);
-    }
+    if ((in.down & gfx::BTN_B) && sel_ >= 0) { sel_ = -1; widgets::setFocus(-1); }
     return;
   }
   // Regular events: picking and focus are the widgets' (drawEvent); the extra keys here.
