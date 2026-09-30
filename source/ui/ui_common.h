@@ -114,6 +114,7 @@ enum : int {
   ID_PGUP,
   ID_PGDN,
   ID_POTIONS,
+  ID_INSPECT,  // S10 combat inspect (信息)
   ID_CONTINUE,
   ID_USE,
   ID_DISCARD,

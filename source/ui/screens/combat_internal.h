@@ -37,6 +37,8 @@ constexpr float kHandY = 130.f;  // centre card at ~49% of the screen, as on RGD
 // Top of the hand area. A card is played only when dragged above it; dragging it
 // back below disarms it, so releasing over the hand always cancels.
 constexpr float kPlayLine = 76.f;
+// S09 potion aim: where the potion sits on the bottom screen's aim page (the arrow's tail).
+constexpr float kPotionAimX = 34.f, kPotionAimY = 22.f;  // top middle of the potion icon
 }  // namespace
 
 // ---------------------------------------------------------------- S12 hand select (U14)
