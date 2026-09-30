@@ -91,9 +91,9 @@ static std::string restDescription(const Run& r, int o, std::string* reason, boo
   std::string base = std::string("rest_site_ui.OPTION_") + kOptKeys[o];
   if (reason) {
     reason->clear();
-    if (used) *reason = "已使用";
+    if (used) *reason = tr("已使用", "Used");
     else if (!valid && R().hasLoc(base + ".descriptionDisabled")) *reason = plain(L(base + ".descriptionDisabled"));
-    else if (!valid) *reason = "无法使用";
+    else if (!valid) *reason = tr("无法使用", "Unavailable");
   }
   if (!valid && !used && R().hasLoc(base + ".descriptionDisabled")) return L(base + ".descriptionDisabled");
   std::string d = L(base + ".description");
@@ -110,7 +110,7 @@ static std::string restDescription(const Run& r, int o, std::string* reason, boo
       replaceAll(d, "{ExtraText}", extra);
       break;
     }
-    case 1: replaceAll(d, "{Count}", "1"); break;
+    case 1: d = expandSmart(d, {{"Count", Dec(1), Dec(1)}}, false); break;  // eng: {Count:plural:a card|{} cards}
     case 2: {
       int lifted = 0;
       for (auto& rel : r.relics) if (rel->id == "Girya") lifted = rel->displayAmount();
@@ -186,18 +186,18 @@ void App::drawRest(bool top) {
       switch (fx.opt) {
         case 0:
           amount = r.lastHeal;
-          text = "回复了 [green]" + num(amount) + "[/green] 点生命值。";
+          text = tr("回复了 [green]", "Healed [green]") + num(amount) + tr("[/green] 点生命值。", "[/green] HP.");
           break;
         case 2: {
           int lifted = 0;
           for (auto& rel : r.relics) if (rel->id == "Girya") lifted = rel->displayAmount();
-          text = "在战斗开始时拥有 [gold]+" + num(lifted + 1) + "[/gold] 力量。（剩余 " + num(std::max(0, 2 - lifted)) + " 次）";
+          text = tr("在战斗开始时拥有 [gold]+", "Start each combat with [gold]+") + num(lifted + 1) + tr("[/gold] 力量。（剩余 ", "[/gold] Strength. (") + num(std::max(0, 2 - lifted)) + tr(" 次）", " left)");
           break;
         }
-        case 5: text = "[gold]" + L("relics.PUMPKIN_CANDLE.title") + "[/gold] 充能 +5。"; break;
+        case 5: text = "[gold]" + L("relics.PUMPKIN_CANDLE.title") + tr("[/gold] 充能 +5。", "[/gold] charges +5."); break;
         case 6:
           amount = (int)r.deck.size() - fx.before;
-          text = "复制了 [blue]" + num(amount) + "[/blue] 张牌。";
+          text = tr("复制了 [blue]", "Duplicated [blue]") + num(amount) + tr("[/blue] 张牌。", "[/blue] cards.");
           break;
         default: break;
       }
@@ -216,13 +216,13 @@ void App::drawRest(bool top) {
       std::string reason;
       bool valid = restValid(sel_);
       std::string desc = restDescription(r, sel_, &reason, valid);
-      bool used = reason == "已使用";
+      bool used = reason == tr("已使用", "Used");
       optionPanel(sel_, used ? restDescription(r, sel_, nullptr, true) : desc, valid ? col::white : col::gray,
                   valid ? "" : (used ? reason : ""));
     } else if (r.restChoice.waiting()) {
       widgets::panel("ui/hover_tip", px, py, pw, 44);
-      R().text(px + pw / 2, py + 7, "选择一项行动", ts(F12, col::white, CENTER));
-      R().text(px + pw / 2, py + 23, "点选查看，再点一次确认", ts(F12, col::gray, CENTER));
+      R().text(px + pw / 2, py + 7, tr("选择一项行动", "Choose an action"), ts(F12, col::white, CENTER));
+      R().text(px + pw / 2, py + 23, tr("点选查看，再点一次确认", "Tap twice to choose"), ts(F12, col::gray, CENTER));
     }
     return;
   }
@@ -296,7 +296,7 @@ void App::drawRest(bool top) {
 
   // Action bar: 离开 (bottom-left, after one option with Miniature Tent), 确认 or 继续 (right).
   if (!r.restUsed.empty() && !result &&
-      widgets::button(kLeaveId, style::kMargin, style::kActionY, 80, style::kButtonH, "离开", widgets::Kind::Secondary,
+      widgets::button(kLeaveId, style::kMargin, style::kActionY, 80, style::kButtonH, tr("离开", "Leave"), widgets::Kind::Secondary,
                       canAct)) {
     sel_ = -1;
     widgets::endFrame();
@@ -313,7 +313,7 @@ void App::drawRest(bool top) {
       sel_ = -1;
       widgets::setFocus(-1);
     }
-  } else if (widgets::button(kConfirmId, kBot - style::kMargin - 96, style::kActionY, 96, style::kButtonH, "确认",
+  } else if (widgets::button(kConfirmId, kBot - style::kMargin - 96, style::kActionY, 96, style::kButtonH, tr("确认", "Confirm"),
                              widgets::Kind::Primary, canAct && sel_ >= 0 && restValid(sel_))) {
     choose = sel_;
   }
@@ -396,7 +396,7 @@ void App::drawUpgrade(bool top) {
       fx.t += 1.f / 60;
       TextStyle tt = ts(F16, col::gold, CENTER);
       tt.scale = 1.25f;
-      R().text(kTop / 2, 24, "已升级", tt);
+      R().text(kTop / 2, 24, tr("已升级", "Upgraded"), tt);
       float s = 1.1f + 0.1f * std::max(0.f, 1 - fx.t * 3);
       drawCard(opts[fx.pick], kTop / 2 - kCardW * s / 2, 52, s, false, true);
       return;
@@ -408,7 +408,7 @@ void App::drawUpgrade(bool top) {
   gfx::rect(0, 0, kBot, kH, 0x000000A8);
   if (result) {
     R().text(kBot / 2, 90, cardTitle(opts[fx.pick]), ts(F16, col::green, CENTER, 0, 1.25f));
-    R().text(kBot / 2, 116, "已升级", ts(F12, col::white, CENTER));
+    R().text(kBot / 2, 116, tr("已升级", "Upgraded"), ts(F12, col::white, CENTER));
     gfx::rect(0, 196, kBot, 44, 0x000000A0);
     button(kBot - 110, 200, 100, 34, L("ancients.PROCEED.title"), ID_CONFIRM, fx.t > 0.2f, true);
     return;

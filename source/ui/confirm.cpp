@@ -88,7 +88,7 @@ void ask(const std::string& title, const std::string& body, std::function<void()
   s.title = title;
   s.body = body;
   s.ok = ok;
-  s.cancel = cancel.empty() ? std::string("取消") : cancel;
+  s.cancel = cancel.empty() ? std::string(tr("取消", "Cancel")) : cancel;
   s.onOk = std::move(onOk);
   open(std::move(s));
 }
@@ -126,11 +126,11 @@ std::string invalidSaveText(const char* key, const char* fallback) {
 }
 std::string invalidSaveTitle() {
   std::string s = L("main_menu_ui.INVALID_SAVE_POPUP.title");
-  return s.rfind("main_menu_ui.", 0) == 0 ? std::string("存档损坏！") : s;
+  return s.rfind("main_menu_ui.", 0) == 0 ? std::string(tr("存档损坏！", "Corrupt save!")) : s;
 }
 std::string dismissLabel() {
   std::string s = L("main_menu_ui.INVALID_SAVE_POPUP.dismiss");
-  return s.rfind("main_menu_ui.", 0) == 0 ? std::string("了解了") : s;
+  return s.rfind("main_menu_ui.", 0) == 0 ? std::string(tr("了解了", "OK")) : s;
 }
 }  // namespace
 
@@ -142,16 +142,16 @@ void App::openSaveError(int kind) {
       // safe choice, keeping it, is focused): progress and unlocks are in progress.sav, untouched.
       confirm::Spec s;
       s.title = invalidSaveTitle();
-      s.body = invalidSaveText("description_run", "无法加载这局游戏。") +
-               "\n\n要删除这局游戏的存档吗？\n进度与解锁不受影响。";
-      s.ok = "删除存档";
-      s.cancel = "保留";
+      s.body = invalidSaveText("description_run", tr("无法加载这局游戏。", "This run could not be loaded.")) +
+               tr("\n\n要删除这局游戏的存档吗？\n进度与解锁不受影响。", "\n\nDelete this run's save?\nProgress and unlocks are not affected.");
+      s.ok = tr("删除存档", "Delete save");
+      s.cancel = tr("保留", "Keep");
       s.onOk = [this] {
         if (savesOn()) gfx::deleteSave(profiles::runSaveName());
         hasSave_ = hasSave();
         continueInfo_.clear();
         titleSelection_ = 0;
-        toast_ = "存档已删除";
+        toast_ = tr("存档已删除", "Save deleted");
         toastT_ = 1.6f;
       };
       s.onCancel = [this] {  // kept on the SD card, but 继续 is hidden until the menu is rebuilt
@@ -164,20 +164,20 @@ void App::openSaveError(int kind) {
     }
     case Kind::ProgressCorrupt:
       confirm::notice(invalidSaveTitle(),
-                      invalidSaveText("description_progress", "加载存档文件时出现问题。") +
-                          "\n\n已改用新的进度。损坏的文件另存为 progress.corrupt。",
+                      invalidSaveText("description_progress", tr("加载存档文件时出现问题。", "There was a problem loading the save file.")) +
+                          tr("\n\n已改用新的进度。损坏的文件另存为 progress.corrupt。", "\n\nStarted with fresh progress. The damaged file was kept as progress.corrupt."),
                       dismissLabel());
       break;
     case Kind::SettingsCorrupt:
       confirm::notice(invalidSaveTitle(),
-                      invalidSaveText("description_settings", "加载设置文件时出现问题。") +
-                          "\n\n已恢复默认设置。损坏的文件另存为 settings.corrupt。",
+                      invalidSaveText("description_settings", tr("加载设置文件时出现问题。", "There was a problem loading the settings file.")) +
+                          tr("\n\n已恢复默认设置。损坏的文件另存为 settings.corrupt。", "\n\nSettings were reset to defaults. The damaged file was kept as settings.corrupt."),
                       dismissLabel());
       break;
     case Kind::WriteFailed:  // no C# text (Steam / the OS report it there)
-      confirm::notice("存档失败",
-                      "无法写入SD卡，这次的进度没有保存。\n\n请检查SD卡是否插好、没有锁定，并且还有剩余空间。",
-                      L("main_menu_ui.GENERIC_POPUP.ok").rfind("main_menu_ui.", 0) == 0 ? "了解了"
+      confirm::notice(tr("存档失败", "Save failed"),
+                      tr("无法写入SD卡，这次的进度没有保存。\n\n请检查SD卡是否插好、没有锁定，并且还有剩余空间。", "Could not write to the SD card; this progress was not saved.\n\nCheck that the SD card is inserted, not locked, and has free space."),
+                      L("main_menu_ui.GENERIC_POPUP.ok").rfind("main_menu_ui.", 0) == 0 ? tr("了解了", "OK")
                                                                                        : L("main_menu_ui.GENERIC_POPUP.ok"));
       break;
     case Kind::SdUnavailable:  // Y5: no C# text either; the game goes on without saving
@@ -269,7 +269,7 @@ void App::drawConfirm(bool top) {
     if (i == sel) outline(bx, by, kBtnW, kBtnH);
   }
   if (l.y + l.h + 18 < kH)
-    R().text(kBot / 2, kH - 16, single(s) ? "A / B：关闭" : "A：选择    B：取消", ts(F12, col::gray, CENTER));
+    R().text(kBot / 2, kH - 16, single(s) ? tr("A / B：关闭", "A / B: Close") : tr("A：选择    B：取消", "A: Select    B: Cancel"), ts(F12, col::gray, CENTER));
   gfx::popAlpha();
 }
 

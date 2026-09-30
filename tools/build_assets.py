@@ -4,8 +4,9 @@
 Everything is read from the local PCK; nothing is downloaded. Output:
   romfs/gfx/atlas_N.t3t + atlas.txt   sprites (card art, creatures, icons)
   romfs/gfx/*.t3t                      full-screen backgrounds
-  romfs/font/font_N.t3t + font.txt     bitmap font (only glyphs used)
-  romfs/loc.txt                        key<TAB>value strings (zhs)
+  romfs/font/font_N.t3t + font.txt     bitmap font, 简体中文 (only glyphs used)
+  romfs/font/eng_N.t3t + eng.txt       bitmap font, English (Kreon; only glyphs used)
+  romfs/loc.txt, loc_eng.txt           key<TAB>value strings (zhs, eng)
 """
 import argparse
 import glob
@@ -397,7 +398,11 @@ def game_font(g, res, fallback):
         i = d.find(magic)
         while i >= 4:
             n = struct.unpack_from('<I', d, i - 4)[0]
-            if 1024 < n <= len(d) - i:
+            # A real sfnt header: 4..64 tables whose first tag is printable (the .fontdata also holds
+            # cached glyph textures, where the magic bytes turn up by chance).
+            tables = struct.unpack_from('>H', d, i + 4)[0] if i + 16 <= len(d) else 0
+            tag = d[i + 12:i + 16]
+            if 1024 < n <= len(d) - i and 4 <= tables <= 64 and all(0x20 <= b < 0x7F for b in tag):
                 os.makedirs(os.path.dirname(cache), exist_ok=True)
                 with open(cache, 'wb') as f:
                     f.write(d[i:i + n])
@@ -441,6 +446,18 @@ def bake_boot_and_act_titles(g, packer, args):
     for n in range(1, 5):
         packer.add(f'act/number_{n}', text_image(medium, 13, number.replace('{actNumber}', str(n)),
                                                  (0x87, 0xCE, 0xEB), (1, 1, 60)))
+    # Y3: the English banner in the game's own English fonts (Spectral Bold / Kreon), act/eng_name_<ID>
+    # and act/eng_number_<n>; act_title.cpp picks the set of the active language.
+    spectral = game_font(g, 'fonts/spectral_bold.ttf', args.font)
+    kreon = game_font(g, 'fonts/kreon_regular.ttf', args.font)
+    for k, v in g.loc('eng', 'acts').items():
+        act = k.split('.')[0]
+        if k.endswith('.title') and act != 'DEPRECATED_ACT':
+            packer.add('act/eng_name_' + act, text_image(spectral, 27, v, (0xEF, 0xC8, 0x51), (1, 1, 60)))
+    number = g.loc('eng', 'gameplay_ui')['ACT_NUMBER']
+    for n in range(1, 5):
+        packer.add(f'act/eng_number_{n}', text_image(kreon, 13, number.replace('{actNumber}', str(n)),
+                                                     (0x87, 0xCE, 0xEB), (1, 1, 60)))
 
 
 def bake_ancient(g, anc, args):
@@ -1046,6 +1063,9 @@ def build(args):
     a = Assets(g)
     os.makedirs(os.path.join(OUT, 'gfx'), exist_ok=True)
     os.makedirs(os.path.join(OUT, 'font'), exist_ok=True)
+    if args.text_only:
+        bake_text(g, args, CARDS, POWERS, MONSTERS, RELICS, EVENTS, POTIONS, ENCHANTMENTS)
+        return
     packer = Packer()
 
     print('card art')
@@ -1326,13 +1346,21 @@ def build(args):
         canvas.save(os.path.join(ROOT, 'build', 'preview_bg_merchant.png'))
     bake_rest_sites(g, args)  # S18: gfx/bg_rest_<act>.t3t
 
+    bake_text(g, args, CARDS, POWERS, MONSTERS, RELICS, EVENTS, POTIONS, ENCHANTMENTS)
+
+
+def bake_text(g, args, CARDS, POWERS, MONSTERS, RELICS, EVENTS, POTIONS, ENCHANTMENTS):
     print('text')
-    strings = {}
+    # Y3: both languages get the same table selection (every take() below); loc.txt is 简体中文,
+    # loc_eng.txt English. The game switches between them at runtime (Res::setLanguage).
+    langs = ('zhs', 'eng')
+    tables = {lang: {} for lang in langs}
 
     def take(table, pred=lambda k: True):
-        for k, v in g.loc('zhs', table).items():
-            if pred(k):
-                strings[f'{table}.{k}'] = v
+        for lang in langs:
+            for k, v in g.loc(lang, table).items():
+                if pred(k):
+                    tables[lang][f'{table}.{k}'] = v
 
     take('cards', lambda k: k.split('.')[0] in CARDS)
     take('powers', lambda k: k.split('.')[0] in POWERS)
@@ -1387,22 +1415,57 @@ def build(args):
               'card_selection', 'intents', 'game_over_screen', 'characters'):
         take(t, (lambda k: not k.startswith(('DAILY', 'DISCOVERY'))) if t == 'game_over_screen'
              else (lambda k: k.split('.')[0] in ('IRONCLAD', 'SILENT', 'DEFECT', 'REGENT', 'NECROBINDER', 'RANDOM_CHARACTER')) if t == 'characters' else (lambda k: True))
-    with open(os.path.join(OUT, 'loc.txt'), 'w', encoding='utf-8', newline='\n') as f:
-        for k in sorted(strings):
-            v = strings[k].replace('\\', '\\\\').replace('\n', '\\n').replace('\t', ' ')
-            f.write(f'{k}\t{v}\n')
-    print(f'  {len(strings)} strings')
+    for lang, name in (('zhs', 'loc.txt'), ('eng', 'loc_eng.txt')):
+        with open(os.path.join(OUT, name), 'w', encoding='utf-8', newline='\n') as f:
+            for k in sorted(tables[lang]):
+                v = tables[lang][k].replace('\\', '\\\\').replace('\n', '\\n').replace('\t', ' ')
+                f.write(f'{k}\t{v}\n')
+        print(f'  {name}: {len(tables[lang])} strings')
 
     print('font')
-    chars = set(chr(c) for c in range(32, 127))
-    for v in strings.values():
+    extra = '×→←↑↓…—“”·●○‹›'
+    ascii_chars = set(chr(c) for c in range(32, 127))
+    # 简体中文: every non-ASCII character in source/ (literals and comments alike, as before).
+    chars = set(ascii_chars)
+    for v in tables['zhs'].values():
         chars.update(v)
-    # Strings written directly in the UI code.
+    literals = source_literals()
+    for text in literals['all']:
+        chars.update(c for c in text if ord(c) > 127)
+    chars.update(extra)
+    build_font(printable(chars), args.font, 'font')
+    # English: the eng loc text plus the characters of every string literal in source/ except the
+    # Chinese half of tr("中文", "English") -- so port text not converted to tr() yet still shows (its
+    # CJK glyphs fall back to the CJK font) and converted text costs no CJK glyphs at all.
+    chars = set(ascii_chars)
+    for v in tables['eng'].values():
+        chars.update(v)
+    for text in literals['english']:
+        chars.update(text)
+    chars.update(extra + '简体中文')
+    kreon = game_font(g, 'fonts/kreon_regular.ttf', args.font)
+    build_font(printable(chars), kreon, 'eng', fallback=args.font)
+
+
+def printable(chars):
+    return sorted(c for c in chars if c.isprintable() and c not in '\n\t')
+
+
+def source_literals():
+    """String literals in source/ (comments skipped). 'all': every file's whole text (the old
+    glyph scan, comments included); 'english': the literals an English build can show, i.e. all
+    but the first argument of tr("中文", "English")."""
+    tok = re.compile(r'"(?:\\.|[^"\\\n])*"|//[^\n]*|/\*.*?\*/|\'(?:\\.|[^\'\\\n])*\'', re.S)
+    tr_first = re.compile(r'\btr\(\s*$')
+    out = {'all': [], 'english': []}
     for src in glob.glob(os.path.join(ROOT, 'source', '**', '*.[ch]*'), recursive=True):
-        chars.update(c for c in open(src, encoding='utf-8').read() if ord(c) > 127)
-    chars.update('×→←↑↓…—“”·●○')
-    chars = sorted(c for c in chars if c.isprintable() and c not in '\n\t')
-    build_font(chars, args.font)
+        text = open(src, encoding='utf-8').read()
+        out['all'].append(text)
+        for m in tok.finditer(text):
+            lit = m.group(0)
+            if lit.startswith('"') and not tr_first.search(text[max(0, m.start() - 16):m.start()]):
+                out['english'].append(lit[1:-1])
+    return out
 
 
 def default_font():
@@ -1419,11 +1482,26 @@ def default_font():
     sys.exit('no CJK font found; pass --font')
 
 
-def build_font(chars, font_path):
-    # One page per size (font_<size index>.t3t): both sizes no longer fit one 1024 page.
+def font_cmap(path):
+    """The code points a font file maps, or None when fontTools is missing (then every glyph is
+    drawn with the primary font)."""
+    try:
+        from fontTools.ttLib import TTFont
+    except ImportError:
+        return None
+    f = TTFont(path, fontNumber=0, lazy=True)
+    return set(f.getBestCmap() or {})
+
+
+def build_font(chars, font_path, prefix, fallback=None):
+    """<prefix>_<size index>.t3t (one page per size: 12 and 16 px) + <prefix>.txt. With a fallback
+    font, characters the primary font does not have (CJK in the English page) are drawn with it,
+    baseline-aligned to the primary font."""
     sizes = [12, 16]
     page_size = 1024
     lines = []
+    cmap = font_cmap(font_path) if fallback else None
+    pages_px = 0
     for si, size in enumerate(sizes):
         page = Image.new('RGBA', (page_size, page_size), (255, 255, 255, 0))
         draw = ImageDraw.Draw(page)
@@ -1431,10 +1509,13 @@ def build_font(chars, font_path):
         row_h = 0
         font = ImageFont.truetype(font_path, size, index=0)
         ascent, descent = font.getmetrics()
+        fb = ImageFont.truetype(fallback, size, index=0) if fallback else None
+        fb_dy = ascent - fb.getmetrics()[0] if fb else 0
         lines.append(f'size {si} {size} {ascent + descent} {ascent}')
         for ch in chars:
-            bbox = font.getbbox(ch)
-            adv = round(font.getlength(ch))
+            f, dy = (fb, fb_dy) if fb and cmap is not None and ord(ch) not in cmap else (font, 0)
+            bbox = f.getbbox(ch)
+            adv = round(f.getlength(ch))
             if ch == ' ':
                 lines.append(f'g {si} {ord(ch)} 0 0 0 0 0 0 {adv}')
                 continue
@@ -1447,14 +1528,17 @@ def build_font(chars, font_path):
                 row_h = 0
             if y + h + 1 > page_size:
                 raise RuntimeError('font page full')
-            draw.text((x - bbox[0], y - bbox[1]), ch, font=font, fill=(255, 255, 255, 255))
-            lines.append(f'g {si} {ord(ch)} {x} {y} {w} {h} {bbox[0]} {bbox[1]} {adv}')
+            draw.text((x - bbox[0], y - bbox[1]), ch, font=f, fill=(255, 255, 255, 255))
+            lines.append(f'g {si} {ord(ch)} {x} {y} {w} {h} {bbox[0]} {bbox[1] + dy} {adv}')
             x += w + 1
             row_h = max(row_h, h)
-        write_t3t(os.path.join(OUT, 'font', f'font_{si}.t3t'), shrink_page(page))
-    with open(os.path.join(OUT, 'font', 'font.txt'), 'w', newline='\n') as f:
+        page = shrink_page(page)
+        pages_px += page.width * page.height
+        write_t3t(os.path.join(OUT, 'font', f'{prefix}_{si}.t3t'), page)
+    with open(os.path.join(OUT, 'font', f'{prefix}.txt'), 'w', newline='\n') as f:
         f.write('\n'.join(lines) + '\n')
-    print(f'  {len(chars)} glyphs x {len(sizes)} sizes, one page each')
+    print(f'  {prefix}: {len(chars)} glyphs x {len(sizes)} sizes, one page each, '
+          f'{pages_px * 2 // 1024} KB as RGBA4 on the 3DS')
 
 
 if __name__ == '__main__':
@@ -1462,6 +1546,7 @@ if __name__ == '__main__':
     ap.add_argument('--pck', help='path to "Slay the Spire 2.pck" (default: Steam install)')
     ap.add_argument('--font', default=None, help='CJK font (default: tools/fonts/*, else a system font)')
     ap.add_argument('--preview', action='store_true', help='also write PNG previews')
+    ap.add_argument('--text-only', action='store_true', help='only rebuild loc*.txt and the fonts')
     ap.add_argument('--packaging', action='store_true',
                     help='only write icon.png, banner.png and banner.wav (used by make cia)')
     args = ap.parse_args()

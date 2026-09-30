@@ -40,13 +40,13 @@ void outline(float x, float y, float w, float h, uint32_t c = col::gold, float t
 static std::vector<PauseItem> pauseItems(Screen scr, bool canSaveQuit) {
   std::vector<PauseItem> v;
   v.push_back({kPResume, gp("RESUME"), true, nullptr});
-  if (scr != Screen::Map) v.push_back({kPMap, "地图", true, nullptr});  // on the map it is the screen itself
-  v.push_back({kPDeck, "牌组", true, nullptr});
+  if (scr != Screen::Map) v.push_back({kPMap, tr("地图", "Map"), true, nullptr});  // on the map it is the screen itself
+  v.push_back({kPDeck, tr("牌组", "Deck"), true, nullptr});
   v.push_back({kPSettings, gp("SETTINGS"), true, nullptr});
   // 百科大全 opens the card library (M8); the other compendium pages (relics, potions, bestiary) come later.
   v.push_back({kPCompendium, gp("COMPENDIUM"), true, nullptr});
   v.push_back({kPGiveUp, gp("GIVE_UP"), true, nullptr});
-  v.push_back({kPSaveQuit, gp("SAVE_AND_QUIT"), canSaveQuit, canSaveQuit ? nullptr : "尚无存档"});
+  v.push_back({kPSaveQuit, gp("SAVE_AND_QUIT"), canSaveQuit, canSaveQuit ? nullptr : tr("尚无存档", "No save yet")});
   return v;
 }
 
@@ -72,18 +72,18 @@ void App::drawPause(bool top) {
     const Run& r = *run_;
     std::string act = r.act().name;
     for (char& c : act) c = (char)std::toupper((unsigned char)c);
-    std::string info = L("characters." + r.character().key + ".title") + " · " + L("acts." + act + ".title") + " · 第 " +
-                       num(r.floor) + " 层";
+    std::string info = L("characters." + r.character().key + ".title") + " · " + L("acts." + act + ".title") + tr(" · 第 ", " · Floor ") +
+                       num(r.floor) + tr(" 层", "");
     R().text(kTop / 2, 92, info, ts(F12, col::white, CENTER));
     std::string tip;
     switch (items[pauseSel_].id) {
-      case kPMap: tip = "查看本幕地图。"; break;
-      case kPDeck: tip = "查看你的牌组。"; break;
-      case kPCompendium: tip = "查看卡牌总览。"; break;
+      case kPMap: tip = tr("查看本幕地图。", "View this act's map."); break;
+      case kPDeck: tip = tr("查看你的牌组。", "View your deck."); break;
+      case kPCompendium: tip = tr("查看卡牌总览。", "Browse the card library."); break;
       case kPGiveUp: tip = mm("ABANDON_RUN_CONFIRMATION.body"); break;
       case kPSaveQuit:
-        tip = items[pauseSel_].enabled ? "返回主菜单。继续游戏时从上一个存档点（地图）开始。"
-                                       : "到达地图后才会存档。";
+        tip = items[pauseSel_].enabled ? tr("返回主菜单。继续游戏时从上一个存档点（地图）开始。", "Return to the main menu. Continuing resumes from the last save point (the map).")
+                                       : tr("到达地图后才会存档。", "The game is saved once you reach the map.");
         break;
       default: break;
     }

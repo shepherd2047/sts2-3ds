@@ -32,7 +32,10 @@ std::string replaceAll(std::string s, const std::string& from, const std::string
 }
 
 // DATE_FORMAT ("yyyy MMMM d") in Chinese: 2026年9月29日.
-std::string dateText(const daily::Date& d) { return num(d.year) + "年" + num(d.month) + "月" + num(d.day) + "日"; }
+std::string dateText(const daily::Date& d) {
+  if (english()) return num(d.year) + "-" + (d.month < 10 ? "0" : "") + num(d.month) + "-" + (d.day < 10 ? "0" : "") + num(d.day);
+  return num(d.year) + "年" + num(d.month) + "月" + num(d.day) + "日";
+}
 
 // TIME_LEFT: until the local midnight (the C#'s end of the UTC day); "" when the date is overridden.
 std::string timeLeft() {
@@ -102,13 +105,13 @@ bool App::drawDailyRun(bool top) {
   panel(8, 112, kBot - 16, 80);
   const Progress& pr = progress::state();
   int today = daily::best(pr, daily::key(st.p.date)), overall = daily::bestOverall(pr);
-  R().text(18, 120, "本地记录", ts(F16, col::gold));
-  R().text(18, 144, "今日最高分", ts(F12, col::white));
+  R().text(18, 120, tr("本地记录", "Local records"), ts(F16, col::gold));
+  R().text(18, 144, tr("今日最高分", "Today's best"), ts(F12, col::white));
   R().text(kBot - 18, 144, today < 0 ? "-" : num(today), ts(F12, today < 0 ? col::gray : col::gold, RIGHT));
-  R().text(18, 164, "历史最高分", ts(F12, col::white));
+  R().text(18, 164, tr("历史最高分", "All-time best"), ts(F12, col::white));
   R().text(kBot - 18, 164, overall < 0 ? "-" : num(overall), ts(F12, overall < 0 ? col::gray : col::gold, RIGHT));
-  button(6, 204, 96, 30, "返回", kDBack);
-  button(218, 204, 96, 30, "开始", kDStart, true, true);
+  button(6, 204, 96, 30, tr("返回", "Back"), kDBack);
+  button(218, 204, 96, 30, tr("开始", "Start"), kDStart, true, true);
   return true;
 }
 

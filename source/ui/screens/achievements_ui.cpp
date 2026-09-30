@@ -77,7 +77,7 @@ std::string dateText(int64_t t) {
   if (lt) strftime(buf, sizeof buf, "%Y-%m-%d %H:%M", lt);
   std::string s = L("achievements.UNLOCK_DATE.text");
   size_t p = s.find("{Date}");
-  if (p == std::string::npos) return std::string("已解锁 ") + buf;
+  if (p == std::string::npos) return std::string(tr("已解锁 ", "Unlocked ")) + buf;
   return s.replace(p, 6, std::string(" ") + buf);
 }
 
@@ -120,7 +120,7 @@ bool App::drawAchievements(bool top) {
     R().text(tx, py + 18, un ? title(cur) : L("achievements.LOCKED.title"), ts(F16, un ? col::gold : col::red, LEFT, tw, 1.15f));
     R().text(tx, py + 50, L(achievements::locKey(cur) + ".description"), ts(F12, col::white, LEFT, tw));
     if (un) R().text(tx, py + ph - 30, dateText(achievements::unlockTime(cur)), ts(F12, col::gray, LEFT, tw));
-    R().text(kTop / 2, py + ph + 14, "自定义模式与每日挑战中无法解锁成就", ts(F12, col::gray, CENTER));
+    R().text(kTop / 2, py + ph + 14, tr("自定义模式与每日挑战中无法解锁成就", "Achievements cannot be unlocked in custom or daily runs"), ts(F12, col::gray, CENTER));
     return true;
   }
   for (int i = 0; i < (int)ids.size(); ++i) {
@@ -136,7 +136,7 @@ bool App::drawAchievements(bool top) {
     hits_.push_back({x, y, kIcon, kIcon, kCell0 + i});
   }
   widgets::panel("ui/btn_back", 8, kBarY, 96, kBarH);
-  R().text(8 + 48, kBarY + (kBarH - R().lineHeight(F16)) / 2, "返回", ts(F16, col::white, CENTER));
+  R().text(8 + 48, kBarY + (kBarH - R().lineHeight(F16)) / 2, tr("返回", "Back"), ts(F16, col::white, CENTER));
   hits_.push_back({8, kBarY, 96, kBarH, kBack});
   return true;
 }
@@ -190,7 +190,7 @@ void App::drawAchievementToast() {
   const float w = 220, h = 44, x = (kTop - w) / 2, y = -h + (h + 6) * k;
   widgets::panel("ui/hover_tip", x, y, w, h);
   drawIcon(s.toast, x + 6, y + 4, 36, true);
-  R().text(x + 48, y + 6, "解锁成就", ts(F12, col::gray, LEFT, w - 54));
+  R().text(x + 48, y + 6, tr("解锁成就", "Unlock the achievement"), ts(F12, col::gray, LEFT, w - 54));
   R().text(x + 48, y + 21, title(s.toast), ts(F16, col::gold, LEFT, w - 54));
 }
 

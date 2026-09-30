@@ -225,21 +225,21 @@ std::string typeName(CardType t) {
     case CardType::Attack: return L("gameplay_ui.CARD_TYPE.ATTACK");
     case CardType::Skill: return L("gameplay_ui.CARD_TYPE.SKILL");
     case CardType::Power: return L("gameplay_ui.CARD_TYPE.POWER");
-    case CardType::Status: return "状态";
-    case CardType::Curse: return "诅咒";
+    case CardType::Status: return tr("状态", "Status");
+    case CardType::Curse: return tr("诅咒", "Curse");
   }
   return "";
 }
 std::string rarityName(Rarity r) {
   switch (r) {
-    case Rarity::Basic: return "基础";
+    case Rarity::Basic: return tr("基础", "Basic");
     case Rarity::Common: return L("card_library.RARITY_COMMON");
     case Rarity::Uncommon: return L("card_library.RARITY_UNCOMMON");
     case Rarity::Rare: return L("card_library.RARITY_RARE");
-    case Rarity::Ancient: return "先古";
-    case Rarity::Token: return "衍生";
-    case Rarity::Status: return "状态";
-    case Rarity::Curse: return "诅咒";
+    case Rarity::Ancient: return tr("先古", "Ancient");
+    case Rarity::Token: return tr("衍生", "Token");
+    case Rarity::Status: return tr("状态", "Status");
+    case Rarity::Curse: return tr("诅咒", "Curse");
   }
   return "";
 }
@@ -248,7 +248,7 @@ std::string poolName(int pool) {
     const auto& ids = db::characterIds();
     return pool < (int)ids.size() ? L("characters." + db::character(ids[pool]).key + ".title") : std::string();
   }
-  return pool == kColorless ? "无色" : pool == kAncients ? "先古之民" : "其他";
+  return pool == kColorless ? tr("无色", "Colorless") : pool == kAncients ? tr("先古之民", "Ancients") : tr("其他", "Other");
 }
 // The pool's filter tip (card_library.POOL_*_TIP), for the top screen when nothing is listed.
 std::string poolTip(int pool) {
@@ -356,7 +356,7 @@ bool App::drawCardLibrary(bool top) {
         y += ph + 4;
       }
     }
-    R().text(kTop - 6, kH - 16, "L R 角色  Y 类型  X 升级  A 详情  B 返回", ts(F12, col::gray, RIGHT));
+    R().text(kTop - 6, kH - 16, tr("L R 角色  Y 类型  X 升级  A 详情  B 返回", "L R Character  Y Type  X Upgrade  A Details  B Back"), ts(F12, col::gray, RIGHT));
     return true;
   }
 
@@ -403,11 +403,11 @@ bool App::drawCardLibrary(bool top) {
 
   // The bottom bar: back, type, rarity, upgrades.
   gfx::rect(0, kBarY - 3, kBot, kH - kBarY + 3, 0x000000A0);
-  button(kBarX[0], kBarY, kBarW[0], kBarH, "返回", kBtnBack);
+  button(kBarX[0], kBarY, kBarW[0], kBarH, tr("返回", "Back"), kBtnBack);
   button(kBarX[1], kBarY, kBarW[1], kBarH,
-         st.type == 0 ? "全部类型" : st.type == 4 ? L("card_library.RARITY_OTHER") : L(kTypeKeys[st.type]), kBtnType, true,
+         st.type == 0 ? tr("全部类型", "All types") : st.type == 4 ? L("card_library.RARITY_OTHER") : L(kTypeKeys[st.type]), kBtnType, true,
          st.type != 0);
-  button(kBarX[2], kBarY, kBarW[2], kBarH, st.rarity == 0 ? "全部稀有度" : L(kRarityKeys[st.rarity]), kBtnRarity,
+  button(kBarX[2], kBarY, kBarW[2], kBarH, st.rarity == 0 ? tr("全部稀有度", "All rarities") : L(kRarityKeys[st.rarity]), kBtnRarity,
          rarityEnabled(), st.rarity != 0 && rarityEnabled());
   button(kBarX[3], kBarY, kBarW[3], kBarH, L("gameplay_ui.VIEW_UPGRADES"), kBtnUpgrade, true, st.upgrades);
   if (st.zone == 2 && pad) outline(kBarX[st.bar], kBarY, kBarW[st.bar], kBarH);

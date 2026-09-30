@@ -149,7 +149,7 @@ void App::drawShop(bool top) {
       if (sel_ < 0) {
         TextStyle ht = ts(F12, col::white, CENTER);
         widgets::panel("ui/hover_tip", 60, kH - 34, kTop - 120, 26);
-        R().text(kTop / 2, kH - 28, "点选商品查看，再点一次购买", ht);
+        R().text(kTop / 2, kH - 28, tr("点选商品查看，再点一次购买", "Tap an item to inspect, tap again to buy"), ht);
       }
       return;
     }
@@ -162,7 +162,7 @@ void App::drawShop(bool top) {
       priceTag(cx, kH - 25, price, afford, 1.15f);
       if (sale) {
         spr(R().sprite("ui/sale_tag"), cx + 26, kH - 30, 22, 22);
-        R().text(cx + 50, kH - 25, "特价", ts(F12, col::green, LEFT));
+        R().text(cx + 50, kH - 25, tr("特价", "Sale"), ts(F12, col::green, LEFT));
       }
     };
     if (it->kind == ShopItem::CardItem) {
@@ -171,28 +171,28 @@ void App::drawShop(bool top) {
       if (it->onSale) spr(R().sprite("ui/sale_tag"), 14 + cw - 22, 20, 30, 30);
       priceBand(14, cw, it->onSale);
       // Keyword-free side note: which shelf the card is from.
-      R().text(14 + cw + 20, 30, it->colorless ? "无色牌" : "角色牌", ts(F12, col::gold));
-      if (!afford) R().text(14 + cw + 20, 46, "金币不足", ts(F12, col::red));
+      R().text(14 + cw + 20, 30, it->colorless ? tr("无色牌", "Colorless card") : tr("角色牌", "Character card"), ts(F12, col::gold));
+      if (!afford) R().text(14 + cw + 20, 46, tr("金币不足", "Not enough gold"), ts(F12, col::red));
       return;
     }
     // Relic / potion / removal: a panel with the big icon, name, rarity and description.
     const float px = 10, pw = 232, py = 28;
     std::string title, sub, desc;
     if (it->kind == ShopItem::RelicItem) {
-      static const char* rarities[] = {"", "初始", "普通", "罕见", "稀有", "商店", "事件", "先古"};
+      const char* rarities[] = {"", tr("初始", "Starter"), tr("普通", "Common"), tr("罕见", "Uncommon"), tr("稀有", "Rare"), tr("商店", "Shop"), tr("事件", "Event"), tr("先古", "Ancient")};
       title = L("relics." + it->relic->locKey + ".title");
       int rr = (int)it->relic->rarity;
-      sub = std::string("遗物 · ") + (rr >= 0 && rr < 8 ? rarities[rr] : "");
+      sub = std::string(tr("遗物 · ", "Relic · ")) + (rr >= 0 && rr < 8 ? rarities[rr] : "");
       desc = describeRelic(it->relic.get());
     } else if (it->kind == ShopItem::PotionItem) {
-      static const char* rarities[] = {"", "普通", "罕见", "稀有", "事件", "衍生"};
+      const char* rarities[] = {"", tr("普通", "Common"), tr("罕见", "Uncommon"), tr("稀有", "Rare"), tr("事件", "Event"), tr("衍生", "Token")};
       title = L("potions." + it->potion->locKey + ".title");
       int pr = (int)it->potion->rarity;
-      sub = std::string("药水 · ") + (pr >= 0 && pr < 6 ? rarities[pr] : "");
+      sub = std::string(tr("药水 · ", "Potion · ")) + (pr >= 0 && pr < 6 ? rarities[pr] : "");
       desc = describePotion(it->potion.get());
     } else {
       title = L("merchant_room.MERCHANT.cardRemovalService.title");
-      sub = "服务";
+      sub = tr("服务", "Service");
       desc = L("merchant_room.MERCHANT.cardRemovalService.description");
       std::string amt = num(r.ascValue(sts::kInflation, 50, 25));
       for (size_t p; (p = desc.find("{Amount}")) != std::string::npos;) desc.replace(p, 8, amt);
@@ -215,9 +215,9 @@ void App::drawShop(bool top) {
     R().text(px + 10, py + big + 52, desc, dt);
     priceBand(px, pw, false);
     if (it->kind == ShopItem::PotionItem && !r.hasOpenPotionSlot())
-      R().text(px + pw + 8, kH - 25, "药水栏已满", ts(F12, col::red));
+      R().text(px + pw + 8, kH - 25, tr("药水栏已满", "Potion belt full"), ts(F12, col::red));
     else if (!afford)
-      R().text(px + pw + 8, kH - 25, "金币不足", ts(F12, col::red));
+      R().text(px + pw + 8, kH - 25, tr("金币不足", "Not enough gold"), ts(F12, col::red));
     return;
   }
 
@@ -274,12 +274,12 @@ void App::drawShop(bool top) {
       case ShopItem::Removal: {
         float ix = b.x + (b.w - kRemovalIcon) / 2;
         spr(R().sprite("ui/card_removal"), ix, b.y + 2, kRemovalIcon, kRemovalIcon, stocked ? 0xFFFFFFFF : 0x606060FF);
-        R().text(b.x + b.w / 2, b.y + kRemovalIcon + 4, "移除卡牌", ts(F12, stocked ? col::white : col::gray, CENTER, 0, 0.85f));
+        R().text(b.x + b.w / 2, b.y + kRemovalIcon + 4, tr("移除卡牌", "Remove card"), ts(F12, stocked ? col::white : col::gray, CENTER, 0, 0.85f));
         break;
       }
     }
     if (stocked) priceTag(b.x + b.w / 2, priceY, price, afford);
-    else R().text(b.x + b.w / 2, priceY, "售罄", ts(F12, col::gray, CENTER, 0, 0.85f));
+    else R().text(b.x + b.w / 2, priceY, tr("售罄", "Sold out"), ts(F12, col::gray, CENTER, 0, 0.85f));
     // Sold slots stay focusable (for the D-pad path) but do nothing.
     if (widgets::hit(kGoodsId + i, b.x, b.y, b.w, b.h, canAct)) {
       bool tapFocus = in.touchDown && sel_ != i;  // first tap only focuses
@@ -289,14 +289,14 @@ void App::drawShop(bool top) {
   }
 
   // Action bar: leave (back, bottom-left), the potion belt (Foul Potion throw), gold, buy.
-  if (widgets::button(kLeaveId, style::kMargin, style::kActionY, 70, style::kButtonH, "离开",
+  if (widgets::button(kLeaveId, style::kMargin, style::kActionY, 70, style::kButtonH, tr("离开", "Leave"),
                       widgets::Kind::Secondary, canAct)) {
     sel_ = -1;
     r.shopChoice.fire(-1);
     widgets::endFrame();
     return;
   }
-  if (widgets::button(kPotionsId, style::kMargin + 74, style::kActionY, 64, style::kButtonH, "药水",
+  if (widgets::button(kPotionsId, style::kMargin + 74, style::kActionY, 64, style::kButtonH, tr("药水", "Potions"),
                       widgets::Kind::Secondary, canAct)) {
     potionsOpen_ = true;
     potionAim_ = false;
@@ -308,7 +308,7 @@ void App::drawShop(bool top) {
     R().text(gx + 22, gy, num(r.gold), ts(F16, col::gold));
   }
   bool canBuy = it && it->stocked();
-  if (widgets::button(kBuyId, kBot - style::kMargin - 84, style::kActionY, 84, style::kButtonH, "购买",
+  if (widgets::button(kBuyId, kBot - style::kMargin - 84, style::kActionY, 84, style::kButtonH, tr("购买", "Buy"),
                       widgets::Kind::Primary, canAct && canBuy))
     buy = sel_;
   widgets::endFrame();

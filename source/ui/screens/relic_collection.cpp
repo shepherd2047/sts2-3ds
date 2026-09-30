@@ -123,7 +123,7 @@ std::string stripTags(const std::string& s) {
 }
 void splitHeader(const std::string& key, std::string* title, std::string* desc) {
   std::string s = stripTags(L(key));
-  const std::string colon = "：";
+  const std::string colon = tr("：", ": ");
   size_t p = s.find(colon);
   if (p == std::string::npos) { *title = s; *desc = ""; return; }
   *title = s.substr(0, p);
@@ -518,7 +518,7 @@ bool App::drawRelicCollection(bool top) {
              ts(F16, col::gold));
     int seen = 0;
     for (auto& e : b.all) seen += e.seen;
-    R().text(kTop - 8, 6, "已发现 " + num(seen) + "/" + num((int)b.all.size()), ts(F12, col::white, RIGHT));
+    R().text(kTop - 8, 6, tr("已发现 ", "Seen ") + num(seen) + "/" + num((int)b.all.size()), ts(F12, col::white, RIGHT));
     Entry* e = focused();
     if (e) {
       const float big = 72, ix = 22, iy = 34;
@@ -547,9 +547,9 @@ bool App::drawRelicCollection(bool top) {
       }
       // The category's description (the C# header line) along the bottom.
       gfx::rect(0, kH - 36, kTop, 36, 0x00000090);
-      R().text(8, kH - 33, head + "：" + headDesc, ts(F12, 0xD8D8D8FF, LEFT, kTop - 16));
+      R().text(8, kH - 33, head + tr("：", ": ") + headDesc, ts(F12, 0xD8D8D8FF, LEFT, kTop - 16));
     }
-    R().text(kTop - 6, kH - 15, "L R 分类  B 返回", ts(F12, col::gray, RIGHT));
+    R().text(kTop - 6, kH - 15, tr("L R 分类  B 返回", "L R Category  B Back"), ts(F12, col::gray, RIGHT));
     return true;
   }
 
@@ -576,7 +576,7 @@ bool App::drawRelicCollection(bool top) {
       case Line::Sub: {
         Sprite ic = R().sprite(l.icon);
         if (ic) spr(ic, 10, y + 1, 18, 18);
-        R().text(32, y + 3, (ancientKnown(l) ? ancientName(l) : L("relic_collection.UNKNOWN_ANCIENT")) + "：",
+        R().text(32, y + 3, (ancientKnown(l) ? ancientName(l) : L("relic_collection.UNKNOWN_ANCIENT")) + tr("：", ": "),
                  ts(F12, col::blue));
         break;
       }
@@ -606,9 +606,9 @@ bool App::drawRelicCollection(bool top) {
   }
 
   gfx::rect(0, kBarY - 3, kBot, kH - kBarY + 3, 0x000000A0);
-  button(kBarX[0], kBarY, kBarW[0], kBarH, "返回", kBtnBack);
-  button(kBarX[1], kBarY, kBarW[1], kBarH, "L 上一类", kBtnPrev);
-  button(kBarX[2], kBarY, kBarW[2], kBarH, "R 下一类", kBtnNext);
+  button(kBarX[0], kBarY, kBarW[0], kBarH, tr("返回", "Back"), kBtnBack);
+  button(kBarX[1], kBarY, kBarW[1], kBarH, tr("L 上一类", "L Prev"), kBtnPrev);
+  button(kBarX[2], kBarY, kBarW[2], kBarH, tr("R 下一类", "R Next"), kBtnNext);
   if (st.zone == 2 && !st.touchList) outline(kBarX[st.bar], kBarY, kBarW[st.bar], kBarH);
   return true;
 }

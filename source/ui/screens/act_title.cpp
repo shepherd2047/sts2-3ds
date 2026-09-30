@@ -113,14 +113,14 @@ void App::drawActTitle(bool top) {
   }
   std::string entry = actEntry(run_->act().name);
   float nameCY = (540.f + 9.f) * kK + 2.f;
-  drawTitleText("act/name_" + entry, L("acts." + entry + ".title"), kTop / 2.f, nameCY, F16, 1.7f, col::gold, nameA);
+  drawTitleText(std::string(english() ? "act/eng_name_" : "act/name_") + entry, L("acts." + entry + ".title"), kTop / 2.f, nameCY, F16, 1.7f, col::gold, nameA);
   // The number is drawn larger than the scene's 9 px, so the name sits 2 px lower to keep them apart.
   int n = run_->actIndex + 1;
   std::string label = L("gameplay_ui.ACT_NUMBER");
   size_t p = label.find("{actNumber}");
   if (p != std::string::npos) label.replace(p, 11, num(n));
   float numCY = (numTop + 27.f) * kK;
-  drawTitleText("act/number_" + num(n), label, kTop / 2.f, numCY, F12, 1.f, col::blue, numA);
+  drawTitleText(std::string(english() ? "act/eng_number_" : "act/number_") + num(n), label, kTop / 2.f, numCY, F12, 1.f, col::blue, numA);
 }
 
 }  // namespace ui

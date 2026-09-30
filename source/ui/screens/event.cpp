@@ -92,7 +92,7 @@ struct OptionText { std::string title, desc; bool locked = false; };
 // the option's own; "desc.<Name>" only for the description).
 OptionText optionText(const Event* e, int i) {
   OptionText t;
-  if (e->finished) { t.title = "继续"; return t; }
+  if (e->finished) { t.title = tr("继续", "Continue"); return t; }
   const EventOption& o = e->options[i];
   t.locked = o.locked();
   std::map<std::string, std::string> sv = e->strVars, svDesc;
@@ -308,8 +308,8 @@ void App::drawAncient(bool top) {
       if (rel) R().text(tx, py + 34, relicRarityName(rel->rarity), ts(F12, col::gold, LEFT, tw, 0.85f));
       R().text(tx, py + head, desc, dt);
       gfx::popClip();
-      std::string hint = widgets::usingPad() ? "A 选择   B 返回" : "再点一次选择   B 返回";
-      if (rel) hint += "   X 详情";
+      std::string hint = widgets::usingPad() ? tr("A 选择   B 返回", "A Select   B Back") : tr("再点一次选择   B 返回", "Tap again to select   B Back");
+      if (rel) hint += tr("   X 详情", "   X Details");
       R().text(kTop / 2, kH - 18, hint, ts(F12, col::gray, CENTER, 0, 0.85f));
       return;
     }
@@ -391,19 +391,19 @@ void App::drawAncient(bool top) {
     // NAncientDialogueHitbox + FakeNextButton: the whole screen advances (updateEvent); the
     // button shows the line's reply.
     std::string label = nextLabel(e->dialogue[e->dialogueLine]);
-    if (label.empty()) label = "继续";
+    if (label.empty()) label = tr("继续", "Continue");
     const float bw = 180, bh = 44, bx = (kBot - bw) / 2, by = kH - bh - 30;
     nineTint("ui/btn_ancient", bx, by, bw, bh, plateCol);
     nineTint("ui/btn_ancient_outline", bx, by, bw, bh, ringCol);  // the only thing to press
     R().text(kBot / 2, by + (bh - R().lineHeight(F16)) / 2, label, ts(F16, col::white, CENTER, bw - 16));
-    R().text(kBot / 2, kH - 22, "A / 点击屏幕 继续", ts(F12, col::gray, CENTER, 0, 0.85f));
+    R().text(kBot / 2, kH - 22, tr("A / 点击屏幕 继续", "A / tap to continue"), ts(F12, col::gray, CENTER, 0, 0.85f));
   } else if (e->finished) {
     float h = 44, y = (kH - h) / 2, bx = x + 40, bw = w - 80;
     if (widgets::hit(kAncProceedId, bx, y, bw, h, canAct)) pick = 0;
     nineTint("ui/btn_ancient", bx, y, bw, h, plateCol);
     nineTint("ui/btn_ancient_outline", bx, y, bw, h,
              widgets::usingPad() && widgets::focused() == kAncProceedId ? ringCol : style::kPanelEdge);
-    R().text(kBot / 2, y + (h - R().lineHeight(F16)) / 2, "继续", ts(F16, col::white, CENTER));
+    R().text(kBot / 2, y + (h - R().lineHeight(F16)) / 2, tr("继续", "Continue"), ts(F16, col::white, CENTER));
   } else {
     // C# DefaultFocusedControl: with the D-pad the first open option takes the focus.
     if (ancAutoFocus_ && widgets::usingPad() && widgets::focused() < 0)
@@ -507,9 +507,9 @@ void App::drawEvent(bool top) {
       if (art) spr(art, kArtX + (kArtW - art.w) / 2, kBodyY, art.w, art.h);
       if (evPages_ > 1 && !optionMode) {  // where the text continues
         float py = kBodyY + (art ? art.h : 0) + 10;
-        R().text(kArtX + kArtW / 2, py, "第 " + num(evPage_ + 1) + " / " + num(evPages_) + " 页",
+        R().text(kArtX + kArtW / 2, py, tr("第 ", "Page ") + num(evPage_ + 1) + " / " + num(evPages_) + tr(" 页", ""),
                  ts(F12, col::gold, CENTER));
-        R().text(kArtX + kArtW / 2, py + 16, "L / R 翻页", ts(F12, col::gray, CENTER, 0, 0.85f));
+        R().text(kArtX + kArtW / 2, py + 16, tr("L / R 翻页", "L / R Page"), ts(F12, col::gray, CENTER, 0, 0.85f));
       }
     };
 
@@ -601,8 +601,8 @@ void App::drawEvent(bool top) {
     float y = kBodyY + ph + 6;
     for (size_t k = 0; k < tips.size() && y < kH - 50; ++k)
       y = drawTip(tips[k], kColX - 4, y, kColW + 4, kH - 24) + 4;
-    std::string hint = widgets::usingPad() ? "A 选择   B 返回" : "再点一次选择   B 返回";
-    if (!cards.empty() || (!tips.empty() && tips[0].kind == Offer::RelicK)) hint += "   X 详情";
+    std::string hint = widgets::usingPad() ? tr("A 选择   B 返回", "A Select   B Back") : tr("再点一次选择   B 返回", "Tap again to select   B Back");
+    if (!cards.empty() || (!tips.empty() && tips[0].kind == Offer::RelicK)) hint += tr("   X 详情", "   X Details");
     R().text(kColX + kColW / 2, kH - 18, hint, ts(F12, col::gray, CENTER, 0, 0.85f));
     return;
   }
@@ -624,7 +624,7 @@ void App::drawEvent(bool top) {
 
   if (e->finished) {  // SetEventFinished: a single proceed option in the middle
     float h = 44, y = (areaTop + areaBot - h) / 2;
-    if (widgets::optionButton(kProceedId, x + 40, y, w - 80, h, "继续", canAct)) pick = 0;
+    if (widgets::optionButton(kProceedId, x + 40, y, w - 80, h, tr("继续", "Continue"), canAct)) pick = 0;
   } else {
     float h = std::min(kOptMaxH, (areaBot - areaTop - (n - 1) * style::kGap) / n);
     float y0 = areaTop + (areaBot - areaTop - (n * h + (n - 1) * style::kGap)) / 2;

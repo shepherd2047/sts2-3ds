@@ -135,17 +135,17 @@ void App::drawTips(bool top) {
         label = L(b.id == 0 ? "main_menu_ui.GENERIC_POPUP.confirm" : "main_menu_ui.GENERIC_POPUP.cancel");
       } else if (b.id == 0) {
         art = "ui/ftue_btn";
-        label = page + 1 < tips::pages(t) ? "下一页" : L("ftues.CONFIRM_BUTTON");
+        label = page + 1 < tips::pages(t) ? tr("下一页", "Next") : L("ftues.CONFIRM_BUTTON");
       } else {
         art = "ui/btn_confirm";
-        label = "上一页";
+        label = tr("上一页", "Prev");
       }
       float dy = pressed ? 1 : 0;
       widgets::panel(art, b.x, b.y + slide + dy, b.w, b.h, pressed ? 0xC0C0C0FF : 0xFFFFFFFF);
       R().text(b.x + b.w / 2, b.y + slide + dy + (b.h - R().lineHeight(F16)) / 2, label, ts(F16, col::white, CENTER));
     }
     R().text(kBot / 2, kBtnY + kBtnH + 14 + slide,
-             t == Ftue::AcceptTutorials ? "A：确认    B：取消" : tips::pages(t) > 1 ? "A / →：下一页    B / ←：上一页" : "按 A 或点击按钮继续",
+             t == Ftue::AcceptTutorials ? tr("A：确认    B：取消", "A: Confirm    B: Cancel") : tips::pages(t) > 1 ? tr("A / →：下一页    B / ←：上一页", "A / →: Next    B / ←: Back") : tr("按 A 或点击按钮继续", "Press A or tap the button to continue"),
              ts(F12, col::gray, CENTER));
     gfx::popAlpha();
     return;

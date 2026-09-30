@@ -154,11 +154,11 @@ void App::drawCrystalSphere(bool top) {
     };
     toolButton(kBigY, CS::Tool::Big, "crystal/icon_big", "DIVINATION_LABEL_BIG", ID_CS_BIG);
     toolButton(kSmallY, CS::Tool::Small, "crystal/icon_small", "DIVINATION_LABEL_SMALL", ID_CS_SMALL);
-    R().text(kPanelX + kPanelW / 2, 140, "L 小 / R 大", ts(F12, col::gray, CENTER, 0, 0.85f));
-    R().text(kPanelX + kPanelW / 2, 160, "点两次占卜", ts(F12, col::gray, CENTER, 0, 0.85f));
+    R().text(kPanelX + kPanelW / 2, 140, tr("L 小 / R 大", "L Small / R Large"), ts(F12, col::gray, CENTER, 0, 0.85f));
+    R().text(kPanelX + kPanelW / 2, 160, tr("点两次占卜", "Tap twice to divine"), ts(F12, col::gray, CENTER, 0, 0.85f));
   } else if (g.phase == CS::Phase::Done) {
     bool ready = run_->eventChoice.waiting();
-    button(kPanelX + 4, 190, kPanelW - 8, 36, "继续", ID_CS_PROCEED, ready, true);
+    button(kPanelX + 4, 190, kPanelW - 8, 36, tr("继续", "Continue"), ID_CS_PROCEED, ready, true);
   }
 }
 
