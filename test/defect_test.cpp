@@ -504,7 +504,7 @@ int main() {
     int hpSum = f.enemyHpSum();
     f.play(strike, f.enemy());
     CHECK(hpSum - f.enemyHpSum() == 11);
-    CHECK(strike->cost == 0);
+    CHECK(f.c->energyCost(strike) == 0);  // EnergyCost.SetThisCombat(0)
   }
   {  // Turbo: gains energy, then a Void lands in the discard pile; drawing it later costs energy.
     Fight f;
