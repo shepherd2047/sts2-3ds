@@ -278,7 +278,7 @@ own art, and every screen in track S is then rebuilt with it.
 | F4 | Rich text: inline icons (energy per character, gold, star, HP), keyword colours, keyword glossary tooltips from `HoverTips`, `choose()` / plural formatters for all loc strings (fixes MadScience) | UI | F3 | done (UI), accepted 2026-09-28 (fix {IsMultiplayer} "?" in F5) |
 | F5 | Card renderer v2: faithful frames per type/rarity/character, portrait crop, cost gem (X, unplayable), type banner, green upgrade text, enchantment badge, affliction overlay. Three sizes: hand, large, grid mini. | UI, *Opus* | F1, F4 | done (UI), accepted 2026-09-28 |
 | F6 | Motion: screen transitions (fade/slide), card draw/discard/exhaust flights, damage/block numbers, power icon pop, relic flash, gold/HP counters that tick, screen shake (setting), button feedback | UI | F3 | done (UI), accepted 2026-09-28 |
-| F7 | Light VFX: hit sparks, slash, block shield, poison/burn ticks, heal, buff/debuff arrows, orb evoke (X3), stars (X4), Osty (X5). Cheap sprite effects only. | UI | F6 | in progress (subagent) |
+| F7 | Light VFX: hit sparks, slash, block shield, poison/burn ticks, heal, buff/debuff arrows, orb evoke (X3), stars (X4), Osty (X5). Cheap sprite effects only. | UI | F6 | done (subagent), accepted 2026-09-29: vfx.cpp (64-particle pool, batched), hits/block/poison/burn/heal/buff arrows/orb evoke/stars/Osty; 7 game VFX sprites on an existing atlas page (no extra texture memory) |
 
 ### Track S: every screen rebuilt with the kit (RGDSplus U01-U33)
 
@@ -440,7 +440,7 @@ their `clone()` must call `adoptEnchantment()`.
 | U2 | Audio engine: 3DS ndsp streaming of ADPCM music from romfs, SFX voices; SDL backend decodes the same files; SDL backend | platform | U1 | done (subagent, Opus), accepted 2026-09-29: source/audio/ (audio.h API: playSfx/playMusic/playAmbience with crossfade, per-bus volume), audio_3ds.cpp (ndsp, DSP decodes ADPCM, 8 SFX voices + 4 streaming slots on a thread), audio_sdl.cpp; files from sdmc:/3ds/sts2-3ds/audio/ or ./audio/ (STS_AUDIO_DIR); debug STS_MUSIC / STS_TAP_SFX in main.cpp (U3/U4 remove it); not heard on hardware yet |
 | U3 | Music routing: title, each act's map and fights, elite, boss, shop, rest, Ancient, victory, death; crossfades | UI | U2 | done (subagent, Opus), accepted 2026-09-29: music_router.cpp per NRunMusicController (act sections, elite, boss tracks, shop, rest, Ancient, death), ambience beds, crossfades; STS_MUSIC / STS_AMB / STS_MUSIC_LOG; intros, stems and one-shot ambience layers not played |
 | U4 | SFX: cards, hits, block, buffs, gold, relics, potions and UI controls, mapped from the C# `SfxCmd` names | content | U2 | done (subagent), accepted 2026-09-29: sfx_router.cpp + generated sfx_tables.inc (tools/gen_sfx_tables.py), VisualEvent Hit/CardPlayed/BlockBroken; STS_SFX_LOG; gaps: per-move boss sounds, hover, chests, merchant voice, events |
-| U5 | Ambience per room, and wiring the volume sliders | UI | U3, Y1 | in progress (subagent) |
+| U5 | Ambience per room, and wiring the volume sliders | UI | U3, Y1 | done (subagent), accepted 2026-09-29: ambience per room already routed by U3; added the campfire going out (restsite_amb_nofire) as the C#; volume buses verified in code (sliders from S21) |
 
 ### Track H: hardware and release
 
