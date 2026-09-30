@@ -47,13 +47,7 @@ struct CreativeAiPower : Power {
   Task<> beforeHandDraw() override {
     Combat* c = owner->combat;
     for (int i = 0; i < amount; ++i) {
-      // FilterForCombat: CanBeGeneratedInCombat, not Basic/Ancient; TakeRandom(1) = shuffle, take first.
-      auto ids = db::characterCards(c->run->characterId, [](const Card& k) {
-        return k.type == CardType::Power && k.rarity != Rarity::Basic && k.rarity != Rarity::Ancient;
-      });
-      c->rng("CombatCardGeneration").shuffle(ids);
-      if (ids.empty()) continue;
-      auto card = db::card(ids[0]);
+      auto card = oneDistinctForCombat(*c, [](const Card& k) { return k.type == CardType::Power; });
       if (card) co_await cmd::addGeneratedCard(*c, std::move(card), Pile::Hand);
     }
   }

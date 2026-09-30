@@ -8,22 +8,10 @@ namespace {
 
 // ---------------------------------------------------------------- helpers
 
-// CardFactory.GetDistinctForCombat(character pool filtered by `keep`, n, CombatCardGeneration):
-// no Basic / Ancient cards (FilterForCombat), TakeRandom = shuffle then take (as potions.cpp).
-template <class F>
-std::vector<std::unique_ptr<Card>> distinctForCombat(Combat& c, F keep, int n) {
-  auto ids = db::characterCards(c.run->characterId, [&](const Card& k) {
-    return keep(k) && k.rarity != Rarity::Basic && k.rarity != Rarity::Ancient;
-  });
-  c.rng("CombatCardGeneration").shuffle(ids);
-  std::vector<std::unique_ptr<Card>> out;
-  for (size_t i = 0; i < ids.size() && (int)out.size() < n; ++i) {
-    auto k = db::card(ids[i]);
-    if (!k) continue;
-    k->combat = &c;
-    out.push_back(std::move(k));
-  }
-  return out;
+// CardFactory.GetDistinctForCombat(Owner.Character.CardPool.Where(keep), n, CombatCardGeneration): the shared
+// FilterForCombat helper (card_factory.h).
+std::vector<std::unique_ptr<Card>> poolDistinctForCombat(Combat& c, std::function<bool(const Card&)> keep, int n) {
+  return distinctForCombat(c, db::characterPool(c.run->characterId, std::move(keep)), n);
 }
 
 // ---------------------------------------------------------------- curses / status
@@ -94,7 +82,7 @@ struct HelloWorldPower : Power {
     if (!owner || !owner->combat || amountOnTurnStart < 1) co_return;
     flash = 1.f;
     Combat& c = *owner->combat;
-    auto cards = distinctForCombat(c, [](const Card& k) { return k.rarity == Rarity::Common; }, amountOnTurnStart);
+    auto cards = poolDistinctForCombat(c, [](const Card& k) { return k.rarity == Rarity::Common; }, amountOnTurnStart);
     for (auto& k : cards) co_await cmd::addGeneratedCard(c, std::move(k), Pile::Hand);
   }
 };
@@ -131,7 +119,7 @@ struct Abundance : IroncladT<Abundance> {
     keywords = kwExhaust;
   }
   Task<> onPlay(CardPlay&) override {
-    auto made = distinctForCombat(*combat, [](const Card& k) { return k.type == CardType::Power; }, 3);
+    auto made = poolDistinctForCombat(*combat, [](const Card& k) { return k.type == CardType::Power; }, 3);
     std::vector<Card*> opts;
     for (auto& k : made) {
       cmd::upgradeCard(k.get());
@@ -191,7 +179,7 @@ struct Distraction : IroncladT<Distraction> {
     keywords = kwExhaust;
   }
   Task<> onPlay(CardPlay&) override {
-    auto made = distinctForCombat(*combat, [](const Card& k) { return k.type == CardType::Skill; }, 1);
+    auto made = poolDistinctForCombat(*combat, [](const Card& k) { return k.type == CardType::Skill; }, 1);
     if (made.empty()) co_return;
     made[0]->setThisTurnOrUntilPlayed(0);  // SetToFreeThisTurn
     co_await cmd::addGeneratedCard(*combat, std::move(made[0]), Pile::Hand);

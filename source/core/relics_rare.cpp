@@ -400,7 +400,8 @@ struct GamblingChip : Relic {
 
 // ---- UnsettlingLamp: in relics_shared2.cpp (A5).
 
-// ---- VexingPuzzlebox: on turn 1, add a random Ironclad card to hand, free this turn. ----
+// ---- VexingPuzzlebox: on turn 1, add a random card of the character's pool to hand, free this turn. ----
+// GetDistinctForCombat(Owner.Character.CardPool, 1, CombatCardGeneration).First().
 // PORT NOTE: picks from the whole character pool rather than the player's unlocked pool
 // (no unlock system in this build).
 struct VexingPuzzlebox : Relic {
@@ -408,10 +409,7 @@ struct VexingPuzzlebox : Relic {
   Task<> afterPlayerTurnStart() override {
     if (!combat || combat->turnNumber != 1) co_return;
     doFlash();
-    auto ids = db::characterCards(combat->run->characterId, [](const Card&) { return true; });
-    if (ids.empty()) co_return;
-    const std::string& id = combat->rng("CombatCardGeneration").nextItem(ids);
-    auto card = db::card(id);
+    auto card = oneDistinctForCombat(*combat);
     if (!card) co_return;
     card->setThisTurn(0);
     co_await cmd::addGeneratedCard(*combat, std::move(card), Pile::Hand);

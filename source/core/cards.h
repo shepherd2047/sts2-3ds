@@ -1,5 +1,6 @@
 // Base class and helpers for translated cards.
 #pragma once
+#include "card_factory.h"
 #include "powers_ironclad.h"
 
 namespace sts {

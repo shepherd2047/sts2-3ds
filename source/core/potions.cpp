@@ -160,20 +160,12 @@ struct PotionBase : Potion {
     me()->hp = std::min(me()->maxHp, me()->hp + amount.toInt());
     co_await wait(0.2);
   }
-  // CardFactory.GetDistinctForCombat (the character's pool, no Basic/Ancient) +
+  // CardFactory.GetDistinctForCombat (the character's pool of that type, FilterForCombat) +
   // CardSelectCmd.FromChooseACardScreen(canSkip) + SetToFreeThisTurn -> hand.
   Task<> chooseGenerated(CardType type) {
-    auto ids = db::characterCards(c().run->characterId, [&](const Card& k) { return k.type == type && k.rarity != Rarity::Basic && k.rarity != Rarity::Ancient; });
-    c().rng("CombatCardGeneration").shuffle(ids);  // TakeRandom(3)
-    std::vector<std::unique_ptr<Card>> made;
+    auto made = distinctForCombat(c(), db::characterPool(c().run->characterId, [&](const Card& k) { return k.type == type; }), 3);
     std::vector<Card*> opts;
-    for (size_t i = 0; i < ids.size() && i < 3; ++i) {
-      auto k = db::card(ids[i]);
-      if (!k) continue;
-      k->combat = &c();
-      opts.push_back(k.get());
-      made.push_back(std::move(k));
-    }
+    for (auto& k : made) opts.push_back(k.get());
     auto picked = co_await cmd::selectCards(c(), "选择一张牌加入手牌", opts, 0, 1);
     if (picked.empty()) co_return;
     for (auto& k : made)
@@ -387,12 +379,13 @@ struct MazalethsGift : PotionBase {
 struct OrobicAcid : PotionBase {
   POTION_HEADER(OrobicAcid, "OROBIC_ACID", Rare, CombatOnly, Self) }
   Task<> onUse(Creature*) override {
-    for (CardType type : {CardType::Attack, CardType::Skill, CardType::Power}) {
-      auto ids = db::characterCards(c().run->characterId, [&](const Card& k) { return k.type == type && k.rarity != Rarity::Basic && k.rarity != Rarity::Ancient; });
-      if (ids.empty()) continue;
-      auto k = db::card(c().rng("CombatCardGeneration").nextItem(ids));
-      if (!k) continue;
-      k->setThisTurnOrUntilPlayed(0);
+    // Three GetDistinctForCombat(pool.Where(type), 1, CombatCardGeneration), all made before any is added.
+    std::vector<std::unique_ptr<Card>> made;
+    for (CardType type : {CardType::Attack, CardType::Skill, CardType::Power})
+      for (auto& k : distinctForCombat(c(), db::characterPool(c().run->characterId, [&](const Card& k) { return k.type == type; }), 1))
+        made.push_back(std::move(k));
+    for (auto& k : made) {
+      k->setThisTurnOrUntilPlayed(0);  // SetToFreeThisTurn
       co_await cmd::addGeneratedCard(c(), std::move(k), Pile::Hand);
     }
   }
