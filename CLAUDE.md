@@ -113,7 +113,7 @@ Preview automation (env vars): `STS_HIDDEN=1 STS_FIXED_STEP=1 STS_SEED=42`,
 (button / tap T / press-hold P / move M / release U at a frame),
 `STS_SHOTS="435:build/a.bmp,..."`, `STS_ALLCARDS=1`, `STS_AUTOPLAY=1`,
 `STS_ENCOUNTER=<EncounterId>` (first fight is that encounter; also works for
-`build/sim`). From title: 40:A reaches the map, 100:A enters the first room.
+`build/sim`). From title: 40:A opens character select and 100:A (or START) starts the run; with STS_ENCOUNTER / STS_ROOM, `40:A,100:A,160:A,220:A` reaches the first room (Neow otherwise runs first).
 Headless checks: `SIM_FIGHTS=1 ./build/sim N` prints each fight; add a second
 argument for a verbose event log.
 
