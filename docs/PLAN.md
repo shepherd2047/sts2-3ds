@@ -603,6 +603,10 @@ Any new relic with a C# `[SavedProperty]` needs `persist`.
   `.3dsx` stays small for `make link`; U1's default quality (music/ambience 22 kHz mono, sfx 32 kHz).
 - **Ascension 0-10 is open for every character** from the start (no win-to-unlock); the character
   select shows the run's seed but has no seed entry (custom runs, U05, get one).
+- **One tap picks** (2026-09-30): on the kit screens a single tap on an option / item chooses it
+  (events, Ancients, shop, rest site, relic choice); the D-pad still focuses first and A picks.
+- **Top bar fallback** (2026-09-30): besides ZL/ZR, a button chord that exists on every 3DS
+  focuses the top bar.
 
 ---
 
