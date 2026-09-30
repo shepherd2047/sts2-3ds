@@ -46,7 +46,8 @@ mock-ups (`STS_MOCK=1|2|3`, `source/ui/style_mock.cpp`) show them on screen: 1 r
 - Touch: a control is **pressed on release** if the stylus is still on it; it highlights on touch-down.
   Dragging more than 5 px off a control cancels the press. Scroll lists start scrolling after 5 px.
   **One tap picks** (owner decision 2026-09-30): a tap on an event / Ancient option, a shop item, a
-  rest-site option, an offered relic or a potion target chooses it at once (a refused shop tap plays
+  rest-site option, an offered relic, a card on a choose-one screen (card rewards, event / potion card
+  choices; 跳过 stays a button) or a potion target chooses it at once (a refused shop tap plays
   the merchant's line and leaves the item focused; a single-card deck choice goes to its 确认 / 返回
   review). The D-pad focuses first, with the preview on the top screen, and A picks. Buttons activate
   on the first tap. Exceptions: multi-select grids (a tap toggles a pick) and inspection lists (card

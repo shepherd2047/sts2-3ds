@@ -400,8 +400,9 @@ void App::updateDeckChoice(const gfx::Input& in) {
 // event's or relic's card choice, a potion's generated cards in combat; the combat card reward uses
 // it too): the CHOOSE_CARD_HEADER banner and the offered cards in one row on the bottom, with
 // 跳过 when the choice can be skipped (NChoiceSelectionSkipButton), 详情 and 选择; the focused card
-// large on the top screen with its text and keywords. The first tap focuses, a tap on the focused
-// card (or A, or 选择) takes it; D-pad left/right move the focus, down goes to the buttons; X detail;
+// large on the top screen with its text and keywords. A tap on a card takes it (owner decision
+// 2026-09-30: one tap picks); with the D-pad the focused card is shown on top and A (or 选择)
+// takes it; D-pad left/right move the focus, down goes to the buttons; X detail;
 // B skips when allowed.
 namespace {
 struct OneSel {
@@ -476,9 +477,7 @@ int App::chooseOneUpdate(const ChooseOneSpec& s, const gfx::Input& in) {
     if (id == kOnePick && o.sel >= 0) return take(o.sel);
     if (id == kOneDetail && o.sel >= 0) inspectCard(s.cards, o.sel);
     if (id >= kOneCard0 && id < kOneCard0 + n) {
-      int i = id - kOneCard0;
-      if (o.sel == i) return take(i);
-      o.sel = i;
+      return take(id - kOneCard0);  // one tap takes the card
     }
     return -2;
   }
@@ -509,7 +508,7 @@ void App::chooseOneDraw(const ChooseOneSpec& s, bool top) {
     if (o.sel >= 0 && o.sel < n) { drawCardInspect(s.cards[o.sel], 34); return; }
     screenTitle(kTop / 2, 70, s.title.empty() ? L("gameplay_ui.CHOOSE_CARD_HEADER") : s.title);
     if (!s.sub.empty()) R().text(kTop / 2, 116, s.sub, ts(F16, col::white, CENTER, kTop - 40));
-    R().text(kTop / 2, 150, s.canSkip ? tr("点选一张牌，再点一次拿取；也可以跳过", "Tap a card, tap again to take it; or skip") : tr("点选一张牌，再点一次拿取", "Tap a card, tap again to take it"),
+    R().text(kTop / 2, 150, s.canSkip ? tr("点选一张牌即可拿取；也可以跳过", "Tap a card to take it; or skip") : tr("点选一张牌即可拿取", "Tap a card to take it"),
              ts(F12, col::gray, CENTER));
     return;
   }
