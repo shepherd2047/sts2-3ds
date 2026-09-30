@@ -1,5 +1,6 @@
 // Split from ui.cpp (F3).
 #include "../ui_common.h"
+#include "combat_internal.h"
 
 namespace ui {
 
@@ -34,28 +35,60 @@ void App::drawPotions(bool top) {
       if (!fight) R().text(kTop / 2, 100, "药水", ts(F16, col::gold, CENTER, 0, 1.3f));
       return;
     }
+    if (potionAim_ && fight) {
+      // S09: the fight stays clear (reticle + arrow from drawCombat); only the target is named.
+      auto alive = r.combat->aliveEnemies();
+      if (!alive.empty()) {
+        Creature* t = alive[std::clamp(target_, 0, (int)alive.size() - 1)];
+        std::string name = R().hasLoc("monsters." + t->name + ".name") ? L("monsters." + t->name + ".name") : t->name;
+        std::string s = L("potions." + p->locKey + ".title") + " → " + name;
+        TextStyle st = ts(F12, col::gold, CENTER);
+        float w = R().measure(s, st);
+        gfx::rect(kTop / 2 - w / 2 - 8, 21, w + 16, 16, 0x000000B0);
+        R().text(kTop / 2, 22, s, st);
+      }
+      return;
+    }
     // The picked potion along the bottom of the top screen (below the creatures' feet).
     gfx::rect(0, kH - 54, kTop, 54, 0x000000C8);
     drawPotionIcon(p, 8, kH - 48, 40);
     R().text(56, kH - 52, L("potions." + p->locKey + ".title"), ts(F16, col::gold));
     R().text(56, kH - 32, describePotion(p), ts(F12, col::white, LEFT, kTop - 64, 0.9f));
-    if (potionAim_) R().text(kTop / 2, 24, "选择目标", ts(F16, col::gold, CENTER));
     return;
   }
   drawSceneBg(false, 0.75f);
-  if (potionAim_ && fight) {
+  if (potionAim_ && fight && p) {
+    // S09 potion aim (NTargetManager for a potion): the potion and its text at the top, one tile per
+    // enemy (tap to pick, tap again to throw; ←→ on the D-pad), the arrow running from the potion to
+    // the target's reticle on the top screen, 取消 / 使用 below.
     auto alive = r.combat->aliveEnemies();
-    if (target_ >= (int)alive.size()) target_ = 0;
-    R().text(kBot / 2, 40, "选择目标", ts(F16, col::gold, CENTER));
-    if (!alive.empty()) {
-      Creature* t = alive[target_];
+    const int m = (int)alive.size();
+    if (target_ >= m) target_ = 0;
+    drawPotionIcon(p, kPotionAimX - 20, kPotionAimY + 2, 40);
+    R().text(62, 20, L("potions." + p->locKey + ".title"), ts(F16, col::gold));
+    R().text(62, 40, describePotion(p), ts(F12, col::white, LEFT, kBot - 70, 0.9f));
+    R().text(kBot / 2, 94, m > 1 ? "选择目标（←→ 或点选）" : "目标", ts(F12, col::gold, CENTER));
+    const float gap = 6, tw = m ? std::min(110.f, (kBot - 16 - gap * (m - 1)) / m) : 0, th = 64, ty = 112;
+    float tx = (kBot - (tw * m + gap * (m - 1))) / 2;
+    for (int i = 0; i < m; ++i, tx += tw + gap) {
+      Creature* t = alive[i];
+      const bool cur = i == target_;
+      panel(tx, ty, tw, th, cur ? 0x5A2A20F0 : 0x2A2218E8, cur ? 0xFF6060FF : 0x8A7A5AFF);
+      if (cur) gfx::rect(tx + 2, ty + th - 4, tw - 4, 2, 0xE61E1BFF);
       std::string name = R().hasLoc("monsters." + t->name + ".name") ? L("monsters." + t->name + ".name") : t->name;
-      R().text(kBot / 2, 90, name + "  " + num(t->hp) + "/" + num(t->maxHp), ts(F16, col::white, CENTER));
+      gfx::pushClip(tx + 2, ty, tw - 4, th);
+      R().text(tx + tw / 2, ty + 6, name, ts(F12, cur ? col::gold : col::white, CENTER));
+      gfx::popClip();
+      R().text(tx + tw / 2, ty + 24, num(std::max(0, t->hp)) + "/" + num(t->maxHp), ts(F12, 0xFF8080FF, CENTER));
+      if (t->block > 0) R().text(tx + tw / 2, ty + 40, "格挡 " + num(t->block), ts(F12, col::blue, CENTER, 0, 0.9f));
+      hits_.push_back({tx, ty, tw, th, ID_GRID0 + i});
     }
-    button(20, 80, 50, 40, "<", ID_PGUP, alive.size() > 1);
-    button(kBot - 70, 80, 50, 40, ">", ID_PGDN, alive.size() > 1);
     button(10, 196, 110, 36, "取消", ID_BACK);
-    button(kBot - 120, 196, 110, 36, "使用", ID_CONFIRM, !alive.empty(), true);
+    button(kBot - 120, 196, 110, 36, "使用", ID_CONFIRM, m > 0, true);
+    if (m > 0 && centers_.count(alive[target_])) {
+      auto [cx, cy] = centers_[alive[target_]];
+      drawArrow(false, kPotionAimX + kBotOX, kPotionAimY + kBotOY, cx, cy, true, false);
+    }
     return;
   }
   R().text(kBot / 2, 4, "药水", ts(F16, col::gold, CENTER));
@@ -123,8 +156,13 @@ void App::updatePotions(const gfx::Input& in) {
     auto alive = fight ? r.combat->aliveEnemies() : std::vector<Creature*>{};
     int m = (int)alive.size();
     if (m == 0 || (in.down & gfx::BTN_B) || id == ID_BACK) { potionAim_ = false; return; }
-    if ((in.down & gfx::BTN_LEFT) || id == ID_PGUP) target_ = (target_ + m - 1) % m;
-    if ((in.down & gfx::BTN_RIGHT) || id == ID_PGDN) target_ = (target_ + 1) % m;
+    if (in.down & (gfx::BTN_LEFT | gfx::BTN_L)) target_ = (target_ + m - 1) % m;
+    if (in.down & (gfx::BTN_RIGHT | gfx::BTN_R)) target_ = (target_ + 1) % m;
+    if (id >= ID_GRID0 && id < ID_GRID0 + m) {  // a tile: pick it, or throw at the picked one
+      if (id - ID_GRID0 == target_) { fire(alive[target_]); return; }
+      target_ = id - ID_GRID0;
+      sfx::click();
+    }
     if ((in.down & gfx::BTN_A) || id == ID_CONFIRM) fire(alive[std::min(target_, m - 1)]);
     return;
   }

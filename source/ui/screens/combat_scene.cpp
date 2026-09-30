@@ -110,42 +110,59 @@ void drawPowerRow(Creature* c, float x, float y, float bw) {
   }
 }
 
-// The intents over the creature's head, side by side (NCreature's intent row of NIntents): the C#
-// bob (sin(t*pi + offset) * 10 + 8 px up at 1080p, ~a quarter here), attack damage after the
-// player's modifiers as "N" or "N×H" (intents.FORMAT_DAMAGE_*), the tiered attack icon by total
-// damage, status card counts.
-void drawIntents(Combat& cb, Creature* c, float x, float y, float time) {
-  struct Shown { Sprite ic; std::string label; };
-  std::vector<Shown> shown;
-  for (auto& in : c->monster->nextMove->intents) {
-    Shown sh;
-    switch (in.kind) {
-      case Intent::Attack: {
-        int single = std::max(0, cb.modifyDamage(cb.player, c, in.damage, kMove, nullptr).toInt());
-        int total = single * std::max(1, in.hits);
-        int tier = total < 5 ? 1 : total < 10 ? 2 : total < 20 ? 3 : total < 40 ? 4 : 5;
-        sh.ic = R().sprite("intent/attack_" + num(tier));
-        sh.label = in.hits > 1 ? num(single) + "×" + num(in.hits) : num(single);
-        break;
-      }
-      case Intent::Buff: sh.ic = R().sprite("intent/buff"); break;
-      case Intent::Defend: sh.ic = R().sprite("intent/defend"); break;
-      case Intent::Debuff:
-        sh.ic = R().sprite("intent/debuff_small");
-        if (!sh.ic) sh.ic = R().sprite("intent/debuff");
-        break;
-      case Intent::DebuffStrong: sh.ic = R().sprite("intent/debuff"); break;
-      case Intent::Status:
-        sh.ic = R().sprite("intent/status");
-        if (in.count > 0) sh.label = num(in.count);
-        break;
-      case Intent::Stun: sh.ic = R().sprite("intent/stun"); break;
-      case Intent::Summon: sh.ic = R().sprite("intent/summon"); break;
-      case Intent::Heal: sh.ic = R().sprite("intent/heal"); break;
-      case Intent::Escape: sh.ic = R().sprite("intent/escape"); break;
-      case Intent::Sleep: sh.ic = R().sprite("intent/sleep"); break;
-      default: sh.ic = R().sprite("intent/unknown"); break;
+// One intent as shown: the icon (the tiered attack icon by total damage), its label (attack damage
+// after the player's modifiers as "N" or "N×H", intents.FORMAT_DAMAGE_*; status card counts) and
+// the loc key of its hover tip (intents.<KEY>.title / .description, NIntent / AbstractIntent).
+struct IntentShown {
+  Sprite ic;
+  std::string label;
+  const char* key = "UNKNOWN";
+  int damage = 0, hits = 1, count = 0;
+};
+IntentShown intentShown(Combat& cb, Creature* c, const Intent& in) {
+  IntentShown sh;
+  switch (in.kind) {
+    case Intent::Attack: {
+      int single = std::max(0, cb.modifyDamage(cb.player, c, in.damage, kMove, nullptr).toInt());
+      int total = single * std::max(1, in.hits);
+      int tier = total < 5 ? 1 : total < 10 ? 2 : total < 20 ? 3 : total < 40 ? 4 : 5;
+      sh.ic = R().sprite("intent/attack_" + num(tier));
+      sh.label = in.hits > 1 ? num(single) + "×" + num(in.hits) : num(single);
+      sh.key = "ATTACK";
+      sh.damage = single;
+      sh.hits = std::max(1, in.hits);
+      break;
     }
+    case Intent::Buff: sh.ic = R().sprite("intent/buff"); sh.key = "BUFF"; break;
+    case Intent::Defend: sh.ic = R().sprite("intent/defend"); sh.key = "DEFEND"; break;
+    case Intent::Debuff:
+      sh.ic = R().sprite("intent/debuff_small");
+      if (!sh.ic) sh.ic = R().sprite("intent/debuff");
+      sh.key = "DEBUFF";
+      break;
+    case Intent::DebuffStrong: sh.ic = R().sprite("intent/debuff"); sh.key = "DEBUFF_STRONG"; break;
+    case Intent::Status:
+      sh.ic = R().sprite("intent/status");
+      if (in.count > 0) sh.label = num(in.count);
+      sh.key = "STATUS";
+      sh.count = in.count;
+      break;
+    case Intent::Stun: sh.ic = R().sprite("intent/stun"); sh.key = "STUN"; break;
+    case Intent::Summon: sh.ic = R().sprite("intent/summon"); sh.key = "SUMMON"; break;
+    case Intent::Heal: sh.ic = R().sprite("intent/heal"); sh.key = "HEAL"; break;
+    case Intent::Escape: sh.ic = R().sprite("intent/escape"); sh.key = "ESCAPE"; break;
+    case Intent::Sleep: sh.ic = R().sprite("intent/sleep"); sh.key = "SLEEP"; break;
+    default: sh.ic = R().sprite("intent/unknown"); break;
+  }
+  return sh;
+}
+
+// The intents over the creature's head, side by side (NCreature's intent row of NIntents), with the
+// C# bob (sin(t*pi + offset) * 10 + 8 px up at 1080p, ~a quarter here).
+void drawIntents(Combat& cb, Creature* c, float x, float y, float time) {
+  std::vector<IntentShown> shown;
+  for (auto& in : c->monster->nextMove->intents) {
+    IntentShown sh = intentShown(cb, c, in);
     bool dup = false;  // the same plain icon twice (Buff + Buff) shows once
     for (auto& o : shown)
       dup |= sh.label.empty() && o.label.empty() && o.ic.tex == sh.ic.tex && o.ic.x == sh.ic.x && o.ic.y == sh.ic.y;
@@ -172,6 +189,36 @@ void drawIntents(Combat& cb, Creature* c, float x, float y, float time) {
   }
 }
 
+inline float expoOut(float t) { return t >= 1 ? 1.f : 1.f - std::pow(2.f, -10.f * std::max(0.f, t)); }
+
+// S09: NSelectionReticle. The game's combat_reticle corner bracket at the four corners of the
+// creature's box: on select it fades in over 0.2 s while scaling 0.9 -> 1 (expo out, 0.5 s).
+// `t` is the time since the creature became the target.
+void drawReticle(float x0, float y0, float x1, float y1, float t, uint32_t tint) {
+  Sprite sp = R().sprite("ui/reticle");
+  const float sc = 0.9f + 0.1f * expoOut(t / 0.5f);
+  const float a = std::clamp(t / 0.2f, 0.f, 1.f) * (float)(tint & 0xFF) / 255.f;
+  const uint32_t col = (tint & 0xFFFFFF00) | (uint32_t)(a * 255);
+  const float cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, hw = (x1 - x0) / 2 * sc, hh = (y1 - y0) / 2 * sc;
+  const float cs = std::clamp(std::min(hw, hh) * 0.55f, 9.f, 16.f);
+  const float xs[4] = {cx - hw, cx + hw - cs, cx + hw - cs, cx - hw};
+  const float ys[4] = {cy - hh, cy - hh, cy + hh - cs, cy + hh - cs};
+  for (int k = 0; k < 4; ++k) {  // top-left art turned a quarter per corner (clockwise)
+    if (!sp) {
+      gfx::rect(xs[k], ys[k] + (k >= 2 ? cs - 2 : 0), cs, 2, col);
+      gfx::rect(xs[k] + (k == 1 || k == 2 ? cs - 2 : 0), ys[k], 2, cs, col);
+      continue;
+    }
+    gfx::pushTransform(gfx::Affine::rotateAround(xs[k] + cs / 2, ys[k] + cs / 2, k * 3.14159265f / 2));
+    spr(sp, xs[k], ys[k], cs, cs, col);
+    gfx::popTransform();
+  }
+}
+std::map<Creature*, float>& reticleTimes() {
+  static std::map<Creature*, float> m;
+  return m;
+}
+
 }  // namespace
 
 // ================================================================ combat
@@ -188,19 +235,22 @@ float App::enemyX(int i, int n) {
   return left + (right - left) * (i + 0.5f) / n;
 }
 
-void App::drawCreature(Creature* c, float x, float feetY, bool targeted) {
+// The creature's body (Spine skeleton, else its still) with its feet at (x, feetY). `live` is the
+// battlefield copy (screen shake, hit flash decay, illusions coming back); the inspect page draws a
+// second, scaled copy with live = false. False when nothing is drawn (faded out after death).
+bool App::drawCreatureBody(Creature* c, float x, float feetY, float scale, bool live) {
   Sprite s = R().sprite("creature/" + (c->isPlayer ? playerArt(run_.get()) : c->name));
-  float dx = x + (screenShake_ ? std::sin((float)time_ * 55.f + (c->isPlayer ? 0.f : 1.3f)) * c->shake * 3.f : 0.f);
+  float dx = x + (live && screenShake_ ? std::sin((float)time_ * 55.f + (c->isPlayer ? 0.f : 1.3f)) * c->shake * 3.f : 0.f);
   bool dying = c->dead();
-  float flash = c->hitFlash;
-  c->hitFlash = std::max(0.f, c->hitFlash - 0.08f);
+  float flash = live ? c->hitFlash : 0.f;
+  if (live) c->hitFlash = std::max(0.f, c->hitFlash - 0.08f);
   if (Visual* v = visual(c)) {
-    if (v->dying && c->alive()) {  // an illusion came back
+    if (live && v->dying && c->alive()) {  // an illusion came back
       v->dying = false;
       v->fade = 1.f;
       v->anim->play(idleAnim(*v), true);
     }
-    if (v->fade <= 0) return;
+    if (v->fade <= 0) return false;
     v->anim->apply(*v->skel);
     v->skel->updateWorldTransform();
     if (v->key == "VANTOM") {
@@ -215,7 +265,7 @@ void App::drawCreature(Creature* c, float x, float feetY, bool targeted) {
     float tint[4] = {1.f, 1.f - flash * 0.6f, 1.f - flash * 0.6f, v->fade};
     static std::vector<spine::Batch> batches;
     batches.clear();
-    v->skel->render(batches, dx, feetY, 1.f, false, tint);
+    v->skel->render(batches, dx, feetY, scale, false, tint);
     static_assert(sizeof(spine::Vertex) == sizeof(gfx::Vert), "vertex layouts must match");
     for (auto& b : batches)
       gfx::triangles(R().texture(v->data->pages[b.page]), reinterpret_cast<const gfx::Vert*>(b.vertices.data()),
@@ -224,23 +274,26 @@ void App::drawCreature(Creature* c, float x, float feetY, bool targeted) {
     uint32_t tint = flash > 0 ? 0xFF4040FF : 0xFFFFFFFF;
     float blend = flash > 0 ? flash * 0.6f : 0.f;
     if (dying) { tint = 0x000000A0; blend = 0.6f; }
-    if (s) spr(s, dx - s.ax, feetY - s.ay, -1, -1, tint, blend);
-    else gfx::rect(dx - 20, feetY - 50, 40, 50, 0x80808080);
+    if (s) spr(s, dx - s.ax * scale, feetY - s.ay * scale, s.w * scale, s.h * scale, tint, blend);
+    else gfx::rect(dx - 20 * scale, feetY - 50 * scale, 40 * scale, 50 * scale, 0x80808080);
   }
-  if (dying) return;
+  return true;
+}
+
+void App::drawCreature(Creature* c, float x, float feetY, bool targeted, uint32_t reticleTint) {
+  Sprite s = R().sprite("creature/" + (c->isPlayer ? playerArt(run_.get()) : c->name));
+  if (!drawCreatureBody(c, x, feetY, 1.f, true)) { reticleTimes().erase(c); return; }
+  if (c->dead()) { reticleTimes().erase(c); return; }
 
   float top = feetY - (s ? s.ay : 50);
+  // S09: the target's reticle (NCreature.ShowSingleSelectReticle), around the body's box.
   if (targeted) {
-    float h = s ? s.h : 50, w = s ? s.w : 40;
-    Sprite ret = R().sprite("ui/reticle");
-    float pulse = 2 * std::sin((float)time_ * 8);
-    float rx = dx - s.ax - 4 - pulse, ry = top - 4 - pulse, rw = w + 8 + 2 * pulse, rh = h + 8 + 2 * pulse;
-    uint32_t rc = 0xFFE070FF;
-    gfx::rect(rx, ry, 10, 2, rc); gfx::rect(rx, ry, 2, 10, rc);
-    gfx::rect(rx + rw - 10, ry, 10, 2, rc); gfx::rect(rx + rw - 2, ry, 2, 10, rc);
-    gfx::rect(rx, ry + rh - 2, 10, 2, rc); gfx::rect(rx, ry + rh - 10, 2, 10, rc);
-    gfx::rect(rx + rw - 10, ry + rh - 2, 10, 2, rc); gfx::rect(rx + rw - 2, ry + rh - 10, 2, 10, rc);
-    (void)ret;
+    float& t = reticleTimes()[c];
+    t += std::min(0.05f, (float)gfx::dt());
+    const float w = s ? s.w : 40, h = s ? s.h : 50, left = x - (s ? s.ax : 20);
+    drawReticle(left - 3, top - 3, left + w + 3, top + h + 3, t, reticleTint);
+  } else {
+    reticleTimes().erase(c);
   }
 
   // S08 HUD under / over the creature (C# NHealthBar, NPowerContainer, NIntent).
@@ -317,6 +370,361 @@ void App::drawStatusBar(float y) {
     if (!other.empty()) spr(R().sprite(other), ix, y + 1, 21, 21);
     R().text(ix + 24, y + 4, "安全", ts(F12, 0x80C8FFFF, LEFT));
   }
+}
+
+// ================================================================ S10 combat inspect (RGDSplus U11)
+
+namespace {
+
+std::string creatureName(Run& r, Creature* c) {
+  if (!c) return {};
+  if (c->isPlayer) {
+    std::string k = "characters." + r.character().key + ".title";
+    return R().hasLoc(k) ? L(k) : r.character().id;
+  }
+  if (c->monster && R().hasLoc("monsters." + c->monster->locKey + ".name")) return L("monsters." + c->monster->locKey + ".name");
+  if (R().hasLoc("monsters." + c->name + ".name")) return L("monsters." + c->name + ".name");
+  return c->name;
+}
+
+std::vector<std::string> splitTop(const std::string& s, char sep) {
+  std::vector<std::string> out;
+  int d = 0;
+  size_t start = 0;
+  for (size_t k = 0; k <= s.size(); ++k) {
+    if (k < s.size() && s[k] == '{') ++d;
+    else if (k < s.size() && s[k] == '}') --d;
+    if (k == s.size() || (s[k] == sep && d == 0)) { out.push_back(s.substr(start, k - start)); start = k + 1; }
+  }
+  return out;
+}
+
+// The SmartFormat pieces power texts use that expandSmart (cardtext.cpp) leaves out: {X:abs()},
+// {X:cond:<0?a|b} (also ==N?, >N?, a default alt), {Name.StringValue:cond:a|b} (a when the string
+// is set; {} is the value) and {singleStarIcon}. Everything else is left for expandSmart.
+std::string powerPreformat(const std::string& s, const std::vector<DynVar>& vars, const std::map<std::string, std::string>& sv) {
+  auto val = [&](const std::string& n) -> Dec {
+    for (auto& v : vars) if (v.name == n) return v.base;
+    return Dec(0);
+  };
+  std::string out;
+  for (size_t i = 0; i < s.size();) {
+    if (s[i] != '{') { out += s[i++]; continue; }
+    int depth = 0;
+    size_t j = i;
+    for (; j < s.size(); ++j) {
+      if (s[j] == '{') ++depth;
+      else if (s[j] == '}' && --depth == 0) break;
+    }
+    if (j >= s.size()) { out += s.substr(i); break; }
+    std::string body = s.substr(i + 1, j - i - 1);
+    i = j + 1;
+    size_t colon = body.find(':');
+    std::string name = body.substr(0, colon), rest = colon == std::string::npos ? "" : body.substr(colon + 1);
+    if (name == "singleStarIcon") { out += "[icon:star]"; continue; }
+    if (rest.rfind("abs()", 0) == 0) { out += num(std::abs(val(name).toInt())); continue; }
+    if (rest.rfind("cond:", 0) != 0) { out += "{" + body + "}"; continue; }
+    auto alts = splitTop(rest.substr(5), '|');
+    std::string chosen, self;
+    const std::string strSuffix = ".StringValue";
+    if (name.size() > strSuffix.size() && name.compare(name.size() - strSuffix.size(), strSuffix.size(), strSuffix) == 0) {
+      auto it = sv.find(name.substr(0, name.size() - strSuffix.size()));
+      self = it == sv.end() ? "" : it->second;
+      chosen = !self.empty() ? alts[0] : alts.size() > 1 ? alts[1] : "";
+    } else {
+      const int v = val(name).toInt();
+      self = num(v);
+      for (auto& a : alts) {
+        size_t q = a.find('?');
+        const char c0 = a.empty() ? 0 : a[0];
+        if (q == std::string::npos || !(c0 == '<' || c0 == '>' || c0 == '=' || c0 == '!')) { chosen = a; break; }
+        std::string op = a.substr(0, (a.size() > 1 && a[1] == '=') ? 2 : 1);
+        int n = std::atoi(a.substr(op.size(), q - op.size()).c_str());
+        bool ok = op == "<" ? v < n : op == ">" ? v > n : op == "<=" ? v <= n : op == ">=" ? v >= n : op == "!=" ? v != n : v == n;
+        if (ok) { chosen = a.substr(q + 1); break; }
+      }
+    }
+    for (size_t p; (p = chosen.find("{}")) != std::string::npos;) chosen.replace(p, 2, self);
+    out += powerPreformat(chosen, vars, sv);
+  }
+  return out;
+}
+
+// PowerModel.HoverTip: the title and the smart description with its amount and names, falling back
+// to the plain description when the text needs a value this port doesn't keep on the power.
+std::string powerText(Run& r, Power* p) {
+  const std::string base = "powers." + p->locKey;
+  std::vector<DynVar> vars{{"Amount", Dec(p->amount), Dec(p->amount)},
+                           {"OnPlayer", Dec(p->owner && p->owner->isPlayer ? 1 : 0), Dec(0)}};
+  if (p->locKey == "VULNERABLE_POWER" || p->locKey == "TANK_POWER") vars.push_back({"DamageIncrease", Dec::lit(1.5), Dec::lit(1.5)});
+  if (p->locKey == "TANK_POWER") vars.push_back({"DamageDecrease", Dec::lit(0.5), Dec::lit(0.5)});
+  std::map<std::string, std::string> sv;
+  sv["OwnerName"] = creatureName(r, p->owner);
+  if (p->applier && !p->applier->isPlayer) sv["ApplierName"] = creatureName(r, p->applier);
+  auto ok = [](const std::string& s) { return !s.empty() && s.find('?') == std::string::npos; };
+  if (R().hasLoc(base + ".smartDescription")) {
+    std::string s = expandSmart(powerPreformat(L(base + ".smartDescription"), vars, sv), vars, true, &sv);
+    if (ok(s)) return s;
+  }
+  if (!R().hasLoc(base + ".description")) return {};
+  std::string s = expandSmart(powerPreformat(L(base + ".description"), vars, sv), vars, true, &sv);
+  return ok(s) ? s : L(base + ".description");
+}
+
+struct InspectTip {
+  Sprite icon;
+  std::string title, amount, desc;
+  uint32_t amountCol = col::white;
+  bool header = false;  // a section label (意图 / 能力)
+};
+constexpr float kInsPad = 4, kInsIcon = 16, kInsTitleS = 0.85f, kInsTop = 22, kInsBottom = 237, kInsGap = 2;
+
+float inspectTipH(const InspectTip& t, float w) {
+  if (t.header) return 14;
+  float dh = 0;
+  if (!t.desc.empty()) R().measure(t.desc, ts(F12, col::white, LEFT, w - 2 * kInsPad), &dh);
+  return kInsPad * 2 + std::max(kInsIcon, R().lineHeight(F16) * kInsTitleS) + (t.desc.empty() ? 0 : dh + 2);
+}
+
+void drawInspectTip(const InspectTip& t, float x, float y, float w) {
+  const float h = inspectTipH(t, w);
+  if (t.header) {
+    R().text(x + 2, y, t.title, ts(F12, col::gold));
+    gfx::rect(x, y + h - 2, w, 1, 0x8FC1C880);
+    return;
+  }
+  gfx::rect(x + 2, y + 2, w - 4, h - 4, 0x0B0B12D0);  // the fight must not show through the tip art
+  widgets::panel("ui/hover_tip", x, y, w, h);
+  const float lh = std::max(kInsIcon, R().lineHeight(F16) * kInsTitleS);
+  float tx = x + kInsPad;
+  if (t.icon) {
+    spr(t.icon, tx, y + kInsPad + (lh - kInsIcon) / 2, kInsIcon, kInsIcon);
+    tx += kInsIcon + 4;
+  }
+  TextStyle at = ts(F16, t.amountCol, RIGHT, 0, kInsTitleS);
+  const float aw = t.amount.empty() ? 0 : R().measure(t.amount, at) + 6;
+  const float ty = y + kInsPad + (lh - R().lineHeight(F16) * kInsTitleS) / 2;
+  gfx::pushClip(tx, y, std::max(1.f, x + w - kInsPad - aw - tx), h);
+  R().text(tx, ty, t.title, ts(F16, col::gold, LEFT, 0, kInsTitleS));
+  gfx::popClip();
+  if (!t.amount.empty()) R().text(x + w - kInsPad, ty, t.amount, at);
+  if (!t.desc.empty()) R().text(x + kInsPad, y + kInsPad + lh + 2, t.desc, ts(F12, col::white, LEFT, w - 2 * kInsPad));
+}
+
+// The tips of one creature: its intents (monsters, NIntent hover tips) then its powers.
+std::vector<InspectTip> inspectTips(Run& r, Combat& cb, Creature* c) {
+  std::vector<InspectTip> out;
+  if (c->monster && c->monster->nextMove && cb.inProgress && !c->monster->nextMove->intents.empty()) {
+    out.push_back({{}, "意图", "", "", col::white, true});
+    for (auto& in : c->monster->nextMove->intents) {
+      IntentShown sh = intentShown(cb, c, in);
+      InspectTip t;
+      t.icon = sh.ic;
+      std::string k = std::string("intents.") + sh.key;
+      t.title = R().hasLoc(k + ".title") ? L(k + ".title") : sh.key;
+      t.amount = sh.label;
+      t.amountCol = in.kind == Intent::Attack ? col::red : col::white;
+      std::vector<DynVar> v{{"Damage", Dec(sh.damage), Dec(sh.damage)}, {"Repeat", Dec(sh.hits), Dec(sh.hits)},
+                            {"CardCount", Dec(sh.count), Dec(sh.count)}};
+      if (R().hasLoc(k + ".description")) t.desc = expandSmart(L(k + ".description"), v, true);
+      bool dup = false;
+      for (auto& o : out) dup |= !o.header && o.title == t.title && o.amount == t.amount && o.desc == t.desc;
+      if (!dup) out.push_back(t);
+    }
+  }
+  out.push_back({{}, "能力", "", "", col::white, true});
+  if (c->powers.empty()) {
+    InspectTip t;
+    t.title = "没有能力";
+    out.push_back(t);
+  }
+  for (auto& up : c->powers) {
+    Power* p = up.get();
+    InspectTip t;
+    t.icon = R().sprite("power/" + p->locKey);
+    std::string k = "powers." + p->locKey + ".title";
+    t.title = R().hasLoc(k) ? L(k) : p->id;
+    if (p->stackType() == StackType::Counter) {
+      t.amount = num(p->amount);
+      t.amountCol = p->typeForAmount(Dec(p->amount)) == PowerType::Debuff ? 0xFF5555FF : col::white;
+    }
+    t.desc = powerText(r, p);
+    out.push_back(t);
+  }
+  return out;
+}
+
+constexpr int kInsCloseId = 0x5130, kInsPrevId = 0x5131, kInsNextId = 0x5132, kInsPgUpId = 0x5133, kInsPgDnId = 0x5134,
+              kInsChip0 = 0x5140;
+// The touch that opened the page (信息) must be let go before the page's buttons listen.
+bool& inspectTouchArmed() {
+  static bool armed = true;
+  return armed;
+}
+
+}  // namespace
+
+std::vector<Creature*> App::inspectList() {
+  std::vector<Creature*> out;
+  Combat* cb = run_->combat.get();
+  if (!cb) return out;
+  out.push_back(cb->player);
+  if (cb->osty && !cb->osty->removed && cb->osty->alive()) out.push_back(cb->osty);
+  for (Creature* e : visibleEnemies())
+    if (e->alive()) out.push_back(e);
+  return out;
+}
+
+// Opens on the enemy being aimed at, else the first enemy (the player when none is left).
+void App::openCombatInspect() {
+  auto list = inspectList();
+  if (list.empty()) return;
+  Creature* want = nullptr;
+  if (Combat* cb = run_->combat.get()) {
+    auto alive = cb->aliveEnemies();
+    if (!alive.empty()) want = alive[std::clamp(target_, 0, (int)alive.size() - 1)];
+  }
+  inspect_ = 0;
+  for (int i = 0; i < (int)list.size(); ++i)
+    if (list[i] == want) inspect_ = i;
+  inspectPage_ = 0;
+  drag_ = {};
+  aiming_ = false;
+  widgets::setFocus(-1);
+  inspectTouchArmed() = !gfx::input().touching;
+  sfx::click();
+}
+
+void App::updateCombatInspect(const gfx::Input& in) {
+  auto list = inspectList();
+  const int m = (int)list.size();
+  if (m == 0 || (in.down & gfx::BTN_B)) { inspect_ = -1; return; }
+  inspect_ = std::clamp(inspect_, 0, m - 1);
+  auto step = [&](int d) {
+    inspect_ = (inspect_ + d + m) % m;
+    inspectPage_ = 0;
+  };
+  if (in.down & (gfx::BTN_RIGHT | gfx::BTN_R)) step(1);
+  if (in.down & (gfx::BTN_LEFT | gfx::BTN_L)) step(-1);
+  if (in.down & gfx::BTN_DOWN) inspectPage_ = std::min(inspectPages_ - 1, inspectPage_ + 1);
+  if (in.down & gfx::BTN_UP) inspectPage_ = std::max(0, inspectPage_ - 1);
+}
+
+void App::drawCombatInspect(bool top) {
+  Combat* cb = run_->combat.get();
+  auto list = inspectList();
+  if (!cb || list.empty()) { inspect_ = -1; return; }
+  inspect_ = std::clamp(inspect_, 0, (int)list.size() - 1);
+  Creature* c = list[inspect_];
+  if (top) {
+    // Over the dimmed fight: the creature large at the left with name and HP / block, its intents
+    // and powers explained at the right (paged when they do not fit).
+    gfx::rect(0, 18, kTop, kH - 18, 0x000000E8);
+    const float lx = 80, lw = 148;
+    gfx::rect(lx - lw / 2 + 2, kInsTop + 2, lw - 4, kInsBottom - kInsTop - 4, 0x0B0B12D0);
+    widgets::panel("ui/hover_tip", lx - lw / 2, kInsTop, lw, kInsBottom - kInsTop, 0xFFFFFFB0);
+    TextStyle nt = ts(F16, col::gold, CENTER, lw - 10);
+    R().text(lx, kInsTop + 4, creatureName(*run_, c), nt);
+    const char* kind = c->isPlayer ? "玩家" : c == cb->osty ? "召唤物" : "敌人";
+    R().text(lx, kInsTop + 22, kind, ts(F12, col::gray, CENTER));
+    Sprite s = R().sprite("creature/" + (c->isPlayer ? playerArt(run_.get()) : c->name));
+    const float feet = 180, boxW = lw - 16, boxH = feet - (kInsTop + 40);
+    float sc = s ? std::min({1.6f, boxW / std::max(1.f, (float)s.w), boxH / std::max(1.f, (float)s.h)}) : 1.f;
+    gfx::pushClip(lx - lw / 2 + 2, kInsTop + 38, lw - 4, feet - kInsTop - 36);
+    drawCreatureBody(c, lx, feet, sc, false);
+    gfx::popClip();
+    if (c->displayHp < 0) c->displayHp = (float)c->hp;
+    drawHpBar(c, lx + 6, feet + 8, 108);
+    std::string line = c->block > 0 ? "格挡 " + num(c->block) : "";
+    if (c->isPlayer) line += (line.empty() ? "" : "  ·  ") + std::string("能量 ") + num(cb->energy) + "/" + num(cb->maxEnergyNow());
+    if (!line.empty()) R().text(lx, feet + 22, line, ts(F12, c->block > 0 ? col::blue : col::white, CENTER));
+    if (inspectPages_ > 1)
+      R().text(lx, kInsBottom - 16, num(inspectPage_ + 1) + " / " + num(inspectPages_) + "  ↑↓", ts(F12, col::gray, CENTER));
+
+    // Tips, paged by height.
+    auto tips = inspectTips(*run_, *cb, c);
+    const float tx = lx + lw / 2 + 6, tw = kTop - 6 - tx;
+    std::vector<std::vector<int>> pages(1);
+    float y = kInsTop;
+    for (int i = 0; i < (int)tips.size(); ++i) {
+      float h = inspectTipH(tips[i], tw);
+      if (!pages.back().empty() && y + h > kInsBottom) { pages.push_back({}); y = kInsTop; }
+      pages.back().push_back(i);
+      y += h + kInsGap;
+    }
+    // A section label never ends a page.
+    for (size_t p = 0; p + 1 < pages.size(); ++p)
+      if (pages[p].size() > 1 && tips[pages[p].back()].header) {
+        pages[p + 1].insert(pages[p + 1].begin(), pages[p].back());
+        pages[p].pop_back();
+      }
+    inspectPages_ = (int)pages.size();
+    inspectPage_ = std::clamp(inspectPage_, 0, inspectPages_ - 1);
+    y = kInsTop;
+    for (int i : pages[inspectPage_]) {
+      drawInspectTip(tips[i], tx, y, tw);
+      y += inspectTipH(tips[i], tw) + kInsGap;
+    }
+    return;
+  }
+
+  // Bottom: the creatures as chips (tap one), prev / next, pages, 关闭 at the bottom left.
+  gfx::rect(0, 0, kBot, kH, style::kScrim);
+  R().text(kBot / 2, 6, "←→ / L R 切换  ·  ↑↓ 翻页  ·  B 关闭", ts(F12, col::gray, CENTER, kBot - 16));
+  gfx::Input wi = pauseOpen_ ? gfx::Input{} : gfx::input();
+  wi.down = wi.held = wi.up = 0;  // keys are read by updateCombatInspect; only touch here
+  bool& armed = inspectTouchArmed();
+  if (!armed) {
+    if (!wi.touching && !wi.touchUp) armed = true;
+    wi.touching = wi.touchDown = wi.touchUp = false;
+  }
+  if (widgets::focused() >= 0) widgets::setFocus(-1);
+  widgets::beginFrame(wi);
+  const int n = (int)list.size();
+  const float gap = 4, cw = std::min(100.f, (kBot - 2 * style::kMargin - gap * (n - 1)) / n), ch = 52;
+  float x = (kBot - (cw * n + gap * (n - 1))) / 2;
+  const float y = 28;
+  for (int i = 0; i < n; ++i, x += cw + gap) {
+    Creature* e = list[i];
+    const bool cur = i == inspect_;
+    panel(x, y, cw, ch, cur ? 0x3B6272F0 : 0x22323BE0, cur ? style::kFocus : 0x4F8790FF);
+    gfx::pushClip(x + 2, y, cw - 4, ch);
+    R().text(x + cw / 2, y + 4, creatureName(*run_, e), ts(F12, cur ? col::gold : col::white, CENTER));
+    gfx::popClip();
+    R().text(x + cw / 2, y + 20, num(std::max(0, e->hp)) + "/" + num(e->maxHp), ts(F12, 0xFF8080FF, CENTER, 0, 0.9f));
+    if (e->block > 0) R().text(x + cw / 2, y + 34, "格挡 " + num(e->block), ts(F12, col::blue, CENTER, 0, 0.85f));
+    else if (!e->powers.empty()) R().text(x + cw / 2, y + 34, num((int)e->powers.size()) + " 能力", ts(F12, col::gray, CENTER, 0, 0.85f));
+    if (widgets::hit(kInsChip0 + i, x, y, cw, ch) && i != inspect_) {
+      inspect_ = i;
+      inspectPage_ = 0;
+      sfx::click();
+    }
+  }
+  // The shown creature's name and what the pages hold.
+  R().text(kBot / 2, 92, creatureName(*run_, c), ts(F16, col::gold, CENTER, kBot - 16));
+  std::string sub = c->isPlayer ? "玩家" : c == cb->osty ? "召唤物" : "敌人";
+  sub += "  ·  " + num((int)c->powers.size()) + " 个能力";
+  R().text(kBot / 2, 112, sub, ts(F12, col::gray, CENTER));
+  if (inspectPages_ > 1) {
+    if (widgets::button(kInsPgUpId, kBot / 2 - 110, 138, 72, style::kButtonH, "上一页", widgets::Kind::Secondary, inspectPage_ > 0))
+      inspectPage_ = std::max(0, inspectPage_ - 1);
+    R().text(kBot / 2, 146, num(inspectPage_ + 1) + " / " + num(inspectPages_), ts(F16, col::white, CENTER));
+    if (widgets::button(kInsPgDnId, kBot / 2 + 38, 138, 72, style::kButtonH, "下一页", widgets::Kind::Secondary,
+                        inspectPage_ + 1 < inspectPages_))
+      inspectPage_ = std::min(inspectPages_ - 1, inspectPage_ + 1);
+  }
+  if (widgets::button(kInsCloseId, style::kMargin, style::kActionY, 72, style::kButtonH, "关闭")) inspect_ = -1;
+  if (n > 1) {
+    if (widgets::button(kInsPrevId, kBot - style::kMargin - 52 * 2 - 4, style::kActionY, 52, style::kButtonH, "◀")) {
+      inspect_ = (inspect_ - 1 + n) % n;
+      inspectPage_ = 0;
+    }
+    if (widgets::button(kInsNextId, kBot - style::kMargin - 52, style::kActionY, 52, style::kButtonH, "▶")) {
+      inspect_ = (inspect_ + 1) % n;
+      inspectPage_ = 0;
+    }
+  }
+  widgets::endFrame();
 }
 
 }  // namespace ui

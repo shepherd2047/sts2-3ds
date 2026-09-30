@@ -185,28 +185,40 @@ void App::drawCombat(bool top) {
   Card* selCard = sel_ >= 0 && !selecting ? cb->hand[sel_] : nullptr;
   bool canAct = cb->playerPhase && cb->actions.waiting();
 
-  // Which card aims where this frame.
+  if (cb->choice.active) inspect_ = -1;  // a choice takes the screens over
+
+  // Which card aims where this frame (S09, NTargetManager + NTargetingArrow): the locked creature
+  // shows its reticle; the arrow is red on an enemy, green on the player, and white (the C#
+  // unhighlighted arrow) while the card cannot be played; a card hitting every enemy (or a random
+  // one) marks them all.
   Creature* tgt = nullptr;
-  bool arrow = false, arrowAlly = false;
+  bool arrow = false, arrowAlly = false, arrowValid = true, markAll = false;
   float afx = 0, afy = 0;
   if (drag_.down && drag_.moved && drag_.armed && drag_.card) {
     afx = drag_.x + kBotOX;
     afy = drag_.y - kCardH * kDragS / 2 + kBotOY;
+    arrowValid = cb->canPlay(drag_.card);
     if (drag_.card->target == TargetType::AnyEnemy && drag_.target) { tgt = drag_.target; arrow = true; }
     else if (drag_.card->target == TargetType::Self) { tgt = cb->player; arrow = arrowAlly = true; }
+    else if (drag_.card->target == TargetType::AllEnemies || drag_.card->target == TargetType::RandomEnemy) markAll = arrowValid;
   } else if (potionsOpen_ && potionAim_ && !alive.empty()) {
     if (target_ >= (int)alive.size()) target_ = 0;
     tgt = alive[target_];
+    afx = kPotionAimX + kBotOX;  // from the potion on the bottom screen's aim page
+    afy = kPotionAimY + kBotOY;
+    arrow = true;
   } else if (aiming_ && selCard && !alive.empty()) {
     float cx = std::clamp(handSlot(n, sel_).x, 70.f, kBot - 70.f);
     afx = cx + kBotOX;
     afy = kPreviewY + kBotOY;
     tgt = alive[target_];
     arrow = true;
+    arrowValid = cb->canPlay(selCard);
   }
   float atx = 0, aty = 0;
   if (arrow && centers_.count(tgt)) { atx = centers_[tgt].first; aty = centers_[tgt].second; }
   else arrow = false;
+  const uint32_t reticleTint = !arrowValid ? 0xB0B0B0C0 : arrowAlly ? 0x9CFFC8FF : 0xFFFFFFFF;
 
   if (top) {
     gfx::Texture* bg = R().texture(actTexture(*run_, "bg_"));
@@ -218,7 +230,7 @@ void App::drawCombat(bool top) {
       centers_[c] = {x, s ? feet - s.ay + s.h / 2.f : feet - 30};
     };
     center(cb->player, 95);
-    drawCreature(cb->player, 95, feet, tgt == cb->player && !arrowAlly);
+    drawCreature(cb->player, 95, feet, tgt == cb->player, reticleTint);
     // X4.5: the Necrobinder's Osty (Combat::osty) stands beside the player. drawCreature already
     // draws its idle animation, HP bar and powers (it treats any non-player Creature the same
     // way), and fades it out on death (c->dead() -> "if (dying) return;" after the die anim), so
@@ -249,8 +261,7 @@ void App::drawCombat(bool top) {
     for (int i = 0; i < (int)enemies.size(); ++i) {
       float x = enemyX(i, (int)enemies.size());
       center(enemies[i], x);
-      bool aoe = drag_.down && drag_.armed && drag_.card && drag_.card->target == TargetType::AllEnemies;
-      drawCreature(enemies[i], x, feet, enemies[i] == tgt || (aoe && enemies[i]->alive()));
+      drawCreature(enemies[i], x, feet, enemies[i] == tgt || (markAll && enemies[i]->alive()), reticleTint);
     }
     for (auto& f : floats_) {
       if (f.t < 0) continue;
@@ -326,12 +337,13 @@ void App::drawCombat(bool top) {
     }
     drawTopBar();
     drawTurnBanner(*cb);
-    if (arrow) drawArrow(true, afx, afy, atx, aty, true, arrowAlly);
+    if (arrow) drawArrow(true, afx, afy, atx, aty, arrowValid, arrowAlly);
     drawFlights(true);
     if (cb->choice.active && combatChooseOne()) {  // S13: the focused offer over the fight
       gfx::rect(0, 0, kTop, kH, 0x000000B0);
       chooseOneDraw(combatChooseOneSpec(), true);
     }
+    if (inspect_ >= 0 && !potionsOpen_) drawCombatInspect(true);  // S10
     return;
   }
 
@@ -340,6 +352,10 @@ void App::drawCombat(bool top) {
   gfx::Texture* room = R().texture(actTexture(*run_, "bg_"));
   gfx::image(room, kBotOX, 0, kBot, kH, 0, 0, kBot, kH, 0x000000FF, 0.15f);
 
+  if (inspect_ >= 0) {  // S10
+    drawCombatInspect(false);
+    return;
+  }
   if (cb->choice.active && combatChooseOne()) {  // S13: generated cards -> the choose-one screen
     gfx::rect(0, 0, kBot, kH, style::kScrim);
     chooseOneDraw(combatChooseOneSpec(), false);
@@ -513,6 +529,11 @@ void App::drawCombat(bool top) {
     for (auto& pt : run_->potions) filled += pt != nullptr;
     R().text(px + pw / 2, py + (ph - R().lineHeight(F12)) / 2, "药水 " + num(filled), ts(F12, canAct ? col::white : col::gray, CENTER));
     if (canAct) hits_.push_back({px, py - 2, pw, ph + 4, ID_POTIONS});
+    // S10: 信息 (combat inspect, also ↑) beside it; open on either side's turn.
+    const float ix = px + pw + 6, iw = 44;
+    panel(ix, py, iw, ph, 0x22323BE8, 0x4F8790FF);
+    R().text(ix + iw / 2, py + (ph - R().lineHeight(F12)) / 2, "信息", ts(F12, col::white, CENTER));
+    hits_.push_back({ix, py - 4, iw, ph + 8, ID_INSPECT});
   }
   // Piles (C# NCombatCardPile): the pile art in the corners with the count on the game's
   // pile_button_count plate at the bottom corner; the icon bumps when its count changes. The
@@ -586,8 +607,15 @@ void App::drawCombat(bool top) {
     if (drag_.armed) {
       gfx::rect(0, kPlayLine, kBot, kH - kPlayLine, 0x00000060);
       gfx::rect(0, kPlayLine, kBot, 1, 0xFFFFFF60);
-      hint = "松手打出 · 拖回手牌取消";
-      hc = 0x90FF90FF;
+      std::string why;
+      if (!cb->canPlay(drag_.card, &why)) {
+        hint = why == "ENERGY" ? L("combat_messages.NOT_ENOUGH_ENERGY") : L("combat_messages.UNPLAYABLE");
+        for (auto& ch : hint) if (ch == '\n') ch = ' ';
+        hc = col::red;
+      } else {
+        hint = drag_.card->target == TargetType::AnyEnemy && alive.size() > 1 ? "松手打出 · 左右拖动换目标" : "松手打出 · 拖回手牌取消";
+        hc = 0x90FF90FF;
+      }
     } else {
       gfx::rect(0, 0, kBot, kPlayLine, 0x60C0FF00 | (uint32_t)(0x10 + pulse * 0x18));
       for (float x = 4; x < kBot; x += 12) gfx::rect(x, kPlayLine, 6, 2, 0x60C0FFC0);
@@ -598,6 +626,13 @@ void App::drawCombat(bool top) {
     float w = R().measure(hint, st);
     gfx::rect(kBot / 2 - w / 2 - 6, 200, w + 12, 16, 0x000000B0);
     R().text(kBot / 2, 201, hint, st);
+  } else if (aiming_ && selCard && canAct) {
+    // S09 D-pad targeting: the arrow runs from the raised card to the enemy picked with ←→.
+    std::string hint = alive.size() > 1 ? "←→ 选择目标 · A 打出 · B 取消" : "A 打出 · B 取消";
+    TextStyle st = ts(F12, 0x90FF90FF, CENTER);
+    float w = R().measure(hint, st);
+    gfx::rect(kBot / 2 - w / 2 - 6, 200, w + 12, 16, 0x000000B0);
+    R().text(kBot / 2, 201, hint, st);
   }
   // Card being dragged, following the finger; glows when it is in the play zone.
   if (drag_.down && drag_.moved && drag_.card && !flying(drag_.card)) {
@@ -605,7 +640,7 @@ void App::drawCombat(bool top) {
     if (drag_.armed) gfx::rect(drag_.x - kCardW * s / 2 - 3, drag_.y - kCardH * s / 2 - 3, kCardW * s + 6, kCardH * s + 6, 0x60D0FF90);
     drawCard(drag_.card, drag_.x - kCardW * s / 2, drag_.y - kCardH * s / 2, s, false, true, false);
   }
-  if (arrow) drawArrow(false, afx, afy, atx, aty, true, arrowAlly);
+  if (arrow) drawArrow(false, afx, afy, atx, aty, arrowValid, arrowAlly);
   drawFlights(false);
 }
 
@@ -737,6 +772,13 @@ void App::updateCombat(const gfx::Input& in) {
       }
     }
     if (confirm) finish({cb->choice.options[sel_]});
+    return;
+  }
+
+  // S10 combat inspect: ↑ (while no card is held or aimed) or 信息, on either side's turn.
+  if (inspect_ >= 0) { updateCombatInspect(in); return; }
+  if (!drag_.down && !aiming_ && ((in.down & gfx::BTN_UP) || (in.touchDown && hitAt(in.tx, in.ty) == ID_INSPECT))) {
+    openCombatInspect();
     return;
   }
 
@@ -875,7 +917,12 @@ void App::updateCombat(const gfx::Input& in) {
       }
     } else {
       bool edge = in.tx <= 2 || in.ty <= 2 || in.tx >= kBot - 3 || in.ty >= kH - 3;
-      if (drag_.armed && !edge) play(drag_.card, drag_.target, drag_.x, drag_.y, kDragS);
+      if (drag_.armed && !edge) {
+        // The D-pad starts from the enemy last aimed at by touch.
+        auto it = std::find(alive.begin(), alive.end(), drag_.target);
+        if (it != alive.end()) target_ = (int)(it - alive.begin());
+        play(drag_.card, drag_.target, drag_.x, drag_.y, kDragS);
+      }
     }
     drag_ = {};
   }
@@ -895,7 +942,11 @@ void App::updateCombat(const gfx::Input& in) {
   if (in.down & gfx::BTN_L) { sel_ = n ? (sel_ <= 0 ? n - 1 : sel_ - 1) : -1; aiming_ = false; }
   if (in.down & (gfx::BTN_LEFT | gfx::BTN_RIGHT)) {
     int d = (in.down & gfx::BTN_RIGHT) ? 1 : -1;
-    if (aiming_ && !alive.empty()) target_ = std::clamp(target_ + d, 0, (int)alive.size() - 1);
+    if (aiming_ && !alive.empty()) {  // S09: cycle the enemies (wrapping), like the drag's sideways switch
+      const int m = (int)alive.size();
+      target_ = ((target_ + d) % m + m) % m;
+      if (m > 1) sfx::click();
+    }
     else if (n) sel_ = sel_ < 0 ? 0 : (sel_ + d + n) % n;
   }
   if (in.down & gfx::BTN_A) {

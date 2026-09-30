@@ -304,7 +304,19 @@ class App {
   bool topBarFocus_ = false;
   void drawBossPreview();  // C11: NTopBarBossIcon on the map's top screen
   void drawStatusBar(float y);
-  void drawCreature(sts::Creature* c, float x, float feetY, bool targeted);
+  // S09: `targeted` shows the NSelectionReticle around the body, tinted `reticleTint`.
+  void drawCreature(sts::Creature* c, float x, float feetY, bool targeted, uint32_t reticleTint = 0xFFFFFFFF);
+  bool drawCreatureBody(sts::Creature* c, float x, float feetY, float scale, bool live);
+  // S10 (RGDSplus U11): combat inspect, screens/combat_scene.cpp. ↑ or 信息 in combat opens it:
+  // the creature large on top with HP / block, its intents and powers explained (hover tips),
+  // ←→ / L R cycle player + monsters, ↑↓ page the tips, B closes.
+  std::vector<sts::Creature*> inspectList();
+  void openCombatInspect();
+  void drawCombatInspect(bool top);
+  void updateCombatInspect(const gfx::Input& in);
+  int inspect_ = -1;       // index into inspectList(), -1 closed
+  int inspectPage_ = 0;
+  int inspectPages_ = 1;   // tip pages of the shown creature (set while drawing)
   // `unseen` (M8 card library, ModelVisibility.NotSeen): darkened portrait, 未知 title, "?" cost, ？？？ text.
   void drawCard(sts::Card* c, float x, float y, float s, bool dim = false, bool desc = false, bool selected = false,
                 bool unseen = false);
