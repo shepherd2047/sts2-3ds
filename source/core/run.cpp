@@ -703,8 +703,7 @@ void Run::enterAct(int index) {
   er.shuffle(eliteQueue);
   bossId = er.nextItem(bosses);
   fightsThisAct = 0;
-  // The act's Ancient (ActModel.GenerateRooms: act 1 is always Neow). PORT NOTE: the
-  // Ancients of Hive and Glory are not ported yet (package 11b). Debug starts
+  // The act's Ancient (ActModel.GenerateRooms: act 1 is always Neow). Debug starts
   // (STS_ENCOUNTER / STS_ROOM / STS_EVENT / STS_NO_NEOW) skip it so scripts reach the map.
   // Hive / Glory roll one of their three (plus the shared Darv if this act got him,
   // RunManager.GenerateRooms: Darv goes to act 2, act 3 or neither). Only registered events.
@@ -1093,9 +1092,8 @@ Task<> Run::main() {
         int extra = 0;
         for (auto& rel : relics) extra += rel->bonusRelicRewards(RoomType::Boss);
         for (int i = 0; i < extra; ++i) co_await offerRelic(pullRelicFromFront(relicBag, rollRelicRarity(rr)), false);
-        // RunManager.EnterNextAct. PORT NOTE: the next act starts with its Ancient, which
-        // heals to full (AncientEventModel.BeforeEventStarted); until Ancients are ported
-        // (package 11) the heal happens here.
+        // RunManager.EnterNextAct. The next act starts with its Ancient, which heals to full
+        // (AncientEventModel.BeforeEventStarted); when there is none the heal happens here.
         enterAct(actIndex + 1);
         if (ancientId.empty()) player->hp = player->maxHp;  // stands in for the Ancient's heal
       }

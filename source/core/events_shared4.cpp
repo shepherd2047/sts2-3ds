@@ -109,9 +109,8 @@ struct FakeOrichalcum : Relic {
     addVar("Block", 3);
   }
   bool shouldTrigger = false;
-  // PORT NOTE: C# uses BeforeSideTurnEndVeryEarly (before Plating); beforeSideTurnEndEarly is the
-  // stand-in used by Orichalcum too.
-  Task<> beforeSideTurnEndEarly(Side, const std::vector<Creature*>& participants) override {
+  // BeforeSideTurnEndVeryEarly: checks Block before PlatingPower reacts.
+  Task<> beforeSideTurnEndVeryEarly(Side, const std::vector<Creature*>& participants) override {
     if (!contains(participants, owner()) || owner()->block > 0) return {};
     shouldTrigger = true;
     return {};

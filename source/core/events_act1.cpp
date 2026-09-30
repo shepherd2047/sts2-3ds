@@ -413,7 +413,6 @@ struct Wellspring : Event {
   }
   Task<> bottle() {
     // Character potion pool + SharedPotionPool, one NextItem from the Rewards stream.
-    // PORT NOTE: only registered potions are in the list.
     std::vector<std::string> items;
     for (auto& id : db::potionPool(run->characterId)) if (db::potion(id)) items.push_back(id);
     std::string pick = run->rng("Rewards").nextItem(items);

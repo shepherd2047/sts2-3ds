@@ -173,7 +173,7 @@ struct Normality : IroncladT<Normality> {
 };
 
 // LanternKey.cs: unplayable quest card. PORT NOTE: its act-3 hooks (ModifyUnknownMapPointRoomTypes
-// / ModifyNextEvent -> WarHistorianRepy) need the multi-act run (package 3) and are missing.
+// / ModifyNextEvent -> WarHistorianRepy) need run-level hooks on deck cards and the Quest card type.
 struct LanternKey : IroncladT<LanternKey> {
   CARD_HEADER(LanternKey, "LANTERN_KEY", -1, Status, Token, Self)
     keywords = kwUnplayable;

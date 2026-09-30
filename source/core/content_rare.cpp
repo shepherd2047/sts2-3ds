@@ -117,6 +117,7 @@ struct Dominate : IroncladT<Dominate> {
 };
 
 struct Feed : IroncladT<Feed> {
+  bool canBeGeneratedInCombat() const override { return false; }
   CARD_HEADER(Feed, "FEED", 1, Attack, Rare, AnyEnemy)
     keywords = kwExhaust;
     addVar("Damage", 10);
@@ -210,6 +211,7 @@ struct Midnight : IroncladT<Midnight> {
 };
 
 struct NotYet : IroncladT<NotYet> {
+  bool canBeGeneratedInCombat() const override { return false; }
   CARD_HEADER(NotYet, "NOT_YET", 2, Skill, Rare, Self)
     keywords = kwExhaust;
     addVar("Heal", 10);
@@ -252,17 +254,14 @@ struct PactsEnd : IroncladT<PactsEnd> {
   void onUpgrade() override { upgradeVar("Damage", 6); }
 };
 
-// PORT NOTE: skips the C# IsTransformable check (excludes a handful of cards,
-// e.g. ones already mid-transform, that this engine has no equivalent flag
-// for); every Attack-type card in hand is treated as transformable. Falls
-// through to a no-op if "GiantRock" isn't registered in this build's db.
+// PrimalForce.cs: every transformable Attack in hand becomes a Giant Rock (upgraded if this is).
 struct PrimalForce : IroncladT<PrimalForce> {
   CARD_HEADER(PrimalForce, "PRIMAL_FORCE", 0, Skill, Rare, Self)
   }
   Task<> onPlay(CardPlay&) override {
     std::vector<Card*> handCopy = combat->hand;
     for (Card* c : handCopy) {
-      if (!c || c->type != CardType::Attack) continue;
+      if (!c || !c->isTransformable() || c->type != CardType::Attack) continue;
       auto rock = db::card("GiantRock");
       if (!rock) continue;
       if (upgraded()) rock->upgrade();
@@ -337,8 +336,7 @@ struct TearAsunder : IroncladT<TearAsunder> {
 
 // PORT NOTE: AfterDowngraded (restoring the permanently-added ExtraDamage
 // when a relic/effect downgrades a card) isn't modeled — this engine has no
-// downgrade mechanic — so ExtraDamage isn't tracked separately. OstyDamage
-// (a var this engine doesn't have) is treated the same as "no matching var".
+// downgrade mechanic — so ExtraDamage isn't tracked separately.
 struct Thrash : IroncladT<Thrash> {
   CARD_HEADER(Thrash, "THRASH", 1, Attack, Rare, AnyEnemy)
     addVar("Damage", 4);
@@ -352,6 +350,7 @@ struct Thrash : IroncladT<Thrash> {
       Dec damage = 0;
       if (card->var("CalculatedDamage")) damage = card->calculatedDamage();
       else if (card->var("Damage")) damage = card->val("Damage");
+      else if (card->var("OstyDamage")) damage = card->val("OstyDamage");
       damage = combat->modifyDamage(nullptr, me(), damage, kMove, card);
       upgradeVar("Damage", damage);
       co_await cmd::exhaustCard(*combat, card);

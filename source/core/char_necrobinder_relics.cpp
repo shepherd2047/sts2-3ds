@@ -42,16 +42,14 @@ struct BoneFlute : Relic {
 };
 
 // BookRepairKnife.cs: whenever a Doom kill takes more than just the owner, heal 3 per such
-// creature. PORT NOTE: `ShouldOwnerDeathTriggerFatal` (a per-power override letting a death not
-// count, e.g. a revive-on-death power) isn't ported -- no power in this build overrides it yet,
-// so every non-owner creature in the batch counts.
+// creature whose powers all let the death count (ShouldOwnerDeathTriggerFatal).
 struct BookRepairKnife : Relic {
   RELIC_HEADER(BookRepairKnife, "BOOK_REPAIR_KNIFE", Uncommon)
     addVar("Heal", 3);
   }
   Task<> afterDiedToDoom(const std::vector<Creature*>& creatures) override {
     int n = 0;
-    for (Creature* cr : creatures) if (cr != owner()) ++n;
+    for (Creature* cr : creatures) if (cr != owner() && cr->deathIsFatal()) ++n;
     if (n == 0) co_return;
     doFlash();
     co_await cmd::heal(owner(), val("Heal") * Dec(n));
