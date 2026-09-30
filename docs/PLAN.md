@@ -450,7 +450,7 @@ their `clone()` must call `adoptEnchantment()`.
 | H2 | Memory: a full run with each character on hardware and a sim soak (1000 runs per character), no leaks, linear memory within limits | 3DS | X* | in progress (subagent: sim soak + sanitizers; hardware part later) |
 | H3 | Romfs budget with all characters and audio; texture and audio quality checks on the device | tools | U1, X* | todo |
 | H4 | Packaging: icon, banner (with its sound), title id, `.3dsx` + `.cia` builds | tools | – | done (subagent), accepted 2026-09-29: `make cia` (makerom/ctrtool/bannertool in ~/.local/bin), title id 000400000FA57200, banner + icon + 3 s banner sound baked at build time; New 3DS 124MB mode |
-| H5 | Balance and bugs: compare numbers with the C# for every character (script), fix known PORT NOTEs | content | X* | todo |
+| H5 | Balance and bugs: compare numbers with the C# for every character (script), fix known PORT NOTEs | content | X* | in progress (subagent: number-check script + fixes) |
 | H6 | Release checklist: every character wins a run on the device, every U page ticked, every package done, no PORT NOTE left without an n/a reason | QA | all | todo |
 
 ---
