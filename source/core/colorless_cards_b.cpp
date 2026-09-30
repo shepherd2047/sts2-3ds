@@ -328,6 +328,7 @@ struct Prowess : IroncladT<Prowess> {
 // Purity.cs: 0 cost, Skill, Self, Uncommon. Exhaust up to Cards (3, +2) cards from the hand.
 struct Purity : IroncladT<Purity> {
   CARD_HEADER(Purity, "PURITY", 0, Skill, Uncommon, Self)
+    keywords = kwRetain | kwExhaust;
     addVar("Cards", 3);
   }
   Task<> onPlay(CardPlay&) override {
