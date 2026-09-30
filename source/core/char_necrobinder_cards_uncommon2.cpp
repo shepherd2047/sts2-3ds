@@ -194,6 +194,7 @@ struct NoEscape : IroncladT<NoEscape> {
     addVar("DoomThreshold", 10);
     addVar("CalculationBase", 10);
     addVar("CalculationExtra", 5);
+    addVar("CalculatedDoom", 0);  // the multiplier needs the target's Doom
   }
   Task<> onPlay(CardPlay& p) override {
     int doom = p.target->powerAmount<DoomPower>();
@@ -227,12 +228,13 @@ struct Parse : IroncladT<Parse> {
 // (CalculationBase 0 + CalculationExtra 1 per CardPlayFinishedEntry with WasEthereal).
 // PORT NOTE: no card-play history entries with an Ethereal flag; each card counts the Ethereal plays it
 // has itself observed (afterCardPlayed), so a copy generated mid-combat misses the earlier ones.
-// The CalculatedHits var is computed in onPlay (Card::calcMultiplier only feeds damage/block).
 struct PullFromBelow : IroncladT<PullFromBelow> {
   CARD_HEADER(PullFromBelow, "PULL_FROM_BELOW", 1, Attack, Uncommon, AnyEnemy)
     addVar("Damage", 5);
     addVar("CalculationBase", 0);
     addVar("CalculationExtra", 1);
+    addVar("CalculatedHits", 0);
+    calcMultiplier = [](Card* c) { return static_cast<PullFromBelow*>(c)->etherealPlays; };
   }
   int etherealPlays = 0;
   Task<> afterCardPlayed(const CardPlay& p) override {
@@ -270,6 +272,11 @@ struct Rattle : IroncladT<Rattle> {
     addVar("OstyDamage", 7);
     addVar("CalculationBase", 0);
     addVar("CalculationExtra", 1);
+    addVar("CalculatedHits", 0);
+    calcMultiplier = [](Card* c) {
+      auto* r = static_cast<Rattle*>(c);
+      return 1 + (r->combat && r->attackTurn == r->combat->turnNumber ? r->attackCount : 0);
+    };
   }
   int attackTurn = -1, attackCount = 0;
   Task<> afterAttack(Creature* attacker) override {
