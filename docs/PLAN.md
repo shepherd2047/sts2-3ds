@@ -428,9 +428,9 @@ their `clone()` must call `adoptEnchantment()`.
 |---|---|---|---|---|
 | Y1 | Settings store `settings.sav` + logic: fast mode, screen shake, BGM/SFX/ambience volume, language, run timer, text effects, long-press confirm, common tooltips, hand card count, reset tutorials, delete data | engine | – | done (subagent), accepted 2026-09-28: `settings_store.h/.cpp` (C# SettingsSave + PrefsSave merged into settings.sav), loaded in App::init; volumes not wired to audio yet (U track), no settings screen yet (S21) |
 | Y2 | Pause menu (START during a run): resume, settings, deck, compendium, save & quit, abandon run (with confirm) | UI | Y1, F3 | done (subagent), accepted 2026-09-29; 百科大全 opens the card library |
-| Y3 | Languages: bake English + 简体中文 loc and fonts, switch at runtime | tools + UI | Y1 | in progress (subagent) |
+| Y3 | Languages: bake English + 简体中文 loc and fonts, switch at runtime | tools + UI | Y1 | done (subagent), accepted 2026-09-29: loc_eng + Kreon glyph pages, runtime switch from 设置 (main menu only), `tr()` for ~450 UI literals, `STS_LANG=en|zh`; dev menu / style mock still Chinese-only |
 | Y4 | Profiles: 3 slots on SD, rename and delete; the run save and progress files are per profile | engine | M1 | done (subagent, Opus), accepted 2026-09-29: profiles.h/.cpp; saves/ (PC) or sdmc:/3ds/sts2-3ds/ (3DS): profile.sav + profile<N>/run.sav, progress.sav; settings.sav global; old top-level saves migrate to profile 1; progress now saved (save points, run end, returnTitle), abandon wired; API for S03: profiles::info/rename/select/remove, App::selectProfile/deleteProfile |
-| Y5 | 3DS system behaviour: sleep when the lid is closed, HOME menu, safe saves on power loss, SD errors shown in a dialog | 3DS | – | in progress (subagent) |
+| Y5 | 3DS system behaviour: sleep when the lid is closed, HOME menu, safe saves on power loss, SD errors shown in a dialog | 3DS | – | done (subagent), accepted 2026-09-29: safe_file.cpp atomic writes (.tmp + rename, .bak fallback) + recovery for every save; APT suspend/sleep hooks pause audio and the frame clock; SD probe at startup (`STS_FAKE_SAVE_ERROR=sd`); **sleep/HOME need a hardware test** (steps in the Y5 commit report) |
 
 ### Track U: audio
 
