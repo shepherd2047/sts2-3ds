@@ -40,6 +40,136 @@ HandSelect& syncHandSelect(const Combat& cb, int& sel) {
 }
 
 constexpr int kHsClearId = 0x5120, kHsConfirmId = 0x5121;  // widget ids (bottom action bar)
+
+// ---- S08 combat HUD state (pure UI; one per fight)
+struct HudAnim {
+  const Combat* combat = nullptr;
+  int lastEnergy = -1, lastDraw = -1, lastDiscard = -1, lastExhaust = 0;
+  float energyPop = 0, drawBump = 0, discardBump = 0, exhaustBump = 0;
+  float glow = 0, etSink = 0;
+  // Turn banner: the one showing and the one queued after it (combat start -> player turn 1).
+  enum Kind { None, Start, Player, Enemy, Other };
+  Kind banner = None, next = None;
+  float bannerT = 0;
+  int round = 1;
+  std::string text;
+};
+HudAnim& hudAnim(const Combat& cb) {
+  static HudAnim h;
+  if (h.combat != &cb) {
+    h = HudAnim{};
+    h.combat = &cb;
+  }
+  return h;
+}
+
+// Character.EnergyLabelOutlineColor, by the run's energy colour.
+uint32_t energyOutline(const std::string& color) {
+  if (color == "silent") return 0x004F04FF;
+  if (color == "defect") return 0x163E64FF;
+  if (color == "regent") return 0x784000FF;
+  if (color == "necrobinder") return 0x702D6FFF;
+  return 0x801212FF;  // ironclad
+}
+
+inline float expoOut(float t) { return t >= 1 ? 1.f : 1.f - std::pow(2.f, -10.f * std::max(0.f, t)); }
+
+std::string locOr(const char* key, const std::string& fallback) {
+  return R().hasLoc(key) ? L(key) : fallback;
+}
+
+// The turn banners over the fight (C# NCombatStartBanner, NPlayerTurnBanner, NEnemyTurnBanner),
+// their tweens shortened ~40 % for the smaller screen and the port's quicker turns:
+//  - 战斗开始: a dark band fades in, the label shrinks 2x -> 1x while fading in, then fades out and
+//    hands over to the player banner for turn 1;
+//  - 玩家回合: the label rises and "第N回合" drops apart from the middle while fading in, holds, fades;
+//  - 敌方回合: the label shrinks 2x -> 1x while fading in, then turns red and fades out.
+// Rules set Combat::banner / bannerTime; the UI takes the banner over and clears bannerTime.
+void drawTurnBanner(Combat& cb) {
+  HudAnim& h = hudAnim(cb);
+  if (cb.bannerTime > 0) {
+    cb.bannerTime = 0;
+    h.text = cb.banner;
+    h.bannerT = 0;
+    h.next = HudAnim::None;
+    h.round = std::max(1, cb.roundNumber);
+    if (cb.banner == "战斗开始") { h.banner = HudAnim::Start; h.next = HudAnim::Player; h.round = 1; }
+    else if (cb.banner == "玩家回合") h.banner = HudAnim::Player;
+    else if (cb.banner == "敌人回合") h.banner = HudAnim::Enemy;
+    else h.banner = HudAnim::Other;
+  }
+  if (h.banner == HudAnim::None) return;
+  h.bannerT += std::min(0.05f, (float)gfx::dt());
+  const float t = h.bannerT;
+  const float cy = 116;  // the middle of the fight, above the creatures' feet
+  auto band = [&](float a) {
+    if (a <= 0) return;
+    const uint32_t k = (uint32_t)(a * 150);
+    gfx::gradient(0, cy - 26, kTop / 2, 52, 0x00000000, k, 0x00000000, k);
+    gfx::gradient(kTop / 2, cy - 26, kTop / 2, 52, k, 0x00000000, k, 0x00000000);
+  };
+  auto label = [&](const std::string& s, float y, float scale, uint32_t color, float a, uint32_t outline) {
+    if (a <= 0) return;
+    TextStyle st = ts(F16, (color & 0xFFFFFF00) | (uint32_t)(std::clamp(a, 0.f, 1.f) * 255), CENTER);
+    st.scale = scale;
+    st.shadow = false;
+    st.outline = (outline & 0xFFFFFF00) | (uint32_t)(std::clamp(a, 0.f, 1.f) * 255);
+    R().text(kTop / 2, y - R().lineHeight(F16) * scale / 2, s, st);
+  };
+  const float big = 1.6f;
+  float dur = 1.3f;
+  switch (h.banner) {
+    case HudAnim::Start: {
+      dur = 1.2f;
+      const float in = expoOut(t / 0.8f), out = t > 0.8f ? std::clamp((t - 0.8f) / 0.4f, 0.f, 1.f) : 0.f;
+      band(expoOut(t / 0.45f) * (1 - out));
+      label(locOr("gameplay_ui.BATTLE_START", h.text), cy, big * (1 + (1 - expoOut(t / 0.45f))), col::gold, in * (1 - out), 0x2A1A08FF);
+      break;
+    }
+    case HudAnim::Player: {
+      dur = 1.4f;
+      const float in = expoOut(t / 0.6f), mv = expoOut(t / 0.9f);
+      const float a = t < 1.15f ? in : std::max(0.f, 1 - (t - 1.15f) / 0.25f);
+      band(a);
+      label(locOr("gameplay_ui.PLAYER_TURN", h.text), cy - 12 * mv, big, col::white, a, 0x1B3045FF);
+      std::string turn = locOr("gameplay_ui.TURN_COUNT", "第{turnNumber}回合");
+      size_t at = turn.find("{turnNumber}");
+      if (at != std::string::npos) turn.replace(at, 12, num(h.round));
+      label(turn, cy + 12 * mv, 1.f, col::gold, a, 0x000000FF);
+      break;
+    }
+    case HudAnim::Enemy: {
+      dur = 1.3f;
+      const float in = expoOut(t / 0.8f), sc = 1 + (1 - expoOut(t / 0.45f));
+      float red = 0, a = in;
+      if (t > 0.6f) {
+        const float u = std::clamp((t - 0.6f) / 0.7f, 0.f, 1.f);
+        red = expoOut(u);
+        a = std::pow(1 - u, 3.f);  // cubic ease-out fade, as the C# tween
+      }
+      band(std::min(in, a));
+      const uint32_t c0 = col::white, c1 = 0xFF3030FF;
+      auto mix = [&](int sh) {
+        float v0 = (float)((c0 >> sh) & 0xFF), v1 = (float)((c1 >> sh) & 0xFF);
+        return (uint32_t)(v0 + (v1 - v0) * red) << sh;
+      };
+      label(locOr("gameplay_ui.ENEMY_TURN", h.text), cy, big * sc, mix(24) | mix(16) | mix(8) | 0xFF, a, 0x300000FF);
+      break;
+    }
+    default: {
+      dur = 1.0f;
+      const float a = std::min(1.f, (dur - t) * 2);
+      band(a);
+      label(h.text, cy, big, col::gold, a, 0x000000FF);
+      break;
+    }
+  }
+  if (t >= dur) {
+    h.banner = h.next;
+    h.next = HudAnim::None;
+    h.bannerT = 0;
+  }
+}
 }  // namespace
 
 void App::drawCombat(bool top) {
@@ -195,14 +325,7 @@ void App::drawCombat(bool top) {
       }
     }
     drawTopBar();
-    if (cb->bannerTime > 0) {
-      cb->bannerTime -= 1.f / 60;
-      float a = std::min(1.f, cb->bannerTime * 2);
-      gfx::rect(0, 96, kTop, 40, (uint32_t)(a * 0xA0));
-      TextStyle st = ts(F16, col::gold, CENTER);
-      st.scale = 1.6f;
-      R().text(kTop / 2, 104, cb->banner, st);
-    }
+    drawTurnBanner(*cb);
     if (arrow) drawArrow(true, afx, afy, atx, aty, true, arrowAlly);
     drawFlights(true);
     if (cb->choice.active && combatChooseOne()) {  // S13: the focused offer over the fight
@@ -324,24 +447,57 @@ void App::drawCombat(bool top) {
   // Energy orb left and end turn right, level with each other a little below the hand
   // (~77% down, ~10% / ~87% across on RGDSplus). Colour is the run's character
   // (Character::energyColor; X1.5-X4.5).
+  // S08 (C# NEnergyCounter): the character's orb, dark at 0 energy; "E/M" in cream with the
+  // character's EnergyLabelOutlineColor (red on a dark outline at 0); a pop when energy is gained.
+  HudAnim& ha = hudAnim(*cb);
+  const float dtv = 1.f / 60;
+  const int energy = cb->energy;
+  if (energy > ha.lastEnergy && ha.lastEnergy >= 0) ha.energyPop = 1.f;
+  ha.lastEnergy = energy;
+  ha.energyPop = std::max(0.f, ha.energyPop - dtv * 3.f);
   Sprite orb = R().sprite(energyOrbSprite(run_.get()));
-  const float ox = 32, oy = 185, od = 34;
-  spr(orb, ox - od / 2, oy - od / 2, od, od);
-  TextStyle et = ts(F12, cb->energy > 0 ? col::white : col::gray, CENTER);
-  R().text(ox, oy - R().lineHeight(F12) / 2, num(cb->energy) + "/" + num(cb->maxEnergyNow()), et);
+  const float ox = 32, oy = 185, od = 34 * (1.f + 0.12f * ha.energyPop);
+  spr(orb, ox - od / 2, oy - od / 2, od, od, 0x000000FF, energy == 0 ? 0.4f : 0.f);
+  {
+    TextStyle et = ts(F16, energy == 0 ? 0xFF5555FF : col::white, CENTER);
+    et.shadow = false;
+    et.outline = energy == 0 ? 0x501717FF : energyOutline(run_->character().energyColor);
+    std::string e = num(energy) + "/" + num(cb->maxEnergyNow());
+    float w = R().measure(e, et);
+    et.scale = std::min(1.f, 26.f / std::max(1.f, w));
+    R().text(ox, oy - R().lineHeight(F16) * et.scale / 2, e, et);
+  }
   // X3.5: the Regent's star counter (Combat::stars, Character::alwaysShowStars) next to energy.
   if (run_->character().alwaysShowStars || cb->stars > 0) {
     const float sx = ox + od / 2 + 22, sy = oy;
     spr(R().sprite("ui/star"), sx - 9, sy - 9, 18, 18);
     R().text(sx + 12, sy - R().lineHeight(F12) / 2, num(cb->stars), ts(F12, col::white, LEFT));
   }
+  // S08 end turn (C# NEndTurnButton): enabled on the player's turn; glowing (Glow at 75 % plus
+  // the GlowVfx ring growing 0.5 -> 0.7 and fading 0.4 -> 0 every 1.5 s) when no card in the hand
+  // can be played; grey (StsColors.gray) and sunk a little on the enemy's turn (State.Hidden).
+  const bool etEnabled = cb->playerPhase;
+  bool anyPlayable = false;
+  for (Card* c : cb->hand) anyPlayable = anyPlayable || cb->canPlay(c);
+  const bool glow = etEnabled && !anyPlayable;
+  ha.glow = std::clamp(ha.glow + (glow ? dtv / 0.8f : -dtv / 0.5f), 0.f, 1.f);
+  ha.etSink = std::clamp(ha.etSink + (etEnabled ? -dtv / 0.3f : dtv / 0.4f), 0.f, 1.f);
   Sprite endTurn = R().sprite("ui/end_turn");
-  const float ew = 64, eh = 32, ex = 278 - ew / 2, ey = oy - eh / 2;  // sprite is 2:1
-  spr(endTurn, ex, ey, ew, eh, canAct ? 0xFFFFFFFF : 0x000000FF, canAct ? 0 : 0.5f);
+  const float ew = 64, eh = 32, ex = 278 - ew / 2, ey = oy - eh / 2 + 6 * easeOut(ha.etSink);  // sprite is 2:1
+  if (ha.glow > 0) {
+    Sprite g = R().sprite("ui/end_turn_glow");
+    const float a = 0.75f * easeOut(ha.glow);
+    spr(g, ex - 4, ey - 2, ew + 8, eh + 4, 0xFFFFFF00 | (uint32_t)(a * 255));
+    const float ph = std::fmod(clock_, 1.5f) / 1.5f, k = 1.f + 0.4f * easeOut(ph);
+    const float va = 0.4f * (1.f - ph) * ha.glow;
+    spr(g, ex + ew / 2 - (ew + 8) * k / 2, ey + eh / 2 - (eh + 4) * k / 2, (ew + 8) * k, (eh + 4) * k,
+        0xFFFFFF00 | (uint32_t)(va * 255));
+  }
+  spr(endTurn, ex, ey, ew, eh, etEnabled ? 0xFFFFFFFF : 0x606060FF, etEnabled ? 0 : 0.55f);
   {
     // The visible plate is ~78% x 62% of the sprite, centred; the label fills 80% of it.
     const float pw = ew * 0.78f, ph = eh * 0.62f;
-    TextStyle lt = ts(F16, canAct ? col::white : col::gray, CENTER);
+    TextStyle lt = ts(F16, etEnabled ? col::white : 0x808080FF, CENTER);
     // The text box takes 80% of the plate; CJK ink sits a little below the box middle (measured).
     const float inkMid = 0.53f;
     float lw = R().measure("结束", lt), lh = R().lineHeight(F16);
@@ -358,21 +514,37 @@ void App::drawCombat(bool top) {
     R().text(px + pw / 2, py + (ph - R().lineHeight(F12)) / 2, "药水 " + num(filled), ts(F12, canAct ? col::white : col::gray, CENTER));
     if (canAct) hits_.push_back({px, py - 2, pw, ph + 4, ID_POTIONS});
   }
-  // Piles: small icons in the corners with a red count badge.
-  auto pile = [&](const char* sprite, float cx, float cy, int count) {
-    spr(R().sprite(sprite), cx - 12, cy - 12, 24, 24);
-    gfx::circle(cx + 10, cy + 8, 7, 0xC02828FF);
-    R().text(cx + 10, cy + 8 - R().lineHeight(F12) * 0.4f, num(count), ts(F12, col::white, CENTER, 0, 0.8f));
+  // Piles (C# NCombatCardPile): the pile art in the corners with the count on the game's
+  // pile_button_count plate at the bottom corner; the icon bumps when its count changes. The
+  // exhaust pile (NExhaustPileButton) appears only once a card has been exhausted, beside the
+  // discard pile.
+  auto pile = [&](const char* sprite, float cx, float cy, int count, int& last, float& bump, bool rightSide) {
+    if (last >= 0 && count != last) bump = 1.f;
+    last = count;
+    bump = std::max(0.f, bump - dtv * 4.f);
+    const float s = 26 * (1.f + 0.18f * bump);
+    spr(R().sprite(sprite), cx - s / 2, cy - s / 2, s, s);
+    Sprite plate = R().sprite("ui/pile_count");
+    const float pw = 18, ph = 15, px = rightSide ? cx - 17 : cx + 17 - pw, py = cy + 3;
+    if (plate) spr(plate, px, py, pw, ph);
+    else gfx::circle(px + pw / 2, py + ph / 2, 7, 0x202020E0);
+    TextStyle ct = ts(F12, col::white, CENTER, 0, count >= 100 ? 0.7f : 0.85f);
+    ct.shadow = false;
+    ct.outline = 0x000000FF;
+    R().text(px + pw / 2, py + ph / 2 - R().lineHeight(F12) * ct.scale / 2, num(count), ct);
   };
   int waiting = 0;  // drawn cards still sitting on the pile, waiting for their turn to fly
   for (auto& [c, p] : poses_) waiting += p.delay > 0;
-  pile("ui/draw_pile", kDrawPileX, kDrawPileY, (int)cb->draw.size() + waiting);
-  pile("ui/discard_pile", kDiscardX, kDiscardY, (int)cb->discard.size());
+  pile("ui/draw_pile", kDrawPileX, kDrawPileY, (int)cb->draw.size() + waiting, ha.lastDraw, ha.drawBump, false);
+  pile("ui/discard_pile", kDiscardX, kDiscardY, (int)cb->discard.size(), ha.lastDiscard, ha.discardBump, true);
   hits_.push_back({0, 201, 34, 39, ID_PILE_DRAW});
   hits_.push_back({kBot - 34.f, 201, 34, 39, ID_PILE_DISCARD});
   if (!cb->exhaust.empty()) {
-    R().text(kBot - 38, 200, "消耗 " + num((int)cb->exhaust.size()), ts(F12, col::white, RIGHT));
-    hits_.push_back({kBot - 104.f, 196, 66, 24, ID_PILE_EXHAUST});
+    const float xx = kDiscardX - 38, xy = kDiscardY;
+    pile("ui/exhaust_pile", xx, xy, (int)cb->exhaust.size(), ha.lastExhaust, ha.exhaustBump, true);
+    hits_.push_back({xx - 17, 204, 34, 36, ID_PILE_EXHAUST});
+  } else {
+    ha.lastExhaust = 0;
   }
 
   auto flying = [&](Card* c) {

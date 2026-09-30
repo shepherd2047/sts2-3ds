@@ -1,8 +1,178 @@
 // Split from ui.cpp (F3).
 #include "../ui_common.h"
 #include "combat_internal.h"
+#include "../../core/char_necrobinder.h"
+#include "../../core/char_silent.h"
 
 namespace ui {
+
+namespace {
+
+// C# NHealthBar colours.
+constexpr uint32_t kHpRed = 0xF1373EFF;         // _redForegroundColor
+constexpr uint32_t kHpBlock = 0x3B6FA3FF;       // _blockHpForegroundColor
+constexpr uint32_t kHpMiddle = 0xFFC9A8FF;      // the lagging "middleground" chunk
+constexpr uint32_t kHpPoison = 0x5FC23AFF;      // PoisonForeground
+constexpr uint32_t kHpDoom = 0x8F4FC9FF;        // DoomForeground
+constexpr uint32_t kHpOutline = 0x900000FF;     // _defaultFontOutlineColor
+constexpr uint32_t kBlockOutline = 0x1B3045FF;  // _blockOutlineColor
+constexpr float kBarH = 8;
+
+// A 9-slice bar piece from the game's health_bar_* art, flat-tinted.
+void barPiece(const char* name, float x, float y, float w, float h, uint32_t tint, float blend) {
+  Sprite sp = R().sprite(name);
+  if (w <= 0) return;
+  if (!sp) { gfx::rect(x, y, w, h, tint); return; }
+  if (w < sp.nl + sp.nr) { gfx::image(sp.tex, sp.x, sp.y, sp.w, sp.h, x, y, w, h, tint, blend); return; }
+  gfx::nineSlice(sp.tex, sp.x, sp.y, sp.w, sp.h, sp.nl, sp.nt, sp.nr, sp.nb, x, y, w, h, tint, blend);
+}
+
+// NHealthBar: background, the lagging middleground, the red (blue with block) foreground with the
+// poison chunk at its right end and the doom chunk from the left, the block outline and badge, and
+// the HP label with the C# outline colours (green / purple when poison / doom is lethal).
+void drawHpBar(Creature* c, float x, float by, float bw) {
+  const int maxHp = std::max(1, c->maxHp), hp = std::clamp(c->hp, 0, maxHp);
+  const float x0 = x - bw / 2;
+  auto W = [&](float v) { return bw * std::clamp(v, 0.f, (float)maxHp) / maxHp; };
+  barPiece("ui/hp_bg", x0 - 1, by - 1, bw + 2, kBarH + 2, 0x101010FF, 0.6f);
+  if (c->displayHp > hp) barPiece("ui/hp_fill", x0, by, W(c->displayHp), kBarH, kHpMiddle, 1.f);
+  int poison = 0, doom = 0;
+  if (auto* p = c->get<PoisonPower>()) poison = std::max(0, p->calculateTotalDamageNextTurn());
+  if (auto* d = c->get<DoomPower>()) doom = std::max(0, d->amount);
+  const bool poisonLethal = poison > 0 && poison >= hp;
+  const bool doomLethal = !poisonLethal && doom > 0 && doom >= hp - poison;
+  if (hp > 0) {
+    const uint32_t fg = c->block > 0 ? kHpBlock : kHpRed;
+    const int solid = std::max(0, hp - poison);
+    if (poisonLethal) {
+      barPiece("ui/hp_fill", x0, by, W(hp), kBarH, kHpPoison, 1.f);
+    } else {
+      barPiece("ui/hp_fill", x0, by, W(solid), kBarH, doomLethal ? kHpDoom : fg, 1.f);
+      if (poison > 0) barPiece("ui/hp_fill", x0 + W(solid), by, W(hp) - W(solid), kBarH, kHpPoison, 1.f);
+      if (doom > 0 && !doomLethal) barPiece("ui/hp_fill", x0, by, W(doom), kBarH, kHpDoom, 1.f);
+    }
+    gfx::rect(x0 + 1, by + 1, std::max(0.f, W(hp) - 2), 1, 0xFFFFFF38);  // top highlight
+  }
+  if (c->block > 0) {  // C# BlockOutline
+    const uint32_t bc = 0x8CC4F0FF;
+    gfx::rect(x0 - 1, by - 1, bw + 2, 1, bc);
+    gfx::rect(x0 - 1, by + kBarH, bw + 2, 1, bc);
+    gfx::rect(x0 - 1, by - 1, 1, kBarH + 2, bc);
+    gfx::rect(x0 + bw, by - 1, 1, kBarH + 2, bc);
+  }
+  uint32_t tc = col::white, oc = kHpOutline;
+  if (poisonLethal) { tc = 0x76FF40FF; oc = 0x074700FF; }
+  else if (doomLethal) { tc = 0xFB8DFFFF; oc = 0x2D1263FF; }
+  else if (c->block > 0) oc = kBlockOutline;
+  TextStyle ht = ts(F12, tc, CENTER, 0, 0.85f);
+  ht.shadow = false;
+  ht.outline = oc;
+  R().text(x, by + kBarH / 2 - R().lineHeight(F12) * 0.85f / 2, num(hp) + "/" + num(c->maxHp), ht);
+  if (c->block > 0) {  // C# BlockContainer: the shield at the bar's left end with the amount
+    const float bs = 20, bx = x0 - bs / 2 - 3, byy = by + kBarH / 2 - bs / 2;
+    spr(R().sprite("ui/block"), bx, byy, bs, bs);
+    TextStyle bt = ts(F12, col::white, CENTER, 0, 0.85f);
+    bt.shadow = false;
+    bt.outline = kBlockOutline;
+    R().text(bx + bs / 2, byy + bs / 2 - R().lineHeight(F12) * 0.85f / 2, num(c->block), bt);
+  }
+}
+
+// NPowerContainer.UpdatePositions: as many columns as fit the bar, at least half the count (so
+// many powers wrap into two rows that widen, centred on the creature); amounts at the icon's
+// bottom-right in cream, red for a debuff amount (PowerModel.AmountLabelColor); a flash (the C#
+// PowerFlash particle) bursts the icon outwards when the power triggers.
+void drawPowerRow(Creature* c, float x, float y, float bw) {
+  const int n = (int)c->powers.size();
+  if (!n) return;
+  const float pitch = 16, icon = 14;
+  int cols = std::max((int)std::ceil(bw / pitch), (n + 1) / 2);
+  cols = std::min(cols, 9);  // never wider than ~144 px; a third row then
+  const float rowW = pitch * std::min(cols, n);
+  const float left = x - rowW / 2;
+  for (int i = 0; i < n; ++i) {
+    Power* p = c->powers[i].get();
+    const float px = left + pitch * (i % cols) + 1, py = y + pitch * (i / cols);
+    Sprite ic = R().sprite("power/" + p->locKey);
+    spr(ic, px, py, icon, icon);
+    if (p->flash > 0) {
+      const float g = 1.f + (1.f - p->flash) * 0.9f, sz = icon * g;
+      spr(ic, px + icon / 2 - sz / 2, py + icon / 2 - sz / 2, sz, sz, 0xFFFFFF00 | (uint32_t)(p->flash * 190), 0.4f);
+    }
+    p->flash = std::max(0.f, p->flash - 0.03f);
+    if (p->stackType() == StackType::Counter) {
+      const bool debuff = p->typeForAmount(Dec(p->amount)) == PowerType::Debuff;
+      TextStyle at = ts(F12, debuff ? 0xFF5555FF : col::white, RIGHT, 0, 0.8f);
+      at.shadow = false;
+      at.outline = 0x000000FF;
+      R().text(px + icon + 2, py + icon - R().lineHeight(F12) * 0.8f + 3, num(p->amount), at);
+    }
+  }
+}
+
+// The intents over the creature's head, side by side (NCreature's intent row of NIntents): the C#
+// bob (sin(t*pi + offset) * 10 + 8 px up at 1080p, ~a quarter here), attack damage after the
+// player's modifiers as "N" or "N×H" (intents.FORMAT_DAMAGE_*), the tiered attack icon by total
+// damage, status card counts.
+void drawIntents(Combat& cb, Creature* c, float x, float y, float time) {
+  struct Shown { Sprite ic; std::string label; };
+  std::vector<Shown> shown;
+  for (auto& in : c->monster->nextMove->intents) {
+    Shown sh;
+    switch (in.kind) {
+      case Intent::Attack: {
+        int single = std::max(0, cb.modifyDamage(cb.player, c, in.damage, kMove, nullptr).toInt());
+        int total = single * std::max(1, in.hits);
+        int tier = total < 5 ? 1 : total < 10 ? 2 : total < 20 ? 3 : total < 40 ? 4 : 5;
+        sh.ic = R().sprite("intent/attack_" + num(tier));
+        sh.label = in.hits > 1 ? num(single) + "×" + num(in.hits) : num(single);
+        break;
+      }
+      case Intent::Buff: sh.ic = R().sprite("intent/buff"); break;
+      case Intent::Defend: sh.ic = R().sprite("intent/defend"); break;
+      case Intent::Debuff:
+        sh.ic = R().sprite("intent/debuff_small");
+        if (!sh.ic) sh.ic = R().sprite("intent/debuff");
+        break;
+      case Intent::DebuffStrong: sh.ic = R().sprite("intent/debuff"); break;
+      case Intent::Status:
+        sh.ic = R().sprite("intent/status");
+        if (in.count > 0) sh.label = num(in.count);
+        break;
+      case Intent::Stun: sh.ic = R().sprite("intent/stun"); break;
+      case Intent::Summon: sh.ic = R().sprite("intent/summon"); break;
+      case Intent::Heal: sh.ic = R().sprite("intent/heal"); break;
+      case Intent::Escape: sh.ic = R().sprite("intent/escape"); break;
+      case Intent::Sleep: sh.ic = R().sprite("intent/sleep"); break;
+      default: sh.ic = R().sprite("intent/unknown"); break;
+    }
+    bool dup = false;  // the same plain icon twice (Buff + Buff) shows once
+    for (auto& o : shown)
+      dup |= sh.label.empty() && o.label.empty() && o.ic.tex == sh.ic.tex && o.ic.x == sh.ic.x && o.ic.y == sh.ic.y;
+    if (!dup) shown.push_back(sh);
+  }
+  if (shown.empty()) return;
+  const float isz = 24, gap = 1;
+  TextStyle lt = ts(F16, col::white, LEFT, 0, 0.85f);
+  lt.shadow = false;
+  lt.outline = 0x000000FF;
+  float widths[8] = {}, total = 0;
+  const int m = std::min((int)shown.size(), 8);
+  for (int i = 0; i < m; ++i) {
+    widths[i] = isz + (shown[i].label.empty() ? 0 : std::max(0.f, R().measure(shown[i].label, lt) - 6));
+    total += widths[i] + (i ? gap : 0);
+  }
+  const float bob = -(std::sin(time * 3.14159f + x * 0.37f) * 2.5f + 2.f);
+  float ix = x - total / 2;
+  for (int i = 0; i < m; ++i) {
+    spr(shown[i].ic, ix, y + bob, isz, isz);
+    if (!shown[i].label.empty())
+      R().text(ix + isz - 6, y + bob + isz - R().lineHeight(F16) * 0.85f + 2, shown[i].label, lt);
+    ix += widths[i] + gap;
+  }
+}
+
+}  // namespace
 
 // ================================================================ combat
 
@@ -73,67 +243,15 @@ void App::drawCreature(Creature* c, float x, float feetY, bool targeted) {
     (void)ret;
   }
 
-  // HP bar
+  // S08 HUD under / over the creature (C# NHealthBar, NPowerContainer, NIntent).
   float bw = std::clamp(s ? s.w * 0.9f : 50.f, 48.f, 72.f);
   float by = feetY + 4;
   if (c->displayHp < 0) c->displayHp = (float)c->hp;
   c->displayHp += ((float)c->hp - c->displayHp) * 0.15f;
-  gfx::rect(x - bw / 2 - 1, by - 1, bw + 2, 9, 0x000000FF);
-  gfx::rect(x - bw / 2, by, bw * std::max(0.f, c->displayHp) / c->maxHp, 7, 0xFFB0A0FF);
-  gfx::rect(x - bw / 2, by, bw * c->hp / c->maxHp, 7, c->block > 0 ? 0x4A90D0FF : 0xC02828FF);
-  R().text(x, by - 3, num(c->hp) + "/" + num(c->maxHp), ts(F12, col::white, CENTER));
-  if (c->block > 0) {
-    Sprite b = R().sprite("ui/block");
-    spr(b, x - bw / 2 - 16, by - 7, 20, 20);
-    R().text(x - bw / 2 - 6, by - 4, num(c->block), ts(F12, col::white, CENTER));
-  }
-  // Powers
-  float px = x - bw / 2;
-  for (auto& p : c->powers) {
-    Sprite ic = R().sprite("power/" + p->locKey);
-    uint32_t pt = p->flash > 0 ? 0xFFFFFFFF : 0xFFFFFFFF;
-    spr(ic, px, by + 10, 14, 14, pt, 0);
-    p->flash = std::max(0.f, p->flash - 0.03f);
-    if (p->stackType() == StackType::Counter)
-      R().text(px + 15, by + 12, num(p->amount), ts(F12, p->amount < 0 ? col::red : col::white, RIGHT, 0, 0.85f));
-    px += 16;
-  }
-  // Intent
-  if (c->monster && c->monster->nextMove && run_->combat && run_->combat->inProgress) {
-    Combat& cb = *run_->combat;
-    float ix = x - 12, iy = top - 30;
-    std::string label;
-    Sprite ic;
-    for (auto& in : c->monster->nextMove->intents) {
-      if (in.kind == Intent::Attack) {
-        int single = std::max(0, cb.modifyDamage(cb.player, c, in.damage, kMove, nullptr).toInt());
-        int total = single * in.hits;
-        int tier = total < 5 ? 1 : total < 10 ? 2 : total < 20 ? 3 : total < 40 ? 4 : 5;
-        ic = R().sprite("intent/attack_" + num(tier));
-        label = in.hits > 1 ? num(single) + "×" + num(in.hits) : num(single);
-        break;
-      }
-    }
-    if (!ic) {
-      auto& in = c->monster->nextMove->intents[0];
-      switch (in.kind) {
-        case Intent::Buff: ic = R().sprite("intent/buff"); break;
-        case Intent::Defend: ic = R().sprite("intent/defend"); break;
-        case Intent::Debuff:
-        case Intent::DebuffStrong: ic = R().sprite("intent/debuff"); break;
-        case Intent::Status: ic = R().sprite("intent/status"); label = num(in.count); break;
-        case Intent::Stun: ic = R().sprite("intent/stun"); break;
-        case Intent::Summon: ic = R().sprite("intent/summon"); break;
-        case Intent::Heal: ic = R().sprite("intent/heal"); break;
-        case Intent::Escape: ic = R().sprite("intent/escape"); break;
-        case Intent::Sleep: ic = R().sprite("intent/sleep"); break;
-        default: ic = R().sprite("intent/unknown"); break;
-      }
-    }
-    float bob = 2 * std::sin((float)time_ * 3 + x);
-    spr(ic, ix, iy + bob, 24, 24);
-    if (!label.empty()) R().text(ix + 22, iy + 8 + bob, label, ts(F12, col::white));
-  }
+  drawHpBar(c, x, by, bw);
+  drawPowerRow(c, x, by + kBarH + 4, bw);
+  if (c->monster && c->monster->nextMove && run_->combat && run_->combat->inProgress)
+    drawIntents(*run_->combat, c, x, std::max(26.f, top - 30), (float)time_);  // below the top bar
 }
 
 // Compact status strip (Vault of the Void style): block badge, an HP bar that
