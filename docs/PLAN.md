@@ -309,11 +309,11 @@ screenshots of both screens, and tick the U table at the end of this file.
 | S19 | U24 | Top bar: HP, gold, potion belt, relic strip with scroll, floor/act, run timer, deck/map buttons | F3 | done (subagent), accepted 2026-09-29: game top-bar icons in one 18 px row, relic strip with counters and scroll, NRunTimer rules; ZL/ZR focus mode (New 3DS only; old 3DS uses the bottom-screen buttons) |
 | S20 | U25 | Detail popups for card/relic/potion: large on top with keywords, controls (upgrade preview, close) on the bottom | F5 | done (subagent), accepted 2026-09-29: one popup for card/relic/potion (`inspectCard/Relic(s)/Potion`), C# hover tips via tools/gen_hover_tips.py, prev/next from lists, upgrade preview |
 | S21 | U26 | Settings and pause menus (screens only; logic in Y1/Y2) | Y1 | done (subagent), accepted 2026-09-29: 4 pages (游戏设置/显示/音频设置/数据), volumes applied (part of U5), reset tutorials hook `settings::resetTutorials()`; graphics/input tabs left out (fixed 3DS hardware) |
-| S22 | U27 | Tutorials, confirmations, errors | M13 | in progress (subagent) |
+| S22 | U27 | Tutorials, confirmations, errors | M13 | done (subagent), accepted 2026-09-29: shared `confirm::ask/notice` modal for all 7 confirmations; save_errors.cpp (corrupt progress/settings renamed .corrupt, bad run.sav offers delete, SD write-failure notice); `STS_FAKE_SAVE_ERROR` |
 | S23 | U28 | Death / victory: score, badges, continue | M7 | done (subagent), accepted 2026-09-29: C# banners + quotes, ScoreUtility lines with count-up, badges, achievements this run, daily/custom marker; ArchitectDamage approximated from history (PORT NOTE) |
 | S24 | U29 | Compendium: cards, relics, potions, bestiary | M8-M10 | done: built by M8, M9, M10 |
 | S25 | U30 | Stats and run history | M6 | done: built by M6 |
-| S26 | U31 | Credits (scroll across both screens) | F3 | in progress (subagent) |
+| S26 | U31 | Credits (scroll across both screens) | F3 | done (subagent), accepted 2026-09-29: credits.cpp from the game loc table, scroll across both screens, port section; 设置 → 数据 → 制作人员 |
 | – | U32 | Daily run: offline only (M12); leaderboards n/a | – | n/a |
 | – | U33 | Unknown or mod pages | – | n/a |
 
@@ -428,9 +428,9 @@ their `clone()` must call `adoptEnchantment()`.
 |---|---|---|---|---|
 | Y1 | Settings store `settings.sav` + logic: fast mode, screen shake, BGM/SFX/ambience volume, language, run timer, text effects, long-press confirm, common tooltips, hand card count, reset tutorials, delete data | engine | – | done (subagent), accepted 2026-09-28: `settings_store.h/.cpp` (C# SettingsSave + PrefsSave merged into settings.sav), loaded in App::init; volumes not wired to audio yet (U track), no settings screen yet (S21) |
 | Y2 | Pause menu (START during a run): resume, settings, deck, compendium, save & quit, abandon run (with confirm) | UI | Y1, F3 | done (subagent), accepted 2026-09-29; 百科大全 opens the card library |
-| Y3 | Languages: bake English + 简体中文 loc and fonts, switch at runtime | tools + UI | Y1 | todo |
+| Y3 | Languages: bake English + 简体中文 loc and fonts, switch at runtime | tools + UI | Y1 | in progress (subagent) |
 | Y4 | Profiles: 3 slots on SD, rename and delete; the run save and progress files are per profile | engine | M1 | done (subagent, Opus), accepted 2026-09-29: profiles.h/.cpp; saves/ (PC) or sdmc:/3ds/sts2-3ds/ (3DS): profile.sav + profile<N>/run.sav, progress.sav; settings.sav global; old top-level saves migrate to profile 1; progress now saved (save points, run end, returnTitle), abandon wired; API for S03: profiles::info/rename/select/remove, App::selectProfile/deleteProfile |
-| Y5 | 3DS system behaviour: sleep when the lid is closed, HOME menu, safe saves on power loss, SD errors shown in a dialog | 3DS | – | todo |
+| Y5 | 3DS system behaviour: sleep when the lid is closed, HOME menu, safe saves on power loss, SD errors shown in a dialog | 3DS | – | in progress (subagent) |
 
 ### Track U: audio
 
@@ -440,7 +440,7 @@ their `clone()` must call `adoptEnchantment()`.
 | U2 | Audio engine: 3DS ndsp streaming of ADPCM music from romfs, SFX voices; SDL backend decodes the same files; SDL backend | platform | U1 | done (subagent, Opus), accepted 2026-09-29: source/audio/ (audio.h API: playSfx/playMusic/playAmbience with crossfade, per-bus volume), audio_3ds.cpp (ndsp, DSP decodes ADPCM, 8 SFX voices + 4 streaming slots on a thread), audio_sdl.cpp; files from sdmc:/3ds/sts2-3ds/audio/ or ./audio/ (STS_AUDIO_DIR); debug STS_MUSIC / STS_TAP_SFX in main.cpp (U3/U4 remove it); not heard on hardware yet |
 | U3 | Music routing: title, each act's map and fights, elite, boss, shop, rest, Ancient, victory, death; crossfades | UI | U2 | done (subagent, Opus), accepted 2026-09-29: music_router.cpp per NRunMusicController (act sections, elite, boss tracks, shop, rest, Ancient, death), ambience beds, crossfades; STS_MUSIC / STS_AMB / STS_MUSIC_LOG; intros, stems and one-shot ambience layers not played |
 | U4 | SFX: cards, hits, block, buffs, gold, relics, potions and UI controls, mapped from the C# `SfxCmd` names | content | U2 | done (subagent), accepted 2026-09-29: sfx_router.cpp + generated sfx_tables.inc (tools/gen_sfx_tables.py), VisualEvent Hit/CardPlayed/BlockBroken; STS_SFX_LOG; gaps: per-move boss sounds, hover, chests, merchant voice, events |
-| U5 | Ambience per room, and wiring the volume sliders | UI | U3, Y1 | todo |
+| U5 | Ambience per room, and wiring the volume sliders | UI | U3, Y1 | in progress (subagent) |
 
 ### Track H: hardware and release
 
@@ -449,7 +449,7 @@ their `clone()` must call `adoptEnchantment()`.
 | H1 | Performance on the New 3DS: frame time (Spine skinning, text layout, atlas binds), load times, hot spots | 3DS | – | todo |
 | H2 | Memory: a full run with each character on hardware and a sim soak (1000 runs per character), no leaks, linear memory within limits | 3DS | X* | todo |
 | H3 | Romfs budget with all characters and audio; texture and audio quality checks on the device | tools | U1, X* | todo |
-| H4 | Packaging: icon, banner (with its sound), title id, `.3dsx` + `.cia` builds | tools | – | in progress (subagent) |
+| H4 | Packaging: icon, banner (with its sound), title id, `.3dsx` + `.cia` builds | tools | – | done (subagent), accepted 2026-09-29: `make cia` (makerom/ctrtool/bannertool in ~/.local/bin), title id 000400000FA57200, banner + icon + 3 s banner sound baked at build time; New 3DS 124MB mode |
 | H5 | Balance and bugs: compare numbers with the C# for every character (script), fix known PORT NOTEs | content | X* | todo |
 | H6 | Release checklist: every character wins a run on the device, every U page ticked, every package done, no PORT NOTE left without an n/a reason | QA | all | todo |
 
