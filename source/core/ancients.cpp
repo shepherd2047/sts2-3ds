@@ -61,10 +61,10 @@ struct NeowsFury : IroncladT<NeowsFury> {
   }
 };
 
-// Greed.cs. PORT NOTE: no Eternal keyword here, so it can be removed like other curses.
+// Greed.cs (Eternal: it cannot be removed from the deck).
 struct Greed : IroncladT<Greed> {
   CARD_HEADER(Greed, "GREED", -1, Curse, Curse, None)
-    keywords = kwUnplayable;
+    keywords = kwUnplayable | kwEternal;
     maxUpgradeLevel = 0;
   }
 };

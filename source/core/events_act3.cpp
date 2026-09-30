@@ -81,10 +81,10 @@ struct Doubt : IroncladT<Doubt> {
   Task<> onTurnEndInHand() override { co_await applyPower<WeakPower>(me(), val("WeakPower"), nullptr, this); }
 };
 
-// BadLuck.cs. PORT NOTE: no Eternal keyword (it can be removed from the deck).
+// BadLuck.cs (Eternal: it cannot be removed from the deck).
 struct BadLuck : IroncladT<BadLuck> {
   CARD_HEADER(BadLuck, "BAD_LUCK", -1, Curse, Curse, None)
-    keywords = kwUnplayable;
+    keywords = kwUnplayable | kwEternal;
     maxUpgradeLevel = 0;
     addVar("HpLoss", 13);
   }

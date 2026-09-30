@@ -90,11 +90,11 @@ struct ToricToughness : IroncladT<ToricToughness> {
 // SwordOfJade.cs (SwordOfStone's replacement): +3 Strength at the start of each combat.
 struct SwordOfJade : Relic {
   RELIC_HEADER(SwordOfJade, "SWORD_OF_JADE", Event)
-    addVar("Strength", 3);
+    addVar("StrengthPower", 3);
   }
   Task<> beforeCombatStart() override {
     doFlash();
-    co_await applyPower<StrengthPower>(owner(), val("Strength"), owner(), nullptr);
+    co_await applyPower<StrengthPower>(owner(), val("StrengthPower"), owner(), nullptr);
   }
 };
 

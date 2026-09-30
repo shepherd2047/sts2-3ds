@@ -97,13 +97,13 @@ struct Exterminate : IroncladT<Exterminate> {
 struct Squash : IroncladT<Squash> {
   CARD_HEADER(Squash, "SQUASH", 1, Attack, Token, AnyEnemy)
     addVar("Damage", 10);
-    addVar("Vulnerable", 2);
+    addVar("VulnerablePower", 2);
   }
   Task<> onPlay(CardPlay& p) override {
     co_await attack(p.target, val("Damage"));
-    co_await applyPower<VulnerablePower>(p.target, val("Vulnerable"), me(), this);
+    co_await applyPower<VulnerablePower>(p.target, val("VulnerablePower"), me(), this);
   }
-  void onUpgrade() override { upgradeVar("Damage", 2); upgradeVar("Vulnerable", 1); }
+  void onUpgrade() override { upgradeVar("Damage", 2); upgradeVar("VulnerablePower", 1); }
 };
 
 // Metamorphosis.cs: shuffle random free Attacks into the draw pile.
@@ -161,6 +161,10 @@ struct Normality : IroncladT<Normality> {
   CARD_HEADER(Normality, "NORMALITY", -1, Curse, Curse, None)
     keywords = kwUnplayable;
     maxUpgradeLevel = 0;
+    addVar("CalculationBase", 3);
+    addVar("CalculationExtra", -1);
+    addVar("CalculatedCards", 0);
+    calcMultiplier = [](Card* c) { return c->combat ? std::min(3, c->combat->cardsPlayedThisTurn) : 0; };
   }
   bool shouldPlay(Card*) override {
     if (!combat || combat->pileOf(this) != Pile::Hand) return true;

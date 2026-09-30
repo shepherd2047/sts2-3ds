@@ -160,6 +160,7 @@ struct Whistle : IroncladT<Whistle> {
 // Enthralled: while it is in hand, only it can be played (except auto-plays).
 struct Enthralled : IroncladT<Enthralled> {
   CARD_HEADER(Enthralled, "ENTHRALLED", 2, Curse, Curse, None)
+    keywords = kwEternal;
     maxUpgradeLevel = 0;
   }
   bool shouldPlay(Card* c) override {
@@ -170,7 +171,7 @@ struct Enthralled : IroncladT<Enthralled> {
 
 struct Folly : IroncladT<Folly> {
   CARD_HEADER(Folly, "FOLLY", -1, Curse, Curse, None)
-    keywords = kwUnplayable | kwInnate | kwEthereal;
+    keywords = kwUnplayable | kwInnate | kwEthereal | kwEternal;
     maxUpgradeLevel = 0;
   }
 };
@@ -199,7 +200,7 @@ struct Apparition : IroncladT<Apparition> {
 
 struct CurseOfTheBell : IroncladT<CurseOfTheBell> {
   CARD_HEADER(CurseOfTheBell, "CURSE_OF_THE_BELL", -1, Curse, Curse, None)
-    keywords = kwUnplayable;
+    keywords = kwUnplayable | kwEternal;
     maxUpgradeLevel = 0;
   }
 };
