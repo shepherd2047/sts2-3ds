@@ -181,9 +181,10 @@ void App::openSaveError(int kind) {
                                                                                        : L("main_menu_ui.GENERIC_POPUP.ok"));
       break;
     case Kind::SdUnavailable:  // Y5: no C# text either; the game goes on without saving
-      confirm::notice("无法使用SD卡",
-                      "无法写入SD卡，这次游戏的进度不会保存。\n\n请检查SD卡是否插好、没有锁定，并且还有剩余空间。",
-                      L("main_menu_ui.GENERIC_POPUP.ok").rfind("main_menu_ui.", 0) == 0 ? "了解了"
+      confirm::notice(tr("无法使用SD卡", "SD card unavailable"),
+                      tr("无法写入SD卡，这次游戏的进度不会保存。\n\n请检查SD卡是否插好、没有锁定，并且还有剩余空间。",
+                         "Could not write to the SD card; progress will not be saved this session.\n\nCheck that the SD card is inserted, not locked, and has free space."),
+                      L("main_menu_ui.GENERIC_POPUP.ok").rfind("main_menu_ui.", 0) == 0 ? tr("了解了", "OK")
                                                                                        : L("main_menu_ui.GENERIC_POPUP.ok"));
       break;
     default: break;
