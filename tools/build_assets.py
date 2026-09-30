@@ -1258,6 +1258,7 @@ def build(args):
         'CUSTOM_RUN_SCREEN',  # M11+S05: the custom run screen
         'DAILY_RUN_MENU',  # M12: the daily run screen
         'ENABLE_TUTORIALS',  # M13: NAcceptTutorialsFtue's question
+        'INVALID_SAVE_POPUP',  # S22: the save error dialogs (NGame / NMainMenu)
         'LOADING_OVERLAY'))  # S01: the boot's loading status (NLoadingOverlay)
     take('ftues')  # M13: the first-time tips (Nodes.Ftue)
     # S21: the settings screen (tabs, setting names / descriptions, toasts, reset popups)

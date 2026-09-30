@@ -134,7 +134,8 @@ void ioRun(Archive& a, Run& r) {
   a.tag("MAP");
   int n = (int)r.nodes.size();
   a.io(n);
-  if (a.reading) r.nodes.assign((size_t)std::max(0, n), MapNode{});
+  n = a.count(n);
+  if (a.reading) r.nodes.assign((size_t)n, MapNode{});
   for (auto& node : r.nodes) ioNode(a, node);
   a.tag("BAGS");
   ioBag(a, r.relicBag);
@@ -154,12 +155,14 @@ void ioRun(Archive& a, Run& r) {
   a.tag("DECK");
   n = (int)r.deck.size();
   a.io(n);
-  if (a.reading) { r.deck.clear(); r.deck.resize((size_t)std::max(0, n)); }
+  n = a.count(n);
+  if (a.reading) { r.deck.clear(); r.deck.resize((size_t)n); }
   for (auto& c : r.deck) ioCard(a, c);
   a.tag("RELICS");
   n = (int)r.relics.size();
   a.io(n);
-  if (a.reading) { r.relics.clear(); r.relics.resize((size_t)std::max(0, n)); }
+  n = a.count(n);
+  if (a.reading) { r.relics.clear(); r.relics.resize((size_t)n); }
   for (auto& rel : r.relics) ioRelic(a, r, rel);
   a.tag("POTIONS");
   std::vector<std::string> belt;
@@ -208,6 +211,20 @@ void ioRun(Archive& a, Run& r) {
   a.tag("END");
 }
 
+// S22: indices the rest of the game uses unchecked must point inside the loaded run, so a garbled
+// save that still parses is rejected here (-> the corrupt-save dialog) instead of crashing later.
+bool loadedStateValid(const Run& r) {
+  const int n = (int)r.nodes.size();
+  if (r.currentNode < -1 || r.currentNode >= n) return false;
+  for (auto& node : r.nodes)
+    for (int next : node.next)
+      if (next < 0 || next >= n) return false;
+  if (r.actIndex < 0 || r.actIndex >= Run::kActs) return false;
+  if (!r.player || r.player->maxHp <= 0 || r.player->hp <= 0 || r.player->hp > r.player->maxHp) return false;
+  if (r.gold < 0 || r.floor < 0) return false;
+  return true;
+}
+
 }  // namespace
 
 std::string Run::save() {
@@ -229,7 +246,7 @@ bool Run::load(const std::string& data) {
   start(std::strtoull(a.toks[2].c_str(), nullptr, 10), version >= 3 && a.toks.size() > 3 ? a.toks[3] : "Ironclad",
         version >= 4 && a.toks.size() > 4 ? std::atoi(a.toks[4].c_str()) : 0);
   ioRun(a, *this);
-  if (!a.ok) return false;
+  if (!a.ok || !loadedStateValid(*this)) return false;
   // Saves from before C11 (DoubleBoss fights chained, no map node): give the last act's map its
   // second boss node (StandardActMap.SecondBossMapPoint takes no Rng, so the rest is the same).
   if (!secondBossId.empty() && secondBossNode() < 0) {

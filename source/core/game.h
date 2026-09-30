@@ -230,10 +230,19 @@ struct Archive {
     std::memcpy(&v, &bits, 4);
   }
   void io(Dec& d) { io(d.raw); }
+  // S22: a count read from a garbled file can be anything; every element takes at least one
+  // token, so more than the tokens left is corrupt (and must not allocate billions of elements).
+  int count(int n) {
+    if (!reading) return n;
+    size_t left = toks.size() > pos ? toks.size() - pos : 0;
+    if (n < 0 || (size_t)n > left) { ok = false; return 0; }
+    return n;
+  }
   template <class T> void io(std::vector<T>& v) {
     int n = (int)v.size();
     io(n);
-    if (reading) v.assign((size_t)std::max(0, n), T{});
+    n = count(n);
+    if (reading) v.assign((size_t)n, T{});
     for (auto& x : v) io(x);
   }
   void tag(const char* t) {  // a marker that must match when reading

@@ -17,6 +17,7 @@
 // screen summary is listed as still to do there).
 // Keys: D-pad focus, A pick, X rename, Y delete, B back; everything is also tappable.
 #include "../../core/profiles.h"
+#include "../confirm.h"
 #include "../ui_common.h"
 
 namespace ui {
@@ -24,7 +25,6 @@ namespace ui {
 namespace {
 constexpr int kN = profiles::kCount;
 constexpr int kCard0 = 2301, kRename0 = 2311, kDelete0 = 2321, kBack = 2399;  // + slot index
-constexpr int kDCancel = 2331, kDConfirm = 2332;
 constexpr float kCardW = 96, kCardH = 150, kCardGap = 8, kCardY = 12;
 constexpr float kCardX0 = (kBot - (kN * kCardW + (kN - 1) * kCardGap)) / 2;
 constexpr float kBtnY = kCardY + kCardH + 6, kBtnH = 32;
@@ -32,8 +32,6 @@ constexpr float kBtnY = kCardY + kCardH + 6, kBtnH = 32;
 struct State {
   bool open = false;
   int sel = 0;          // focused item (index into items())
-  int confirm = 0;      // slot whose delete confirm is open, 0 = none
-  int confirmSel = 0;   // 0 cancel, 1 delete
   profiles::Info info[kN];
   std::string runInfo[kN];  // the slot's saved run (top screen summary), "" = none
 };
@@ -146,7 +144,6 @@ void fitText(float cx, float y, const std::string& s, uint32_t c, float maxW) {
 void App::openProfiles() {
   State& s = P();
   s.open = true;
-  s.confirm = 0;
   refresh();
   s.sel = indexOf(items(), kCard0 + profiles::current() - 1);  // InitialFocusedControl
 }
@@ -212,7 +209,7 @@ bool App::drawProfiles(bool top) {
   for (int i = 0; i < kN; ++i) {
     const profiles::Info& in = s.info[i];
     const float x = kCardX0 + i * (kCardW + kCardGap);
-    const bool focus = focusId == kCard0 + i && !s.confirm;
+    const bool focus = focusId == kCard0 + i && !confirm::isOpen();
     const float y = kCardY - (focus ? 3 : 0);
     widgets::panel("ui/panel_reward", x, y, kCardW, kCardH, focus || fs == i ? 0xFFFFFFFF : 0xC0C0C0FF);
     if (i + 1 == cur) {  // CurrentProfileIndicator: the map marker over the top edge
@@ -239,7 +236,7 @@ bool App::drawProfiles(bool top) {
   }
   // Rename / delete under each card.
   for (const Item& it : v) {
-    const bool focus = it.id == focusId && !s.confirm;
+    const bool focus = it.id == focusId && !confirm::isOpen();
     if (it.id >= kRename0 && it.id < kRename0 + kN) {
       widgets::panel("ui/btn_ok_s", it.x, it.y, it.w, it.h);
       R().text(it.x + it.w / 2, it.y + (it.h - R().lineHeight(F16)) / 2, "改名", ts(F16, col::white, CENTER));
@@ -256,27 +253,6 @@ bool App::drawProfiles(bool top) {
     if (focus) outline(it.x, it.y, it.w, it.h);
     hits_.push_back({it.x, it.y, it.w, it.h, it.id});
   }
-  if (s.confirm) {  // NGenericPopup with PROFILE_SCREEN.DELETE_CONFIRM_POPUP
-    gfx::rect(0, 0, kBot, kH, 0x000000C0);
-    const float w = 288, h = 176, x = (kBot - w) / 2, y = 32;
-    widgets::panel("ui/panel_popup", x, y, w, h);
-    R().text(x + w / 2, y + 14, withId(mm("PROFILE_SCREEN.DELETE_CONFIRM_POPUP.title"), s.confirm),
-             ts(F16, col::gold, CENTER, 0, 1.1f));
-    std::string body = stripTags(withId(mm("PROFILE_SCREEN.DELETE_CONFIRM_POPUP.description"), s.confirm),
-                                 {"[sine]", "[/sine]"});
-    for (size_t p; (p = body.find("\n\n")) != std::string::npos;) body.erase(p, 1);
-    R().text(x + w / 2, y + 42, body, ts(F12, col::white, CENTER, w - 32));
-    const float bw = 104, bh = 34, by = y + h - bh - 12;
-    struct { int id; const char* sprite; const char* key; float x; } btn[2] = {
-        {kDCancel, "ui/btn_cancel_s", "PROFILE_SCREEN.DELETE_CONFIRM_POPUP.cancel", x + 20},
-        {kDConfirm, "ui/btn_ok_s", "PROFILE_SCREEN.DELETE_CONFIRM_POPUP.delete", x + w - 20 - bw}};
-    for (int i = 0; i < 2; ++i) {
-      widgets::panel(btn[i].sprite, btn[i].x, by, bw, bh);
-      R().text(btn[i].x + bw / 2, by + (bh - R().lineHeight(F16)) / 2, mm(btn[i].key), ts(F16, col::white, CENTER));
-      if (i == s.confirmSel) outline(btn[i].x, by, bw, bh);
-      hits_.push_back({btn[i].x, by, bw, bh, btn[i].id});
-    }
-  }
   return true;
 }
 
@@ -284,21 +260,6 @@ bool App::updateProfiles(const gfx::Input& in) {
   State& s = P();
   if (!s.open) return false;
   int id = in.touchDown ? hitAt(in.tx, in.ty) : ID_NONE;
-
-  if (s.confirm) {
-    if (in.down & (gfx::BTN_LEFT | gfx::BTN_RIGHT)) s.confirmSel = 1 - s.confirmSel;
-    if (id == ID_NONE && (in.down & gfx::BTN_A)) id = s.confirmSel ? kDConfirm : kDCancel;
-    if ((in.down & gfx::BTN_B) || id == kDCancel) { s.confirm = 0; return true; }
-    if (id == kDConfirm) {
-      const int slot = s.confirm;
-      s.confirm = 0;
-      deleteProfile(slot);  // SaveManager.DeleteProfile (+ hasSave_)
-      continueInfo_.clear();
-      refresh();
-      s.sel = indexOf(items(), kCard0 + slot - 1);
-    }
-    return true;
-  }
 
   auto v = items();
   s.sel = navigate(v, std::clamp(s.sel, 0, (int)v.size() - 1), in.down);
@@ -338,8 +299,17 @@ bool App::updateProfiles(const gfx::Input& in) {
       refresh();
     }
   } else if (id >= kDelete0 && id < kDelete0 + kN) {
-    s.confirm = slot + 1;
-    s.confirmSel = 0;  // Cancel first, as NGenericPopup
+    // NDeleteProfileButton: NGenericPopup with PROFILE_SCREEN.DELETE_CONFIRM_POPUP (S22 shared modal).
+    const int id1 = slot + 1;
+    confirm::ask(withId(mm("PROFILE_SCREEN.DELETE_CONFIRM_POPUP.title"), id1),
+                 withId(mm("PROFILE_SCREEN.DELETE_CONFIRM_POPUP.description"), id1),
+                 [this, id1] {
+                   deleteProfile(id1);  // SaveManager.DeleteProfile (+ hasSave_)
+                   continueInfo_.clear();
+                   refresh();
+                   P().sel = indexOf(items(), kCard0 + id1 - 1);
+                 },
+                 mm("PROFILE_SCREEN.DELETE_CONFIRM_POPUP.delete"), mm("PROFILE_SCREEN.DELETE_CONFIRM_POPUP.cancel"));
   }
   return true;
 }

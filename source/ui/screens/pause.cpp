@@ -3,6 +3,7 @@
 // adds 地图 (the look-only map from another room, what START used to open) and 牌组. The room
 // stays drawn underneath; the scheduler is frozen and the run timer stops while it is open
 // (RunManager.IsPaused). Map, deck and settings open on top of it and fall back to it on close.
+#include "../confirm.h"
 #include "../ui_common.h"
 
 namespace ui {
@@ -10,7 +11,6 @@ namespace ui {
 namespace {
 enum : int {
   kPResume = 2401, kPMap, kPDeck, kPSettings, kPCompendium, kPGiveUp, kPSaveQuit,
-  kPCancel = 2411, kPConfirm = 2412,
 };
 
 struct PauseItem {
@@ -52,8 +52,6 @@ static std::vector<PauseItem> pauseItems(Screen scr, bool canSaveQuit) {
 void App::openPause() {
   pauseOpen_ = true;
   pauseSel_ = 0;
-  pauseModalSel_ = 0;
-  abandonConfirm_ = false;
   // Close the room's own overlays so the menu is on top; combat input in flight is dropped.
   deckOpen_ = relicsOpen_ = potionsOpen_ = false;
   potionAim_ = false;
@@ -77,7 +75,7 @@ void App::drawPause(bool top) {
                        num(r.floor) + " 层";
     R().text(kTop / 2, 92, info, ts(F12, col::white, CENTER));
     std::string tip;
-    switch (abandonConfirm_ ? kPGiveUp : items[pauseSel_].id) {
+    switch (items[pauseSel_].id) {
       case kPMap: tip = "查看本幕地图。"; break;
       case kPDeck: tip = "查看你的牌组。"; break;
       case kPCompendium: tip = "查看卡牌总览。"; break;
@@ -101,41 +99,13 @@ void App::drawPause(bool top) {
     uint32_t c = !it.enabled ? col::gray : it.id == kPGiveUp ? col::red : col::white;
     R().text(x + w / 2, y + (h - R().lineHeight(F16)) / 2, it.label, ts(F16, c, CENTER));
     if (it.note) R().text(x + w - 8, y + (h - R().lineHeight(F12)) / 2, it.note, ts(F12, col::gray, RIGHT));
-    if (i == pauseSel_ && !abandonConfirm_) outline(x, y, w, h);
+    if (i == pauseSel_ && !confirm::isOpen()) outline(x, y, w, h);
     hits_.push_back({x, y, w, h, it.id});
-  }
-  if (abandonConfirm_) {  // NAbandonRunConfirmPopup, as on the main menu
-    gfx::rect(0, 0, kBot, kH, 0x000000C0);
-    const float pw = 260, ph = 140, px = (kBot - pw) / 2, py = 46;
-    hits_.clear();
-    widgets::panel("ui/panel_popup", px, py, pw, ph);
-    R().text(px + pw / 2, py + 16, mm("ABANDON_RUN_CONFIRMATION.header"), ts(F16, col::gold, CENTER, 0, 1.1f));
-    R().text(px + pw / 2, py + 48, mm("ABANDON_RUN_CONFIRMATION.body"), ts(F12, col::white, CENTER, pw - 32));
-    const float bw = 104, bh = 34, by = py + ph - bh - 14;
-    struct { int id; const char* sprite; const char* key; float x; } btn[2] = {
-        {kPCancel, "ui/btn_cancel_s", "GENERIC_POPUP.cancel", px + 18},
-        {kPConfirm, "ui/btn_ok_s", "GENERIC_POPUP.confirm", px + pw - 18 - bw}};
-    for (int i = 0; i < 2; ++i) {
-      widgets::panel(btn[i].sprite, btn[i].x, by, bw, bh);
-      R().text(btn[i].x + bw / 2, by + (bh - R().lineHeight(F16)) / 2, mm(btn[i].key), ts(F16, col::white, CENTER));
-      if (i == pauseModalSel_) outline(btn[i].x, by, bw, bh);
-      hits_.push_back({btn[i].x, by, bw, bh, btn[i].id});
-    }
   }
 }
 
 void App::updatePause(const gfx::Input& in) {
   int id = in.touchDown ? hitAt(in.tx, in.ty) : ID_NONE;
-  if (abandonConfirm_) {
-    if (in.down & (gfx::BTN_LEFT | gfx::BTN_RIGHT)) pauseModalSel_ = 1 - pauseModalSel_;
-    if (in.down & gfx::BTN_A) id = pauseModalSel_ ? kPConfirm : kPCancel;
-    if ((in.down & gfx::BTN_B) || id == kPCancel) { abandonConfirm_ = false; return; }
-    if (id == kPConfirm) {
-      run_->abandon();  // M1/M2: a loss (+ runsAbandoned) and a history entry; returnTitle saves progress.sav
-      returnTitle();
-    }
-    return;
-  }
   const auto items = pauseItems(run_->screen, hasSave() || savesOff());
   const int n = (int)items.size();
   if (in.down & gfx::BTN_UP) pauseSel_ = (pauseSel_ + n - 1) % n;  // NPauseMenu: focus wraps
@@ -154,7 +124,12 @@ void App::updatePause(const gfx::Input& in) {
     case kPDeck: openCardList(CardListMode::Deck); break;
     case kPSettings: settingsOpen_ = true; break;
     case kPCompendium: openCardLibrary(); break;
-    case kPGiveUp: abandonConfirm_ = true; pauseModalSel_ = 0; break;
+    case kPGiveUp:  // NAbandonRunConfirmPopup (S22 shared modal); M1/M2: a loss (+ runsAbandoned) and a history entry
+      confirm::ask(mm("ABANDON_RUN_CONFIRMATION.header"), mm("ABANDON_RUN_CONFIRMATION.body"), [this] {
+        run_->abandon();
+        returnTitle();  // saves progress.sav
+      });
+      break;
     case kPSaveQuit: returnTitle(true); break;  // run.sav stays: 继续 resumes at the last map choice
     default: break;
   }

@@ -322,19 +322,6 @@ void ScrollList::end() {
 
 // ---------------------------------------------------------------- modal / toast / banner
 
-int modal(int id, const std::string& title, const std::string& message, bool danger) {
-  gfx::rect(0, 0, style::kMargin > 0 ? 320 : 320, 240, 0x000000B0);  // full bottom-screen scrim
-  const float w = 260, h = 150, x = (320 - w) / 2, y = (240 - h) / 2;
-  panel("ui/panel_popup", x, y, w, h);
-  R().text(x + w / 2, y + 14, title, ts(F16, col::gold, CENTER, 0, 1.1f));
-  R().text(x + w / 2, y + 44, message, ts(F12, col::white, CENTER, w - 24));
-  int result = 0;
-  if (button(id * 2, x + 16, y + h - 42, (w - 40) / 2, kButtonH, "取消", Kind::Secondary)) result = -1;
-  if (button(id * 2 + 1, x + w / 2 + 8, y + h - 42, (w - 40) / 2, kButtonH, "确认", danger ? Kind::Danger : Kind::Primary))
-    result = 1;
-  return result;
-}
-
 namespace {
 struct Toast { std::string text; float t; };
 std::vector<Toast> toasts;

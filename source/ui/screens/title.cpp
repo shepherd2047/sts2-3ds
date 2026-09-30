@@ -2,6 +2,7 @@
 #include <cstring>
 
 #include "../../core/progress.h"
+#include "../confirm.h"
 #include "../ui_common.h"
 
 namespace ui {
@@ -137,7 +138,6 @@ constexpr int kMContinue = 2001, kMAbandon = 2002, kMSingle = 2003, kMCompendium
               kMSettings = 2006, kMQuit = 2007, kMProfile = 2008;
 constexpr int kSStandard = 2101, kSDaily = 2102, kSCustom = 2103, kSCards = 2111,  // + 0..3: the four cards
               kSStats = 2115, kSHistory = 2116, kSBack = 2199;
-constexpr int kDCancel = 2201, kDConfirm = 2202;
 constexpr float kRowH = 32, kLabelScale = 1.2f;
 constexpr uint32_t kCream = col::white;  // StsColors.cream
 
@@ -301,7 +301,7 @@ void App::drawTitle(bool top) {
   }
 
   // Bottom: the tower continues from the top screen; a soft dark band behind the button column.
-  drawMenuBg(false, sub || menuModal_ ? 0.45f : 0.2f);
+  drawMenuBg(false, sub || confirm::isOpen() ? 0.45f : 0.2f);
   if (!sub) {
     auto items = menuItems(hasSave_);
     const int n = (int)items.size();
@@ -309,7 +309,7 @@ void App::drawTitle(bool top) {
     titleSelection_ = std::clamp(titleSelection_, 0, n - 1);
     for (int i = 0; i < n; ++i) {
       const float y = y0 + i * kRowH;
-      const bool focus = i == titleSelection_ && !menuModal_;
+      const bool focus = i == titleSelection_ && !confirm::isOpen();
       TextStyle st = ts(F16, focus ? col::gold : kCream, CENTER, 0, kLabelScale * (focus ? 1.05f : 1.f));
       st.outline = 0x000000FF;  // the labels sit straight on the tower art
       std::string label = mm(items[i].key);
@@ -330,7 +330,7 @@ void App::drawTitle(bool top) {
     subSel_ = std::clamp(subSel_, 0, (int)items.size() - 1);
     for (int i = 0; i < (int)items.size(); ++i) {
       const SubItem& it = items[i];
-      const bool focus = i == subSel_ && !menuModal_;
+      const bool focus = i == subSel_ && !confirm::isOpen();
       float y = it.y - (focus && !it.shortButton ? 3 : 0);
       if (it.id == kSBack) {
         widgets::panel("ui/btn_back", it.x, y, it.w, it.h);
@@ -363,42 +363,25 @@ void App::drawTitle(bool top) {
       hits_.push_back({it.x, y, it.w, it.h, it.id});
     }
   }
-
-  if (menuModal_) {  // NGenericPopup / NAbandonRunConfirmPopup
-    const bool quit = menuModal_ == 2;
-    gfx::rect(0, 0, kBot, kH, 0x000000C0);
-    const float w = 260, h = 140, x = (kBot - w) / 2, y = 46;
-    widgets::panel("ui/panel_popup", x, y, w, h);
-    R().text(x + w / 2, y + 16, mm(quit ? "QUIT_CONFIRM_POPUP.header" : "ABANDON_RUN_CONFIRMATION.header"),
-             ts(F16, col::gold, CENTER, 0, 1.1f));
-    R().text(x + w / 2, y + 48, mm(quit ? "QUIT_CONFIRM_POPUP.body" : "ABANDON_RUN_CONFIRMATION.body"),
-             ts(F12, col::white, CENTER, w - 32));
-    const float bw = 104, bh = 34, by = y + h - bh - 14;
-    struct { int id; const char* sprite; const char* key; float x; } btn[2] = {
-        {kDCancel, "ui/btn_cancel_s", "GENERIC_POPUP.cancel", x + 18},
-        {kDConfirm, "ui/btn_ok_s", "GENERIC_POPUP.confirm", x + w - 18 - bw}};
-    for (int i = 0; i < 2; ++i) {
-      widgets::panel(btn[i].sprite, btn[i].x, by, bw, bh);
-      R().text(btn[i].x + bw / 2, by + (bh - R().lineHeight(F16)) / 2, mm(btn[i].key), ts(F16, col::white, CENTER));
-      if (i == menuModalSel_) outline(btn[i].x, by, bw, bh);
-      hits_.push_back({btn[i].x, by, bw, bh, btn[i].id});
-    }
-  }
 }
 
 void App::activateMenu(int id) {
   auto notDone = [&](const std::string& what) { toast_ = what + " · 未完成"; toastT_ = 1.2f; };
   switch (id) {
     case kMContinue: startRun(true); break;
-    case kMAbandon: menuModal_ = 1; menuModalSel_ = 0; break;
+    case kMAbandon:  // NAbandonRunConfirmPopup (S22 shared modal); AbandonRun: the save goes
+      confirm::ask(mm("ABANDON_RUN_CONFIRMATION.header"), mm("ABANDON_RUN_CONFIRMATION.body"), [this] { returnTitle(); });
+      break;
     case kMSingle:
       if (finishedRuns() > 0) { menuSub_ = 1; subSel_ = 0; }
       else { titleCharacter_ = true; titleSeed_ = randomSeed(); }
       break;
     case kMCompendium: menuSub_ = 2; subSel_ = 0; break;
     case kMStats: openStats(1); break;  // M6
-    case kMSettings: settingsOpen_ = true; abandonConfirm_ = false; break;
-    case kMQuit: menuModal_ = 2; menuModalSel_ = 0; break;
+    case kMSettings: settingsOpen_ = true; break;
+    case kMQuit:  // NGenericPopup QUIT_CONFIRM_POPUP; NGame.Quit: back to the Homebrew menu / closes the preview
+      confirm::ask(mm("QUIT_CONFIRM_POPUP.header"), mm("QUIT_CONFIRM_POPUP.body"), [this] { quit_ = true; });
+      break;
     case kMProfile: openProfiles(); break;
     case kSStandard: titleCharacter_ = true; titleSeed_ = randomSeed(); break;
     case kSCards: openCardLibrary(); break;  // M8
@@ -425,18 +408,6 @@ void App::updateTitle(const gfx::Input& in) {
   if (updateCustomRun(in)) return;  // M11+S05
   if (updateDailyRun(in)) return;   // M12
   int id = in.touchDown ? hitAt(in.tx, in.ty) : ID_NONE;
-  if (menuModal_) {
-    if (in.down & (gfx::BTN_LEFT | gfx::BTN_RIGHT)) menuModalSel_ = 1 - menuModalSel_;
-    if (in.down & gfx::BTN_A) id = menuModalSel_ ? kDConfirm : kDCancel;
-    if ((in.down & gfx::BTN_B) || id == kDCancel) { menuModal_ = 0; return; }
-    if (id == kDConfirm) {
-      if (menuModal_ == 2) quit_ = true;   // NGame.Quit: back to the Homebrew menu / closes the preview
-      else returnTitle();                  // AbandonRun: the save goes, the menu shows 单人模式 again
-      menuModal_ = 0;
-      titleSelection_ = 0;
-    }
-    return;
-  }
   if (menuSub_) {
     auto items = subItems(menuSub_);
     subSel_ = navigate(items, std::clamp(subSel_, 0, (int)items.size() - 1), in.down);

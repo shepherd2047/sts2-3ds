@@ -13,6 +13,7 @@
 #include "history.h"
 #include "profiles.h"
 #include "progress.h"
+#include "save_errors.h"
 
 namespace sts {
 
@@ -121,7 +122,11 @@ bool writeProfileFile() { return S().disk && writeAtomic(profiles::profileFilePa
 // Loads `id`'s progress into progress::state(), or a fresh one if it has none (or it is garbled).
 void loadProgress(int id) {
   progress::reset();
-  if (S().disk && !progress::load(profiles::progressPath(id))) progress::reset();
+  // S22: a garbled file is moved to progress.corrupt and reported (the UI shows the C#'s
+  // INVALID_SAVE_POPUP); the slot goes on with fresh progress instead of overwriting it later.
+  if (S().disk && saveerr::loadChecked(profiles::progressPath(id), [](const std::string& p) { return progress::load(p); },
+                                       saveerr::Kind::ProgressCorrupt) != saveerr::Load::Ok)
+    progress::reset();
 }
 
 }  // namespace

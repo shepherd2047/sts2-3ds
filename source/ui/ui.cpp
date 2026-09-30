@@ -2,7 +2,9 @@
 #include "../core/events_crystal.h"
 #include "../core/modifiers.h"
 #include "../core/profiles.h"
+#include "../core/save_errors.h"
 #include "../core/settings_store.h"
+#include "confirm.h"
 #include "music_router.h"
 #include "ui_common.h"
 
@@ -32,6 +34,11 @@ std::string actTexture(const Run& r, const char* kind) {
 namespace {
 std::string saveName() { return profiles::runSaveName(); }
 bool savesEnabled() { return !getenv("STS_HIDDEN") && !getenv("STS_NO_SAVE"); }
+// S22: a failed SD write (or STS_FAKE_SAVE_ERROR=write) queues the write-error dialog.
+bool noteWrite(bool ok) {
+  if (!ok || saveerr::faked(saveerr::Kind::WriteFailed)) saveerr::report(saveerr::Kind::WriteFailed);
+  return ok;
+}
 }
 
 bool App::init() {
@@ -46,7 +53,13 @@ bool App::init() {
   // Y1: settings.sav, loaded once at startup. STS_HIDDEN/STS_NO_SAVE (automated previews, and the
   // headless sim which never links ui.cpp at all) must never touch the real player's file; the
   // in-memory settings::state() then just keeps its defaults for that run of the app.
-  if (savesEnabled()) settings::load();
+  // S22: a garbled settings.sav is moved to settings.corrupt and reported; defaults are kept.
+  if (savesEnabled() && saveerr::loadChecked(settings::defaultPath(), [](const std::string& p) { return settings::load(p); },
+                                             saveerr::Kind::SettingsCorrupt) == saveerr::Load::Corrupt)
+    settings::reset();
+  checkRunSave();  // S22: a run.sav that no longer loads asks to be deleted
+  for (auto k : {saveerr::Kind::ProgressCorrupt, saveerr::Kind::SettingsCorrupt})  // STS_FAKE_SAVE_ERROR previews
+    if (saveerr::faked(k)) saveerr::report(k);
   fastMode_ = settings::state().fastMode;
   screenShake_ = settings::state().screenShake;
   Scheduler::get().speed = fastMode_ ? 1.75 : 1.0;
@@ -60,7 +73,21 @@ bool App::init() {
 void App::saveSettings() {
   settings::state().fastMode = fastMode_;
   settings::state().screenShake = screenShake_;
-  if (savesEnabled()) settings::save();
+  if (savesEnabled()) noteWrite(settings::save());
+}
+
+// S22: probe-load the current slot's run.sav; one that is there but no longer loads is reported
+// (the dialog offers to delete it) and 继续 is hidden. STS_FAKE_SAVE_ERROR=run fakes it.
+void App::checkRunSave() {
+  std::string data;
+  bool bad = saveerr::faked(saveerr::Kind::RunCorrupt);
+  if (!bad && readRunSave(data)) {
+    Run probe;
+    bad = !probe.load(data);
+  }
+  if (!bad) return;
+  hasSave_ = false;
+  saveerr::report(saveerr::Kind::RunCorrupt);
 }
 
 bool App::hasSave() const {
@@ -73,6 +100,7 @@ bool App::hasSave() const {
 bool App::selectProfile(int id) {
   bool ok = profiles::select(id);
   hasSave_ = hasSave();
+  checkRunSave();
   return ok;
 }
 
@@ -92,7 +120,12 @@ void App::startRun(bool resume) {
   if (resume) {
     std::string data;
     loaded = gfx::readSave(saveName(), data) && run_->load(data);
-    if (!loaded) { run_ = std::make_unique<Run>(); toast_ = "存档无法读取，开始新游戏"; toastT_ = 2.f; }
+    if (!loaded) {  // S22: stay on the menu and ask about the save (confirm.cpp) instead of a new run
+      run_ = std::make_unique<Run>();
+      hasSave_ = false;
+      saveerr::report(saveerr::Kind::RunCorrupt);
+      return;
+    }
   }
   if (!loaded) {
     if (savesEnabled()) gfx::deleteSave(saveName());
@@ -116,10 +149,11 @@ void App::startRun(bool resume) {
     titleCustom_ = false;
     run_->start(seed, character, titleAsc_);
   }
-  if (savesEnabled())
+  if (savesEnabled() || saveerr::faked(saveerr::Kind::WriteFailed))
     run_->onSavePoint = [](Run& r) {
-      gfx::writeSave(saveName(), r.save());
-      profiles::saveProgress();  // seen cards/relics/monsters so far
+      if (!savesEnabled()) { noteWrite(true); return; }  // STS_FAKE_SAVE_ERROR=write in a preview
+      bool ok = gfx::writeSave(saveName(), r.save());
+      noteWrite(profiles::saveProgress() && ok);  // seen cards/relics/monsters so far
     };
   if (getenv("STS_ALLCARDS")) {  // debug: every pool card in the deck
     run_->deck.clear();
@@ -155,7 +189,6 @@ void App::startRun(bool resume) {
   closeDetail();
   relicsOpen_ = false;
   settingsOpen_ = false;
-  abandonConfirm_ = false;
   pauseOpen_ = false;
   titleCharacter_ = false;
   titleSelection_ = 0;
@@ -171,7 +204,7 @@ void App::returnTitle(bool keepSave) {
   Scheduler::get().clear();
   if (savesEnabled()) {
     if (!keepSave) gfx::deleteSave(saveName());
-    profiles::saveProgress();  // after Run::abandon() / a finished run / save & quit
+    noteWrite(profiles::saveProgress());  // after Run::abandon() / a finished run / save & quit
   }
   visuals_.clear();
   R().releaseSkeletons({});
@@ -183,12 +216,12 @@ void App::returnTitle(bool keepSave) {
   ghosts_.clear();
   mapTouch_ = {};
   drag_ = {};
-  deckOpen_ = relicsOpen_ = settingsOpen_ = abandonConfirm_ = mapView_ = devOpen_ = pauseOpen_ = topBarFocus_ = false;
+  deckOpen_ = relicsOpen_ = settingsOpen_ = mapView_ = devOpen_ = pauseOpen_ = topBarFocus_ = false;
   potionsOpen_ = false;
   closeDetail();
   titleCharacter_ = false;
   titleSelection_ = 0;
-  menuSub_ = menuModal_ = 0;
+  menuSub_ = 0;
   continueInfo_.clear();
   hasSave_ = hasSave();
 }
@@ -239,7 +272,7 @@ void App::update(const gfx::Input& in, double dt) {
     // Run::main has recorded the win/loss in progress::state() (M1); persist it (Y4).
     if ((scr == Screen::GameOver || scr == Screen::Victory) && savesEnabled()) {
       gfx::deleteSave(saveName());
-      profiles::saveProgress();
+      noteWrite(profiles::saveProgress());
     }
     if (scr == Screen::Title) hasSave_ = hasSave();
   }
@@ -277,6 +310,7 @@ void App::update(const gfx::Input& in, double dt) {
   }
 
   if (autoplay_) autoplay(visualDt);
+  if (updateConfirm(in)) return;  // S22: the shared confirmation / error modal, over everything
   if (updateTips(in)) return;  // M13: a first-time tip owns the input while open
   if (detailOpen()) { updateDetail(in); return; }  // S20: the popup over every screen
   if (updateCardLibrary(in)) return;  // M8: over any page (main menu compendium, pause menu)
@@ -387,6 +421,7 @@ void App::draw() {
     gfx::screen(top ? gfx::TOP : gfx::BOTTOM, 0x0B0B12FF);
     if (const char* m = getenv("STS_MOCK")) { drawStyleMock(std::atoi(m), top); continue; }
     if (drawBoot(top)) continue;
+    do {  // S22: every `continue` below ends in the shared modal, drawn over all of it
     if (detailOpen()) { drawDetail(top); continue; }  // S20: the popup over every screen
     if (drawCardLibrary(top)) continue;  // M8
     if (drawRelicCollection(top)) continue;  // M9
@@ -435,6 +470,8 @@ void App::draw() {
       gfx::rect((kBot - w) / 2, 112, w, 20, 0x000000C0 & (0xFFFFFF00 | (uint32_t)(a * 0xC0)));
       R().text(kBot / 2, 115, toast_, ts(F12, col::gold, CENTER));
     }
+    } while (false);
+    drawConfirm(top);  // S22
   }
 }
 
