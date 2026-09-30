@@ -282,6 +282,7 @@ void App::update(const gfx::Input& in, double dt) {
   if (updateCardLibrary(in)) return;  // M8: over any page (main menu compendium, pause menu)
   if (updateRelicCollection(in)) return;  // M9: relic collection / potion lab
   if (updateBestiary(in)) return;     // M10
+  if (updateCredits(in)) return;      // S26: over the settings page
   if (settingsOpen_) { updateSettings(in); return; }
   if ((in.down & gfx::BTN_SELECT) && scr != Screen::Title) {
     devOpen_ = !devOpen_;
@@ -391,6 +392,7 @@ void App::draw() {
     if (drawCardLibrary(top)) continue;  // M8
     if (drawRelicCollection(top)) continue;  // M9
     if (drawBestiary(top)) continue;     // M10
+    if (drawCredits(top)) continue;      // S26
     if (settingsOpen_) { drawSettings(top); continue; }
     if (devOpen_) { drawDev(top); continue; }
     if (run_->deckChoice.active) { drawDeckChoice(top); continue; }

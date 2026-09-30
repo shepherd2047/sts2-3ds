@@ -1264,6 +1264,7 @@ def build(args):
     take('settings_ui', lambda k: not k.startswith(('INPUT_SETTINGS', 'FEEDBACK', 'MODDING', 'DISCONNECT',
                                                     'ANTI_ALIASING', 'ASPECT_RATIO', 'FULLSCREEN', 'MSAA',
                                                     'VSYNC', 'WINDOW', 'KEYBOARD_ONLY', 'DISPLAY_DROPDOWN')))
+    take('credits', lambda k: k != 'EXIT_MESSAGE')  # S26: NCreditsScreen's sections (screens/credits.cpp)
     take('modifiers')  # M11: run modifier titles / descriptions (Neow options, custom run screen)
     for t in ('card_keywords', 'gameplay_ui', 'rest_site_ui', 'card_reward_ui', 'map', 'combat_messages',
               'card_selection', 'intents', 'game_over_screen', 'characters'):
