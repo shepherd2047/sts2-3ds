@@ -470,10 +470,10 @@ void App::updateEvent(const gfx::Input& in) {
   if ((in.down & gfx::BTN_X) && sel_ >= 0 && sel_ < n) {  // the offered card / relic, large
     OptionText ot = optionText(e, sel_);
     for (auto& f : offersFor(e, sel_, ot)) {
-      if (f.kind == Offer::CardK) { detailCard_ = previewCard(f.id); break; }
-      if (f.kind == Offer::RelicK) { detailRelic_ = previewRelic(f.id); break; }
+      if (f.kind == Offer::CardK) { inspectCard(previewCard(f.id)); break; }
+      if (f.kind == Offer::RelicK) { inspectRelic(previewRelic(f.id)); break; }
+      if (f.kind == Offer::PotionK) { inspectPotion(previewPotion(f.id)); break; }
     }
-    detailUpgrade_ = false;
     return;
   }
   if ((in.down & gfx::BTN_B) && sel_ >= 0) { sel_ = -1; widgets::setFocus(-1); }

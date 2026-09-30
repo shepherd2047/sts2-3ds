@@ -1218,10 +1218,10 @@ def build(args):
     take('ancients', lambda k: k.split('.')[0] in EVENTS or k.startswith('PROCEED.'))  # PROCEED: TheArchitect's option
     take('potions', lambda k: k.split('.')[0] in POTIONS)
     take('enchantments', lambda k: k.split('.')[0] in ENCHANTMENTS)
-    # the enchantment replay line; C11: the map's boss preview (NTopBarBossIcon: BOSS / DOUBLE_BOSS)
-    # S19: the top bar's tips (NTopBarHp / Gold / FloorIcon / DeckButton / MapButton / PauseButton, potion slot)
-    take('static_hover_tips', lambda k: k.startswith(('REPLAY', 'BOSS.', 'DOUBLE_BOSS.', 'HIT_POINTS.', 'MONEY_POUCH.',
-                                                      'FLOOR.', 'DECK.', 'MAP.', 'SETTINGS.', 'POTION_SLOT.')))
+    # the enchantment replay line; C11: the map's boss preview (NTopBarBossIcon: BOSS / DOUBLE_BOSS);
+    # S20: every static tip for the detail popup's hover tips (Block, Energy, Fatal, Transform, ...),
+    # which also covers S19's top bar tips (HIT_POINTS / MONEY_POUCH / FLOOR / DECK / MAP / SETTINGS / POTION_SLOT)
+    take('static_hover_tips')
     # C11: boss names (EncounterModel.Title); M6: every encounter's title and loss line (the run
     # history's killed-by quote, EncounterModel.GetLossMessageFor)
     take('encounters', lambda k: k.endswith(('.title', '.loss')))

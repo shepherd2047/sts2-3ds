@@ -152,10 +152,7 @@ void App::startRun(bool resume) {
   mapScroll_ = 0;
   deckOpen_ = false;
   cardListMode_ = CardListMode::Deck;
-  detailCard_ = nullptr;
-  detailRelic_ = nullptr;
-  detailUpgrade_ = false;
-  detailKeyword_ = -1;
+  closeDetail();
   relicsOpen_ = false;
   settingsOpen_ = false;
   abandonConfirm_ = false;
@@ -188,8 +185,7 @@ void App::returnTitle(bool keepSave) {
   drag_ = {};
   deckOpen_ = relicsOpen_ = settingsOpen_ = abandonConfirm_ = mapView_ = devOpen_ = pauseOpen_ = topBarFocus_ = false;
   potionsOpen_ = false;
-  detailCard_ = nullptr;
-  detailRelic_ = nullptr;
+  closeDetail();
   titleCharacter_ = false;
   titleSelection_ = 0;
   menuSub_ = menuModal_ = 0;
@@ -232,10 +228,7 @@ void App::update(const gfx::Input& in, double dt) {
   if (scr != lastScreen_) {
     transitionT_ = 1.f;  // F6: fade through black on every screen change
     topBarFocus_ = false;  // S19: a new room takes the input back from the top bar
-    detailCard_ = nullptr;
-    detailRelic_ = nullptr;
-    detailUpgrade_ = false;
-    detailKeyword_ = -1;
+    closeDetail();
     if (cardListMode_ != CardListMode::Deck) { deckOpen_ = false; cardListMode_ = CardListMode::Deck; }
     sel_ = -1;
     scroll_ = 0;
@@ -284,6 +277,7 @@ void App::update(const gfx::Input& in, double dt) {
   }
 
   if (autoplay_) autoplay(visualDt);
+  if (detailOpen()) { updateDetail(in); return; }  // S20: the popup over every screen
   if (updateCardLibrary(in)) return;  // M8: over any page (main menu compendium, pause menu)
   if (updateRelicCollection(in)) return;  // M9: relic collection / potion lab
   if (updateBestiary(in)) return;     // M10
@@ -296,7 +290,6 @@ void App::update(const gfx::Input& in, double dt) {
     return;
   }
   if (devOpen_) { updateDev(in); return; }
-  if (detailCard_ || detailRelic_) { updateDetail(in); return; }
   if (run_->deckChoice.active) { updateDeckChoice(in); return; }
   // Y2: START opens the pause menu from any room of a run (its 地图 entry is the look-only map
   // that START used to open). While it is open, START resumes (updatePause) or closes the map.
@@ -392,12 +385,12 @@ void App::draw() {
     gfx::screen(top ? gfx::TOP : gfx::BOTTOM, 0x0B0B12FF);
     if (const char* m = getenv("STS_MOCK")) { drawStyleMock(std::atoi(m), top); continue; }
     if (drawBoot(top)) continue;
+    if (detailOpen()) { drawDetail(top); continue; }  // S20: the popup over every screen
     if (drawCardLibrary(top)) continue;  // M8
     if (drawRelicCollection(top)) continue;  // M9
     if (drawBestiary(top)) continue;     // M10
     if (settingsOpen_) { drawSettings(top); continue; }
     if (devOpen_) { drawDev(top); continue; }
-    if (detailCard_ || detailRelic_) { drawDetail(top); continue; }
     if (run_->deckChoice.active) { drawDeckChoice(top); continue; }
     if (mapView_) { drawMap(top); continue; }
     if (relicsOpen_) { drawRelics(top); continue; }

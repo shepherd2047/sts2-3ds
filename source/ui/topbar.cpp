@@ -150,7 +150,7 @@ int firstFocusable(const Layout& L, int group) {
 }  // namespace
 
 bool App::topBarActive() const {
-  return topBarFocus_ && barScreen(run_->screen) && !settingsOpen_ && !devOpen_ && !detailCard_ && !detailRelic_ &&
+  return topBarFocus_ && barScreen(run_->screen) && !settingsOpen_ && !devOpen_ && !detailOpen() &&
          !run_->deckChoice.active && !mapView_ && !relicsOpen_ && !deckOpen_ && !potionsOpen_ && !pauseOpen_;
 }
 
@@ -367,8 +367,7 @@ bool App::updateTopBar(const gfx::Input& in) {
       break;
     case Kind::Relic:
       sfx::click();
-      detailRelic_ = r.relics[it.index].get();
-      detailCard_ = nullptr;
+      inspectRelics(r.relics, it.index);  // S20 popup, prev/next through the owned relics
       break;
     case Kind::Deck:
       if (!(in.down & gfx::BTN_A)) break;

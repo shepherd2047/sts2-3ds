@@ -327,9 +327,9 @@ void App::updateShop(const gfx::Input& in) {
   int n = (int)r.shop.size();
   if ((in.down & gfx::BTN_X) && sel_ >= 0 && sel_ < n && r.shop[sel_].stocked()) {
     ShopItem& item = r.shop[sel_];
-    if (item.kind == ShopItem::CardItem) detailCard_ = item.card.get();
-    if (item.kind == ShopItem::RelicItem) detailRelic_ = item.relic.get();
-    detailUpgrade_ = false;
+    if (item.card) inspectCard(item.card.get());
+    else if (item.relic) inspectRelic(item.relic.get());
+    else if (item.potion) inspectPotion(item.potion.get());
     return;
   }
   if ((in.down & gfx::BTN_B) && sel_ >= 0) { sel_ = -1; widgets::setFocus(-1); }

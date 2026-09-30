@@ -101,7 +101,14 @@ void App::updateReward(const gfx::Input& in) {
   bool cardMode = !r.rewardCards.empty();
   if (cardMode && !rewardCardOpen_) sel_ = -1;  // a card row just opened: nothing focused yet
   rewardCardOpen_ = cardMode;
-  if (!cardMode) return;  // list mode: fully widget-driven from drawReward
+  if (!cardMode) {  // list mode: widget-driven from drawReward; X inspects the focused relic / potion (S20)
+    int f = widgets::focused() - 100;
+    if ((in.down & gfx::BTN_X) && f >= 0 && f < (int)r.rewardItems.size()) {
+      if (r.rewardItems[f].relic) inspectRelic(r.rewardItems[f].relic.get());
+      else if (r.rewardItems[f].potion) inspectPotion(r.rewardItems[f].potion.get());
+    }
+    return;
+  }
   if (!r.rewardChoice.waiting()) return;
   int pick = chooseOneUpdate(rewardChooseSpec(r), in);
   if (pick >= -1) r.rewardChoice.fire(pick);

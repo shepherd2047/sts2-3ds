@@ -25,8 +25,8 @@
 // list's order (the C# walks ModelDb.AllRelics); the Ancients' option lists are the relic types
 // each C# event file references (Neow.cs, Orobas.cs, ...), intersected with the Ancient rarity.
 // Keys: D-pad moves the focus (grid rows, down past the last row to the bar), L R jump to the
-// previous / next category, B back. Touch: tap an icon to focus it, drag the list to scroll, tap
-// the bar's buttons.
+// previous / next category, A inspect (S20 popup), B back. Touch: tap an icon to focus it (again to
+// inspect), drag the list to scroll, tap the bar's buttons.
 #include <algorithm>
 #include <cctype>
 #include <cmath>
@@ -623,6 +623,20 @@ bool App::updateRelicCollection(const gfx::Input& in) {
     else if (id == kBtnPrev) jumpSection(-1);
     else if (id == kBtnNext) jumpSection(1);
   };
+  auto inspect = [&](int sel) {  // S20: the detail popup, prev / next through the seen entries
+    std::vector<Relic*> rl;
+    std::vector<Potion*> pl;
+    int at = -1;
+    for (int k = 0; k < n; ++k) {
+      Entry& e = b.all[b.lines[b.pos[k].first].items[b.pos[k].second]];
+      if (!e.seen) continue;
+      if (k == sel) at = e.relic ? (int)rl.size() : (int)pl.size();
+      if (e.relic) rl.push_back(e.relic.get());
+      else if (e.potion) pl.push_back(e.potion.get());
+    }
+    if (at >= 0 && st.potions) inspectPotion(pl, at);
+    else if (at >= 0) inspectRelic(rl, at);
+  };
 
   // Touch: buttons on press; the list scrolls on drag, a tap focuses an icon.
   if (in.touchDown) {
@@ -648,6 +662,7 @@ bool App::updateRelicCollection(const gfx::Input& in) {
     st.touchDown = false;
     if (!st.dragged && st.touchItem >= 0 && itemAt((float)in.tx, (float)in.ty) == st.touchItem) {
       st.zone = 1;
+      if (st.sel == st.touchItem) inspect(st.sel);
       st.sel = st.touchItem;
     }
     return true;
@@ -660,6 +675,7 @@ bool App::updateRelicCollection(const gfx::Input& in) {
   if (d & gfx::BTN_R) { jumpSection(1); return true; }
   if (st.zone == 1) {
     if (n == 0) { st.zone = 2; return true; }
+    if (d & gfx::BTN_A) { inspect(st.sel); return true; }
     if (d & gfx::BTN_RIGHT) st.sel = std::min(n - 1, st.sel + 1);
     if (d & gfx::BTN_LEFT) st.sel = std::max(0, st.sel - 1);
     if ((d & gfx::BTN_DOWN) && !moveRow(1)) st.zone = 2;
