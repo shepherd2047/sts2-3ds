@@ -3,6 +3,7 @@
 #include "combat_internal.h"
 #include "../../core/char_necrobinder.h"
 #include "../../core/char_silent.h"
+#include "../vfx.h"
 
 namespace ui {
 
@@ -317,6 +318,186 @@ void App::drawStatusBar(float y) {
     if (!other.empty()) spr(R().sprite(other), ix, y + 1, 21, 21);
     R().text(ix + 24, y + 4, "安全", ts(F12, 0x80C8FFFF, LEFT));
   }
+}
+
+// ================================================================ F7 light combat VFX
+
+namespace {
+
+constexpr uint32_t kOstyRgb = 0x70FFC800;  // Osty's soul fire (osty_fire_shape, teal-green)
+constexpr int kMaxTracked = 12;
+
+// UI-side memory the VisualEvent stream does not carry: whether the damage that just arrived
+// belongs to an attack (a Hit shortly before), who had poison / a Burn in hand last frame (a tick
+// can remove the last stack before the event is drained), the orbs / stars / Osty of the last
+// frame (to see an evoke, a star gain, a summon), and a per-creature arrow throttle.
+struct VfxState {
+  float clock = 0;
+  float hitWindow = 0;
+  Creature* hitBy = nullptr;
+  const Creature* poisoned[kMaxTracked] = {};
+  int nPoisoned = 0;
+  bool burnInHand = false;
+  const Orb* orbs[kMaxTracked] = {};
+  uint32_t orbRgb[kMaxTracked] = {};
+  int nOrbs = -1;  // -1: not seen yet this fight (no burst for the starting orbs)
+  int stars = -1;
+  const Creature* osty = nullptr;
+  int ostyMax = 0;
+  struct Recent {
+    const Creature* who = nullptr;
+    bool buff = false;
+    float t = -10;
+  } recent[8];
+};
+VfxState& vfxState() {
+  static VfxState s;
+  return s;
+}
+
+// NOrbVfx colours per orb id ("LightningOrb", ...).
+uint32_t orbColour(const std::string& id) {
+  if (id.rfind("Lightning", 0) == 0) return 0xFFF08C00;
+  if (id.rfind("Frost", 0) == 0) return 0x8CD8FF00;
+  if (id.rfind("Dark", 0) == 0) return 0xB070FF00;
+  if (id.rfind("Plasma", 0) == 0) return 0xFF9CE000;
+  if (id.rfind("Glass", 0) == 0) return 0xA8FFF000;
+  return 0xFFFFFF00;
+}
+
+}  // namespace
+
+void App::vfxReset() {
+  vfxState() = VfxState{};
+  vfx::clear();
+}
+
+void App::updateVfx(float dt) {
+  VfxState& s = vfxState();
+  s.clock += dt;
+  s.hitWindow = std::max(0.f, s.hitWindow - dt);
+  vfx::update(dt);
+}
+
+void App::vfxEvent(const VisualEvent& e) {
+  Combat* cb = run_->combat.get();
+  if (!cb) return;
+  VfxState& s = vfxState();
+  float x = 0, y = 0, h = 50;
+  auto at = [&](Creature* c) {
+    if (!c) return false;
+    auto it = centers_.find(c);
+    if (it == centers_.end()) return false;
+    x = it->second.first;
+    y = it->second.second;
+    Sprite sp = R().sprite("creature/" + (c->isPlayer ? playerArt(run_.get()) : c->name));
+    h = sp ? std::clamp(sp.h, 30.f, 110.f) : 50.f;
+    return true;
+  };
+  switch (e.kind) {
+    case VisualEvent::Hit:  // AttackCommand: the damage of this swing follows within ~0.15 s
+      s.hitWindow = 0.6f;
+      s.hitBy = e.who;
+      break;
+    case VisualEvent::Damage: {
+      if (e.amount <= 0 || !at(e.who)) break;
+      bool poisoned = e.who->get<PoisonPower>() != nullptr;
+      for (int i = 0; i < s.nPoisoned && !poisoned; ++i) poisoned = s.poisoned[i] == e.who;
+      if (s.hitWindow > 0 && e.who != s.hitBy) {
+        const uint32_t tint = s.hitBy && s.hitBy == cb->osty ? kOstyRgb : e.who->isPlayer ? 0xFFB09000 : 0xFFF8E800;
+        vfx::hit(x, y, e.amount, tint);
+      } else if (poisoned) {
+        vfx::poisonTick(x, y, h);
+      } else if (e.who->isPlayer && s.burnInHand) {
+        vfx::burnTick(x, y, h);
+      } else {
+        vfx::puff(x, y, 0xFF805000);
+      }
+      break;
+    }
+    case VisualEvent::Blocked:
+      if (at(e.who)) vfx::blocked(x, y);
+      break;
+    case VisualEvent::BlockBroken:
+      if (at(e.who)) vfx::blockBroken(x, y);
+      break;
+    case VisualEvent::Block:
+      if (e.amount > 0 && at(e.who)) vfx::blockGain(x, y);
+      break;
+    case VisualEvent::Heal:
+      if (e.amount > 0 && at(e.who)) vfx::heal(x, y, h);
+      break;
+    case VisualEvent::PowerUp:
+    case VisualEvent::PowerDown: {
+      if (!at(e.who)) break;
+      // PowerUp also reports a stack growing (poison +3), so judge the power itself when present.
+      bool buff = e.kind == VisualEvent::PowerUp;
+      for (auto& p : e.who->powers)
+        if (p->locKey == e.text) { buff = p->type() != PowerType::Debuff; break; }
+      // One volley per creature and direction every 0.3 s (a card applying three powers at once).
+      int slot = 0;
+      for (int i = 0; i < 8; ++i) {
+        if (s.recent[i].who == e.who && s.recent[i].buff == buff) { slot = i; break; }
+        if (s.recent[i].t < s.recent[slot].t) slot = i;
+      }
+      if (s.recent[slot].who == e.who && s.recent[slot].buff == buff && s.clock - s.recent[slot].t < 0.3f) break;
+      s.recent[slot] = {e.who, buff, s.clock};
+      vfx::powerArrows(x, y, h, buff);
+      break;
+    }
+    case VisualEvent::Death:
+      if (e.who && e.who == cb->osty && at(e.who)) vfx::soul(x, y, h, kOstyRgb);
+      break;
+    default:
+      break;
+  }
+}
+
+void App::drawVfx(Combat& cb) {
+  VfxState& s = vfxState();
+  // Poison / Burn memory for the next frame's events.
+  s.nPoisoned = 0;
+  auto notePoison = [&](Creature* c) {
+    if (c && s.nPoisoned < kMaxTracked && c->get<PoisonPower>()) s.poisoned[s.nPoisoned++] = c;
+  };
+  notePoison(cb.player);
+  for (Creature* e : cb.enemies) notePoison(e);
+  s.burnInHand = false;
+  for (Card* c : cb.hand) s.burnInHand = s.burnInHand || c->id == "Burn";
+
+  // X2: an orb that left the queue was evoked; burst at the slot it sat in (combat_ui.cpp layout).
+  const int nOrbs = std::min((int)cb.orbQueue.size(), kMaxTracked);
+  if (s.nOrbs >= 0) {
+    for (int i = 0; i < s.nOrbs; ++i) {
+      bool still = false;
+      for (int j = 0; j < nOrbs && !still; ++j) still = cb.orbQueue[j].get() == s.orbs[i];
+      if (!still) vfx::orbEvoke(4 + i * 24.f + 10, 24 + 10, s.orbRgb[i]);
+    }
+  }
+  for (int i = 0; i < nOrbs; ++i) {
+    if (s.nOrbs < 0 || i >= s.nOrbs || s.orbs[i] != cb.orbQueue[i].get()) s.orbRgb[i] = orbColour(cb.orbQueue[i]->id);
+    s.orbs[i] = cb.orbQueue[i].get();
+  }
+  s.nOrbs = nOrbs;
+
+  // X3: Regent stars gained.
+  if (s.stars >= 0 && cb.stars > s.stars && centers_.count(cb.player)) {
+    auto [px, py] = centers_[cb.player];
+    vfx::stars(px, py - 10, cb.stars - s.stars);
+  }
+  s.stars = cb.stars;
+
+  // X4: Osty summoned (appears or its max HP grows).
+  Creature* osty = cb.osty && !cb.osty->removed && cb.osty->alive() ? cb.osty : nullptr;
+  if (osty && (osty != s.osty || osty->maxHp > s.ostyMax) && centers_.count(osty)) {
+    Sprite sp = R().sprite("creature/" + osty->name);
+    auto [ox, oy] = centers_[osty];
+    vfx::soul(ox, oy, sp ? std::clamp(sp.h, 30.f, 110.f) : 50.f, kOstyRgb);
+  }
+  s.osty = osty;
+  s.ostyMax = osty ? osty->maxHp : 0;
+
+  vfx::draw();
 }
 
 }  // namespace ui

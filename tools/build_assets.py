@@ -719,6 +719,69 @@ def bake_treasure_chests(g, packer):
         packer.add(f'treasure/chest{act}_open', fit(box, (w, h)))
 
 
+def add_vfx_art(g, packer, known):
+    """F7 light combat VFX (source/ui/vfx.cpp): a handful of tiny white/tintable particle sprites
+    from the game's own single-image VFX textures, plus two procedural shapes (arrow, ring). They
+    are composed into one small sheet (104x66, ~27 KB RGBA8) packed as a single atlas entry so all
+    of them share one page (one texture per particle batch); each keeps its own vfx/<name> entry
+    pointing into the sheet."""
+    if 'vfx/sheet' in known:
+        return
+    cells = []
+    sprites = (
+        ('vfx/slash', 'images/packed/vfx/combat/slice_thin_vfx.png', (10, 64)),  # NSlashVfx streak
+        ('vfx/glow', 'images/packed/vfx/generic/round_glow.png', (32, 32)),     # flashes, orb burst
+        ('vfx/spark', 'images/packed/vfx/generic/sparkle_2.png', (16, 16)),     # NHitSparkVfx / heal
+        ('vfx/flame', 'images/vfx/fire/flame_paricle_tex.png', (16, 16)),       # burn tick
+        ('vfx/star', 'images/vfx/characters/regent_sparkle.png', (12, 18)),     # NRegentVfx sparkle
+        ('vfx/bubble', 'images/vfx/bubble_particle.png', (12, 12)),             # NPoisonImpactVfx
+        ('vfx/dot', 'images/vfx/dot.png', (8, 8)),                              # specks, embers
+    )
+    for name, path, size in sprites:
+        try:
+            img = g.image(path).convert('RGBA')
+        except Exception as e:  # a missing source must not break the whole build
+            print('  vfx art missing', name, path, e)
+            img = Image.new('RGBA', size, (255, 255, 255, 0))
+        cells.append((name, fit(img, size)))
+    ss = 4  # procedural shapes are drawn at 4x, then downsampled (anti-aliasing)
+    # NPowerAppliedBuff/DebuffVfx arrow: white with a dark rim, tinted per use.
+    w, h = 16, 19  # shape designed on a 12x14 grid
+    kx, ky = w * ss / 12, h * ss / 14
+    big = Image.new('RGBA', (w * ss, h * ss), (0, 0, 0, 0))
+    d = ImageDraw.Draw(big)
+    outer = [(6, 0.5), (11.5, 6.5), (8, 6.5), (8, 13.5), (4, 13.5), (4, 6.5), (0.5, 6.5)]
+    inner = [(6, 2.1), (9.8, 5.9), (7.1, 5.9), (7.1, 12.7), (4.9, 12.7), (4.9, 5.9), (2.2, 5.9)]
+    d.polygon([(x * kx, y * ky) for x, y in outer], fill=(30, 20, 10, 255))
+    d.polygon([(x * kx, y * ky) for x, y in inner], fill=(255, 255, 255, 255))
+    cells.append(('vfx/arrow', big.resize((w, h), Image.LANCZOS)))
+    # Evoke / block shockwave ring.
+    n = 32
+    big = Image.new('RGBA', (n * ss, n * ss), (0, 0, 0, 0))
+    ImageDraw.Draw(big).ellipse((2 * ss, 2 * ss, (n - 2) * ss - 1, (n - 2) * ss - 1),
+                                outline=(255, 255, 255, 255), width=3 * ss)
+    cells.append(('vfx/ring', big.resize((n, n), Image.LANCZOS)))
+    # Shelf layout inside the sheet, 2 px apart so bilinear filtering never bleeds.
+    gap, width = 2, 104
+    x = y = rowh = 0
+    placed = []
+    for name, img in sorted(cells, key=lambda c: -c[1].height):
+        if x + img.width > width:
+            x, y, rowh = 0, y + rowh + gap, 0
+        placed.append((name, img, x, y))
+        x += img.width + gap
+        rowh = max(rowh, img.height)
+    sheet = Image.new('RGBA', (width, y + rowh), (0, 0, 0, 0))
+    for name, img, cx, cy in placed:
+        sheet.paste(img, (cx, cy))
+    packer.add('vfx/sheet', sheet)
+    known.add('vfx/sheet')
+    _, page, sx, sy = packer.entries[-1][:4]
+    for name, img, cx, cy in placed:
+        packer.entries.append((name, page, sx + cx, sy + cy, img.width, img.height, 0, 0))
+        known.add(name)
+
+
 def add_ui_art(g, a, packer, known):
     """Buttons, panels, top bar, controls, reward / rest icons, character orbs and icons.
     Names are ui/<name>; sizes are chosen for the 400x240 / 320x240 screens (docs/UI_STYLE.md)."""
@@ -887,6 +950,7 @@ def add_ui_art(g, a, packer, known):
             packer.add(f'ui/energy_orb_{c}', fit(orb, (44, 44)))
             known.add(f'ui/energy_orb_{c}')
     put('ui/star', 'ui/combat/energy_star.png', (24, 24))
+    add_vfx_art(g, packer, known)
     for o in ('dark', 'empty', 'frost', 'glass', 'lightning', 'plasma'):
         put('orb/' + o, f'orbs/{o}_orb.png', (32, 32))
     # Intents not used by the ported monsters yet

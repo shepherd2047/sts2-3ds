@@ -305,6 +305,12 @@ class App {
   void drawBossPreview();  // C11: NTopBarBossIcon on the map's top screen
   void drawStatusBar(float y);
   void drawCreature(sts::Creature* c, float x, float feetY, bool targeted);
+  // F7 light combat VFX (vfx.h; wiring in combat_scene.cpp): reset on a new fight, tick with the
+  // visual dt, spawn from the VisualEvent hook, draw (plus orb / star / Osty diffs) on the top screen.
+  void vfxReset();
+  void updateVfx(float dt);
+  void vfxEvent(const sts::VisualEvent& e);
+  void drawVfx(sts::Combat& cb);
   // `unseen` (M8 card library, ModelVisibility.NotSeen): darkened portrait, 未知 title, "?" cost, ？？？ text.
   void drawCard(sts::Card* c, float x, float y, float s, bool dim = false, bool desc = false, bool selected = false,
                 bool unseen = false);
