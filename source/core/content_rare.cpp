@@ -320,6 +320,8 @@ struct TearAsunder : IroncladT<TearAsunder> {
   CARD_HEADER(TearAsunder, "TEAR_ASUNDER", 2, Attack, Rare, AnyEnemy)
     addVar("Damage", 5);
     addVar("Repeat", 1);
+    addVar("CalculationBase", 0);
+    addVar("CalculationExtra", 1);
     addVar("CalculatedHits", 1);  // shown in the description during combat
   }
   Task<> afterDamageReceived(Creature* target, const DamageResult& r, int, Creature*, Card*) override {
@@ -339,7 +341,6 @@ struct TearAsunder : IroncladT<TearAsunder> {
 // (a var this engine doesn't have) is treated the same as "no matching var".
 struct Thrash : IroncladT<Thrash> {
   CARD_HEADER(Thrash, "THRASH", 1, Attack, Rare, AnyEnemy)
-    keywords = kwExhaust;
     addVar("Damage", 4);
   }
   Task<> onPlay(CardPlay& p) override {

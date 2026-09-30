@@ -66,6 +66,7 @@ struct Bully : IroncladT<Bully> {
   CARD_HEADER(Bully, "BULLY", 0, Attack, Uncommon, AnyEnemy)
     addVar("CalculationBase", 4);
     addVar("ExtraDamage", 2);
+    addVar("CalculatedDamage", 0);  // the multiplier needs the target (Vulnerable): 0 in the hand, as Calculate(null)
   }
   Task<> onPlay(CardPlay& p) override {
     Dec dmg = val("CalculationBase") + val("ExtraDamage") * Dec(p.target->powerAmount<VulnerablePower>());
@@ -137,7 +138,6 @@ struct Dismantle : IroncladT<Dismantle> {
 
 struct DrumOfBattle : IroncladT<DrumOfBattle> {
   CARD_HEADER(DrumOfBattle, "DRUM_OF_BATTLE", 1, Skill, Uncommon, Self)
-    keywords = kwExhaust;
     addVar("Cards", 2);
     addVar("Energy", 2);
   }
@@ -235,9 +235,8 @@ struct Hemokinesis : IroncladT<Hemokinesis> {
   void onUpgrade() override { upgradeVar("Damage", 5); }
 };
 
-// PORT NOTE: the decompile's CanonicalKeywords override wasn't present, but
-// ExtraHoverTips advertises Exhaust and AfterAutoPostPlayPhaseEntered only
-// makes sense for a card that exhausts, so Exhaust is added here to match.
+// HowlFromBeyond.cs: no Exhaust keyword of its own (the hover tip explains Exhaust): after the
+// auto-post-play phase it plays itself again while it sits in the Exhaust pile.
 struct HowlFromBeyond : IroncladT<HowlFromBeyond> {
   CARD_HEADER(HowlFromBeyond, "HOWL_FROM_BEYOND", 3, Attack, Uncommon, AllEnemies)
     addVar("Damage", 18);
