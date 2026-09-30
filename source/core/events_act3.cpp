@@ -81,10 +81,10 @@ struct Doubt : IroncladT<Doubt> {
   Task<> onTurnEndInHand() override { co_await applyPower<WeakPower>(me(), val("WeakPower"), nullptr, this); }
 };
 
-// BadLuck.cs. PORT NOTE: no Eternal keyword (it can be removed from the deck).
+// BadLuck.cs (Eternal: it cannot be removed from the deck).
 struct BadLuck : IroncladT<BadLuck> {
   CARD_HEADER(BadLuck, "BAD_LUCK", -1, Curse, Curse, None)
-    keywords = kwUnplayable;
+    keywords = kwUnplayable | kwEternal;
     maxUpgradeLevel = 0;
     addVar("HpLoss", 13);
   }
@@ -343,7 +343,6 @@ struct BattlewornDummy : Event {
     setFinished("VICTORY");
     if (level == 1) {
       // Character potion pool + SharedPotionPool, one NextItem from the Rewards stream.
-      // PORT NOTE: only registered potions are in the list.
       std::vector<std::string> items;
       for (auto& id : db::potionPool(run->characterId)) if (db::potion(id)) items.push_back(id);
       std::string pick = run->rng("Rewards").nextItem(items);

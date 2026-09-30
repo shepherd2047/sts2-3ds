@@ -16,15 +16,14 @@ namespace {
 // CallOfTheVoidPower.cs: Buff, Counter. Before each hand draw, add Amount random Ethereal cards
 // from the character's pool (not Basic / Ancient) to the hand.
 // PORT NOTE: CardFactory.GetDistinctForCombat is approximated by drawing an id per card from
-// CombatCardGeneration (like BigHat's shuffle approximation); CanBeGeneratedInCombat == false
-// (Eidolon, Transfigure) is a hard-coded exclusion since Card has no such flag. Unlike the C#, the
-// cards are not guaranteed distinct from each other.
+// CombatCardGeneration (like BigHat's shuffle approximation). Unlike the C#, the cards are not
+// guaranteed distinct from each other.
 struct CallOfTheVoidPower : Power {
   POWER_HEADER(CallOfTheVoidPower, "CALL_OF_THE_VOID_POWER")
   Task<> beforeHandDraw() override {
     Combat* c = owner->combat;
     auto ids = db::characterCards(c->run->characterId, [](const Card& k) {
-      return k.rarity != Rarity::Basic && k.rarity != Rarity::Ancient && k.id != "Eidolon" && k.id != "Transfigure";
+      return k.rarity != Rarity::Basic && k.rarity != Rarity::Ancient && k.canBeGeneratedInCombat();
     });
     if (ids.empty()) co_return;
     std::vector<std::unique_ptr<Card>> made;
@@ -210,8 +209,8 @@ struct DevourLife : IroncladT<DevourLife> {
 };
 
 // Eidolon.cs: Exhaust, auto-play every Ethereal, non-Unplayable card in the exhaust pile.
-// PORT NOTE: CanBeGeneratedInCombat == false is not modelled on Card (see CallOfTheVoidPower).
 struct Eidolon : IroncladT<Eidolon> {
+  bool canBeGeneratedInCombat() const override { return false; }
   CARD_HEADER(Eidolon, "EIDOLON", 2, Skill, Rare, Self)
     keywords = kwExhaust;
   }
@@ -511,9 +510,9 @@ struct TimesUp : IroncladT<TimesUp> {
 
 // Transfigure.cs: Exhaust (removed on upgrade). Choose a card in hand: it costs 1 more this combat
 // (unless X-cost / Unplayable) and gains +1 replay.
-// PORT NOTE: CanBeGeneratedInCombat == false is not modelled on Card (see CallOfTheVoidPower); the
-// prompt key is this card's own (SelectionScreenPrompt).
+// The prompt key is this card's own (SelectionScreenPrompt).
 struct Transfigure : IroncladT<Transfigure> {
+  bool canBeGeneratedInCombat() const override { return false; }
   CARD_HEADER(Transfigure, "TRANSFIGURE", 1, Skill, Rare, Self)
     keywords = kwExhaust;
     addVar("Energy", 1);

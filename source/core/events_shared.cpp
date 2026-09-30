@@ -289,9 +289,11 @@ struct ThisOrThat : Event {
 // RanwidTheElder.cs (acts 2-3): trade a potion, 100 gold or a relic for a relic.
 struct RanwidTheElder : Event {
   EVENT_HEADER(RanwidTheElder, "RANWID_THE_ELDER")
-  // PORT NOTE: C# also requires a potion in the belt; potions are not ported, so that check
-  // is dropped and the POTION option is always locked.
-  bool isAllowed(Run& r) override { return actIndex(r) > 0 && !tradableRelics(r).empty() && r.gold >= 100; }
+  bool isAllowed(Run& r) override {
+    bool potion = false;
+    for (auto& p : r.potions) if (p) potion = true;
+    return actIndex(r) > 0 && !tradableRelics(r).empty() && r.gold >= 100 && potion;
+  }
   void calculateVars() override {
     addVar("Gold", 100);
     setStr("Potion", "Potion");
@@ -299,7 +301,20 @@ struct RanwidTheElder : Event {
   }
   std::vector<EventOption> initialOptions() override {
     std::vector<EventOption> o;
-    o.push_back(EventOption{page("INITIAL") + ".options.POTION_LOCKED", nullptr});
+    std::vector<Potion*> held;
+    for (auto& p : run->potions) if (p) held.push_back(p.get());
+    Potion* potion = rng().nextItem(held);
+    if (potion) {
+      setStr("Potion", "potions." + potion->locKey + ".title");
+      o.push_back(option("INITIAL", "POTION", [this, potion]() -> Task<> {
+        for (size_t i = 0; i < run->potions.size(); ++i)
+          if (run->potions[i].get() == potion) { run->discardPotion((int)i); break; }
+        co_await run->obtainRelic(pullRelic(*run));
+        setFinished("POTION");
+      }));
+    } else {
+      o.push_back(EventOption{page("INITIAL") + ".options.POTION_LOCKED", nullptr});
+    }
     o.push_back(option("INITIAL", "GOLD", [this]() -> Task<> {
       run->gold -= val("Gold").toInt();
       co_await run->obtainRelic(pullRelic(*run));

@@ -418,12 +418,13 @@ struct ThievingHopper : Monster {
     machine.start(thievery);
   }
 
-  // Steal priorities: Uncommon, then Common/Rare, then Basic, then Ancient.
-  // PORT NOTE: combat cards are clones of the deck cards with no link back, so a card is
-  // stealable only if the run's deck holds a copy with the same id and upgrade level;
-  // enchantments (Imbued) do not exist here.
-  static int stealTier(Rarity r) {
-    switch (r) {
+  // _stealPriorities: Uncommon, then Common/Rare(/Event), then Basic(/Quest), then Ancient or
+  // Imbued (the first three skip Imbued cards). Only cards with a DeckVersion can be stolen.
+  // PORT NOTE: CardRarity.Event / Quest have no counterpart (event cards are Token or Ancient
+  // here), so an event card falls to the Ancient tier or to no tier.
+  static int stealTier(const Card& c) {
+    if (c.enchantment && c.enchantment->id == "Imbued") return 3;
+    switch (c.rarity) {
       case Rarity::Uncommon: return 0;
       case Rarity::Common: case Rarity::Rare: return 1;
       case Rarity::Basic: return 2;
@@ -431,26 +432,21 @@ struct ThievingHopper : Monster {
       default: return -1;
     }
   }
-  static Card* deckCopy(Run& run, Card* c) {
-    for (auto& d : run.deck) if (d->id == c->id && d->upgradeLevel == c->upgradeLevel) return d.get();
-    return nullptr;
-  }
   Task<> thieveryMove(Targets targets) {
     Run* run = combat->run;
     std::unique_ptr<Card> stolen;
     if (combat->player->alive() && run) {
       std::vector<Card*> pool;
-      for (Card* c : combat->draw) pool.push_back(c);
-      for (Card* c : combat->discard) pool.push_back(c);
+      for (Card* c : combat->draw) if (c->deckVersion.p) pool.push_back(c);
+      for (Card* c : combat->discard) if (c->deckVersion.p) pool.push_back(c);
       std::vector<Card*> chosen;
       for (int tier = 0; tier < 4 && chosen.empty(); ++tier)
         for (Card* c : pool)
-          if (stealTier(c->rarity) == tier && deckCopy(*run, c)) chosen.push_back(c);
-      if (chosen.empty())
-        for (Card* c : pool) if (deckCopy(*run, c)) chosen.push_back(c);
+          if (stealTier(*c) == tier) chosen.push_back(c);
+      if (chosen.empty()) chosen = pool;
       if (!chosen.empty()) {
         Card* pick = combat->rng("CombatCardGeneration").nextItem(chosen);
-        Card* deckCard = deckCopy(*run, pick);
+        Card* deckCard = pick->deckVersion.p;
         for (auto it = run->deck.begin(); it != run->deck.end(); ++it)
           if (it->get() == deckCard) { stolen = std::move(*it); run->deck.erase(it); break; }
         combat->removeFromPiles(pick);  // CardPileCmd.RemoveFromCombat

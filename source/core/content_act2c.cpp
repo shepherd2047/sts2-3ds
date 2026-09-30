@@ -218,6 +218,7 @@ struct WasteAwayPower : Power {
 // The four curses Knowledge Demon offers are picked on a card screen and take effect when
 // chosen (KnowledgeDemon.IChoosable.OnChosen); they never enter a pile.
 struct Disintegration : IroncladT<Disintegration> {
+  bool canBeGeneratedInCombat() const override { return false; }
   CARD_HEADER(Disintegration, "DISINTEGRATION", -1, Status, Status, None)
     maxUpgradeLevel = 0;
     addVar("DisintegrationPower", 6);
@@ -225,6 +226,7 @@ struct Disintegration : IroncladT<Disintegration> {
 };
 
 struct MindRot : IroncladT<MindRot> {
+  bool canBeGeneratedInCombat() const override { return false; }
   CARD_HEADER(MindRot, "MIND_ROT", -1, Status, Status, None)
     maxUpgradeLevel = 0;
     addVar("MindRotPower", 1);
@@ -232,6 +234,7 @@ struct MindRot : IroncladT<MindRot> {
 };
 
 struct Sloth : IroncladT<Sloth> {
+  bool canBeGeneratedInCombat() const override { return false; }
   CARD_HEADER(Sloth, "SLOTH", -1, Status, Status, None)
     maxUpgradeLevel = 0;
     addVar("SlothPower", 3);
@@ -239,6 +242,7 @@ struct Sloth : IroncladT<Sloth> {
 };
 
 struct WasteAway : IroncladT<WasteAway> {
+  bool canBeGeneratedInCombat() const override { return false; }
   CARD_HEADER(WasteAway, "WASTE_AWAY", -1, Status, Status, None)
     maxUpgradeLevel = 0;
     addVar("WasteAwayPower", 1);
@@ -247,6 +251,7 @@ struct WasteAway : IroncladT<WasteAway> {
 
 // Playing it buys one more turn in the Insatiable's sandpit and makes it cost 1 more.
 struct FranticEscape : IroncladT<FranticEscape> {
+  bool canBeGeneratedInCombat() const override { return false; }
   CARD_HEADER(FranticEscape, "FRANTIC_ESCAPE", 1, Status, Status, Self)
     maxUpgradeLevel = 0;
   }

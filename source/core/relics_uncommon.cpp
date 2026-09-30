@@ -230,10 +230,8 @@ struct Orichalcum : Relic {
   }
   bool shouldTrigger = false;
 
-  // PORT NOTE: C# uses a "very early" hook so this checks Block before
-  // PlatingPower would react; no Defect power exists in this port yet, so
-  // beforeSideTurnEndEarly is an exact stand-in.
-  Task<> beforeSideTurnEndEarly(Side, const std::vector<Creature*>& participants) override {
+  // BeforeSideTurnEndVeryEarly: checks Block before PlatingPower reacts.
+  Task<> beforeSideTurnEndVeryEarly(Side, const std::vector<Creature*>& participants) override {
     if (!contains(participants, owner()) || owner()->block > 0) return {};
     shouldTrigger = true;
     return {};

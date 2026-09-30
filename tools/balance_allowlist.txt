@@ -1,0 +1,19 @@
+# tools/balance_check.py: intentional or unfixable differences from the C# models.
+# <key>  # reason        (keys as printed by the check; * and ? wildcards allowed)
+
+# The port has no CardType.Quest (A2: needs a "?"-room hook and the act-map rewrite); quest cards are
+# unplayable Status cards until then.
+card ByrdonisEgg.type    # no CardType::Quest yet (A2)
+card Dowsing.type        # no CardType::Quest yet (A2)
+card LanternKey.type     # no CardType::Quest yet (A2)
+card SpoilsMap.type      # no CardType::Quest yet (A2)
+
+# MadScience (TinkerTime): the chosen type / rider are [SavedProperty] fields and AddExtraArgsToDescription
+# arguments in the C#; the port keeps them as vars so run.sav and the description formatter see them.
+card MadScience.vars+*   # TinkerTime state + description args stored as vars (saves, cardtext)
+
+# SeaGlass: the C# StringVar "Character" (a name) is a character index here, set by Orobas, saved with the relic.
+relic SeaGlass.vars+CharacterIndex   # character stored as an index (StringVar in the C#)
+
+# FairyInABottle heals MaxHp * 0.3 (a literal in OnUse); the port names the 30 for the description.
+potion FairyInABottle.vars+HealPercent   # literal 0.3 in the C# OnUse, a var here

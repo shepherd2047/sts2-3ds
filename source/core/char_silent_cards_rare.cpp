@@ -372,9 +372,8 @@ struct Murder : IroncladT<Murder> {
 };
 
 // Nightmare.cs: Exhaust; choose a card in hand, 3 copies of it join the next hand.
-// PORT NOTE: CanBeGeneratedInCombat => false has no card-level hook here (nothing generates
-// Silent cards at random in combat yet).
 struct Nightmare : IroncladT<Nightmare> {
+  bool canBeGeneratedInCombat() const override { return false; }
   CARD_HEADER(Nightmare, "NIGHTMARE", 3, Skill, Rare, Self)
     keywords = kwExhaust;
   }
@@ -448,10 +447,10 @@ struct StormOfSteel : IroncladT<StormOfSteel> {
 };
 
 // TheHunt.cs: Exhaust; on a fatal hit an extra 3-card reward is added and TheHuntPower marks it.
-// PORT NOTE: CanBeGeneratedInCombat => false has no card-level hook; the "current room is a combat
-// room" check is always true here (event fights also give rewards); the reward is queued through
+// PORT NOTE: the "current room is a combat room" check is always true here (event fights also give rewards); the reward is queued through
 // Run::bonusCardRewards and rolled by combatRewards for the room type.
 struct TheHunt : IroncladT<TheHunt> {
+  bool canBeGeneratedInCombat() const override { return false; }
   CARD_HEADER(TheHunt, "THE_HUNT", 1, Attack, Rare, AnyEnemy)
     keywords = kwExhaust;
     addVar("Damage", 10);

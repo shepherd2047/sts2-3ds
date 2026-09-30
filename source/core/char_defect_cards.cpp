@@ -74,6 +74,10 @@ struct BallLightning : IroncladT<BallLightning> {
 struct Barrage : IroncladT<Barrage> {
   CARD_HEADER(Barrage, "BARRAGE", 1, Attack, Common, AnyEnemy)
     addVar("Damage", 5);
+    addVar("CalculationBase", 0);
+    addVar("CalculationExtra", 1);
+    addVar("CalculatedHits", 0);
+    calcMultiplier = [](Card* c) { return c->combat ? (int)c->combat->orbQueue.size() : 0; };
   }
   Task<> onPlay(CardPlay& p) override { co_await attack(p.target, val("Damage"), (int)combat->orbQueue.size()); }
   void onUpgrade() override { upgradeVar("Damage", 2); }
@@ -151,6 +155,14 @@ struct ColdSnap : IroncladT<ColdSnap> {
 struct CompileDriver : IroncladT<CompileDriver> {
   CARD_HEADER(CompileDriver, "COMPILE_DRIVER", 1, Attack, Common, AnyEnemy)
     addVar("Damage", 7);
+    addVar("CalculationBase", 0);
+    addVar("CalculationExtra", 1);
+    addVar("CalculatedCards", 0);
+    calcMultiplier = [](Card* c) {
+      std::set<std::string> distinct;
+      if (c->combat) for (auto& o : c->combat->orbQueue) distinct.insert(o->id);
+      return (int)distinct.size();
+    };
   }
   Task<> onPlay(CardPlay& p) override {
     co_await attack(p.target, val("Damage"));
@@ -260,11 +272,8 @@ struct LightningRod : IroncladT<LightningRod> {
   void onUpgrade() override { upgradeVar("Block", 3); }
 };
 
-// MomentumStrike.cs: Strike-tagged attack that becomes 0-cost for the rest of combat.
-// PORT NOTE: the C#'s EnergyCost.SetThisCombat(0) is a per-instance override that resets when
-// the card leaves combat; this engine has no separate "this combat" cost slot, so the card's
-// own `cost` field (persistent for its lifetime, reset only by clone()/upgrade rebuilding a
-// fresh instance) is set directly -- equivalent for the rest of the current fight.
+// MomentumStrike.cs: Strike-tagged attack that becomes 0-cost for the rest of combat
+// (EnergyCost.SetThisCombat(0)).
 struct MomentumStrike : IroncladT<MomentumStrike> {
   CARD_HEADER(MomentumStrike, "MOMENTUM_STRIKE", 1, Attack, Common, AnyEnemy)
     tags = tagStrike;
@@ -272,7 +281,7 @@ struct MomentumStrike : IroncladT<MomentumStrike> {
   }
   Task<> onPlay(CardPlay& p) override {
     co_await attack(p.target, val("Damage"));
-    cost = 0;
+    setThisCombat(0);
   }
   void onUpgrade() override { upgradeVar("Damage", 4); }
 };

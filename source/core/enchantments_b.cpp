@@ -46,8 +46,7 @@ struct Adroit : EnchantmentT<Adroit> {
   }
 };
 
-// Clone.cs: does nothing itself; the CLONE rest site option (Pael's Growth) looks for it.
-// PORT NOTE: CloneRestSiteOption and the PaelsGrowth relic that offers it are not ported yet.
+// Clone.cs: does nothing itself; the CLONE rest site option (Pael's Growth, Run::restSite) looks for it.
 struct Clone : EnchantmentT<Clone> {
   ENCHANTMENT_HEADER(Clone, "CLONE")
   }

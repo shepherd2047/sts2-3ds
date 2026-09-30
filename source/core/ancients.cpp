@@ -43,6 +43,7 @@ Card* basicWithTag(Run& r, int tag, bool last) {
 
 // NeowsFury.cs: 10 damage, then put up to 2 cards from the discard pile into your hand.
 struct NeowsFury : IroncladT<NeowsFury> {
+  bool canBeGeneratedInCombat() const override { return false; }
   CARD_HEADER(NeowsFury, "NEOWS_FURY", 1, Attack, Ancient, AnyEnemy)
     keywords = kwExhaust;
     addVar("Damage", 10);
@@ -61,10 +62,10 @@ struct NeowsFury : IroncladT<NeowsFury> {
   }
 };
 
-// Greed.cs. PORT NOTE: no Eternal keyword here, so it can be removed like other curses.
+// Greed.cs (Eternal: it cannot be removed from the deck).
 struct Greed : IroncladT<Greed> {
   CARD_HEADER(Greed, "GREED", -1, Curse, Curse, None)
-    keywords = kwUnplayable;
+    keywords = kwUnplayable | kwEternal;
     maxUpgradeLevel = 0;
   }
 };
@@ -318,11 +319,8 @@ struct PrecariousShears : Relic {
 namespace {
 // Neow.PositiveOptions / CurseOptions and the coin-flip extras, as in the C#. Relics that
 // aren't registered (their systems are missing) count as not allowed at Neow.
-// PORT NOTE: not ported: Kaleidoscope (needs every character unlocked; never allowed
-// here), MassiveScroll (multiplayer only), LeadPaperweight (colorless pool), LostCoffer,
-// PhialHolster and NeowsSacrifice (potions), ScrollBoxes (bundle screen), WingedBoots
-// (free travel), DowsingRod (quest cards), SilkenTress and SilverCrucible (card reward
-// hooks / enchantments).
+// PORT NOTE: not ported: MassiveScroll (multiplayer only), ScrollBoxes (bundle screen),
+// WingedBoots (free travel), DowsingRod (quest cards).
 const std::vector<std::string> kPositive = {
     "ArcaneScroll", "BoomingConch", "FishingRod", "GoldenPearl", "Kaleidoscope", "LeadPaperweight", "LostCoffer",
     "MassiveScroll", "NeowsTorment", "NewLeaf", "PhialHolster", "PreciseScissors", "ScrollBoxes", "WingedBoots"};

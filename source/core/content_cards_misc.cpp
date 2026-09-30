@@ -126,6 +126,7 @@ struct ReboundPower : Power {
 
 // Abundance.cs: 3 random upgraded Powers of the character's pool, pick one, it is free this turn.
 struct Abundance : IroncladT<Abundance> {
+  bool canBeGeneratedInCombat() const override { return false; }
   CARD_HEADER(Abundance, "ABUNDANCE", 1, Skill, Ancient, Self)
     keywords = kwExhaust;
   }

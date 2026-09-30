@@ -414,7 +414,7 @@ struct Guards : IroncladT<Guards> {
 
 // HeavenlyDrill.cs: X cost, Attack, AnyEnemy. Damage 8, X hits; X doubles when X >= 4 (Energy).
 struct HeavenlyDrill : IroncladT<HeavenlyDrill> {
-  CARD_HEADER(HeavenlyDrill, "HEAVENLY_DRILL", -1, Attack, Rare, AnyEnemy)
+  CARD_HEADER(HeavenlyDrill, "HEAVENLY_DRILL", 0, Attack, Rare, AnyEnemy)
     costsX = true;
     addVar("Damage", 8);
     addVar("Energy", 4);
@@ -507,6 +507,7 @@ struct NeutronAegis : IroncladT<NeutronAegis> {
 // Royalties.cs: 1 cost, Power, Self. RoyaltiesPower 30 (Gold): extra gold after combat.
 // (CanBeGeneratedInCombat is false in the C#; this engine has no such flag for cards.)
 struct Royalties : IroncladT<Royalties> {
+  bool canBeGeneratedInCombat() const override { return false; }
   CARD_HEADER(Royalties, "ROYALTIES", 1, Power, Rare, Self)
     addVar("Gold", 30);
   }
