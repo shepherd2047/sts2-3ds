@@ -295,10 +295,10 @@ screenshots of both screens, and tick the U table at the end of this file.
 | S05 | U05 | Custom run: modifier list, character, seed, confirm | M11 | done with M11, accepted 2026-09-29: `custom_run.cpp` |
 | S06 | U06 | Neow / Ancient dialogue and relic choice (polish only) | F4 | in progress (subagent) |
 | S07 | U07 | Map: legend, boss icon, path highlight, scroll bounds, top-screen preview, node pulse | F3 | done (subagent), accepted 2026-09-29: visited ink circles, pulsing next nodes, red route preview (D-pad follows paths), node info panel on top, scroll bounds from the parchment |
-| S08 | U08/U10 | Combat HUD: hand fan, energy orb, piles with counts, end turn, HP/block bars, power icons, intents with numbers, turn banner | F5, F6 | todo |
+| S08 | U08/U10 | Combat HUD: hand fan, energy orb, piles with counts, end turn, HP/block bars, power icons, intents with numbers, turn banner | F5, F6 | in progress (subagent) |
 | S09 | U09/U12 | Targeting arrow and potion aim; enemy highlight | S08 | todo |
 | S10 | U11 | Combat inspect: a 信息 button, cycle through creatures, power list with descriptions on top | S08 | todo |
-| S11 | U13 | Draw, discard and exhaust piles and deck view: grid on the bottom, focused card on top, sort | F5 | in progress (subagent) |
+| S11 | U13 | Draw, discard and exhaust piles and deck view: grid on the bottom, focused card on top, sort | F5 | done (subagent), accepted 2026-09-29: deck view with the C# sort buttons + 查看升级, combat pile tabs, draw pile in non-revealing order |
 | S12 | U14 | Hand select (discard/exhaust/retain N): counter, confirm/cancel | F5 | done (subagent), accepted 2026-09-29: hand select inferred when every option is in hand; counter, picked list, 重选/确认; Burning Pact etc. show a generic prompt (prompt keys are rules-side) |
 | S13 | U15/U16 | Deck grid select (upgrade/remove/transform with preview) and choose-one | F5 | done (subagent), accepted 2026-09-29: shared grid select in deck.cpp (moved from event.cpp), upgrade before → after, N-pick review stage, choose-one for events / rewards / generated combat cards; enchant preview not enchanted yet |
 | S14 | U17/U18 | **Reward list** (gold, potion, relic, card rows: claim or skip, then proceed) + card reward with skip / Singing Bowl | F5 | done (subagent), accepted 2026-09-28: RewardsSet generate-then-offer (C# order gold, potion, card, relic), rows claimed in any order, Proceed forfeits the rest; CardRewardAlternative options besides Skip not yet |
@@ -307,10 +307,10 @@ screenshots of both screens, and tick the U table at the end of this file.
 | S17 | U21 | Events: art and text on top, large option buttons on the bottom, locked options shown with the reason | F4 | done (subagent), accepted 2026-09-29: paged text, option focus previews offered card/relic/potion/enchantment (parsed from the option text), tap to focus + tap again to pick; Ancient layout unchanged |
 | S18 | U22 | Rest site: campfire and character on top, option buttons with descriptions | F3 | done (subagent), accepted 2026-09-29: baked `gfx/bg_rest_<act>.t3t` + flickering fire, character Spine, result held until 继续; `STS_HP=N` debug |
 | S19 | U24 | Top bar: HP, gold, potion belt, relic strip with scroll, floor/act, run timer, deck/map buttons | F3 | done (subagent), accepted 2026-09-29: game top-bar icons in one 18 px row, relic strip with counters and scroll, NRunTimer rules; ZL/ZR focus mode (New 3DS only; old 3DS uses the bottom-screen buttons) |
-| S20 | U25 | Detail popups for card/relic/potion: large on top with keywords, controls (upgrade preview, close) on the bottom | F5 | in progress (subagent) |
-| S21 | U26 | Settings and pause menus (screens only; logic in Y1/Y2) | Y1 | in progress (subagent) |
+| S20 | U25 | Detail popups for card/relic/potion: large on top with keywords, controls (upgrade preview, close) on the bottom | F5 | done (subagent), accepted 2026-09-29: one popup for card/relic/potion (`inspectCard/Relic(s)/Potion`), C# hover tips via tools/gen_hover_tips.py, prev/next from lists, upgrade preview |
+| S21 | U26 | Settings and pause menus (screens only; logic in Y1/Y2) | Y1 | done (subagent), accepted 2026-09-29: 4 pages (游戏设置/显示/音频设置/数据), volumes applied (part of U5), reset tutorials hook `settings::resetTutorials()`; graphics/input tabs left out (fixed 3DS hardware) |
 | S22 | U27 | Tutorials, confirmations, errors | M13 | todo |
-| S23 | U28 | Death / victory: score, badges, continue | M7 | partial (summary, menu/restart) |
+| S23 | U28 | Death / victory: score, badges, continue | M7 | in progress (subagent) |
 | S24 | U29 | Compendium: cards, relics, potions, bestiary | M8-M10 | done: built by M8, M9, M10 |
 | S25 | U30 | Stats and run history | M6 | done: built by M6 |
 | S26 | U31 | Credits (scroll across both screens) | F3 | todo |
@@ -420,7 +420,7 @@ their `clone()` must call `adoptEnchantment()`.
 | M10 | Bestiary: monster list, Spine viewer, moves | UI | M1 | done (subagent), accepted 2026-09-29: `bestiary.cpp`, one skeleton loaded at a time; seen = fought (C#: killed); `db::monster` registry |
 | M11 | Custom run: 16 modifiers (`Models.Modifiers`), seed entry with the 3DS keyboard, seeded runs | engine + UI | M1 | done (subagent, with S05), accepted 2026-09-29: `modifiers.cpp`, all 16 (PORT NOTEs: Hoarder vs transform, NightTerrors rest text, SealedDeck tie order); run.sav v8, history v3; `STS_MODIFIERS`, `SIM_MODIFIERS` |
 | M12 | Daily run, offline: seed and modifiers from the date as in `Daily\`, local best score only | engine | M11 | done (subagent), accepted 2026-09-29: `daily.cpp` checked against the game's sts2.dll for 5 dates; local date (C#: server/UTC); best per date in progress.sav v2; run.sav v9, history v4; `STS_DAILY_DATE`; history screen doesn't show daily/custom yet |
-| M13 | Tutorials (`Nodes.Ftue`): first-run tips, reset from settings | UI | F3 | todo |
+| M13 | Tutorials (`Nodes.Ftue`): first-run tips, reset from settings | UI | F3 | in progress (subagent) |
 
 ### Track Y: system
 
