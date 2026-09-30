@@ -10,6 +10,7 @@ namespace {
 
 // AscendersBane.cs: a curse that cannot be played or removed and vanishes at the end of the turn.
 struct AscendersBane : IroncladT<AscendersBane> {
+  bool canBeGeneratedInCombat() const override { return false; }
   CARD_HEADER(AscendersBane, "ASCENDERS_BANE", -1, Curse, Curse, None)
     keywords = kwEternal | kwUnplayable | kwEthereal;
     maxUpgradeLevel = 0;

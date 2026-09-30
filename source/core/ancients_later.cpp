@@ -99,6 +99,7 @@ struct Relax : IroncladT<Relax> {
 };
 
 struct Soot : IroncladT<Soot> {
+  bool canBeGeneratedInCombat() const override { return false; }
   CARD_HEADER(Soot, "SOOT", -1, Status, Status, None)
     keywords = kwUnplayable;
     maxUpgradeLevel = 0;

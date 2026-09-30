@@ -507,6 +507,7 @@ struct NeutronAegis : IroncladT<NeutronAegis> {
 // Royalties.cs: 1 cost, Power, Self. RoyaltiesPower 30 (Gold): extra gold after combat.
 // (CanBeGeneratedInCombat is false in the C#; this engine has no such flag for cards.)
 struct Royalties : IroncladT<Royalties> {
+  bool canBeGeneratedInCombat() const override { return false; }
   CARD_HEADER(Royalties, "ROYALTIES", 1, Power, Rare, Self)
     addVar("Gold", 30);
   }

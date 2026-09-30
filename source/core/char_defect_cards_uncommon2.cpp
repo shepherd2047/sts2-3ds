@@ -323,14 +323,14 @@ struct Thunder : IroncladT<Thunder> {
 
 // WhiteNoise.cs: Exhaust; add a random Defect Power card to the hand, free this turn.
 // PORT NOTE: GetDistinctForCombat(...).TakeRandom(1, CombatCardGeneration) is a shuffle + take
-// first (the port's TakeRandom idiom); the CanBeGeneratedInCombat / multiplayer filters and the
-// unlocked-cards filter are not modeled (db::characterCards has no such flags).
+// first (the port's TakeRandom idiom); the multiplayer and unlocked-cards filters are not modeled
+// (single player, everything unlocked).
 struct WhiteNoise : IroncladT<WhiteNoise> {
   CARD_HEADER(WhiteNoise, "WHITE_NOISE", 1, Skill, Uncommon, Self)
     keywords = kwExhaust;
   }
   Task<> onPlay(CardPlay&) override {
-    auto pool = db::characterCards(combat->run->characterId, [](const Card& c) { return c.type == CardType::Power; });
+    auto pool = db::characterCards(combat->run->characterId, [](const Card& c) { return c.type == CardType::Power && c.canBeGeneratedInCombat(); });
     if (pool.empty()) co_return;
     combat->rng("CombatCardGeneration").shuffle(pool);
     auto card = db::card(pool[0]);
