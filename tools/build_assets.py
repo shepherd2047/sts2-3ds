@@ -800,6 +800,9 @@ def add_ui_art(g, a, packer, known):
         m = re.match(r'images/ui/game_over_screen/badge_([a-z_]+)\.png\.import$', f)
         if m and m.group(1) != 'outline':
             put('badge/' + m.group(1), f'ui/game_over_screen/badge_{m.group(1)}.png', (30, 30))
+    # S23: the game over screen's score line icons (NGameOverScreen.AddScoreLine).
+    for nm in ('floor', 'gold', 'elite', 'boss', 'ascension'):
+        put('ui/score_' + nm, f'ui/game_over_screen/score_{nm}.png', (20, 20))
     # M5: achievement icons (NAchievementHolder: packed/achievements/unlocked/<snake>.png in the
     # achievement_border frame, achievement_lock over locked ones); the list page draws them at up
     # to 96 px on the top screen.
