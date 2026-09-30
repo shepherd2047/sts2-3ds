@@ -20,10 +20,18 @@ INCLUDES    := source
 GRAPHICS    :=
 ROMFS       := romfs_3ds
 
-APP_TITLE       := Slay the Spire 2 (3DS)
-APP_DESCRIPTION := Unofficial personal port - Ironclad, Act 1
-APP_AUTHOR      := personal build
+APP_TITLE       := Slay the Spire 2
+APP_DESCRIPTION := Unofficial fan port for the New 3DS (personal use)
+APP_AUTHOR      := Personal fan port - not by Mega Crit
 ICON            := icon.png
+
+# `make cia` (H4): HOME-menu banner + installable title. Title id 000400000FA57200
+# (UniqueId 0xFA572, set in tools/sts2-3ds.rsf with the memory mode). banner.png /
+# banner.wav / icon.png come from tools/build_assets.py (--packaging does just those).
+# bannertool and makerom must be on PATH (Mac: ~/.local/bin, see CLAUDE.md).
+BANNERTOOL ?= bannertool
+MAKEROM    ?= makerom
+RSF        := tools/sts2-3ds.rsf
 
 #---------------------------------------------------------------------------------
 ARCH     := -march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft
@@ -69,7 +77,7 @@ ifneq ($(ROMFS),)
 	export _3DSXFLAGS += --romfs=$(CURDIR)/$(ROMFS)
 endif
 
-.PHONY: all clean link
+.PHONY: all clean link cia
 
 # romfs_3ds/ = romfs/ with the textures converted to GPU formats (tools/compress_romfs.py).
 PYTHON ?= $(shell for p in python3 python; do $$p -c 'import numpy, PIL' >/dev/null 2>&1 && { echo $$p; break; }; done)
@@ -83,12 +91,23 @@ all: $(BUILD)
 link: all
 	$(DEVKITPRO)/tools/bin/3dslink $(if $(IP),-a $(IP)) $(TARGET).3dsx
 
+# Installable .cia (FBI / Azahar: File -> Install CIA). Reuses the .elf, .smdh and romfs_3ds/
+# of `make`; the banner art and sound are regenerated only when missing.
+cia: all
+	@command -v $(BANNERTOOL) >/dev/null || { echo "bannertool not found (see CLAUDE.md, Build & test)"; exit 1; }
+	@command -v $(MAKEROM) >/dev/null || { echo "makerom not found (see CLAUDE.md, Build & test)"; exit 1; }
+	@if [ ! -f banner.png ] || [ ! -f banner.wav ]; then $(PYTHON) tools/build_assets.py --packaging || exit 1; fi
+	@$(BANNERTOOL) makebanner -i banner.png -a banner.wav -o $(BUILD)/banner.bnr >/dev/null
+	@$(MAKEROM) -f cia -o $(TARGET).cia -target t -exefslogo -rsf $(RSF) -elf $(TARGET).elf \
+		-icon $(TARGET).smdh -banner $(BUILD)/banner.bnr -DAPP_ROMFS=$(ROMFS) -major 1 -minor 0 -micro 0
+	@echo built ... $(TARGET).cia
+
 $(BUILD):
 	@mkdir -p $@
 
 clean:
 	@echo clean ...
-	@rm -fr $(BUILD) $(TARGET).3dsx $(OUTPUT).smdh $(TARGET).elf
+	@rm -fr $(BUILD) $(TARGET).3dsx $(TARGET).cia $(OUTPUT).smdh $(TARGET).elf
 
 #---------------------------------------------------------------------------------
 else

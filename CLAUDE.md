@@ -93,7 +93,12 @@ make -f Makefile.sdl            # build/sts2-preview + build/sim
 make                            # sts2-3ds.3dsx (devkitPro env); packs romfs_3ds/
 python tools/compress_romfs.py  # romfs/ -> romfs_3ds/ (GPU texture formats), after build_assets
 make link                       # build + send to the 3DS over Wi-Fi (IP=... if needed)
+make cia                        # also sts2-3ds.cia (title id 000400000FA57200, tools/sts2-3ds.rsf)
 ```
+
+`make cia` needs `bannertool` + `makerom` on PATH (Mac: `~/.local/bin`; makerom/ctrtool from
+3DSGuy/Project_CTR releases, bannertool built from diasurgical/bannertool). Banner art/sound come
+from `python3 tools/build_assets.py --packaging` (run automatically when missing). Test: Azahar → File → Install CIA.
 
 At the end of every conversation with the owner, push all ready project
 changes (do not create an empty commit when there are none), then rebuild the
