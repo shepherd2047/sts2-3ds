@@ -32,16 +32,34 @@ struct MinionPower : Power {
   bool removedAfterOwnerDeath() const override { return false; }
 };
 
-// Ringing affliction on every card: once a card has been played this turn, the rest
-// cannot be. PORT NOTE: the per-card Ringing affliction (and its card overlay) is folded
-// into the power; every card the player owns is afflicted while it lasts, as in C#.
+// RingingPower.cs: every card of the player is Ringing (A4 afflictions): once a card has
+// been played this turn, Ringing cards cannot be. Goes (with the afflictions) at the end of
+// the owner's turn.
 struct RingingPower : Power {
   POWER_HEADER(RingingPower, "RINGING_POWER")
   PowerType type() const override { return PowerType::Debuff; }
   StackType stackType() const override { return StackType::Single; }
-  bool shouldPlay(Card*) override { return !owner->combat || owner->combat->cardsPlayedThisTurn == 0; }
+  Task<> afterApplied(Creature*, Card*) override {
+    for (Card* c : owner->combat->allCards())
+      if (!c->affliction) cmd::afflict(c, "Ringing", 1);
+    co_return;
+  }
+  Task<> afterCardEnteredCombat(Card* c) override {
+    if (ownerOf(c) == owner && !c->affliction) cmd::afflict(c, "Ringing", 1);
+    co_return;
+  }
+  bool shouldPlay(Card* c) override {
+    if (ownerOf(c) != owner || !c->afflictedWith("Ringing")) return true;
+    return !owner->combat || owner->combat->cardsPlayedThisTurn == 0;  // CardPlaysStarted this turn
+  }
   Task<> afterSideTurnEnd(Side, const std::vector<Creature*>& participants) override {
     if (contains(participants, owner)) { flash = 1.f; co_await cmd::removePower(this); }
+  }
+  Task<> afterRemoved(Creature* oldOwner) override {
+    if (oldOwner->combat)
+      for (Card* c : oldOwner->combat->allCards())
+        if (c->afflictedWith("Ringing")) cmd::clearAffliction(c);
+    co_return;
   }
 };
 

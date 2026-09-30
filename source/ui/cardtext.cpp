@@ -266,17 +266,23 @@ std::string expandSmart(const std::string& src, const std::vector<DynVar>& vars,
 
 // CardModel.GetDescriptionForPile: an enchantment's extraCardText (purple) and, when it adds
 // replays, the REPLAY line; nothing for enchantments without extra text or once disabled.
-// PORT NOTE: the enchantment badge and the affliction line belong to the card renderer (F5).
+// The affliction's extra text sits between them (A4). Badges are drawn by card_view.cpp.
 static std::string enchantmentCardText(Card* c) {
   std::string out;
   Enchantment* e = c->enchantment.get();
-  if (!e) return out;
-  if (e->hasExtraCardText() && !e->disabled()) {
+  if (e && e->hasExtraCardText() && !e->disabled()) {
     std::vector<DynVar> vars = e->vars;
     vars.push_back({"Amount", Dec(e->amount), Dec(e->amount)});
     std::string key = "enchantments." + e->locKey + ".extraCardText";
     if (R().hasLoc(key)) out += "[purple]" + expandSmart(L(key), vars, c->combat != nullptr) + "[/purple]";
   }
+  // A4: then the affliction's extraCardText (AfflictionModel.DynamicExtraCardText), also purple.
+  if (Affliction* a = c->affliction.get(); a && a->hasExtraCardText()) {
+    std::vector<DynVar> vars{{"Amount", Dec(a->amount), Dec(a->amount)}};
+    std::string key = "afflictions." + a->locKey + ".extraCardText";
+    if (R().hasLoc(key)) out += (out.empty() ? "" : "\n") + std::string("[purple]") + expandSmart(L(key), vars, false) + "[/purple]";
+  }
+  if (!e) return out;
   int times = c->enchantedReplayCount();
   if (times > 0 && R().hasLoc("static_hover_tips.REPLAY.extraText")) {
     std::vector<DynVar> vars{{"Times", Dec(times), Dec(times)}};

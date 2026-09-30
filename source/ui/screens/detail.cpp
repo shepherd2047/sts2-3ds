@@ -276,6 +276,7 @@ void App::refreshDetail() {
     } else if (!up && c->upgraded()) {
       if ((p.shown = db::card(c->id))) {
         p.shown->enchantment = c->enchantment;
+        p.shown->affliction = c->affliction;
         p.shown->adoptEnchantment();
         if (p.shown->enchantment) p.shown->enchantment->modifyCard();
       }
@@ -290,6 +291,19 @@ void App::refreshDetail() {
         addTip(p.tips, L(k + ".title"), R().hasLoc(k + ".description") ? expandSmart(L(k + ".description"), v, false) : "");
       }
       tableTips(p.tips, "ench:" + e->id, withAmount(e->vars, e->amount), desc);
+    }
+    // A4: AfflictionModel.HoverTips: its own tip (title + description with Amount), then its
+    // ExtraHoverTips (Hexed: Ethereal; Tainted: the Tainted power).
+    if (Affliction* a = s->affliction.get()) {
+      std::string k = "afflictions." + a->locKey;
+      auto v = withAmount({}, a->amount);
+      if (R().hasLoc(k + ".title"))
+        addTip(p.tips, L(k + ".title"), R().hasLoc(k + ".description") ? expandSmart(L(k + ".description"), v, false) : "");
+      if (a->id == "Hexed" && R().hasLoc("card_keywords.ETHEREAL.title"))
+        addTip(p.tips, L("card_keywords.ETHEREAL.title"), L("card_keywords.ETHEREAL.description"));
+      if (a->id == "Tainted" && R().hasLoc("powers.TAINTED_POWER.title"))
+        addTip(p.tips, expandSmart(L("powers.TAINTED_POWER.title"), v, false),
+               R().hasLoc("powers.TAINTED_POWER.description") ? expandSmart(L("powers.TAINTED_POWER.description"), v, false) : "");
     }
     if (int times = s->enchantedReplayCount(); times > 0 && R().hasLoc("static_hover_tips.REPLAY_DYNAMIC.title")) {
       std::vector<DynVar> v{{"Times", Dec(times), Dec(times)}};

@@ -88,8 +88,12 @@ struct NightmarePower : Power {
     entries.clear();
     co_await cmd::removePower(this);
   }
-  // SetSelectedCard: a clone of the chosen card (afflictions do not exist in this port).
-  void setSelectedCard(Card* c, int copies) { entries.push_back({c->clone(), copies}); }
+  // SetSelectedCard: a clone of the chosen card, without its affliction.
+  void setSelectedCard(Card* c, int copies) {
+    auto copy = c->clone();
+    cmd::clearAffliction(copy.get());
+    entries.push_back({std::move(copy), copies});
+  }
 };
 
 // SerpentFormPower.cs: after every card played, Unpowered damage to a random hittable enemy (amount at the start of the play).

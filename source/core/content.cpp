@@ -637,6 +637,7 @@ void registerPotions();      // potions.cpp
 void registerEnchantments(); // enchantments.cpp
 void registerEnchantmentsB(); // enchantments_b.cpp (A3b)
 void registerEnchantmentsC(); // enchantments_c.cpp (A3c)
+void registerAfflictions(); // afflictions.cpp (A4)
 void registerSilent();       // char_silent.cpp
 void registerNecrobinder();  // char_necrobinder.cpp
 void registerRegent();       // char_regent.cpp
@@ -765,6 +766,7 @@ void init() {
   registerEnchantments();
   registerEnchantmentsB();
   registerEnchantmentsC();
+  registerAfflictions();
   registerSilent();
   registerNecrobinder();
   registerRegent();

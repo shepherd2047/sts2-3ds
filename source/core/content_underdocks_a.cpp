@@ -114,25 +114,31 @@ struct SurprisePower : Power {
 
 // LivingFog: after a Skill card is played this turn, every Skill card is afflicted with
 // Smog (unplayable) until the end of the player's turn.
-// PORT NOTE: no per-card affliction system (package A4); the effect is a turn flag that
-// blocks the owner's Skill cards, which is what the Smog afflictions add up to.
+// SmoggyPower.cs: the Smog affliction (A4) blocks the card; cleared from every card at the end
+// of the owner's turn.
 struct SmoggyPower : Power {
   POWER_HEADER(SmoggyPower, "SMOGGY_POWER")
   PowerType type() const override { return PowerType::Debuff; }
   StackType stackType() const override { return StackType::Single; }
-  bool smogged = false;
   Task<> afterCardPlayed(const CardPlay& p) override {
     if (ownerOf(p.card) != owner || p.card->type != CardType::Skill) co_return;
     flash = 1.f;
-    smogged = true;
+    for (Card* c : owner->combat->allCards())
+      if (c->type == CardType::Skill && !c->affliction) cmd::afflict(c, "Smog", 1);
   }
-  Task<> afterSideTurnEnd(Side, const std::vector<Creature*>& participants) override {
-    if (contains(participants, owner)) smogged = false;
+  Task<> afterCardEnteredCombat(Card* c) override {
+    // Only once a Skill play has started this turn (CombatHistory.CardPlaysStarted).
+    if (ownerOf(c) == owner && !c->affliction && c->type == CardType::Skill && owner->combat->currentSide == Side::Player &&
+        owner->combat->skillPlaysStartedThisTurn > 0)
+      cmd::afflict(c, "Smog", 1);
     co_return;
   }
-  bool shouldPlay(Card* c) override {
-    return !(smogged && c->type == CardType::Skill && ownerOf(c) == owner);
+  Task<> afterSideTurnEnd(Side, const std::vector<Creature*>& participants) override {
+    if (!contains(participants, owner)) co_return;
+    for (Card* c : owner->combat->allCards())
+      if (c->afflictedWith("Smog")) cmd::clearAffliction(c);
   }
+  bool shouldPlay(Card* c) override { return ownerOf(c) != owner || !c->afflictedWith("Smog"); }
 };
 
 // ================================================================ Corpse Slugs

@@ -22,17 +22,23 @@ struct ConstrictPower : Power {
   }
 };
 
-// TangledPower afflicts every Attack card the owner holds/draws with a +Amount energy
-// cost (CardCmd.Afflict<Entangled> in the source). This build has no per-card affliction
-// system, so the effect is reproduced directly as a live cost modifier on Attack cards
-// owned by `owner` — behaviourally identical since the source ends up afflicting every
-// such card anyway (AfterApplied marks existing ones, AfterCardEnteredCombat marks new
-// ones), and AfterRemoved just un-afflicts them (implicit here once the power is gone).
+// TangledPower.cs: every Attack card of the owner is Entangled (A4 afflictions) and costs
+// Amount more while the power lasts; the power goes at the end of the owner's turn and
+// takes the afflictions with it.
 struct TangledPower : Power {
   POWER_HEADER(TangledPower, "TANGLED_POWER")
   PowerType type() const override { return PowerType::Debuff; }
+  Task<> afterApplied(Creature*, Card*) override {
+    for (Card* c : owner->combat->allCards())
+      if (c->type == CardType::Attack) cmd::afflict(c, "Entangled", 1);
+    co_return;
+  }
+  Task<> afterCardEnteredCombat(Card* c) override {
+    if (ownerOf(c) == owner && !c->affliction && c->type == CardType::Attack) cmd::afflict(c, "Entangled", 1);
+    co_return;
+  }
   int modifyEnergyCost(Card* card, int cost) override {
-    if (card->type != CardType::Attack || ownerOf(card) != owner) return cost;
+    if (!card->afflictedWith("Entangled") || ownerOf(card) != owner) return cost;
     return cost + amount;
   }
   Task<> afterSideTurnEnd(Side, const std::vector<Creature*>& participants) override {
@@ -40,6 +46,12 @@ struct TangledPower : Power {
       flash = 1.f;
       co_await cmd::removePower(this);
     }
+  }
+  Task<> afterRemoved(Creature* oldOwner) override {
+    if (oldOwner->combat)
+      for (Card* c : oldOwner->combat->allCards())
+        if (c->afflictedWith("Entangled")) cmd::clearAffliction(c);
+    co_return;
   }
 };
 

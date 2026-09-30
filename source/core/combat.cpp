@@ -242,7 +242,8 @@ std::vector<Model*> Combat::listeners() {
   for (auto& m : run->modifiers) out.push_back(m.get());  // M11: RunState.Modifiers (after the relics)
   for (Card* c : allCards()) {
     out.push_back(c);
-    if (c->enchantment) out.push_back(c->enchantment.get());  // card, (affliction,) enchantment
+    if (c->affliction) out.push_back(c->affliction.get());  // card, affliction, enchantment
+    if (c->enchantment) out.push_back(c->enchantment.get());
   }
   for (auto* e : enemies) {
     if (e->removed) continue;
@@ -936,6 +937,7 @@ Task<> Combat::runCombat() {
     co_await startTurn();
     if (over) break;
     if (side == Side::Player) {
+      cmd::debugAfflictions(*this);  // STS_AFFLICT / SIM_AFFLICT, once (first turn)
       playerPhase = true;
       for (;;) {
         PlayerAction a = co_await actions.next();
@@ -1040,6 +1042,7 @@ Task<> Combat::setupPlayerTurn() {
   for (Model* m : listeners()) resetEnergy = resetEnergy && m->shouldResetEnergy();
   energy = resetEnergy ? maxEnergyNow() : energy + maxEnergyNow();
   cardsPlayedThisTurn = 0;
+  skillPlaysStartedThisTurn = 0;
   skillsFinishedThisTurn = 0;
   attackPlaysFinishedThisTurn = 0;
   cardPlaysFinishedThisTurn = 0;
@@ -1195,6 +1198,7 @@ Task<> Combat::playCard(Card* card, Creature* target, bool autoPlay, bool forceE
     for (Model* m : listeners()) card->starXValue = m->modifyXValue(card, card->starXValue);  // Hook.ModifyXValue
   }
   ++cardsPlayedThisTurn;
+  if (card->type == CardType::Skill) ++skillPlaysStartedThisTurn;
   badges::noteCardsPlayedThisTurn(*run, cardsPlayedThisTurn);  // CCCCOMBO badge (M7)
   removeFromPiles(card);
   play.push_back(card);
@@ -1234,6 +1238,7 @@ Task<> Combat::playCard(Card* card, Creature* target, bool autoPlay, bool forceE
     co_await card->onPlay(cp);
     // CardModel.OnPlayWrapper: the enchantment's OnPlay follows the card's own effect.
     if (card->enchantment && player->alive()) co_await card->enchantment->onPlay(cp);
+    if (card->affliction && player->alive()) co_await card->affliction->onPlay(cp);  // then the affliction's
     ++cardPlaysFinishedThisCombat;
     ++cardPlaysFinishedThisTurn;  // CardPlayFinished entry precedes Hook.AfterCardPlayed
     if (player->alive() && !over) {

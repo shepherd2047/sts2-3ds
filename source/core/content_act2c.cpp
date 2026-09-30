@@ -57,17 +57,35 @@ struct TaintedPower : Power {
   }
 };
 
-// PORT NOTE: the C# afflicts every Skill card in the player's combat deck with Tainted
-// (BeforeCombatStart, AfterCardEnteredCombat) and applies TaintedPower when such a card is
-// played, clearing the afflictions when VitalSpark goes. There is no affliction system
-// here; every Skill counts as afflicted while VitalSpark lasts, which is the same thing
-// (only the card overlay and the extra card text are missing).
+// VitalSparkPower.cs: every Skill card of the player is Tainted (A4 afflictions; BeforeCombatStart,
+// AfterCardEnteredCombat); playing a Tainted card applies TaintedPower. The afflictions follow
+// the power's amount and go with it.
 struct VitalSparkPower : Power {
   POWER_HEADER(VitalSparkPower, "VITAL_SPARK_POWER")
+  Task<> beforeCombatStart() override {
+    for (Card* c : owner->combat->allCards())
+      if (c->type == CardType::Skill) cmd::afflict(c, "Tainted", amount);
+    co_return;
+  }
+  Task<> afterCardEnteredCombat(Card* c) override {
+    if (!c->affliction && c->type == CardType::Skill) cmd::afflict(c, "Tainted", amount);
+    co_return;
+  }
   Task<> afterCardPlayed(const CardPlay& play) override {
-    if (!play.card || play.card->type != CardType::Skill || !owner->combat) co_return;
+    if (!play.card || !play.card->afflictedWith("Tainted") || !owner->combat) co_return;
     flash = 1.f;
     co_await cmd::applyPower(std::make_unique<TaintedPower>(), owner->combat->player, amount, nullptr, nullptr);
+  }
+  Task<> afterRemoved(Creature* oldOwner) override {
+    if (oldOwner->combat)
+      for (Card* c : oldOwner->combat->allCards())
+        if (c->afflictedWith("Tainted")) cmd::clearAffliction(c);
+    co_return;
+  }
+  Task<> afterPowerAmountChanged(Power* p, Dec, Creature*, Card*) override {
+    if (p != this || !owner->combat) co_return;
+    for (Card* c : owner->combat->allCards())
+      if (c->afflictedWith("Tainted")) c->affliction->amount = amount;
   }
 };
 
