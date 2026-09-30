@@ -640,36 +640,36 @@ animation name is unusual, extend the fallback in `App::trigger`.
 
 | U | Our screen | Package | Status |
 |---|---|---|---|
-| U01 | Boot, act transition | S01 | todo |
-| U02 | Main menu | S02 | partial |
-| U03 | Profiles | S03 | todo |
-| U04 | Character select | S04 | done |
-| U05 | Custom run | S05 | todo |
-| U06 | Neow / Ancients | S06 | works, polish in S06 |
-| U07 | Map | S07 | works, polish in S07 |
-| U08 | Combat layout | S08 | works, polish in S08 |
-| U09 | Drag targeting | S09 | works |
-| U10 | Creatures on top | S08 | works |
-| U11 | Combat inspect | S10 | missing |
-| U12 | Potions | S09 | works |
-| U13 | Pile / deck views | S11 | partial (combat tabs in SDL) |
-| U14 | Hand select | S12 | works, polish |
-| U15 | Deck grid select | S13 | works |
-| U16 | Choose one | S13 | works |
-| U17 | Reward list | S14 | missing (sequential popups today) |
-| U18 | Card reward | S14 | works |
-| U19 | Relic choice | S15 | works |
-| U20 | Shop | S16 | works |
-| U21 | Events | S17 | works |
-| U22 | Rest site | S18 | works |
-| U23 | Treasure | S15 | works |
-| U24 | Top bar | S19 | partial |
-| U25 | Detail popups | S20 | partial (modal, keywords) |
-| U26 | Settings | S21 | partial (START page) |
-| U27 | Tutorials / dialogs | S22 | missing |
-| U28 | Death / victory | S23 | partial (summary) |
-| U29 | Compendium | S24 | missing |
-| U30 | Stats / history | S25 | missing |
-| U31 | Credits | S26 | missing |
+| U01 | Boot, act transition | S01 | done (on the UI kit, 2026-09-29) |
+| U02 | Main menu | S02 | done (on the UI kit, 2026-09-29) |
+| U03 | Profiles | S03 | done (on the UI kit, 2026-09-29) |
+| U04 | Character select | S04 | done (on the UI kit, 2026-09-29) |
+| U05 | Custom run | S05 | done (on the UI kit, 2026-09-29) |
+| U06 | Neow / Ancients | S06 | done (on the UI kit, 2026-09-29) |
+| U07 | Map | S07 | done (on the UI kit, 2026-09-29) |
+| U08 | Combat layout | S08 | done (on the UI kit, 2026-09-29) |
+| U09 | Drag targeting | S09 | done (on the UI kit, 2026-09-29) |
+| U10 | Creatures on top | S08 | done (on the UI kit, 2026-09-29) |
+| U11 | Combat inspect | S10 | done (on the UI kit, 2026-09-29) |
+| U12 | Potions | S09 | done (on the UI kit, 2026-09-29) |
+| U13 | Pile / deck views | S11 | done (on the UI kit, 2026-09-29) |
+| U14 | Hand select | S12 | done (on the UI kit, 2026-09-29) |
+| U15 | Deck grid select | S13 | done (on the UI kit, 2026-09-29) |
+| U16 | Choose one | S13 | done (on the UI kit, 2026-09-29) |
+| U17 | Reward list | S14 | done (on the UI kit, 2026-09-29) |
+| U18 | Card reward | S14 | done (on the UI kit, 2026-09-29) |
+| U19 | Relic choice | S15 | done (on the UI kit, 2026-09-29) |
+| U20 | Shop | S16 | done (on the UI kit, 2026-09-29) |
+| U21 | Events | S17 | done (on the UI kit, 2026-09-29) |
+| U22 | Rest site | S18 | done (on the UI kit, 2026-09-29) |
+| U23 | Treasure | S15 | done (on the UI kit, 2026-09-29) |
+| U24 | Top bar | S19 | done (on the UI kit, 2026-09-29) |
+| U25 | Detail popups | S20 | done (on the UI kit, 2026-09-29) |
+| U26 | Settings | S21 | done (on the UI kit, 2026-09-29) |
+| U27 | Tutorials / dialogs | S22 | done (on the UI kit, 2026-09-29) |
+| U28 | Death / victory | S23 | done (on the UI kit, 2026-09-29) |
+| U29 | Compendium | S24 | done (on the UI kit, 2026-09-29) |
+| U30 | Stats / history | S25 | done (on the UI kit, 2026-09-29) |
+| U31 | Credits | S26 | done (on the UI kit, 2026-09-29) |
 | U32 | Daily / leaderboards | M12 | offline daily only; leaderboards n/a |
 | U33 | Unknown pages | – | n/a |
