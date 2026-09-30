@@ -53,7 +53,12 @@ class Res {
  public:
   // progress (S01 boot): called with 0..1 after each load step, so the boot can draw frames.
   // The font and loc.txt load first; once fontReady(), text and L() work (atlas sprites not yet).
-  bool load(const std::function<void(float)>& progress = nullptr);
+  // lang (Y3): 0 = 简体中文 (loc.txt, font/font_*), 1 = English (loc_eng.txt, font/eng_*).
+  bool load(const std::function<void(float)>& progress = nullptr, int lang = 0);
+  // Y3: frees the active language's glyph pages and strings and loads another's (only its pages
+  // are ever resident). Main menu only, as the C#: screens must not hold loc strings across it.
+  bool setLanguage(int lang);
+  int language() const { return lang_; }
   bool fontReady() const { return fontTex_[0] != nullptr && !strings_.empty(); }
   Sprite sprite(const std::string& name) const;
   // Names of all atlas sprites that start with prefix, sorted (asset gallery, tests).
@@ -89,6 +94,7 @@ class Res {
   struct Run { std::string text; uint32_t color; };
   struct Line { std::vector<std::pair<uint32_t, uint32_t>> glyphs; float width = 0; };  // (codepoint, colour)
 
+  bool loadText(int lang, const std::function<void(float)>& step);
   std::vector<Line> layout(const std::string& s, const TextStyle& st);
   // [icon:NAME] codepoints are allocated from a private-use range above kIconBase; iconSprites_
   // maps the offset back to an atlas sprite name so text() can draw it instead of a font glyph.
@@ -104,9 +110,14 @@ class Res {
   Font fonts_[2];
   std::unordered_map<std::string, std::string> strings_;
   std::string missing_;
+  int lang_ = 0;
 };
 
 Res& res();
+
+// Y3: port-only UI text (no loc key in the game) in both languages: tr("继续", "Continue").
+inline bool english() { return res().language() == 1; }
+inline const char* tr(const char* zh, const char* en) { return english() ? en : zh; }
 
 // Decode one UTF-8 code point starting at s[i]; advances i.
 uint32_t nextCodepoint(const std::string& s, size_t& i);

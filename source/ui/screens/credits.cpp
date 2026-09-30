@@ -154,15 +154,15 @@ void build() {
   add(v, kPara, C("GODOT"));
   // The port's own section (literals: they also feed the font's glyph set).
   section(v, "MEGA_CRIT.header");
-  v.back() = {kHeader, "移植", ""};
+  v.back() = {kHeader, tr("移植", "Port"), ""};
   const size_t portIdx = v.size() - 1;
   add(v, kSpace);
-  add(v, kPara, "这是《杀戮尖塔2》的个人爱好者 3DS 移植，非官方作品，仅供个人学习与研究，不用于商业用途。");
+  add(v, kPara, tr("这是《杀戮尖塔2》的个人爱好者 3DS 移植，非官方作品，仅供个人学习与研究，不用于商业用途。", "This is a personal fan port of Slay the Spire 2 to the 3DS. It is unofficial, for personal study only, and not for commercial use."));
   add(v, kSpace);
-  add(v, kPara, "双屏界面的设计沿用 RGDSplus 移植版");
+  add(v, kPara, tr("双屏界面的设计沿用 RGDSplus 移植版", "The dual-screen layout follows the RGDSplus port"));
   add(v, kLine, "Slay the Spire for RGDSplus");
   add(v, kNote, "LPF970915/Slay-the-Spire-for-RGDSplus");
-  add(v, kPara, "《杀戮尖塔2》及其全部素材归 Mega Crit 所有。");
+  add(v, kPara, tr("《杀戮尖塔2》及其全部素材归 Mega Crit 所有。", "Slay the Spire 2 and all of its assets belong to Mega Crit."));
 
   // Heights.
   float y = 0;
@@ -282,11 +282,11 @@ bool App::drawCredits(bool top) {
 
   // Bottom: a dark strip under the hint and the back button.
   gfx::rect(0, kH - 44, kBot, 44, 0x000000B0);
-  R().text(kBot - style::kMargin, kH - 22, "A 加速　上下 滚动　B 返回", ts(F12, col::gray, RIGHT));
+  R().text(kBot - style::kMargin, kH - 22, tr("A 加速　上下 滚动　B 返回", "A Speed up   Up/Down Scroll   B Back"), ts(F12, col::gray, RIGHT));
   gfx::Input in = gfx::input();
   if (!st.live) in = gfx::Input{};
   widgets::beginFrame(in);
-  bool back = widgets::button(kBackId, style::kMargin, kH - 40, 70, 32, "返回");
+  bool back = widgets::button(kBackId, style::kMargin, kH - 40, 70, 32, tr("返回", "Back"));
   widgets::endFrame();
   if (back) st.open = false;
   return true;

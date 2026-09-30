@@ -13,6 +13,60 @@ std::string App::cardTitle(Card* c) {
 
 static std::string enchantmentCardText(Card* c);  // defined after expandSmart
 
+// {X:energyIcons()}: 简体中文 "N点能量" (the RGDSplus wording); English as the C#
+// EnergyIconsFormatter: 1..3 icons repeated, otherwise the amount then one icon.
+static std::string energyText(const std::string& name, int n, const std::string& shown) {
+  if (!english()) return name == "energyPrefix" ? std::string("点能量") : "[gold]" + shown + "点能量[/gold]";
+  if (name == "energyPrefix") return "[icon:energy]";
+  if (n > 0 && n < 4) {
+    std::string out;
+    for (int i = 0; i < n; ++i) out += "[icon:energy]";
+    return out;
+  }
+  return shown + "[icon:energy]";
+}
+
+// Splits a top-level (brace-depth 0) '|'-separated list.
+static std::vector<std::string> splitAltsTop(const std::string& s) {
+  std::vector<std::string> out;
+  int d = 0;
+  size_t start = 0;
+  for (size_t k = 0; k <= s.size(); ++k) {
+    if (k < s.size() && s[k] == '{') ++d;
+    else if (k < s.size() && s[k] == '}') --d;
+    if (k == s.size() || (s[k] == '|' && d == 0)) { out.push_back(s.substr(start, k - start)); start = k + 1; }
+  }
+  return out;
+}
+
+// {X:plural:a|b}: the chosen alternative with its "{}" replaced by the amount (English texts use it).
+static std::string pluralAlt(const std::string& alt, int n) {
+  std::string s = alt;
+  for (size_t p; (p = s.find("{}")) != std::string::npos;) s.replace(p, 2, num(n));
+  return s;
+}
+
+// {X:cond:<0?a|b} / {X:cond:==1?a|>1?b|c} / {X:cond:a|b} on a number: the first alternative whose
+// test passes; a plain alternative (no test) is taken as is, a plain two-way list means "non-zero".
+static std::string condAlt(const std::string& alts, int v, const std::vector<std::string>& parts) {
+  (void)alts;
+  bool tests = false;
+  for (auto& a : parts) {
+    size_t q = a.find('?');
+    const char c0 = a.empty() ? 0 : a[0];
+    if (q == std::string::npos || !(c0 == '<' || c0 == '>' || c0 == '=' || c0 == '!')) {
+      if (!tests) return parts.size() > 1 ? (v != 0 ? parts[0] : parts[1]) : (v != 0 ? parts[0] : std::string());
+      return pluralAlt(a, v);
+    }
+    tests = true;
+    std::string op = a.substr(0, (a.size() > 1 && a[1] == '=') ? 2 : 1);
+    int n = std::atoi(a.substr(op.size(), q - op.size()).c_str());
+    bool ok = op == "<" ? v < n : op == ">" ? v > n : op == "<=" ? v <= n : op == ">=" ? v >= n : op == "!=" ? v != n : v == n;
+    if (ok) return pluralAlt(a.substr(q + 1), v);
+  }
+  return {};
+}
+
 // SmartFormat subset used by these cards: {Var:diff()}, {Var},
 // {InCombat:a|b}, {IfUpgraded:show:a|b}.
 std::string App::describe(Card* c) {
@@ -81,7 +135,7 @@ std::string App::describe(Card* c) {
       else if (name == "IfUpgraded") out += choose(rest.substr(rest.find(':') + 1), c->upgraded());
       else if (rest.rfind("energyIcons", 0) == 0) {
         // Energy icons: "{Energy:energyIcons()}" -> "2点能量"; "{energyPrefix:energyIcons(1)}" -> "点能量".
-        out += name == "energyPrefix" ? std::string("点能量") : "[gold]" + value(name) + "点能量[/gold]";
+        out += energyText(name, raw(name).toInt(), name == "energyPrefix" ? std::string() : value(name));
       } else if (rest.rfind("starIcons", 0) == 0) {
         out += value(name) + "[icon:star]";  // {Stars:starIcons()}: the amount and a star (X3)
       } else if (rest.rfind("percentMore", 0) == 0) {
@@ -89,7 +143,11 @@ std::string App::describe(Card* c) {
       } else if (rest.rfind("percentLess", 0) == 0) {
         out += num(((Dec(1) - raw(name)) * Dec(100)).toInt());
       } else if (rest.rfind("plural:", 0) == 0) {
-        out += choose(rest.substr(7), raw(name) == Dec(1));
+        auto parts = splitAltsTop(rest.substr(7));
+        int n = raw(name).toInt();
+        out += expand(pluralAlt(parts.empty() ? std::string() : n == 1 || parts.size() < 2 ? parts[0] : parts[1], n));
+      } else if (rest.rfind("cond:", 0) == 0) {
+        out += expand(condAlt(rest.substr(5), c->var(name.c_str()) ? raw(name).toInt() : 0, splitAltsTop(rest.substr(5))));
       } else if (colon != std::string::npos && rest.find('|') != std::string::npos) {
         // A plain {Name:a|b} conditional on a flag this port doesn't model (e.g. IsMultiplayer,
         // or a per-card extra arg like MadScience's rider flags): missing means false, not "?".
@@ -182,11 +240,16 @@ std::string expandSmart(const std::string& src, const std::vector<DynVar>& vars,
         while ((p = chosen.find("{}")) != std::string::npos) chosen.replace(p, 2, selfRef);
         out += expand(chosen);
       } else if (rest.rfind("energyIcons", 0) == 0)
-        out += name == "energyPrefix" ? std::string("点能量") : "[gold]" + num(raw(name).toInt()) + "点能量[/gold]";
+        out += energyText(name, raw(name).toInt(), num(raw(name).toInt()));
       else if (rest.rfind("starIcons", 0) == 0) out += num(raw(name).toInt()) + "[icon:star]";
       else if (rest.rfind("percentMore", 0) == 0) out += num(((raw(name) - Dec(1)) * Dec(100)).toInt());
       else if (rest.rfind("percentLess", 0) == 0) out += num(((Dec(1) - raw(name)) * Dec(100)).toInt());
-      else if (rest.rfind("plural:", 0) == 0) out += choose(rest.substr(7), raw(name) == Dec(1));
+      else if (rest.rfind("plural:", 0) == 0) {
+        auto parts = splitAlts(rest.substr(7));
+        int n = raw(name).toInt();
+        out += expand(pluralAlt(parts.empty() ? std::string() : n == 1 || parts.size() < 2 ? parts[0] : parts[1], n));
+      } else if (rest.rfind("cond:", 0) == 0 && find(name))
+        out += expand(condAlt(rest.substr(5), raw(name).toInt(), splitAlts(rest.substr(5))));
       else if (colon != std::string::npos && rest.find('|') != std::string::npos) {
         // A plain {Name:a|b} conditional on a flag this port doesn't model: missing means
         // false (e.g. IsMultiplayer), not "?".

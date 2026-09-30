@@ -261,7 +261,7 @@ void App::gridSelectDraw(const GridSelectSpec& s, bool top) {
   const bool multi = s.count > 1 || s.minCount == 0;
   const int need = std::min(s.count, n);
   const int least = s.minCount >= 0 ? std::min(s.minCount, need) : need;
-  const std::string counter = "已选 " + num((int)g.picks.size()) + "/" + num(need);
+  const std::string counter = tr("已选 ", "Picked ") + num((int)g.picks.size()) + "/" + num(need);
   if (top) {
     screenTitle(kTop / 2, 24, promptText(s.prompt, s.count));
     if (g.review) {  // every picked card (upgraded for upgrade prompts), side by side
@@ -286,17 +286,17 @@ void App::gridSelectDraw(const GridSelectSpec& s, bool top) {
         drawCard(c, (kTop - 120.f) / 2, 62, 1.0f, false, true);
       }
       bool picked = std::find(g.picks.begin(), g.picks.end(), g.sel) != g.picks.end();
-      if (multi) R().text(kTop - 10, kH - 18, picked ? counter + "  已选择这张" : counter, ts(F12, picked ? col::gold : col::white, RIGHT));
+      if (multi) R().text(kTop - 10, kH - 18, picked ? counter + tr("  已选择这张", "  Picked") : counter, ts(F12, picked ? col::gold : col::white, RIGHT));
       return;
     }
-    R().text(kTop / 2, 110, multi ? "点选 " + num(need) + " 张牌" : "点选一张牌，再点一次确认",
+    R().text(kTop / 2, 110, multi ? tr("点选 ", "Pick ") + num(need) + tr(" 张牌", " cards") : tr("点选一张牌，再点一次确认", "Tap a card, then tap again to confirm"),
              ts(F16, col::white, CENTER));
     if (multi) R().text(kTop / 2, 136, counter, ts(F12, col::gold, CENTER));
     return;
   }
 
   if (g.review) {  // the review stage: the picks small in a row, 返回 / 确认
-    R().text(kBot / 2, 8, "确认选择？", ts(F16, col::gold, CENTER));
+    R().text(kBot / 2, 8, tr("确认选择？", "Confirm selection?"), ts(F16, col::gold, CENTER));
     int k = (int)g.picks.size();
     float sc = std::min(0.62f, (kBot - 16.f - (k - 1) * 6.f) / (k * 120.f));
     float w = 120 * sc, x0 = (kBot - (k * w + (k - 1) * 6)) / 2;
@@ -306,9 +306,9 @@ void App::gridSelectDraw(const GridSelectSpec& s, bool top) {
     }
     gfx::rect(0, kGY1, kBot, kH - kGY1, style::kScrim);
     widgets::beginFrame(barInput(1));
-    if (widgets::button(kSelBack, style::kMargin, style::kActionY, 80, style::kButtonH, "返回")) g.pending = kSelBack;
+    if (widgets::button(kSelBack, style::kMargin, style::kActionY, 80, style::kButtonH, tr("返回", "Back"))) g.pending = kSelBack;
     R().text(kBot / 2, style::kActionY + 10, counter, ts(F12, col::white, CENTER));
-    if (widgets::button(kSelConfirm, kBot - style::kMargin - 90, style::kActionY, 90, style::kButtonH, "确认",
+    if (widgets::button(kSelConfirm, kBot - style::kMargin - 90, style::kActionY, 90, style::kButtonH, tr("确认", "Confirm"),
                         widgets::Kind::Primary))
       g.pending = kSelConfirm;
     widgets::endFrame();
@@ -336,17 +336,17 @@ void App::gridSelectDraw(const GridSelectSpec& s, bool top) {
   if (g.zone == 0) widgets::setFocus(-1);
   float x = style::kMargin;
   if (s.canCancel) {
-    if (widgets::button(kSelCancel, x, style::kActionY, 64, style::kButtonH, "取消")) g.pending = kSelCancel;
+    if (widgets::button(kSelCancel, x, style::kActionY, 64, style::kButtonH, tr("取消", "Cancel"))) g.pending = kSelCancel;
     x += 64 + style::kGap;
   }
-  if (widgets::button(kSelDetail, x, style::kActionY, 60, style::kButtonH, "详情", widgets::Kind::Secondary,
+  if (widgets::button(kSelDetail, x, style::kActionY, 60, style::kButtonH, tr("详情", "Details"), widgets::Kind::Secondary,
                       g.sel >= 0 && g.sel < n))
     g.pending = kSelDetail;
   x += 60;
   const float cx = kBot - style::kMargin - 90;
   if (multi) R().text((x + cx) / 2, style::kActionY + 10, counter, ts(F12, (int)g.picks.size() >= least ? col::gold : col::white, CENTER));
   bool ready = multi ? (int)g.picks.size() >= least && (int)g.picks.size() <= need : g.sel >= 0 && g.sel < n;
-  if (widgets::button(kSelConfirm, cx, style::kActionY, 90, style::kButtonH, "确认", widgets::Kind::Primary, ready))
+  if (widgets::button(kSelConfirm, cx, style::kActionY, 90, style::kButtonH, tr("确认", "Confirm"), widgets::Kind::Primary, ready))
     g.pending = kSelConfirm;
   widgets::endFrame();
 }
@@ -499,7 +499,7 @@ void App::chooseOneDraw(const ChooseOneSpec& s, bool top) {
     if (o.sel >= 0 && o.sel < n) { drawCardInspect(s.cards[o.sel], 34); return; }
     screenTitle(kTop / 2, 70, s.title.empty() ? L("gameplay_ui.CHOOSE_CARD_HEADER") : s.title);
     if (!s.sub.empty()) R().text(kTop / 2, 116, s.sub, ts(F16, col::white, CENTER, kTop - 40));
-    R().text(kTop / 2, 150, s.canSkip ? "点选一张牌，再点一次拿取；也可以跳过" : "点选一张牌，再点一次拿取",
+    R().text(kTop / 2, 150, s.canSkip ? tr("点选一张牌，再点一次拿取；也可以跳过", "Tap a card, tap again to take it; or skip") : tr("点选一张牌，再点一次拿取", "Tap a card, tap again to take it"),
              ts(F12, col::gray, CENTER));
     return;
   }
@@ -521,10 +521,10 @@ void App::chooseOneDraw(const ChooseOneSpec& s, bool top) {
                                    L("gameplay_ui.CHOOSE_CARD_SKIP_BUTTON")))
     o.pending = kOneSkip;
   float dx = style::kMargin + (s.canSkip ? 84 + style::kGap : 0);
-  if (widgets::button(kOneDetail, dx, style::kActionY, 60, style::kButtonH, "详情", widgets::Kind::Secondary,
+  if (widgets::button(kOneDetail, dx, style::kActionY, 60, style::kButtonH, tr("详情", "Details"), widgets::Kind::Secondary,
                       o.sel >= 0 && o.sel < n))
     o.pending = kOneDetail;
-  if (widgets::button(kOnePick, kBot - style::kMargin - 90, style::kActionY, 90, style::kButtonH, "选择",
+  if (widgets::button(kOnePick, kBot - style::kMargin - 90, style::kActionY, 90, style::kButtonH, tr("选择", "Select"),
                       widgets::Kind::Primary, o.sel >= 0 && o.sel < n))
     o.pending = kOnePick;
   widgets::endFrame();
@@ -697,13 +697,13 @@ void App::drawDeck(bool top) {
       R().text(kTop - 10, kH - 18, num(v.sel + 1) + " / " + num(n), ts(F12, col::gray, RIGHT));
       return;
     }
-    static const char* const kTitles[4] = {"牌组", "抽牌堆", "弃牌堆", "消耗堆"};
+    const char* const kTitles[4] = {tr("牌组", "Deck"), tr("抽牌堆", "Draw Pile"), tr("弃牌堆", "Discard Pile"), tr("消耗堆", "Exhaust Pile")};
     static const char* const kInfo[4] = {"gameplay_ui.DECK_PILE_INFO", "gameplay_ui.DRAW_PILE_INFO",
                                          "gameplay_ui.DISCARD_PILE_INFO", "gameplay_ui.EXHAUST_PILE_INFO"};
     const int m = deck ? 0 : 1 + tab;
-    screenTitle(kTop / 2, 44, std::string(kTitles[m]) + "（" + num(n) + " 张）");
+    screenTitle(kTop / 2, 44, std::string(kTitles[m]) + tr("（", " (") + num(n) + tr(" 张）", " cards)"));
     R().text(kTop / 2, 88, L(kInfo[m]), ts(F12, col::white, CENTER, kTop - 40));
-    R().text(kTop / 2, kH - 30, n ? "点选一张牌查看，再点一次打开详情" : "这里没有牌", ts(F12, col::gray, CENTER));
+    R().text(kTop / 2, kH - 30, n ? tr("点选一张牌查看，再点一次打开详情", "Tap a card to inspect, tap again for details") : tr("这里没有牌", "No cards here"), ts(F12, col::gray, CENTER));
     return;
   }
 
@@ -732,7 +732,7 @@ void App::drawDeck(bool top) {
       if (!cb) return std::string("0");
       return num((int)(t == 0 ? cb->draw : t == 1 ? cb->discard : cb->exhaust).size());
     };
-    std::vector<std::string> labels = {"抽牌堆 " + count(0), "弃牌堆 " + count(1), "消耗堆 " + count(2)};
+    std::vector<std::string> labels = {tr("抽牌堆 ", "Draw ") + count(0), tr("弃牌堆 ", "Discard ") + count(1), tr("消耗堆 ", "Exhaust ") + count(2)};
     int t = widgets::tabs(kVTab0, style::kMargin, kVStripY, kBot - 2 * style::kMargin, kVStripH, labels, tab);
     if (t != tab) v.pending = kVTab0 + t;
   }
@@ -745,24 +745,24 @@ void App::drawDeck(bool top) {
     drawCard(viewCard(cards[i]), x, y, kGS, false, false, i == v.sel);
   }
   gfx::popClip();
-  if (n == 0) R().text(kBot / 2, (kVY0 + kVY1) / 2 - 8, "（空）", ts(F16, col::gray, CENTER));
+  if (n == 0) R().text(kBot / 2, (kVY0 + kVY1) / 2 - 8, tr("（空）", "(empty)"), ts(F16, col::gray, CENTER));
   gridScrollbar(kVY0, kVY1, v.scroll, gridMaxScroll(n, kVY1 - kVY0));
 
   // The action bar.
   gfx::rect(0, kGY1, kBot, kH - kGY1, style::kScrim);
   const bool focused = v.sel >= 0 && v.sel < n;
-  if (widgets::button(kVBack, style::kMargin, style::kActionY, 64, style::kButtonH, "返回")) v.pending = kVBack;
+  if (widgets::button(kVBack, style::kMargin, style::kActionY, 64, style::kButtonH, tr("返回", "Back"))) v.pending = kVBack;
   if (deck) {
     bool u = widgets::toggle(kVUpgrades, style::kMargin + 64 + 8, style::kActionY + 1, v.upgrades,
                              L("gameplay_ui.VIEW_UPGRADES"));
     if (u != v.upgrades) v.pending = kVUpgrades;
     if (widgets::button(kVDetail, kBot - style::kMargin - 64 - style::kGap - 60, style::kActionY, 60,
-                        style::kButtonH, "详情", widgets::Kind::Secondary, focused))
+                        style::kButtonH, tr("详情", "Details"), widgets::Kind::Secondary, focused))
       v.pending = kVDetail;
-    if (widgets::button(kVRelics, kBot - style::kMargin - 64, style::kActionY, 64, style::kButtonH, "遗物"))
+    if (widgets::button(kVRelics, kBot - style::kMargin - 64, style::kActionY, 64, style::kButtonH, tr("遗物", "Relics")))
       v.pending = kVRelics;
   } else {
-    if (widgets::button(kVDetail, kBot - style::kMargin - 64, style::kActionY, 64, style::kButtonH, "详情",
+    if (widgets::button(kVDetail, kBot - style::kMargin - 64, style::kActionY, 64, style::kButtonH, tr("详情", "Details"),
                         widgets::Kind::Secondary, focused))
       v.pending = kVDetail;
   }

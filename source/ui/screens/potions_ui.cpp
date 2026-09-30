@@ -32,7 +32,7 @@ void App::drawPotions(bool top) {
     if (fight) drawCombat(true);
     else { drawSceneBg(true, 0.65f); drawTopBar(); }
     if (!p) {
-      if (!fight) R().text(kTop / 2, 100, "药水", ts(F16, col::gold, CENTER, 0, 1.3f));
+      if (!fight) R().text(kTop / 2, 100, tr("药水", "Potions"), ts(F16, col::gold, CENTER, 0, 1.3f));
       return;
     }
     if (potionAim_ && fight) {
@@ -67,7 +67,7 @@ void App::drawPotions(bool top) {
     drawPotionIcon(p, kPotionAimX - 20, kPotionAimY + 2, 40);
     R().text(62, 20, L("potions." + p->locKey + ".title"), ts(F16, col::gold));
     R().text(62, 40, describePotion(p), ts(F12, col::white, LEFT, kBot - 70, 0.9f));
-    R().text(kBot / 2, 94, m > 1 ? "选择目标（←→ 或点选）" : "目标", ts(F12, col::gold, CENTER));
+    R().text(kBot / 2, 94, m > 1 ? tr("选择目标（←→ 或点选）", "Choose a target (←→ or tap)") : tr("目标", "Target"), ts(F12, col::gold, CENTER));
     const float gap = 6, tw = m ? std::min(110.f, (kBot - 16 - gap * (m - 1)) / m) : 0, th = 64, ty = 112;
     float tx = (kBot - (tw * m + gap * (m - 1))) / 2;
     for (int i = 0; i < m; ++i, tx += tw + gap) {
@@ -80,18 +80,18 @@ void App::drawPotions(bool top) {
       R().text(tx + tw / 2, ty + 6, name, ts(F12, cur ? col::gold : col::white, CENTER));
       gfx::popClip();
       R().text(tx + tw / 2, ty + 24, num(std::max(0, t->hp)) + "/" + num(t->maxHp), ts(F12, 0xFF8080FF, CENTER));
-      if (t->block > 0) R().text(tx + tw / 2, ty + 40, "格挡 " + num(t->block), ts(F12, col::blue, CENTER, 0, 0.9f));
+      if (t->block > 0) R().text(tx + tw / 2, ty + 40, tr("格挡 ", "Block ") + num(t->block), ts(F12, col::blue, CENTER, 0, 0.9f));
       hits_.push_back({tx, ty, tw, th, ID_GRID0 + i});
     }
-    button(10, 196, 110, 36, "取消", ID_BACK);
-    button(kBot - 120, 196, 110, 36, "使用", ID_CONFIRM, m > 0, true);
+    button(10, 196, 110, 36, tr("取消", "Cancel"), ID_BACK);
+    button(kBot - 120, 196, 110, 36, tr("使用", "Use"), ID_CONFIRM, m > 0, true);
     if (m > 0 && centers_.count(alive[target_])) {
       auto [cx, cy] = centers_[alive[target_]];
       drawArrow(false, kPotionAimX + kBotOX, kPotionAimY + kBotOY, cx, cy, true, false);
     }
     return;
   }
-  R().text(kBot / 2, 4, "药水", ts(F16, col::gold, CENTER));
+  R().text(kBot / 2, 4, tr("药水", "Potions"), ts(F16, col::gold, CENTER));
   const float rx = 10, rw = kBot - 20, gap = n > 3 ? 4 : 6, y0 = 26;
   const float rh = std::min(46.f, (190.f - y0 - gap * (n - 1)) / n);
   for (int i = 0; i < n; ++i) {
@@ -111,14 +111,14 @@ void App::drawPotions(bool top) {
       else if (dh > room) st.scale *= room / dh;
       if (!d.empty()) R().text(rx + 48, y + 19, d, st);
     } else {
-      R().text(rx + 48, y + (rh - R().lineHeight(F12)) / 2, "空", ts(F12, col::gray));
+      R().text(rx + 48, y + (rh - R().lineHeight(F12)) / 2, tr("空", "Empty"), ts(F12, col::gray));
     }
     hits_.push_back({rx, y, rw, rh, ID_POTION0 + i});
   }
   bool canUse = potionSel_ >= 0 && r.canUsePotion(potionSel_);
-  button(10, 196, 96, 36, "返回", ID_BACK);
-  button(112, 196, 96, 36, "丢弃", ID_DISCARD, p != nullptr);
-  button(214, 196, 96, 36, "使用", ID_USE, canUse, true);
+  button(10, 196, 96, 36, tr("返回", "Back"), ID_BACK);
+  button(112, 196, 96, 36, tr("丢弃", "Discard"), ID_DISCARD, p != nullptr);
+  button(214, 196, 96, 36, tr("使用", "Use"), ID_USE, canUse, true);
 }
 
 void App::updatePotions(const gfx::Input& in) {
@@ -187,7 +187,7 @@ void App::drawPotionOffer(bool top) {
   if (top) {
     drawSceneBg(true, 0.6f);
     drawTopBar();
-    R().text(kTop / 2, 24, "药水", ts(F16, col::gold, CENTER));
+    R().text(kTop / 2, 24, tr("药水", "Potions"), ts(F16, col::gold, CENTER));
     if (p) {
       gfx::circle(kTop / 2.f, 84, 38, 0xFFE07030);
       drawPotionIcon(p, kTop / 2.f - 28, 56, 56);
@@ -206,7 +206,7 @@ void App::drawPotionOffer(bool top) {
     R().text(kBot / 2, y + s + 4, L("potions." + p->locKey + ".title"), ts(F16, col::white, CENTER));
   }
   if (!room) {
-    R().text(kBot / 2, 74, "药水栏已满：点一瓶丢弃，或跳过", ts(F12, col::gold, CENTER));
+    R().text(kBot / 2, 74, tr("药水栏已满：点一瓶丢弃，或跳过", "Potion belt full: tap one to discard, or skip"), ts(F12, col::gold, CENTER));
     for (int i = 0; i < (int)r.potions.size(); ++i) {
       const int belt = (int)r.potions.size();
       const float pw = std::min(72.f, (kBot - 20.f) / belt - 6), step = (kBot - 20.f) / belt;
@@ -214,15 +214,15 @@ void App::drawPotionOffer(bool top) {
       panel(x, y, pw, 80, 0x2A2218E8, 0x8A7A5AFF);
       drawPotionIcon(r.potions[i].get(), x + pw / 2 - 20, y + 6, 40);
       if (r.potions[i]) R().text(x + pw / 2, y + 50, L("potions." + r.potions[i]->locKey + ".title"), ts(F12, col::white, CENTER, pw - 2, 0.7f));
-      R().text(x + pw / 2, y + 64, "丢弃", ts(F12, col::red, CENTER, 0, 0.8f));
+      R().text(x + pw / 2, y + 64, tr("丢弃", "Discard"), ts(F12, col::red, CENTER, 0, 0.8f));
       hits_.push_back({x, y, pw, 80, ID_POTION0 + i});
     }
   }
   // S14: nine-slice widget buttons (F3) in place of the flat-fill legacy button().
   widgets::beginFrame(gfx::input());
-  if (widgets::button(1, 10, style::kActionY, 110, style::kButtonH, "跳过") && r.potionOfferChoice.waiting())
+  if (widgets::button(1, 10, style::kActionY, 110, style::kButtonH, tr("跳过", "Skip")) && r.potionOfferChoice.waiting())
     r.potionOfferChoice.fire(0);
-  if (widgets::button(2, kBot - 120, style::kActionY, 110, style::kButtonH, "拿取", widgets::Kind::Primary,
+  if (widgets::button(2, kBot - 120, style::kActionY, 110, style::kButtonH, tr("拿取", "Take"), widgets::Kind::Primary,
                       p != nullptr && room) &&
       r.potionOfferChoice.waiting())
     r.potionOfferChoice.fire(1);

@@ -129,9 +129,9 @@ std::string dateTime(int64_t t, bool withYear = true) {
 }
 
 std::string resultText(const history::RunRecord& r) {
-  if (r.win) return "[green]胜利[/green]";
-  if (r.abandoned) return "[purple]放弃[/purple]";
-  return "[red]败北[/red]";
+  if (r.win) return tr("[green]胜利[/green]", "[green]Victory[/green]");
+  if (r.abandoned) return tr("[purple]放弃[/purple]", "[purple]Abandoned[/purple]");
+  return tr("[red]败北[/red]", "[red]Defeat[/red]");
 }
 
 // NRunHistory.LoadDeathQuote: the quote under the header, picked with the run's seed.
@@ -380,16 +380,16 @@ void App::drawStatsPage(bool top) {
       statEntry(x1, y0, cw, "stats_swords", fill(ss("ENTRY_WIN_LOSS.top"), "Amount", num(asc) + "/" + num(10 * (int)ids.size())),
                 fill(fill(ss("ENTRY_WIN_LOSS.bottom"), "Wins", num(wins)), "Losses", num(losses)));
       statEntry(x0, y0 + rh, cw, "stats_chain", fill(ss("ENTRY_STREAK.top"), "Amount", num(best)),
-                "放弃 [blue]" + std::to_string(counter("runsAbandoned")) + "[/blue]");
-      statEntry(x1, y0 + rh, cw, "stats_trophy", "最高分数 [blue]" + num(h.bestScore) + "[/blue]",
-                "历史记录 [blue]" + num((int)s.runs.size()) + "[/blue]");
-      statEntry(x0, y0 + 2 * rh, cw, "stats_cards", "卡牌", fill(ss("ENTRY_CARDS.bottom"), "Amount", num((int)pr.seenCards.size())));
-      statEntry(x1, y0 + 2 * rh, cw, "stats_chest", "遗物", fill(ss("ENTRY_RELIC.bottom"), "Amount", num((int)pr.seenRelics.size())));
-      statEntry(x0, y0 + 3 * rh, cw, "stats_potions_seen", "药水",
+                tr("放弃 [blue]", "Abandoned [blue]") + std::to_string(counter("runsAbandoned")) + "[/blue]");
+      statEntry(x1, y0 + rh, cw, "stats_trophy", tr("最高分数 [blue]", "High score [blue]") + num(h.bestScore) + "[/blue]",
+                tr("历史记录 [blue]", "Run history [blue]") + num((int)s.runs.size()) + "[/blue]");
+      statEntry(x0, y0 + 2 * rh, cw, "stats_cards", tr("卡牌", "Cards"), fill(ss("ENTRY_CARDS.bottom"), "Amount", num((int)pr.seenCards.size())));
+      statEntry(x1, y0 + 2 * rh, cw, "stats_chest", tr("遗物", "Relics"), fill(ss("ENTRY_RELIC.bottom"), "Amount", num((int)pr.seenRelics.size())));
+      statEntry(x0, y0 + 3 * rh, cw, "stats_potions_seen", tr("药水", "Potions"),
                 fill(ss("ENTRY_POTION.bottom"), "Amount", num((int)pr.seenPotions.size())));
-      statEntry(x1, y0 + 3 * rh, cw, "stats_monsters", "怪物",
+      statEntry(x1, y0 + 3 * rh, cw, "stats_monsters", tr("怪物", "Monsters"),
                 fill(ss("ENTRY_MONSTER.bottom"), "Amount", num((int)pr.seenMonsters.size())));
-      R().text(kTop / 2, py + ph - 20, "游玩时间与最高分数来自最近 " + num(history::kMax) + " 局的历史记录",
+      R().text(kTop / 2, py + ph - 20, tr("游玩时间与最高分数来自最近 ", "Play time and high score come from the last ") + num(history::kMax) + tr(" 局的历史记录", " runs in the history"),
                ts(F12, col::gray, CENTER));
       return;
     }
@@ -413,8 +413,8 @@ void App::drawStatsPage(bool top) {
               fill(fill(ss("ENTRY_CHAR_WIN_LOSS.bottom"), "Wins", num(cp.wins)), "Losses", num(cp.losses)));
     statEntry(x, y + 84, w, "stats_chain", fill(ss("ENTRY_CHAR_STREAK.top"), "Amount", num(cp.currentStreak)),
               fill(ss("ENTRY_CHAR_STREAK.bottom"), "Amount", num(cp.bestStreak)));
-    statEntry(x, y + 126, w, "stats_trophy", "最高分数 [blue]" + num(h.bestScore) + "[/blue]",
-              "历史记录 [blue]" + num(h.runs) + "[/blue]");
+    statEntry(x, y + 126, w, "stats_trophy", tr("最高分数 [blue]", "High score [blue]") + num(h.bestScore) + "[/blue]",
+              tr("历史记录 [blue]", "Run history [blue]") + num(h.runs) + "[/blue]");
     return;
   }
 
@@ -431,7 +431,7 @@ void App::drawStatsPage(bool top) {
                ts(F16, focus ? col::gold : col::white));
       int w = 0, l = 0;
       for (auto& [cid, c] : pr.characters) { w += c.wins; l += c.losses; }
-      R().text(rx + rw - 8, y + 7, "[green]" + num(w) + " 胜[/green]  [red]" + num(l) + " 败[/red]", ts(F12, col::white, RIGHT));
+      R().text(rx + rw - 8, y + 7, "[green]" + num(w) + tr(" 胜[/green]  [red]", " W[/green]  [red]") + num(l) + tr(" 败[/red]", " L[/red]"), ts(F12, col::white, RIGHT));
     } else {
       const std::string& id = ids[i - 1];
       Sprite ic = R().sprite(charIcon(id));
@@ -440,14 +440,14 @@ void App::drawStatsPage(bool top) {
       CharacterProgress cp;
       if (auto it = pr.characters.find(id); it != pr.characters.end()) cp = it->second;
       R().text(rx + rw - 8, y + 7,
-               "[green]" + num(cp.wins) + " 胜[/green]  [red]" + num(cp.losses) + " 败[/red]   进阶 [blue]" + num(cp.maxAscension) + "[/blue]",
+               "[green]" + num(cp.wins) + tr(" 胜[/green]  [red]", " W[/green]  [red]") + num(cp.losses) + tr(" 败[/red]   进阶 [blue]", " L[/red]   Ascension [blue]") + num(cp.maxAscension) + "[/blue]",
                ts(F12, col::white, RIGHT));
     }
     if (focus) outline(rx, y, rw, rh);
     hits_.push_back({rx, y, rw, rh, kStatRow0 + i});
   }
   widgets::panel("ui/btn_back", 8, kBarY, 96, kBarH);
-  R().text(8 + 48, kBarY + (kBarH - R().lineHeight(F16)) / 2, "返回", ts(F16, col::white, CENTER));
+  R().text(8 + 48, kBarY + (kBarH - R().lineHeight(F16)) / 2, tr("返回", "Back"), ts(F16, col::white, CENTER));
   hits_.push_back({8, kBarY, 96, kBarH, kBackId});
   const float hw = 124, hx = kBot - 8 - hw;
   spr(R().sprite("ui/btn_compendium"), hx, kBarY, hw, kBarH, 0xFFFFFFFF);
@@ -474,7 +474,7 @@ void App::drawHistoryList(bool top) {
     const float px = 12, py = 30, pw = kTop - 24, ph = kH - py - 8;
     widgets::panel("ui/hover_tip", px, py, pw, ph);
     if (n == 0) {
-      R().text(kTop / 2, py + ph / 2 - 8, "还没有完成的游戏", ts(F16, col::gray, CENTER));
+      R().text(kTop / 2, py + ph / 2 - 8, tr("还没有完成的游戏", "No finished runs yet"), ts(F16, col::gray, CENTER));
       return;
     }
     const history::RunRecord& r = s.runs[std::clamp(s.runSel, 0, n - 1)];
@@ -482,7 +482,7 @@ void App::drawHistoryList(bool top) {
     Sprite ic = R().sprite(charIcon(r.character));
     if (ic) spr(ic, px + 10, y, 26, 26);
     std::string head = charTitle(r.character);
-    if (r.ascension > 0) head += "   进阶 " + num(r.ascension);
+    if (r.ascension > 0) head += tr("   进阶 ", "   Ascension ") + num(r.ascension);
     R().text(px + 42, y + 4, head, ts(F16, col::gold));
     R().text(px + pw - 12, y + 4, resultText(r), ts(F16, col::white, RIGHT));
     y += 30;
@@ -493,13 +493,13 @@ void App::drawHistoryList(bool top) {
              ts(F12, col::white));
     y += 18;
     R().text(px + 12, y,
-             "第 [blue]" + num(r.floorReached) + "[/blue] 层   用时 [blue]" + duration(r.runTime) + "[/blue]   分数 [gold]" + num(r.score) +
+             tr("第 [blue]", "Floor [blue]") + num(r.floorReached) + tr("[/blue] 层   用时 [blue]", "[/blue]   Time [blue]") + duration(r.runTime) + tr("[/blue]   分数 [gold]", "[/blue]   Score [gold]") + num(r.score) +
                  "[/gold]   [icon:hp] " + num(r.hp) + "/" + num(r.maxHp) + "   [icon:gold] " + num(r.gold),
              ts(F12, col::white));
     y += 22;
     // The path preview: one row of small room icons per act.
     for (int a = 0; a < (int)r.path.size() && y < py + ph - 50; ++a) {
-      R().text(px + 12, y + 1, "第" + num(a + 1) + "幕", ts(F12, col::gray));
+      R().text(px + 12, y + 1, tr("第", "Act ") + num(a + 1) + tr("幕", ""), ts(F12, col::gray));
       float x = px + 50;
       for (auto& p : r.path[a]) {
         Sprite si = R().sprite(pointIcon(p));
@@ -520,12 +520,12 @@ void App::drawHistoryList(bool top) {
       drawBadge(b, bx, y + 16, 24);
       bx += 26;
     }
-    if (r.badges.empty()) R().text(px + 12, y + 20, r.abandoned ? "放弃的游戏没有徽章" : "没有徽章", ts(F12, col::gray));
+    if (r.badges.empty()) R().text(px + 12, y + 20, r.abandoned ? tr("放弃的游戏没有徽章", "Abandoned runs earn no badges") : tr("没有徽章", "No badges"), ts(F12, col::gray));
     return;
   }
 
   // Bottom: header, the rows, the action bar.
-  R().text(10, 6, L("main_menu_ui.RUN_HISTORY.title") + "（" + num(n) + "）", ts(F16, col::gold));
+  R().text(10, 6, L("main_menu_ui.RUN_HISTORY.title") + tr("（", " (") + num(n) + tr("）", ")"), ts(F16, col::gold));
   if (n > 0) R().text(kBot - 10, 8, num(s.runSel + 1) + " / " + num(n), ts(F12, col::gray, RIGHT));
   s.runSel = std::clamp(s.runSel, 0, std::max(0, n - 1));
   if (s.runSel < s.runTop) s.runTop = s.runSel;
@@ -540,16 +540,16 @@ void App::drawHistoryList(bool top) {
     Sprite ic = R().sprite(charIcon(r.character));
     if (ic) spr(ic, rx + 3, y + 2, 18, 18);
     R().text(rx + 25, y + 4, resultText(r), ts(F12, col::white));
-    R().text(rx + 60, y + 4, r.ascension > 0 ? "进阶" + num(r.ascension) : std::string("-"), ts(F12, col::blue));
-    R().text(rx + 104, y + 4, "第" + num(r.floorReached) + "层", ts(F12, col::white));
+    R().text(rx + 60, y + 4, r.ascension > 0 ? tr("进阶", "A") + num(r.ascension) : std::string("-"), ts(F12, col::blue));
+    R().text(rx + 104, y + 4, tr("第", "Floor ") + num(r.floorReached) + tr("层", ""), ts(F12, col::white));
     R().text(rx + 158, y + 4, dateTime(r.startTime, false), ts(F12, col::gray));
     R().text(rx + rw - 6, y + 4, num(r.score), ts(F12, col::gold, RIGHT));
     if (focus) outline(rx, y, rw, kListRowH - 2);
     hits_.push_back({rx, y, rw, kListRowH - 2, kRunRow0 + i});
   }
-  if (n == 0) R().text(kBot / 2, 90, "还没有完成的游戏", ts(F16, col::gray, CENTER));
+  if (n == 0) R().text(kBot / 2, 90, tr("还没有完成的游戏", "No finished runs yet"), ts(F16, col::gray, CENTER));
   widgets::panel("ui/btn_back", 8, kBarY, 96, kBarH);
-  R().text(8 + 48, kBarY + (kBarH - R().lineHeight(F16)) / 2, "返回", ts(F16, col::white, CENTER));
+  R().text(8 + 48, kBarY + (kBarH - R().lineHeight(F16)) / 2, tr("返回", "Back"), ts(F16, col::white, CENTER));
   hits_.push_back({8, kBarY, 96, kBarH, kBackId});
   // Page buttons (L / R) and 查看 (A).
   const float pb = 40, px0 = 116;
@@ -563,7 +563,7 @@ void App::drawHistoryList(bool top) {
   }
   const float ow = 96, ox = kBot - 8 - ow;
   widgets::panel("ui/btn_proceed", ox, kBarY, ow, kBarH, n ? 0xFFFFFFFF : 0x707070FF);
-  R().text(ox + ow / 2, kBarY + (kBarH - R().lineHeight(F16)) / 2, "查看", ts(F16, n ? col::white : col::gray, CENTER));
+  R().text(ox + ow / 2, kBarY + (kBarH - R().lineHeight(F16)) / 2, tr("查看", "View"), ts(F16, n ? col::white : col::gray, CENTER));
   hits_.push_back({ox, kBarY, ow, kBarH, kOpenRun});
 }
 
@@ -581,11 +581,11 @@ void App::drawRunDetail(bool top) {
     Sprite ic = R().sprite(charIcon(r.character));
     if (ic) spr(ic, px + 8, 9, 22, 22);
     std::string head = charTitle(r.character);
-    if (r.ascension > 0) head += "  进阶 " + num(r.ascension);
+    if (r.ascension > 0) head += tr("  进阶 ", "  Ascension ") + num(r.ascension);
     R().text(px + 36, 10, head, ts(F16, col::gold));
-    R().text(px + pw - 10, 10, resultText(r) + "   分数 [gold]" + num(r.score) + "[/gold]", ts(F16, col::white, RIGHT));
+    R().text(px + pw - 10, 10, resultText(r) + tr("   分数 [gold]", "   Score [gold]") + num(r.score) + "[/gold]", ts(F16, col::white, RIGHT));
     R().text(px + 10, 34, "[gold]" + dateTime(r.startTime) + "[/gold]   " + fill(L("run_history.INFO.SEED"), "Seed", std::to_string((unsigned long long)r.seed)) +
-                              "   第 " + num(r.floorReached) + " 层   " + duration(r.runTime),
+                              tr("   第 ", "   Floor ") + num(r.floorReached) + tr(" 层   ", "   ") + duration(r.runTime),
              ts(F12, col::white));
     // The focused item.
     const float by = 68, bh = kH - by - 4;
@@ -593,7 +593,7 @@ void App::drawRunDetail(bool top) {
     if (count == 0) {
       uint32_t qc;
       R().text(kTop / 2, by + 20, deathQuote(r, &qc), ts(F12, qc, CENTER, pw - 30));
-      R().text(kTop / 2, by + bh / 2, s.tab == 3 ? (r.abandoned ? "放弃的游戏没有徽章" : "没有徽章") : "（空）", ts(F12, col::gray, CENTER));
+      R().text(kTop / 2, by + bh / 2, s.tab == 3 ? (r.abandoned ? tr("放弃的游戏没有徽章", "Abandoned runs earn no badges") : tr("没有徽章", "No badges")) : tr("（空）", "(empty)"), ts(F12, col::gray, CENTER));
       return;
     }
     if (s.tab == 0) {  // a floor: NMapPointHistoryEntry's hover tip
@@ -603,19 +603,19 @@ void App::drawRunDetail(bool top) {
       if (si) spr(si, px + 12, by + 10, 36, 36);
       std::string title = f.number ? fill(L("run_history.MAP_POINT_HISTORY.header"), "FloorNum", num(f.number)) : pointTypeName(p.type);
       R().text(px + 56, by + 10, title, ts(F16, col::gold));
-      R().text(px + 56, by + 30, "第" + num(f.act + 1) + "幕 · " + pointTypeName(p.type), ts(F12, col::gray));
+      R().text(px + 56, by + 30, tr("第", "Act ") + num(f.act + 1) + tr("幕 · ", " · ") + pointTypeName(p.type), ts(F12, col::gray));
       float y = by + 54;
       for (auto& room : p.rooms) {
         std::string line = roomKindName(room.type);
         if (!room.model.empty()) {
           bool fight = room.type == history::RoomKind::Monster || room.type == history::RoomKind::Elite || room.type == history::RoomKind::Boss;
-          line += "：[gold]" + (fight ? encounterTitle(room.model) : eventTitle(room.model)) + "[/gold]";
+          line += tr("：[gold]", ": [gold]") + (fight ? encounterTitle(room.model) : eventTitle(room.model)) + "[/gold]";
         }
         R().text(px + 16, y, line, ts(F12, col::white, LEFT, pw - 32));
         y += 17;
       }
       std::string st;
-      if (p.goldGained > 0) st += "[gold]+" + num(p.goldGained) + " 金币[/gold]   ";
+      if (p.goldGained > 0) st += "[gold]+" + num(p.goldGained) + tr(" 金币[/gold]   ", " Gold[/gold]   ");
       if (p.goldSpent > 0) st += fill(L("run_history.HISTORY_ENTRY.goldSpent"), "Amount", num(p.goldSpent)) + "   ";
       if (p.damageTaken > 0) st += fill(L("run_history.MAP_POINT_HISTORY.damageTaken"), "Damage", num(p.damageTaken)) + "   ";
       if (!st.empty()) { R().text(px + 16, y + 2, st, ts(F12, col::white, LEFT, pw - 32)); y += 19; }
@@ -640,16 +640,16 @@ void App::drawRunDetail(bool top) {
       drawBadge(b, kTop / 2 - 32, by + 14, 64);
       TextStyle nt = ts(F16, col::gold, CENTER, 0, 1.2f);
       R().text(kTop / 2, by + 86, badgeText(b, true), nt);
-      static const char* rar[] = {"", "铜", "银", "金"};
-      R().text(kTop / 2, by + 110, std::string(rar[std::clamp(b.rarity, 0, 3)]) + "徽章", ts(F12, col::gray, CENTER));
+      const char* rar[] = {"", tr("铜", "Bronze"), tr("银", "Silver"), tr("金", "Gold")};
+      R().text(kTop / 2, by + 110, std::string(rar[std::clamp(b.rarity, 0, 3)]) + tr("徽章", " badge"), ts(F12, col::gray, CENTER));
       R().text(kTop / 2, by + 128, badgeText(b, false), ts(F12, col::white, CENTER, pw - 40));
     }
     return;
   }
 
   // Bottom: the tab strip, the tab's items, the action bar.
-  const std::string labels[kTabs] = {"路线", "牌组 " + num((int)s.cards.size()), "遗物 " + num((int)s.relics.size()),
-                                     "徽章 " + num((int)r.badges.size())};
+  const std::string labels[kTabs] = {tr("路线", "Path"), tr("牌组 ", "Deck ") + num((int)s.cards.size()), tr("遗物 ", "Relics ") + num((int)s.relics.size()),
+                                     tr("徽章 ", "Badges ") + num((int)r.badges.size())};
   const float tw = (kBot - 16 - 3 * 4) / kTabs;
   for (int t = 0; t < kTabs; ++t) {
     const float x = 8 + t * (tw + 4);
@@ -667,7 +667,7 @@ void App::drawRunDetail(bool top) {
     for (int a = 0; a < (int)r.path.size(); ++a) {
       std::string an = a < (int)r.acts.size() ? r.acts[a] : "";
       std::string ak = "acts." + upperSnake(an) + ".title";
-      R().text(10, y, "第" + num(a + 1) + "幕" + (R().hasLoc(ak) ? " · " + L(ak) : std::string()), ts(F12, col::gray));
+      R().text(10, y, tr("第", "Act ") + num(a + 1) + tr("幕", "") + (R().hasLoc(ak) ? " · " + L(ak) : std::string()), ts(F12, col::gray));
       y += 15;
       for (int i = 0; i < (int)s.floors.size(); ++i) {
         const Floor& f = s.floors[i];
@@ -725,13 +725,13 @@ void App::drawRunDetail(bool top) {
       if (i == sel) outline(8, y, kBot - 16, kBadgeRowH - 3, col::gold, 1);
       hits_.push_back({8, y, kBot - 16, kBadgeRowH - 3, kItem0 + i});
     }
-    if (count == 0) R().text(kBot / 2, kContentY + 60, r.abandoned ? "放弃的游戏没有徽章" : "没有徽章", ts(F16, col::gray, CENTER));
+    if (count == 0) R().text(kBot / 2, kContentY + 60, r.abandoned ? tr("放弃的游戏没有徽章", "Abandoned runs earn no badges") : tr("没有徽章", "No badges"), ts(F16, col::gray, CENTER));
   }
   gfx::popClip();
   widgets::panel("ui/btn_back", 8, kBarY, 96, kBarH);
-  R().text(8 + 48, kBarY + (kBarH - R().lineHeight(F16)) / 2, "返回", ts(F16, col::white, CENTER));
+  R().text(8 + 48, kBarY + (kBarH - R().lineHeight(F16)) / 2, tr("返回", "Back"), ts(F16, col::white, CENTER));
   hits_.push_back({8, kBarY, 96, kBarH, kBackId});
-  R().text(kBot - 10, kBarY + 10, "L / R 切换", ts(F12, col::gray, RIGHT));
+  R().text(kBot - 10, kBarY + 10, tr("L / R 切换", "L / R Switch"), ts(F12, col::gray, RIGHT));
 }
 
 // ================================================================ input

@@ -368,7 +368,7 @@ void App::drawStatusBar(float y) {
     R().text(ix + 23, y + 2, num(incoming), st);
   } else {
     if (!other.empty()) spr(R().sprite(other), ix, y + 1, 21, 21);
-    R().text(ix + 24, y + 4, "安全", ts(F12, 0x80C8FFFF, LEFT));
+    R().text(ix + 24, y + 4, tr("安全", "Safe"), ts(F12, 0x80C8FFFF, LEFT));
   }
 }
 
@@ -515,7 +515,7 @@ void drawInspectTip(const InspectTip& t, float x, float y, float w) {
 std::vector<InspectTip> inspectTips(Run& r, Combat& cb, Creature* c) {
   std::vector<InspectTip> out;
   if (c->monster && c->monster->nextMove && cb.inProgress && !c->monster->nextMove->intents.empty()) {
-    out.push_back({{}, "意图", "", "", col::white, true});
+    out.push_back({{}, tr("意图", "Intent"), "", "", col::white, true});
     for (auto& in : c->monster->nextMove->intents) {
       IntentShown sh = intentShown(cb, c, in);
       InspectTip t;
@@ -532,10 +532,10 @@ std::vector<InspectTip> inspectTips(Run& r, Combat& cb, Creature* c) {
       if (!dup) out.push_back(t);
     }
   }
-  out.push_back({{}, "能力", "", "", col::white, true});
+  out.push_back({{}, tr("能力", "Powers"), "", "", col::white, true});
   if (c->powers.empty()) {
     InspectTip t;
-    t.title = "没有能力";
+    t.title = tr("没有能力", "No powers");
     out.push_back(t);
   }
   for (auto& up : c->powers) {
@@ -625,7 +625,7 @@ void App::drawCombatInspect(bool top) {
     widgets::panel("ui/hover_tip", lx - lw / 2, kInsTop, lw, kInsBottom - kInsTop, 0xFFFFFFB0);
     TextStyle nt = ts(F16, col::gold, CENTER, lw - 10);
     R().text(lx, kInsTop + 4, creatureName(*run_, c), nt);
-    const char* kind = c->isPlayer ? "玩家" : c == cb->osty ? "召唤物" : "敌人";
+    const char* kind = c->isPlayer ? tr("玩家", "Player") : c == cb->osty ? tr("召唤物", "Summon") : tr("敌人", "Enemy");
     R().text(lx, kInsTop + 22, kind, ts(F12, col::gray, CENTER));
     Sprite s = R().sprite("creature/" + (c->isPlayer ? playerArt(run_.get()) : c->name));
     const float feet = 180, boxW = lw - 16, boxH = feet - (kInsTop + 40);
@@ -635,8 +635,8 @@ void App::drawCombatInspect(bool top) {
     gfx::popClip();
     if (c->displayHp < 0) c->displayHp = (float)c->hp;
     drawHpBar(c, lx + 6, feet + 8, 108);
-    std::string line = c->block > 0 ? "格挡 " + num(c->block) : "";
-    if (c->isPlayer) line += (line.empty() ? "" : "  ·  ") + std::string("能量 ") + num(cb->energy) + "/" + num(cb->maxEnergyNow());
+    std::string line = c->block > 0 ? tr("格挡 ", "Block ") + num(c->block) : "";
+    if (c->isPlayer) line += (line.empty() ? "" : "  ·  ") + std::string(tr("能量 ", "Energy ")) + num(cb->energy) + "/" + num(cb->maxEnergyNow());
     if (!line.empty()) R().text(lx, feet + 22, line, ts(F12, c->block > 0 ? col::blue : col::white, CENTER));
     if (inspectPages_ > 1)
       R().text(lx, kInsBottom - 16, num(inspectPage_ + 1) + " / " + num(inspectPages_) + "  ↑↓", ts(F12, col::gray, CENTER));
@@ -670,7 +670,7 @@ void App::drawCombatInspect(bool top) {
 
   // Bottom: the creatures as chips (tap one), prev / next, pages, 关闭 at the bottom left.
   gfx::rect(0, 0, kBot, kH, style::kScrim);
-  R().text(kBot / 2, 6, "←→ / L R 切换  ·  ↑↓ 翻页  ·  B 关闭", ts(F12, col::gray, CENTER, kBot - 16));
+  R().text(kBot / 2, 6, tr("←→ / L R 切换  ·  ↑↓ 翻页  ·  B 关闭", "←→ / L R Switch  ·  ↑↓ Page  ·  B Close"), ts(F12, col::gray, CENTER, kBot - 16));
   gfx::Input wi = pauseOpen_ ? gfx::Input{} : gfx::input();
   wi.down = wi.held = wi.up = 0;  // keys are read by updateCombatInspect; only touch here
   bool& armed = inspectTouchArmed();
@@ -692,8 +692,8 @@ void App::drawCombatInspect(bool top) {
     R().text(x + cw / 2, y + 4, creatureName(*run_, e), ts(F12, cur ? col::gold : col::white, CENTER));
     gfx::popClip();
     R().text(x + cw / 2, y + 20, num(std::max(0, e->hp)) + "/" + num(e->maxHp), ts(F12, 0xFF8080FF, CENTER, 0, 0.9f));
-    if (e->block > 0) R().text(x + cw / 2, y + 34, "格挡 " + num(e->block), ts(F12, col::blue, CENTER, 0, 0.85f));
-    else if (!e->powers.empty()) R().text(x + cw / 2, y + 34, num((int)e->powers.size()) + " 能力", ts(F12, col::gray, CENTER, 0, 0.85f));
+    if (e->block > 0) R().text(x + cw / 2, y + 34, tr("格挡 ", "Block ") + num(e->block), ts(F12, col::blue, CENTER, 0, 0.85f));
+    else if (!e->powers.empty()) R().text(x + cw / 2, y + 34, num((int)e->powers.size()) + tr(" 能力", " powers"), ts(F12, col::gray, CENTER, 0, 0.85f));
     if (widgets::hit(kInsChip0 + i, x, y, cw, ch) && i != inspect_) {
       inspect_ = i;
       inspectPage_ = 0;
@@ -702,18 +702,18 @@ void App::drawCombatInspect(bool top) {
   }
   // The shown creature's name and what the pages hold.
   R().text(kBot / 2, 92, creatureName(*run_, c), ts(F16, col::gold, CENTER, kBot - 16));
-  std::string sub = c->isPlayer ? "玩家" : c == cb->osty ? "召唤物" : "敌人";
-  sub += "  ·  " + num((int)c->powers.size()) + " 个能力";
+  std::string sub = c->isPlayer ? tr("玩家", "Player") : c == cb->osty ? tr("召唤物", "Summon") : tr("敌人", "Enemy");
+  sub += "  ·  " + num((int)c->powers.size()) + tr(" 个能力", " powers");
   R().text(kBot / 2, 112, sub, ts(F12, col::gray, CENTER));
   if (inspectPages_ > 1) {
-    if (widgets::button(kInsPgUpId, kBot / 2 - 110, 138, 72, style::kButtonH, "上一页", widgets::Kind::Secondary, inspectPage_ > 0))
+    if (widgets::button(kInsPgUpId, kBot / 2 - 110, 138, 72, style::kButtonH, tr("上一页", "Prev"), widgets::Kind::Secondary, inspectPage_ > 0))
       inspectPage_ = std::max(0, inspectPage_ - 1);
     R().text(kBot / 2, 146, num(inspectPage_ + 1) + " / " + num(inspectPages_), ts(F16, col::white, CENTER));
-    if (widgets::button(kInsPgDnId, kBot / 2 + 38, 138, 72, style::kButtonH, "下一页", widgets::Kind::Secondary,
+    if (widgets::button(kInsPgDnId, kBot / 2 + 38, 138, 72, style::kButtonH, tr("下一页", "Next"), widgets::Kind::Secondary,
                         inspectPage_ + 1 < inspectPages_))
       inspectPage_ = std::min(inspectPages_ - 1, inspectPage_ + 1);
   }
-  if (widgets::button(kInsCloseId, style::kMargin, style::kActionY, 72, style::kButtonH, "关闭")) inspect_ = -1;
+  if (widgets::button(kInsCloseId, style::kMargin, style::kActionY, 72, style::kButtonH, tr("关闭", "Close"))) inspect_ = -1;
   if (n > 1) {
     if (widgets::button(kInsPrevId, kBot - style::kMargin - 52 * 2 - 4, style::kActionY, 52, style::kButtonH, "◀")) {
       inspect_ = (inspect_ - 1 + n) % n;

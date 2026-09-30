@@ -47,8 +47,8 @@ enum Item {
 // Widget ids. Row controls are kRowId + item.
 enum : int { kTabsId = 2600, kRowId = 2620, kBackId = 2650, kResetId = 2651 };
 
-// Y3 hook: the language cycler is shown but locked until English loc + fonts are baked.
-constexpr bool kLanguageReady = false;
+// Y3: the language cycler switches 简体中文 / English at once (Res::setLanguage reloads the loc
+// table and the glyph pages); like the C# it is only enabled from the main menu.
 
 struct Def {
   Item item;
@@ -97,20 +97,20 @@ std::string tabLabel(int t) {
 }
 
 std::string itemTitle(const Def& d, bool inRun) {
-  if (d.item == kDeleteData) return "删除档案数据";
-  if (d.item == kCredits) return "制作人员";
+  if (d.item == kDeleteData) return tr("删除档案数据", "Delete Profile Data");
+  if (d.item == kCredits) return tr("制作人员", "Credits");
   if (d.item == kLanguage && inRun) return S("LANGUAGE_IN_RUN");
   return S(d.title);
 }
 
 std::string itemDesc(const Def& d) {
   switch (d.item) {
-    case kLanguage: return "切换游戏语言。英文版尚未提供，目前只有简体中文。";
-    case kCredits: return "查看游戏的制作人员名单，以及本移植的说明。";
-    case kBgm: return "调节背景音乐的音量。";
-    case kSfx: return "调节战斗与界面音效的音量。";
-    case kAmbience: return "调节房间环境音的音量。";
-    case kDeleteData: return "删除当前档案的进行中存档与进度（解锁、统计），并把所有设置恢复为默认。此操作无法撤销。";
+    case kLanguage: return tr("切换游戏语言（简体中文 / English）。只能在主菜单切换。", "Switch the game language (简体中文 / English). Only available from the main menu.");
+    case kCredits: return tr("查看游戏的制作人员名单，以及本移植的说明。", "View the game's credits and notes about this port.");
+    case kBgm: return tr("调节背景音乐的音量。", "Adjust the volume of the background music.");
+    case kSfx: return tr("调节战斗与界面音效的音量。", "Adjust the volume of combat and interface sound effects.");
+    case kAmbience: return tr("调节房间环境音的音量。", "Adjust the volume of room ambience.");
+    case kDeleteData: return tr("删除当前档案的进行中存档与进度（解锁、统计），并把所有设置恢复为默认。此操作无法撤销。", "Delete the current profile's run in progress and progress (unlocks, statistics), and reset all settings to their defaults. This cannot be undone.");
     default: return S(d.desc);
   }
 }
@@ -181,17 +181,17 @@ void App::drawSettings(bool top) {
     if (d && d->tab == tab_) {
       R().text(px + 14, py + 12, itemTitle(*d, inRun), ts(F16, col::gold, LEFT, pw - 28));
       R().text(px + 14, py + 40, itemDesc(*d), ts(F12, col::white, LEFT, pw - 28));
-      if (!d->wired) R().text(px + 14, py + ph - 22, "此选项会被保存，但本移植尚未接入它的效果。", ts(F12, col::gray, LEFT, pw - 28));
-      else if (d->item == kLanguage && inRun) R().text(px + 14, py + ph - 22, "仅可在主菜单调整。", ts(F12, col::red, LEFT, pw - 28));
+      if (!d->wired) R().text(px + 14, py + ph - 22, tr("此选项会被保存，但本移植尚未接入它的效果。", "This option is saved, but this port does not use it yet."), ts(F12, col::gray, LEFT, pw - 28));
+      else if (d->item == kLanguage && inRun) R().text(px + 14, py + ph - 22, tr("仅可在主菜单调整。", "Can only be changed from the main menu."), ts(F12, col::red, LEFT, pw - 28));
     } else {
       R().text(px + 14, py + 12, tabLabel(tab_), ts(F16, col::gold, LEFT, pw - 28));
-      R().text(px + 14, py + 40, "选择一项设置来查看说明。", ts(F12, col::gray, LEFT, pw - 28));
+      R().text(px + 14, py + 40, tr("选择一项设置来查看说明。", "Select a setting to see its description."), ts(F12, col::gray, LEFT, pw - 28));
     }
     if (noteT_ > 0) {
       uint32_t a = (uint32_t)(0xFF * std::min(1.f, noteT_ / 0.3f));
       R().text(kTop / 2, 192, note_, ts(F12, (col::white & 0xFFFFFF00u) | a, CENTER, kTop - 40));
     }
-    R().text(kTop / 2, 222, "L/R 切换分页　A 确认　B 返回", ts(F12, col::gray, CENTER));
+    R().text(kTop / 2, 222, tr("L/R 切换分页　A 确认　B 返回", "L/R Switch tab   A Confirm   B Back"), ts(F12, col::gray, CENTER));
     return;
   }
 
@@ -222,11 +222,18 @@ void App::drawSettings(bool top) {
     if (d.tab != tab_) continue;
     const int id = kRowId + (int)d.item;
     const bool focus = widgets::focused() == id && widgets::usingPad();
-    const bool rowEnabled = !(d.item == kDeleteData && inRun) && !(d.item == kLanguage && (!kLanguageReady || inRun));
+    const bool rowEnabled = !(d.item == kDeleteData && inRun) && !(d.item == kLanguage && inRun);
     widgets::panel("ui/btn_row", x, y, w, style::kRowH, rowEnabled ? (focus ? 0xFFFFFFFF : 0xE8E8E8FF) : 0x909090FF);
     if (focus) gfx::rect(x, y, w, style::kRowH, style::kSelectedFill);
     const float ly = y + (style::kRowH - R().lineHeight(F16)) / 2;
-    R().text(x + 10, ly, itemTitle(d, false), ts(F16, rowEnabled ? col::white : col::gray, LEFT, 150));
+    {  // one line, shrunk to fit (English titles such as "Long Press Confirmations" are wide)
+      const float maxW = d.kind == kCycler ? w - 150 : d.kind == kSlider ? 136 : d.kind == kAction ? w - 110 : w - 80;
+      const std::string title = itemTitle(d, false);
+      TextStyle tt = ts(F16, rowEnabled ? col::white : col::gray, LEFT);
+      float tw = R().measure(title, tt);
+      if (tw > maxW) tt.scale = maxW / tw;
+      R().text(x + 10, ly + (1 - tt.scale) * R().lineHeight(F16) / 2, title, tt);
+    }
     const bool rowTap = in.touchDown && in.tx >= x && in.tx < x + w && in.ty >= y && in.ty < y + style::kRowH;
     switch (d.kind) {
       case kToggle: {
@@ -238,7 +245,7 @@ void App::drawSettings(bool top) {
           nv = !v;
           widgets::setFocus(id);
         }
-        R().text(cx - 6, y + (style::kRowH - R().lineHeight(F12)) / 2, nv ? "开" : "关",
+        R().text(cx - 6, y + (style::kRowH - R().lineHeight(F12)) / 2, nv ? tr("开", "On") : tr("关", "Off"),
                  ts(F12, nv ? col::gold : col::gray, RIGHT));
         if (nv != v) {
           if (d.item == kFast) {
@@ -276,26 +283,29 @@ void App::drawSettings(bool top) {
         if (step) {
           s.language = s.language == Language::ZhCN ? Language::En : Language::ZhCN;
           saveSettings();
+          R().setLanguage(s.language == Language::En ? 1 : 0);
+          note_.clear();
+          noteT_ = 0;
         }
         uint32_t c = rowEnabled ? col::white : col::gray;
         R().text(cx + 8, ly, "‹", ts(F16, c));
         R().text(cx + cw - 8, ly, "›", ts(F16, c, RIGHT));
         R().text(cx + cw / 2, ly, s.language == Language::En ? "English" : "简体中文", ts(F16, c, CENTER));
         widgets::focusRing(id, cx, y + 2, cw, style::kRowH - 4);
-        if (!rowEnabled) R().text(cx - 4, y + style::kRowH - 13, inRun ? "仅主菜单" : "英文版尚未提供",
+        if (!rowEnabled) R().text(cx - 4, y + style::kRowH - 13, tr("仅主菜单", "Main menu only"),
                                   ts(F12, col::red, RIGHT, 0, 0.85f));
         break;
       }
       case kAction: {
         const float bw = 84, bx = x + w - 5 - bw;
         const bool danger = d.item == kDeleteData;
-        std::string label = danger ? "删除" : d.item == kCredits ? "查看" : S("TUTORIAL_RESET_BUTTON_LABEL");
+        std::string label = danger ? tr("删除", "Delete") : d.item == kCredits ? tr("查看", "View") : S("TUTORIAL_RESET_BUTTON_LABEL");
         if (widgets::button(id, bx, y + 1, bw, style::kRowH - 2, label,
                             danger ? widgets::Kind::Danger : widgets::Kind::Secondary, rowEnabled)) {
           if (d.item == kCredits) openCredits();
           else askFor = danger ? kModalDelete : kModalTutorials;
         }
-        if (!rowEnabled) R().text(bx - 6, y + (style::kRowH - R().lineHeight(F12)) / 2, "仅可在主菜单操作",
+        if (!rowEnabled) R().text(bx - 6, y + (style::kRowH - R().lineHeight(F12)) / 2, tr("仅可在主菜单操作", "Main menu only"),
                                   ts(F12, col::red, RIGHT, 0, 0.85f));
         break;
       }
@@ -305,7 +315,7 @@ void App::drawSettings(bool top) {
   if (volDirty_ && !in.touching) { saveSettings(); volDirty_ = false; }
 
   // Action bar: back bottom-left; 重置为默认 (this page's settings) bottom-right, not on 数据.
-  bool back = widgets::button(kBackId, style::kMargin, style::kActionY, 90, style::kButtonH, "返回");
+  bool back = widgets::button(kBackId, style::kMargin, style::kActionY, 90, style::kButtonH, tr("返回", "Back"));
   if (tab_ != kTabData &&
       widgets::button(kResetId, kBot - style::kMargin - 120, style::kActionY, 120, style::kButtonH, S("RESET_DEFAULT")))
     askFor = kModalReset;
@@ -315,14 +325,14 @@ void App::drawSettings(bool top) {
     switch (askFor) {
       case kModalReset:  // NResetGameplayButton
         title = S("RESET_CONFIRMATION.header");
-        body = "要将「" + tabLabel(tab_) + "」中的设置恢复为默认吗？";
+        body = tr("要将「", "Reset the settings in \"") + tabLabel(tab_) + tr("」中的设置恢复为默认吗？", "\" to their defaults?");
         break;
       case kModalTutorials:
         title = S("TUTORIAL_RESET_POPUP_HEADER");
         body = S("TUTORIAL_RESET_POPUP_DESCRIPTION");
         break;
       default:
-        title = "删除档案数据？";
+        title = tr("删除档案数据？", "Delete profile data?");
         body = itemDesc(kDefs[kDeleteData]);
         break;
     }
@@ -349,14 +359,14 @@ void App::drawSettings(bool top) {
           Scheduler::get().speed = fastMode_ ? 1.75 : 1.0;
           applyVolumes();
           saveSettings();
-          showToast("已恢复默认设置。");
+          showToast(tr("已恢复默认设置。", "Settings reset to defaults."));
           break;
         case kModalTutorials:
           // ProgressState.ResetFtues. M13 (tutorials) reads settings::tutorialSeen(), so this is
           // all it needs; nothing else to refresh here.
           settings::resetTutorials();
           saveSettings();
-          showToast("教程已重置。");
+          showToast(tr("教程已重置。", "Tutorials have been reset."));
           break;
         default:
           // Y1 "delete data". Automated previews (STS_HIDDEN / STS_NO_SAVE) never touch a file:
@@ -372,7 +382,7 @@ void App::drawSettings(bool top) {
           Scheduler::get().speed = fastMode_ ? 1.75 : 1.0;
           applyVolumes();
           hasSave_ = hasSave();
-          showToast("档案数据已删除。");
+          showToast(tr("档案数据已删除。", "Profile data deleted."));
           break;
       }
     });

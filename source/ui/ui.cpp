@@ -43,13 +43,6 @@ bool noteWrite(bool ok) {
 
 bool App::init() {
   auto loading = beginBoot();  // S01: loading frames, then the splash (not in automated previews)
-  if (!R().load(loading)) return false;
-  run_ = std::make_unique<Run>();
-  autoplay_ = getenv("STS_AUTOPLAY") != nullptr;
-  // Y4: profile.sav (current slot, first-launch migration of an old top-level run.sav /
-  // progress.sav into profile 1) and the current slot's progress.sav. Never in automated previews.
-  if (savesEnabled()) profiles::init();
-  hasSave_ = hasSave();
   // Y1: settings.sav, loaded once at startup. STS_HIDDEN/STS_NO_SAVE (automated previews, and the
   // headless sim which never links ui.cpp at all) must never touch the real player's file; the
   // in-memory settings::state() then just keeps its defaults for that run of the app.
@@ -57,6 +50,16 @@ bool App::init() {
   if (savesEnabled() && saveerr::loadChecked(settings::defaultPath(), [](const std::string& p) { return settings::load(p); },
                                              saveerr::Kind::SettingsCorrupt) == saveerr::Load::Corrupt)
     settings::reset();
+  // Y3: the saved language's text and glyph pages load first (STS_LANG=en|zh overrides, for previews).
+  if (const char* l = getenv("STS_LANG"))
+    settings::state().language = (l[0] == 'e' || l[0] == 'E') ? Language::En : Language::ZhCN;
+  if (!R().load(loading, settings::state().language == Language::En ? 1 : 0)) return false;
+  run_ = std::make_unique<Run>();
+  autoplay_ = getenv("STS_AUTOPLAY") != nullptr;
+  // Y4: profile.sav (current slot, first-launch migration of an old top-level run.sav /
+  // progress.sav into profile 1) and the current slot's progress.sav. Never in automated previews.
+  if (savesEnabled()) profiles::init();
+  hasSave_ = hasSave();
   checkRunSave();  // S22: a run.sav that no longer loads asks to be deleted
   for (auto k : {saveerr::Kind::ProgressCorrupt, saveerr::Kind::SettingsCorrupt})  // STS_FAKE_SAVE_ERROR previews
     if (saveerr::faked(k)) saveerr::report(k);
@@ -380,7 +383,7 @@ void App::consumeEvents() {
         if (e.who) trigger(e.who, "Dead", 0);
         break;
       case VisualEvent::Blocked:
-        floats_.push_back({e.who, L("gameplay_ui.BLOCKED").find("gameplay_ui") == 0 ? "格挡" : L("gameplay_ui.BLOCKED"), col::blue, 0, dx});
+        floats_.push_back({e.who, L("gameplay_ui.BLOCKED").find("gameplay_ui") == 0 ? tr("格挡", "Blocked") : L("gameplay_ui.BLOCKED"), col::blue, 0, dx});
         break;
       case VisualEvent::Block:
         floats_.push_back({e.who, "+" + num(e.amount), col::blue, 0, dx});
@@ -393,17 +396,17 @@ void App::consumeEvents() {
         floats_.push_back({e.who, L("powers." + e.text + ".title"), e.kind == VisualEvent::PowerUp ? col::gold : col::purple, 0.1f, dx});
         break;
       case VisualEvent::CardExhaust:
-        toast_ = L("card_keywords.EXHAUST.title") + "：" + L("cards." + e.text + ".title");
+        toast_ = L("card_keywords.EXHAUST.title") + tr("：", ": ") + L("cards." + e.text + ".title");
         toastT_ = 1.2f;
         break;
       case VisualEvent::Shuffle:
         showTip(Ftue::Shuffle);  // M13: NShuffleFtue
-        toast_ = "洗牌";
+        toast_ = tr("洗牌", "Shuffle");
         toastT_ = 0.8f;
         break;
       case VisualEvent::Banner: {
         std::string key = e.text == "Slimed" ? "SLIMED" : e.text == "Wound" ? "WOUND" : e.text;
-        toast_ = "+" + num(e.amount) + " " + L("cards." + key + ".title") + " → " + L("gameplay_ui.PILE_DISCARD").substr(0, 0) + "弃牌堆";
+        toast_ = "+" + num(e.amount) + " " + L("cards." + key + ".title") + " → " + L("gameplay_ui.PILE_DISCARD").substr(0, 0) + tr("弃牌堆", "Discard Pile");
         toastT_ = 1.4f;
         break;
       }
@@ -453,9 +456,9 @@ void App::draw() {
         if (top) {
           drawTopBar();
           R().text(kTop / 2, 90, run_->placeholderText, ts(F16, col::gold, CENTER, 0, 1.3f));
-          R().text(kTop / 2, 124, "这个房间还没有移植，先跳过。", ts(F12, col::white, CENTER));
+          R().text(kTop / 2, 124, tr("这个房间还没有移植，先跳过。", "This room is not ported yet; skipping it."), ts(F12, col::white, CENTER));
         } else {
-          button(kBot / 2 - 60, 100, 120, 40, "继续", ID_CONFIRM, true, true);
+          button(kBot / 2 - 60, 100, 120, 40, tr("继续", "Continue"), ID_CONFIRM, true, true);
         }
         break;
       default: break;

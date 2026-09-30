@@ -322,7 +322,7 @@ void App::drawEnd(bool top, bool won) {
     gfx::rect(px + 8, ty - 3, pw - 16, 1, style::kPanelEdge);
     float k = linesEnd() > 0 ? easeOutCubic(t / linesEnd()) : 1.f;
     int shown = (int)std::lround(rec.score * k);
-    R().text(px + 12, ty + 4, "分数", ts(F16, col::white));
+    R().text(px + 12, ty + 4, tr("分数", "Score"), ts(F16, col::white));
     TextStyle st = ts(F16, col::gold, RIGHT);
     st.scale = 1.25f;
     R().text(px + pw - 12, ty, grouped(shown), st);
@@ -357,7 +357,7 @@ void App::drawEnd(bool top, bool won) {
   if (!s.summary) {
     // Intro: a short summary and 继续.
     R().text(kBot / 2, 70, charTitle(rec.character), ts(F16, col::gold, CENTER));
-    R().text(kBot / 2, 96, "到达第 " + num(rec.floorReached) + " 层", ts(F12, col::white, CENTER));
+    R().text(kBot / 2, 96, tr("到达第 ", "Reached floor ") + num(rec.floorReached) + tr(" 层", ""), ts(F12, col::white, CENTER));
     if (widgets::button(kContinueId, kBot - style::kMargin - 110, style::kActionY, 110, style::kButtonH,
                         L("game_over_screen.BUTTON.continue"), widgets::Kind::Primary) || aKey) {
       s.summary = true;
@@ -373,19 +373,19 @@ void App::drawEnd(bool top, bool won) {
   std::string mods;
   for (auto& m : rec.modifiers) {
     std::string k = modifiers::titleKey(m);
-    mods += (mods.empty() ? "" : "、") + (R().hasLoc(k) ? L(k) : m);
+    mods += (mods.empty() ? "" : tr("、", ", ")) + (R().hasLoc(k) ? L(k) : m);
   }
   const float sh = rec.custom && !mods.empty() ? 62 : 46;
   widgets::panel("ui/hover_tip", sx, 6, sw, sh);
   std::string l1 = "[gold]" + charTitle(rec.character) + "[/gold]";
-  if (rec.ascension > 0) l1 += "  进阶 " + num(rec.ascension);
-  l1 += "  第 " + num(rec.floorReached) + " 层";
+  if (rec.ascension > 0) l1 += tr("  进阶 ", "  Ascension ") + num(rec.ascension);
+  l1 += tr("  第 ", "  Floor ") + num(rec.floorReached) + tr(" 层", "");
   R().text(sx + 8, 11, l1, ts(F12, col::white));
-  R().text(sx + sw - 8, 11, "用时 " + duration(rec.runTime), ts(F12, col::white, RIGHT));
+  R().text(sx + sw - 8, 11, tr("用时 ", "Time ") + duration(rec.runTime), ts(F12, col::white, RIGHT));
   std::string seed = rec.seedText.empty() ? std::to_string((unsigned long long)rec.seed) : rec.seedText;
-  R().text(sx + 8, 29, "种子 " + seed, ts(F12, col::gray));
-  if (!rec.dailyDate.empty()) R().text(sx + sw - 8, 29, "每日挑战 " + rec.dailyDate, ts(F12, col::gold, RIGHT));
-  else if (rec.custom) R().text(sx + sw - 8, 29, "自定义模式", ts(F12, col::purple, RIGHT));
+  R().text(sx + 8, 29, tr("种子 ", "Seed ") + seed, ts(F12, col::gray));
+  if (!rec.dailyDate.empty()) R().text(sx + sw - 8, 29, tr("每日挑战 ", "Daily ") + rec.dailyDate, ts(F12, col::gold, RIGHT));
+  else if (rec.custom) R().text(sx + sw - 8, 29, tr("自定义模式", "Custom mode"), ts(F12, col::purple, RIGHT));
   if (rec.custom && !mods.empty()) {
     gfx::pushClip(sx + 8, 45, sw - 16, 16);
     R().text(sx + 8, 46, mods, ts(F12, col::gray));
@@ -395,8 +395,8 @@ void App::drawEnd(bool top, bool won) {
   // Badges (AnimateBadges: each rises in over 0.25 s).
   float y = 6 + sh + 6;
   const int nb = (int)rec.badges.size();
-  R().text(sx, y, "徽章", ts(F12, col::gold));
-  if (nb == 0) R().text(sx + 36, y, rec.abandoned ? "放弃的游戏没有徽章" : "本局没有获得徽章", ts(F12, col::gray));
+  R().text(sx, y, tr("徽章", "Badges"), ts(F12, col::gold));
+  if (nb == 0) R().text(sx + 36, y, rec.abandoned ? tr("放弃的游戏没有徽章", "Abandoned runs earn no badges") : tr("本局没有获得徽章", "No badges this run"), ts(F12, col::gray));
   y += 16;
   if (widgets::usingPad()) {
     int f = widgets::focused();
@@ -425,7 +425,7 @@ void App::drawEnd(bool top, bool won) {
     int d = s.detail;
     if (d < 0 && nb > 0) d = 0;
     if (d >= 0 && d < nb && t >= badgesStart() + (float)d * kBadgeStep) {
-      name = badgeText(rec.badges[d], true) + "  (" + std::string(rec.badges[d].rarity == 3 ? "金" : rec.badges[d].rarity == 2 ? "银" : "铜") + ")";
+      name = badgeText(rec.badges[d], true) + "  (" + std::string(rec.badges[d].rarity == 3 ? tr("金", "Gold") : rec.badges[d].rarity == 2 ? tr("银", "Silver") : tr("铜", "Bronze")) + ")";
       desc = badgeText(rec.badges[d], false);
     } else if (d >= kAch0 - kBadge0 && d - (kAch0 - kBadge0) < (int)s.achs.size()) {
       achievements::Id id = s.achs[d - (kAch0 - kBadge0)];
@@ -451,9 +451,9 @@ void App::drawEnd(bool top, bool won) {
   const bool locked = rec.custom || !rec.dailyDate.empty();
   if (!s.achs.empty() || locked) {
     float ay = std::min(y + 4, style::kActionY - 4 - kAchSize + 4);
-    R().text(sx, ay, "本局成就", ts(F12, col::gold));
+    R().text(sx, ay, tr("本局成就", "Achievements"), ts(F12, col::gold));
     if (s.achs.empty()) {
-      R().text(sx + 60, ay, "自定义与每日挑战不解锁成就", ts(F12, col::gray));
+      R().text(sx + 60, ay, tr("自定义与每日挑战不解锁成就", "No achievements in custom or daily runs"), ts(F12, col::gray));
     } else {
       float ax = sx + 60;
       const float right = kBot - style::kMargin;
@@ -480,7 +480,7 @@ void App::drawEnd(bool top, bool won) {
   bool toMenu = widgets::button(kMenuId, style::kMargin, style::kActionY, 96, style::kButtonH,
                                 L("game_over_screen.BUTTON.mainMenu"), widgets::Kind::Secondary, done);
   bool again = widgets::button(kRestartId, kBot - style::kMargin - 110, style::kActionY, 110, style::kButtonH,
-                               "再来一局", widgets::Kind::Primary, done);
+                               tr("再来一局", "Play Again"), widgets::Kind::Primary, done);
   if (done && !s.focusSet) {  // A restarts by default, as before
     s.focusSet = true;
     widgets::setFocus(kRestartId);

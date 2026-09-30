@@ -184,23 +184,23 @@ bool App::drawProfiles(bool top) {
     if (icon) spr(icon, px + 12, py + 10, 32, 32);
     R().text(px + 52, py + 9, displayName(in), ts(F16, col::gold));
     std::string sub = in.name.empty() ? std::string() : defaultName(in.id) + "   ";
-    if (in.id == profiles::current()) sub += "当前存档";
+    if (in.id == profiles::current()) sub += tr("当前存档", "Current profile");
     R().text(px + 52, py + 29, sub, ts(F12, col::gray));
     float y = py + 52;
     if (!in.used) {
       R().text(px + 16, y, mm("PROFILE_SCREEN.BUTTON.empty"), ts(F12, col::white));
     } else {
-      R().text(px + 16, y, "[blue]胜场[/blue] " + num(in.wins) + "     [blue]败场[/blue] " + num(in.losses),
+      R().text(px + 16, y, tr("[blue]胜场[/blue] ", "[blue]Wins[/blue] ") + num(in.wins) + tr("     [blue]败场[/blue] ", "     [blue]Losses[/blue] ") + num(in.losses),
                ts(F12, col::white));
       y += 22;
       if (run) {
-        R().text(px + 16, y, "[gold]进行中的游戏[/gold]", ts(F12, col::white));
+        R().text(px + 16, y, tr("[gold]进行中的游戏[/gold]", "[gold]Run in progress[/gold]"), ts(F12, col::white));
         R().text(px + 16, y + 18, s.runInfo[fs], ts(F12, col::white, LEFT, pw - 32));
       } else {
-        R().text(px + 16, y, "没有进行中的游戏", ts(F12, col::gray));
+        R().text(px + 16, y, tr("没有进行中的游戏", "No run in progress"), ts(F12, col::gray));
       }
     }
-    R().text(kTop / 2, 220, "A 选择    X 改名    Y 删除    B 返回", ts(F12, 0xC8C8C8FF, CENTER));
+    R().text(kTop / 2, 220, tr("A 选择    X 改名    Y 删除    B 返回", "A Select    X Rename    Y Delete    B Back"), ts(F12, 0xC8C8C8FF, CENTER));
     return true;
   }
 
@@ -227,9 +227,9 @@ bool App::drawProfiles(bool top) {
     if (!in.used) {
       R().text(x + kCardW / 2, ty + 8, mm("PROFILE_SCREEN.BUTTON.empty"), ts(F12, col::white, CENTER));
     } else {
-      R().text(x + kCardW / 2, ty, "[blue]胜场[/blue] " + num(in.wins), ts(F12, col::white, CENTER));
-      R().text(x + kCardW / 2, ty + 16, "[blue]败场[/blue] " + num(in.losses), ts(F12, col::white, CENTER));
-      if (in.hasRun) R().text(x + kCardW / 2, ty + 34, "[gold]进行中[/gold]", ts(F12, col::white, CENTER));
+      R().text(x + kCardW / 2, ty, tr("[blue]胜场[/blue] ", "[blue]Wins[/blue] ") + num(in.wins), ts(F12, col::white, CENTER));
+      R().text(x + kCardW / 2, ty + 16, tr("[blue]败场[/blue] ", "[blue]Losses[/blue] ") + num(in.losses), ts(F12, col::white, CENTER));
+      if (in.hasRun) R().text(x + kCardW / 2, ty + 34, tr("[gold]进行中[/gold]", "[gold]In progress[/gold]"), ts(F12, col::white, CENTER));
     }
     if (focus) outline(x, y, kCardW, kCardH);
     hits_.push_back({x, y, kCardW, kCardH, kCard0 + i});
@@ -239,14 +239,14 @@ bool App::drawProfiles(bool top) {
     const bool focus = it.id == focusId && !confirm::isOpen();
     if (it.id >= kRename0 && it.id < kRename0 + kN) {
       widgets::panel("ui/btn_ok_s", it.x, it.y, it.w, it.h);
-      R().text(it.x + it.w / 2, it.y + (it.h - R().lineHeight(F16)) / 2, "改名", ts(F16, col::white, CENTER));
+      R().text(it.x + it.w / 2, it.y + (it.h - R().lineHeight(F16)) / 2, tr("改名", "Rename"), ts(F16, col::white, CENTER));
     } else if (it.id >= kDelete0 && it.id < kDelete0 + kN) {
       Sprite d = R().sprite("ui/btn_delete");
       if (d) spr(d, it.x, it.y, it.w, it.h, focus ? 0xFFFFFFFF : 0xE0E0E0FF);
-      else R().text(it.x + it.w / 2, it.y + 8, "删", ts(F12, col::red, CENTER));
+      else R().text(it.x + it.w / 2, it.y + 8, tr("删", "Del"), ts(F12, col::red, CENTER));
     } else if (it.id == kBack) {
       widgets::panel("ui/btn_back", it.x, it.y, it.w, it.h);
-      R().text(it.x + it.w / 2, it.y + (it.h - R().lineHeight(F16)) / 2, "返回", ts(F16, col::white, CENTER));
+      R().text(it.x + it.w / 2, it.y + (it.h - R().lineHeight(F16)) / 2, tr("返回", "Back"), ts(F16, col::white, CENTER));
     } else {
       continue;  // cards: drawn above
     }
@@ -293,7 +293,7 @@ bool App::updateProfiles(const gfx::Input& in) {
       size_t a = name.find_first_not_of(" \t"), b = name.find_last_not_of(" \t");
       name = a == std::string::npos ? std::string() : name.substr(a, b - a + 1);
       if (profiles::rename(slot + 1, name)) {
-        toast_ = "已改名：" + (name.empty() ? defaultName(slot + 1) : name);
+        toast_ = tr("已改名：", "Renamed: ") + (name.empty() ? defaultName(slot + 1) : name);
         toastT_ = 1.2f;
       }
       refresh();

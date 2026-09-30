@@ -15,12 +15,14 @@
 #include <functional>
 #include <string>
 
+#include "res.h"
+
 namespace ui::confirm {
 
 struct Spec {
   std::string title, body;
-  std::string ok = "确认";
-  std::string cancel = "取消";      // "" = a notice with one button
+  std::string ok = tr("确认", "Confirm");
+  std::string cancel = tr("取消", "Cancel");      // "" = a notice with one button
   std::function<void()> onOk;        // may be empty
   std::function<void()> onCancel;    // may be empty
 };
@@ -28,9 +30,9 @@ struct Spec {
 void open(Spec s);
 // A yes / no question; `onOk` runs only when the player confirms.
 void ask(const std::string& title, const std::string& body, std::function<void()> onOk,
-         const std::string& ok = "确认", const std::string& cancel = "取消");
+         const std::string& ok = tr("确认", "Confirm"), const std::string& cancel = tr("取消", "Cancel"));
 // A one-button notice (errors).
-void notice(const std::string& title, const std::string& body, const std::string& ok = "了解了",
+void notice(const std::string& title, const std::string& body, const std::string& ok = tr("了解了", "OK"),
             std::function<void()> onClose = {});
 
 bool isOpen();

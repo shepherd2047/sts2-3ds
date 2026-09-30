@@ -23,7 +23,7 @@ static App::ChooseOneSpec rewardChooseSpec(const Run& r) {
   for (auto& c : r.rewardCards) s.cards.push_back(c.get());
   s.canSkip = true;
   if (!r.rewardItems.empty()) {
-    s.title = "战斗胜利！";
+    s.title = tr("战斗胜利！", "Victory!");
     s.sub = L("gameplay_ui.COMBAT_REWARD_ADD_CARD");
   }
   return s;
@@ -53,9 +53,9 @@ void App::drawReward(bool top) {
     drawTopBar();
     TextStyle t = ts(F16, col::gold, CENTER);
     t.scale = 1.6f;
-    R().text(kTop / 2, 60, "战斗胜利！", t);
+    R().text(kTop / 2, 60, tr("战斗胜利！", "Victory!"), t);
     gfx::rect(kTop / 2.f - 70, 84, 140, 2, style::kPanelHi);
-    R().text(kTop / 2, 112, n > 0 ? "点选下方的奖励，领取后继续" : "没有更多奖励了", ts(F16, col::white, CENTER));
+    R().text(kTop / 2, 112, n > 0 ? tr("点选下方的奖励，领取后继续", "Tap a reward below to take it, then continue") : tr("没有更多奖励了", "No more rewards"), ts(F16, col::white, CENTER));
     return;
   }
   drawSceneBg(false, 0.55f);
@@ -69,13 +69,13 @@ void App::drawReward(bool top) {
     switch (item.kind) {
       case Run::RewardKind::Gold:
         icon = "ui/reward_money";
-        label = num(item.gold) + " 金币";
+        label = num(item.gold) + tr(" 金币", " Gold");
         break;
       case Run::RewardKind::Potion:
         icon = "potion/" + item.potion->locKey;
         label = item.potion ? L("potions." + item.potion->locKey + ".title") : "?";
         enabled = r.hasOpenPotionSlot();
-        if (!enabled) value = "药水栏已满";
+        if (!enabled) value = tr("药水栏已满", "Potion belt full");
         break;
       case Run::RewardKind::Relic:
         icon = item.relic ? "relic/" + item.relic->locKey : "";
@@ -90,7 +90,7 @@ void App::drawReward(bool top) {
       r.rewardListChoice.fire(i);
     y += style::kRowH + style::kGap;
   }
-  if (widgets::button(999, kBot - 120, style::kActionY, 110, style::kButtonH, "继续", widgets::Kind::Primary) &&
+  if (widgets::button(999, kBot - 120, style::kActionY, 110, style::kButtonH, tr("继续", "Continue"), widgets::Kind::Primary) &&
       r.rewardListChoice.waiting() && !tipBlockProceed(n, r.floor))  // M13: NCombatRewardFtue
     r.rewardListChoice.fire(-1);
   widgets::endFrame();

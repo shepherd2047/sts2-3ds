@@ -109,7 +109,7 @@ void drawNodeInfo(const Run& r, int i) {
     desc = L(std::string("map.") + key + ".hoverTip.description");
   }
   int curRow = r.currentNode >= 0 ? r.nodes[r.currentNode].row : -1;
-  std::string floorLine = "第 " + num(std::max(0, r.floor + n.row - curRow)) + " 层";
+  std::string floorLine = tr("第 ", "Floor ") + num(std::max(0, r.floor + n.row - curRow)) + tr(" 层", "");
 
   const float w = 110, x = kTop - w - 4, y = 24, pad = 7;
   TextStyle dt = ts(F12, col::white, LEFT, w - 2 * pad);
@@ -302,14 +302,14 @@ void App::drawMap(bool top) {
     gfx::rect(bx, by, bw, bh, 0xB83A3AF0);
     gfx::rect(bx, by, bw, 2, 0xFF8A8AFF);
     gfx::rect(bx + bw - 8, by, 8, bh, 0x8A2020F0);
-    R().text(bx + (bw - 8) / 2, by + (bh - R().lineHeight(F16)) / 2, "返回", ts(F16, col::white, CENTER));
+    R().text(bx + (bw - 8) / 2, by + (bh - R().lineHeight(F16)) / 2, tr("返回", "Back"), ts(F16, col::white, CENTER));
     hits_.push_back({bx, by, bw, bh, ID_BACK});
   } else {
-    button(4, 210, 64, 26, "牌组", ID_DECK);
-    button(72, 210, 64, 26, "遗物", ID_RELICS);
-    button(140, 210, 56, 26, "开发", ID_DEVMENU);
-    button(200, 210, 56, 26, "药水", ID_POTIONS);
-    button(kBot - 52, 4, 48, 24, "暂停", ID_PAUSE);  // top-right, clear of the nodes and the legend
+    button(4, 210, 64, 26, tr("牌组", "Deck"), ID_DECK);
+    button(72, 210, 64, 26, tr("遗物", "Relics"), ID_RELICS);
+    button(140, 210, 56, 26, tr("开发", "Dev"), ID_DEVMENU);
+    button(200, 210, 56, 26, tr("药水", "Potions"), ID_POTIONS);
+    button(kBot - 52, 4, 48, 24, tr("暂停", "Pause"), ID_PAUSE);  // top-right, clear of the nodes and the legend
   }
   // Legend (NMapScreen MapLegend: LEGEND_HEADER over the six NMapLegendItems) on the right, as
   // on RGDSplus. Tapping an item is its focus: that point type lights up on the map and its hover
@@ -323,8 +323,11 @@ void App::drawMap(bool top) {
       Sprite ic = roomIcon(kLegendTypes[i]);
       float s = mapLegend_ == i ? 17.f : 14.f;  // NMapLegendItem: the icon at 1.25x while focused
       if (ic) spr(ic, kLegendX + 11 - ic.w / ic.h * s / 2, y + 8 - s / 2, ic.w / ic.h * s, s, 0x2E241AFF, 1.f);
-      R().text(kLegendX + 21, y + 2, L(std::string("map.") + kLegendKeys[i] + ".title"),
-               ts(F12, mapLegend_ == i ? 0x7A1E12FF : col::dark, LEFT, 0, 0.85f));
+      TextStyle lt = ts(F12, mapLegend_ == i ? 0x7A1E12FF : col::dark, LEFT, 0, 0.85f);
+      const std::string name = L(std::string("map.") + kLegendKeys[i] + ".title");
+      float nw = R().measure(name, lt);  // Y3: English names are wider; shrink to the panel
+      if (nw > kLegendW - 23) lt.scale *= (kLegendW - 23) / nw;
+      R().text(kLegendX + 21, y + 2 + (0.85f - lt.scale) * R().lineHeight(F12) / 2, name, lt);
       hits_.push_back({kLegendX, y, kLegendW, kLegendRow, ID_LEGEND + i});
     }
     if (mapLegend_ >= 0) {

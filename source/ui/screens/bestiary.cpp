@@ -563,7 +563,7 @@ bool App::drawBestiary(bool top) {
     R().text(rx, y, fe->seen ? fe->title : L("bestiary.LOCKED.monsterTitle"),
              ts(F16, fe->seen ? roomColor(fe->room) : col::gray, LEFT, rw));
     y += 21;
-    std::string kind = fe->room == RoomType::Boss ? "首领" : fe->room == RoomType::Elite ? "精英" : "普通";
+    std::string kind = fe->room == RoomType::Boss ? tr("首领", "Boss") : fe->room == RoomType::Elite ? tr("精英", "Elite") : tr("普通", "Normal");
     std::string meta = kind + " · " + st.groups[fe->group];
     if (fe->seen && fe->room == RoomType::Boss) meta += " · " + fe->encTitle;
     R().text(rx, y, meta, ts(F12, col::gray, LEFT, rw));
@@ -576,7 +576,7 @@ bool App::drawBestiary(bool top) {
         const MonInfo& info = it->second;
         std::string hp = "[icon:hp] " + hpRange(info.hp[0][0], info.hp[0][1]);
         if (info.built[1] && (info.hp[1][0] != info.hp[0][0] || info.hp[1][1] != info.hp[0][1]))
-          hp += "   [gold]进阶" + num(kToughHp) + "+ " + hpRange(info.hp[1][0], info.hp[1][1]) + "[/gold]";
+          hp += tr("   [gold]进阶", "   [gold]A") + num(kToughHp) + "+ " + hpRange(info.hp[1][0], info.hp[1][1]) + "[/gold]";
         R().text(rx, y, hp, ts(F12, col::white, LEFT, rw));
         y += 18;
       }
@@ -615,7 +615,7 @@ bool App::drawBestiary(bool top) {
       }
       if (st.moves.empty()) R().text(rx, y, "—", ts(F12, col::gray));
     }
-    R().text(kTop - 6, kH - 15, "L R 分组  X 演示  Y 下一行动  B 返回  (括号: 进阶" + num(kDeadlyDmg) + "+)",
+    R().text(kTop - 6, kH - 15, tr("L R 分组  X 演示  Y 下一行动  B 返回  (括号: 进阶", "L R Group  X Animate  Y Next move  B Back  (brackets: A") + num(kDeadlyDmg) + "+)",
              ts(F12, col::gray, RIGHT, 0, 0.85f));
     return true;
   }
@@ -655,7 +655,7 @@ bool App::drawBestiary(bool top) {
     gfx::rect(kBot - 4, ty, 3, th, 0xC8B080FF);
   }
   gfx::rect(0, kBarY - 3, kBot, kH - kBarY + 3, 0x000000A0);
-  button(kBarX[0], kBarY, kBarW[0], kBarH, "返回", kBtnBack);
+  button(kBarX[0], kBarY, kBarW[0], kBarH, tr("返回", "Back"), kBtnBack);
   const bool haveMoves = !st.moves.empty() && fe && fe->seen;
   button(kBarX[1], kBarY, kBarW[1], kBarH, "<", kBtnPrev, haveMoves);
   std::string name = haveMoves ? "▶ " + st.moves[std::clamp(st.move, 0, (int)st.moves.size() - 1)].name

@@ -94,11 +94,11 @@ constexpr int kIdClose = 7700, kIdPrev = 7701, kIdNext = 7702, kIdUpgrade = 7703
 constexpr float kTipGap = 4, kTipPad = 6, kTipTop = 8, kTipBottom = 232;
 
 std::string relicRarityName(RelicRarity r) {
-  static const char* names[] = {"", "初始", "普通", "罕见", "稀有", "商店", "事件", "先古"};
+  const char* names[] = {"", tr("初始", "Starter"), tr("普通", "Common"), tr("罕见", "Uncommon"), tr("稀有", "Rare"), tr("商店", "Shop"), tr("事件", "Event"), tr("先古", "Ancient")};
   return names[(int)r];
 }
 std::string potionRarityName(PotionRarity r) {
-  static const char* names[] = {"", "普通", "罕见", "稀有", "事件", "衍生"};
+  const char* names[] = {"", tr("普通", "Common"), tr("罕见", "Uncommon"), tr("稀有", "Rare"), tr("事件", "Event"), tr("衍生", "Token")};
   return names[(int)r];
 }
 std::string cardTypeName(CardType t) {
@@ -106,13 +106,13 @@ std::string cardTypeName(CardType t) {
     case CardType::Attack: return L("gameplay_ui.CARD_TYPE.ATTACK");
     case CardType::Skill: return L("gameplay_ui.CARD_TYPE.SKILL");
     case CardType::Power: return L("gameplay_ui.CARD_TYPE.POWER");
-    case CardType::Status: return "状态";
-    case CardType::Curse: return "诅咒";
+    case CardType::Status: return tr("状态", "Status");
+    case CardType::Curse: return tr("诅咒", "Curse");
   }
   return "";
 }
 std::string cardRarityName(Rarity r) {
-  static const char* names[] = {"基础", "普通", "罕见", "稀有", "先古", "衍生", "状态", "诅咒"};
+  const char* names[] = {tr("基础", "Basic"), tr("普通", "Common"), tr("罕见", "Uncommon"), tr("稀有", "Rare"), tr("先古", "Ancient"), tr("衍生", "Token"), tr("状态", "Status"), tr("诅咒", "Curse")};
   return names[(int)r];
 }
 
@@ -433,20 +433,20 @@ void App::drawDetail(bool top) {
   if (listValid(detailCard_, detailRelic_, detailPotion_)) {
     const float ry = py + ph + 6, bw = 96;
     const int n = (int)p.list.size();
-    if (widgets::button(kIdPrev, px, ry, bw, style::kButtonH, "L 上一个", widgets::Kind::Secondary, p.index > 0))
+    if (widgets::button(kIdPrev, px, ry, bw, style::kButtonH, tr("L 上一个", "L Prev"), widgets::Kind::Secondary, p.index > 0))
       detailStep(-1);
     R().text(kBot / 2.f, ry + 9, num(p.index + 1) + " / " + num(n), ts(F16, col::white, CENTER));
-    if (widgets::button(kIdNext, kBot - px - bw, ry, bw, style::kButtonH, "下一个 R", widgets::Kind::Secondary, p.index + 1 < n))
+    if (widgets::button(kIdNext, kBot - px - bw, ry, bw, style::kButtonH, tr("下一个 R", "Next R"), widgets::Kind::Secondary, p.index + 1 < n))
       detailStep(1);
   }
   // Action bar: 关闭 bottom-left, more tips in the middle, the upgrade checkbox at the right.
-  if (widgets::button(kIdClose, px, style::kActionY, 100, style::kButtonH, "B 关闭")) { gfx::popAlpha(); widgets::endFrame(); closeDetail(); return; }
+  if (widgets::button(kIdClose, px, style::kActionY, 100, style::kButtonH, tr("B 关闭", "B Close"))) { gfx::popAlpha(); widgets::endFrame(); closeDetail(); return; }
   if (p.pages.size() > 1 &&
       widgets::button(kIdPage, 116, style::kActionY, 88, style::kButtonH,
-                     "Y 说明 " + num(p.page + 1) + "/" + num((int)p.pages.size())))
+                     tr("Y 说明 ", "Y Info ") + num(p.page + 1) + "/" + num((int)p.pages.size())))
     p.page = (p.page + 1) % (int)p.pages.size();
   if (detailCard_ && detailCard_->maxUpgradeLevel > 0) {
-    bool v = widgets::toggle(kIdUpgrade, 212, style::kActionY + 1, detailUpgrade_, "升级");
+    bool v = widgets::toggle(kIdUpgrade, 212, style::kActionY + 1, detailUpgrade_, tr("升级", "Upgrade"));
     if (v != detailUpgrade_) detailToggleUpgrade();
   }
   gfx::popAlpha();

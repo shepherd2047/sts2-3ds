@@ -142,8 +142,8 @@ bool App::drawCustomRun(bool top) {
     float y = py + 44 + dh;
     std::string list;
     for (size_t i = 0; i < k.size(); ++i)
-      if (st.ticked[i]) list += (list.empty() ? "" : "、") + modTitle(k[i]);
-    R().text(12, y, L("main_menu_ui.CUSTOM_RUN_SCREEN.MODIFIERS_TITLE") + "：" + (list.empty() ? "-" : list),
+      if (st.ticked[i]) list += (list.empty() ? "" : tr("、", ", ")) + modTitle(k[i]);
+    R().text(12, y, L("main_menu_ui.CUSTOM_RUN_SCREEN.MODIFIERS_TITLE") + tr("：", ": ") + (list.empty() ? "-" : list),
              ts(F12, col::gold, LEFT, kTop - 24));
     R().text(12, kH - 34, L("main_menu_ui.CUSTOM_RUN_SCREEN.disclaimer"), ts(F12, col::gray, LEFT, kTop - 24, 0.9f));
     return true;
@@ -174,7 +174,7 @@ bool App::drawCustomRun(bool top) {
   R().text(kListX + 6, 53, L("main_menu_ui.CUSTOM_RUN_SCREEN.SEED_LABEL") +
                                (st.seed.empty() ? "[gray]" + L("main_menu_ui.CUSTOM_RUN_SCREEN.SEED_RANDOM_PLACEHOLDER") + "[/gray]" : st.seed),
            ts(F12, col::white));
-  R().text(kListX + kListW - 6, 53, "X 输入", ts(F12, col::gray, RIGHT));
+  R().text(kListX + kListW - 6, 53, tr("X 输入", "X Enter"), ts(F12, col::gray, RIGHT));
   hits_.push_back({kListX, 50, kListW, 22, kCSeed});
   // Modifier list.
   panel(kListX, kListY, kListW, kListH);
@@ -194,9 +194,9 @@ bool App::drawCustomRun(bool top) {
     float ty = kListY + (kListH - th) * st.scroll / (float)((int)k.size() - kVisible);
     gfx::rect(kListX + kListW - 4, ty, 3, th, 0xB89A60FF);
   }
-  button(6, 206, 96, 30, "返回", kCBack);
+  button(6, 206, 96, 30, tr("返回", "Back"), kCBack);
   button(112, 206, 96, 30, L("main_menu_ui.CUSTOM_RUN_SCREEN.RANDOMIZE"), kCRandom);
-  button(218, 206, 96, 30, "开始", kCStart, true, true);
+  button(218, 206, 96, 30, tr("开始", "Start"), kCStart, true, true);
   return true;
 }
 

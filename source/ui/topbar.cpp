@@ -64,8 +64,9 @@ std::string runClock(double seconds) {  // TimeFormatting.Format: m:ss, or h:mm:
 std::string stripHotkey(std::string s) {  // "牌组{Hotkey:...}" / "设置（ESC）" -> the bare title
   size_t c = s.find('{');
   if (c != std::string::npos) s.resize(c);
-  c = s.find("（");
+  c = s.find(tr("（", " ("));
   if (c != std::string::npos) s.resize(c);
+  while (!s.empty() && s.back() == ' ') s.pop_back();  // English: "Deck {Hotkey...}"
   return s;
 }
 
@@ -271,25 +272,25 @@ void App::drawTopBar() {
   gfx::rect(fx + fw - 1.5f, 0, 1.5f, kBarH - 1, c);
 
   // Its hover tip, under the bar (NHoverTipSet at the control's bottom + 20).
-  std::string title, desc, hint = "[gold]A[/gold] 打开    [gold]B[/gold] 返回";
+  std::string title, desc, hint = tr("[gold]A[/gold] 打开    [gold]B[/gold] 返回", "[gold]A[/gold] Open    [gold]B[/gold] Back");
   auto tip = [&](const char* key) {
     title = stripHotkey(ui::L(std::string("static_hover_tips.") + key + ".title"));
     desc = ui::L(std::string("static_hover_tips.") + key + ".description");
   };
   switch (it.kind) {
-    case Kind::Hp: tip("HIT_POINTS"); hint = "[gold]B[/gold] 返回"; break;
-    case Kind::Gold: tip("MONEY_POUCH"); hint = "[gold]B[/gold] 返回"; break;
+    case Kind::Hp: tip("HIT_POINTS"); hint = tr("[gold]B[/gold] 返回", "[gold]B[/gold] Back"); break;
+    case Kind::Gold: tip("MONEY_POUCH"); hint = tr("[gold]B[/gold] 返回", "[gold]B[/gold] Back"); break;
     case Kind::Floor:
       tip("FLOOR");
       title += "  " + L.floor + " · " + L.act;
-      hint = "[gold]B[/gold] 返回";
+      hint = tr("[gold]B[/gold] 返回", "[gold]B[/gold] Back");
       break;
     case Kind::Ascension: {
       char key[40];
       std::snprintf(key, sizeof key, "ascension.LEVEL_%02d", std::clamp(r.ascension, 0, 10));
-      title = "进阶 " + num(r.ascension);
-      desc = ui::L(std::string(key) + ".title") + "：" + ui::L(std::string(key) + ".description");
-      hint = "[gold]B[/gold] 返回";
+      title = tr("进阶 ", "Ascension ") + num(r.ascension);
+      desc = ui::L(std::string(key) + ".title") + tr("：", ": ") + ui::L(std::string(key) + ".description");
+      hint = tr("[gold]B[/gold] 返回", "[gold]B[/gold] Back");
       break;
     }
     case Kind::Potion: {
@@ -297,10 +298,10 @@ void App::drawTopBar() {
       if (q) {
         title = ui::L("potions." + q->locKey + ".title");
         desc = describePotion(q);
-        hint = "[gold]A[/gold] 使用 / 丢弃    [gold]B[/gold] 返回";
+        hint = tr("[gold]A[/gold] 使用 / 丢弃    [gold]B[/gold] 返回", "[gold]A[/gold] Use / Discard    [gold]B[/gold] Back");
       } else {
         tip("POTION_SLOT");
-        hint = "[gold]B[/gold] 返回";
+        hint = tr("[gold]B[/gold] 返回", "[gold]B[/gold] Back");
       }
       break;
     }
@@ -308,10 +309,10 @@ void App::drawTopBar() {
       Relic* rel = r.relics[it.index].get();
       title = ui::L("relics." + rel->locKey + ".title");
       desc = describeRelic(rel);
-      hint = "[gold]A[/gold] 详情    [gold]B[/gold] 返回";
+      hint = tr("[gold]A[/gold] 详情    [gold]B[/gold] 返回", "[gold]A[/gold] Details    [gold]B[/gold] Back");
       break;
     }
-    case Kind::Deck: tip("DECK"); title += "（" + L.deck + "）"; break;
+    case Kind::Deck: tip("DECK"); title += tr("（", " (") + L.deck + tr("）", ")"); break;
     case Kind::Map: tip("MAP"); break;
     case Kind::Pause: tip("SETTINGS"); break;
   }

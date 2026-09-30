@@ -102,11 +102,11 @@ void App::drawCharacterSelect(bool top) {
   R().text(122, ay + 24, L(std::string(lk) + ".description"), ts(F12, col::white, LEFT, kBot - 20 - 118));
   // Seed (tap or Y: a new one).
   panel(10, ay + 80, kBot - 20, 24);
-  R().text(18, ay + 84, "种子  " + titleSeed_, ts(F12, col::white));
-  R().text(kBot - 18, ay + 84, "Y 换一个", ts(F12, col::gray, RIGHT));
+  R().text(18, ay + 84, tr("种子  ", "Seed  ") + titleSeed_, ts(F12, col::white));
+  R().text(kBot - 18, ay + 84, tr("Y 换一个", "Y New seed"), ts(F12, col::gray, RIGHT));
   hits_.push_back({10, ay + 80, (float)kBot - 20, 24, ID_SEED});
-  button(19, 194, 130, 40, "返回", ID_BACK);
-  button(171, 194, 130, 40, "开始", ID_START, true, true);
+  button(19, 194, 130, 40, tr("返回", "Back"), ID_BACK);
+  button(171, 194, 130, 40, tr("开始", "Start"), ID_START, true, true);
 }
 
 void App::updateCharacterSelect(const gfx::Input& in) {
@@ -283,7 +283,7 @@ void App::drawTitle(bool top) {
       widgets::panel("ui/hover_tip", px, py, pw, ph);
       std::string title = std::string(it.key) == "STATISTICS" ? mm("STATISTICS.title") : mm(std::string(it.key) + ".title");
       R().text(px + 12, py + 7, title, ts(F16, col::gold));
-      if (!it.ported) R().text(px + pw - 12, py + 9, "未完成", ts(F12, col::gray, RIGHT));
+      if (!it.ported) R().text(px + pw - 12, py + 9, tr("未完成", "WIP"), ts(F12, col::gray, RIGHT));
       R().text(px + 12, py + 28, desc, dt);
       return;
     }
@@ -334,7 +334,7 @@ void App::drawTitle(bool top) {
       float y = it.y - (focus && !it.shortButton ? 3 : 0);
       if (it.id == kSBack) {
         widgets::panel("ui/btn_back", it.x, y, it.w, it.h);
-        R().text(it.x + it.w / 2, y + (it.h - R().lineHeight(F16)) / 2, "返回", ts(F16, col::white, CENTER));
+        R().text(it.x + it.w / 2, y + (it.h - R().lineHeight(F16)) / 2, tr("返回", "Back"), ts(F16, col::white, CENTER));
       } else if (it.shortButton) {  // NCompendiumBottomButton: green plate, icon + label
         spr(R().sprite("ui/btn_compendium"), it.x, y, it.w, it.h, 0xFFFFFFFF);
         Sprite icon = R().sprite(it.sprite);
@@ -356,7 +356,7 @@ void App::drawTitle(bool top) {
         if (!it.ported) {
           TextStyle nt = ts(F12, 0x8A3A2CFF, CENTER);
           nt.shadow = false;
-          R().text(it.x + it.w / 2, y + 18 + ih + R().lineHeight(tt.size), "未完成", nt);
+          R().text(it.x + it.w / 2, y + 18 + ih + R().lineHeight(tt.size), tr("未完成", "WIP"), nt);
         }
       }
       if (focus) outline(it.x, y, it.w, it.h);
@@ -366,7 +366,7 @@ void App::drawTitle(bool top) {
 }
 
 void App::activateMenu(int id) {
-  auto notDone = [&](const std::string& what) { toast_ = what + " · 未完成"; toastT_ = 1.2f; };
+  auto notDone = [&](const std::string& what) { toast_ = what + tr(" · 未完成", " · WIP"); toastT_ = 1.2f; };
   switch (id) {
     case kMContinue: startRun(true); break;
     case kMAbandon:  // NAbandonRunConfirmPopup (S22 shared modal); AbandonRun: the save goes

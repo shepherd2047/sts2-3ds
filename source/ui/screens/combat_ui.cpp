@@ -8,14 +8,20 @@ namespace ui {
 namespace {
 // S12: the hand-select prompt (C# NPlayerHand._selectionHeader = prefs.Prompt with Amount /
 // MinCount / MaxCount). Rules pass a loc key, a card/relic id or plain text.
+// Y3: the plain-text prompts the rules pass (core/potions.cpp, colorless_pool.cpp) in English.
+static std::string plainPrompt(const std::string& p) {
+  if (p == "选择一张牌加入手牌") return tr("选择一张牌加入手牌", "Choose a card to add into your Hand.");
+  return p;
+}
+
 std::string handSelectPrompt(const CardChoice& ch, int minN, int maxN) {
   const std::string& p = ch.prompt;
   std::string s;
   if (R().hasLoc(p)) s = L(p);
   else if (R().hasLoc("cards." + p + ".selectionScreenPrompt")) s = L("cards." + p + ".selectionScreenPrompt");
   else if (R().hasLoc("relics." + p + ".selectionScreenPrompt")) s = L("relics." + p + ".selectionScreenPrompt");
-  else if (R().hasLoc("cards." + p + ".title")) s = "[gold]" + L("cards." + p + ".title") + "[/gold]：选择[blue]" + num(maxN) + "[/blue]张牌";
-  else s = p;
+  else if (R().hasLoc("cards." + p + ".title")) s = "[gold]" + L("cards." + p + ".title") + tr("[/gold]：选择[blue]", "[/gold]: choose [blue]") + num(maxN) + tr("[/blue]张牌", "[/blue] cards");
+  else s = plainPrompt(p);
   auto sub = [&](const std::string& key, int v) {
     for (size_t at; (at = s.find(key)) != std::string::npos;) s.replace(at, key.size(), num(v));
   };
@@ -132,7 +138,7 @@ void drawTurnBanner(Combat& cb) {
       const float a = t < 1.15f ? in : std::max(0.f, 1 - (t - 1.15f) / 0.25f);
       band(a);
       label(locOr("gameplay_ui.PLAYER_TURN", h.text), cy - 12 * mv, big, col::white, a, 0x1B3045FF);
-      std::string turn = locOr("gameplay_ui.TURN_COUNT", "第{turnNumber}回合");
+      std::string turn = locOr("gameplay_ui.TURN_COUNT", tr("第{turnNumber}回合", "Turn {turnNumber}"));
       size_t at = turn.find("{turnNumber}");
       if (at != std::string::npos) turn.replace(at, 12, num(h.round));
       label(turn, cy + 12 * mv, 1.f, col::gold, a, 0x000000FF);
@@ -296,22 +302,22 @@ void App::drawCombat(bool top) {
       {
         const float x = 10, h = 104;
         widgets::panel("ui/hover_tip", x, sideY, sideW, h);
-        R().text(x + sideW / 2, sideY + 8, "已选", ts(F12, col::gold, CENTER));
+        R().text(x + sideW / 2, sideY + 8, tr("已选", "Picked"), ts(F12, col::gold, CENTER));
         TextStyle kt = ts(F16, valid ? col::gold : col::white, CENTER, 0, 1.6f);
         R().text(x + sideW / 2, sideY + 26, num(k) + " / " + num(maxN), kt);
-        std::string range = minN == maxN ? "需选 " + num(maxN) + " 张"
-                            : minN == 0  ? "最多 " + num(maxN) + " 张，可不选"
-                                         : "选 " + num(minN) + "–" + num(maxN) + " 张";
+        std::string range = minN == maxN ? tr("需选 ", "Choose ") + num(maxN) + tr(" 张", " cards")
+                            : minN == 0  ? tr("最多 ", "Up to ") + num(maxN) + tr(" 张，可不选", " cards, optional")
+                                         : tr("选 ", "Choose ") + num(minN) + "–" + num(maxN) + tr(" 张", " cards");
         R().text(x + sideW / 2, sideY + 60, range, ts(F12, col::gray, CENTER, sideW - 12));
-        if (k < minN) R().text(x + sideW / 2, sideY + 80, "还需选 " + num(minN - k) + " 张", ts(F12, col::red, CENTER));
+        if (k < minN) R().text(x + sideW / 2, sideY + 80, tr("还需选 ", "Still need ") + num(minN - k) + tr(" 张", " cards"), ts(F12, col::red, CENTER));
       }
       // Picked cards, in pick order.
       {
         const float x = kTop - 10 - sideW;
         const int rows = std::max(1, std::min(k, 8));
         widgets::panel("ui/hover_tip", x, sideY, sideW, 30 + rows * 15.f);
-        R().text(x + sideW / 2, sideY + 8, "已选的牌", ts(F12, col::gold, CENTER));
-        if (k == 0) R().text(x + sideW / 2, sideY + 26, "（无）", ts(F12, col::gray, CENTER));
+        R().text(x + sideW / 2, sideY + 8, tr("已选的牌", "Picked cards"), ts(F12, col::gold, CENTER));
+        if (k == 0) R().text(x + sideW / 2, sideY + 26, tr("（无）", "(none)"), ts(F12, col::gray, CENTER));
         for (int i = 0; i < k && i < 8; ++i) {
           std::string name = i == 7 && k > 8 ? "…" : num(i + 1) + ". " + cardTitle(hs.picks[i]);
           gfx::pushClip(x + 6, sideY + 24 + i * 15.f, sideW - 12, 15);
@@ -324,7 +330,7 @@ void App::drawCombat(bool top) {
       if (fc) {
         bool ok = hs.has(fc), pk = hs.picked(fc);
         drawCard(fc, cx, cy, cs, !ok, true, pk);
-        std::string tag = pk ? "已选中" : ok ? "" : "不可选";
+        std::string tag = pk ? tr("已选中", "Picked") : ok ? "" : tr("不可选", "Not allowed");
         if (!tag.empty()) {
           TextStyle tt = ts(F12, pk ? col::gold : col::gray, CENTER);
           float tw = R().measure(tag, tt) + 14;
@@ -332,7 +338,7 @@ void App::drawCombat(bool top) {
           R().text(kTop / 2, cy + ch - 19, tag, tt);
         }
       } else {
-        R().text(kTop / 2, cy + ch / 2 - 8, "←→ 或触摸下屏选择手牌", ts(F12, col::gray, CENTER));
+        R().text(kTop / 2, cy + ch / 2 - 8, tr("←→ 或触摸下屏选择手牌", "←→ or touch the bottom screen to pick cards"), ts(F12, col::gray, CENTER));
       }
     }
     drawTopBar();
@@ -421,16 +427,16 @@ void App::drawCombat(bool top) {
         gfx::popTransform();
       }
 
-    if (widgets::button(kHsClearId, style::kMargin, style::kActionY, 72, style::kButtonH, "重选",
+    if (widgets::button(kHsClearId, style::kMargin, style::kActionY, 72, style::kButtonH, tr("重选", "Clear"),
                         widgets::Kind::Secondary, k > 0 && cb->choice.result.waiting())) {
       hs.picks.clear();
       widgets::setFocus(-1);
     }
-    if (widgets::button(kHsConfirmId, kBot - style::kMargin - 96, style::kActionY, 96, style::kButtonH, "确认",
+    if (widgets::button(kHsConfirmId, kBot - style::kMargin - 96, style::kActionY, 96, style::kButtonH, tr("确认", "Confirm"),
                         widgets::Kind::Primary, valid))
       hs.confirm = true;  // fired by updateCombat next frame
     R().text(kBot / 2, style::kActionY + 2, num(k) + " / " + num(maxN), ts(F16, valid ? col::gold : col::white, CENTER));
-    std::string why = k < minN ? "还需选 " + num(minN - k) + " 张" : minN < maxN ? "最多 " + num(maxN) + " 张" : "";
+    std::string why = k < minN ? tr("还需选 ", "Still need ") + num(minN - k) + tr(" 张", " cards") : minN < maxN ? tr("最多 ", "Up to ") + num(maxN) + tr(" 张", " cards") : "";
     if (!why.empty()) R().text(kBot / 2, style::kActionY + 20, why, ts(F12, k < minN ? col::red : col::gray, CENTER));
     widgets::endFrame();
     return;
@@ -440,7 +446,7 @@ void App::drawCombat(bool top) {
     gfx::rect(0, 0, kBot, kH, 0x000000A0);
     const CardChoice& ch = cb->choice;
     std::string prompt = R().hasLoc(ch.prompt) ? L(ch.prompt)
-                         : R().hasLoc("cards." + ch.prompt + ".title") ? L("cards." + ch.prompt + ".title") + "：选择一张牌" : ch.prompt;
+                         : R().hasLoc("cards." + ch.prompt + ".title") ? L("cards." + ch.prompt + ".title") + tr("：选择一张牌", ": choose a card") : plainPrompt(ch.prompt);
     R().text(kBot / 2, 4, prompt, ts(F16, col::gold, CENTER, kBot - 8, 0.9f));
     drawCardGrid(ch.options, sel_, 26, 196, scroll_);
     bool multi = ch.maxCount > 1;
@@ -453,10 +459,10 @@ void App::drawCombat(bool top) {
       }
     }
     bool ready = multi ? (int)deckPicks_.size() >= ch.minCount : sel_ >= 0 && sel_ < (int)ch.options.size();
-    if (ch.minCount == 0) button(kBot / 2 - 50, 200, 100, 34, "跳过", ID_SKIP);
-    button(kBot - 110, 200, 100, 34, "确认", ID_CONFIRM, ready);
+    if (ch.minCount == 0) button(kBot / 2 - 50, 200, 100, 34, tr("跳过", "Skip"), ID_SKIP);
+    button(kBot - 110, 200, 100, 34, tr("确认", "Confirm"), ID_CONFIRM, ready);
     if (!multi && sel_ >= 0 && sel_ < (int)ch.options.size()) R().text(10, 206, cardTitle(ch.options[sel_]), ts(F12, col::white));
-    if (multi) R().text(10, 208, "已选 " + num((int)deckPicks_.size()), ts(F12, col::white));
+    if (multi) R().text(10, 208, tr("已选 ", "Picked ") + num((int)deckPicks_.size()), ts(F12, col::white));
     return;
   }
 
@@ -516,9 +522,9 @@ void App::drawCombat(bool top) {
     TextStyle lt = ts(F16, etEnabled ? col::white : 0x808080FF, CENTER);
     // The text box takes 80% of the plate; CJK ink sits a little below the box middle (measured).
     const float inkMid = 0.53f;
-    float lw = R().measure("结束", lt), lh = R().lineHeight(F16);
+    float lw = R().measure(tr("结束", "End"), lt), lh = R().lineHeight(F16);
     lt.scale = std::min(0.8f * pw / lw, 0.8f * ph / lh);
-    R().text(ex + ew / 2, ey + eh / 2 - lh * lt.scale * inkMid, "结束", lt);
+    R().text(ex + ew / 2, ey + eh / 2 - lh * lt.scale * inkMid, tr("结束", "End"), lt);
   }
   if (canAct) hits_.push_back({ex, ey - 4, ew, eh + 8, ID_END_TURN});
   // Potions: a small button bottom centre, between the piles (opens the belt list).
@@ -527,12 +533,12 @@ void App::drawCombat(bool top) {
     panel(px, py, pw, ph, canAct ? 0x3A2E24E8 : 0x2A2A2AC0, canAct ? 0xB89A60FF : 0x555555FF);
     int filled = 0;
     for (auto& pt : run_->potions) filled += pt != nullptr;
-    R().text(px + pw / 2, py + (ph - R().lineHeight(F12)) / 2, "药水 " + num(filled), ts(F12, canAct ? col::white : col::gray, CENTER));
+    R().text(px + pw / 2, py + (ph - R().lineHeight(F12)) / 2, tr("药水 ", "Potions ") + num(filled), ts(F12, canAct ? col::white : col::gray, CENTER));
     if (canAct) hits_.push_back({px, py - 2, pw, ph + 4, ID_POTIONS});
     // S10: 信息 (combat inspect, also ↑) beside it; open on either side's turn.
     const float ix = px + pw + 6, iw = 44;
     panel(ix, py, iw, ph, 0x22323BE8, 0x4F8790FF);
-    R().text(ix + iw / 2, py + (ph - R().lineHeight(F12)) / 2, "信息", ts(F12, col::white, CENTER));
+    R().text(ix + iw / 2, py + (ph - R().lineHeight(F12)) / 2, tr("信息", "Info"), ts(F12, col::white, CENTER));
     hits_.push_back({ix, py - 4, iw, ph + 8, ID_INSPECT});
   }
   // Piles (C# NCombatCardPile): the pile art in the corners with the count on the game's
@@ -613,13 +619,13 @@ void App::drawCombat(bool top) {
         for (auto& ch : hint) if (ch == '\n') ch = ' ';
         hc = col::red;
       } else {
-        hint = drag_.card->target == TargetType::AnyEnemy && alive.size() > 1 ? "松手打出 · 左右拖动换目标" : "松手打出 · 拖回手牌取消";
+        hint = drag_.card->target == TargetType::AnyEnemy && alive.size() > 1 ? tr("松手打出 · 左右拖动换目标", "Release to play · drag sideways to retarget") : tr("松手打出 · 拖回手牌取消", "Release to play · drag back to cancel");
         hc = 0x90FF90FF;
       }
     } else {
       gfx::rect(0, 0, kBot, kPlayLine, 0x60C0FF00 | (uint32_t)(0x10 + pulse * 0x18));
       for (float x = 4; x < kBot; x += 12) gfx::rect(x, kPlayLine, 6, 2, 0x60C0FFC0);
-      hint = "↑ 拖过虚线出牌 · 松手取消";
+      hint = tr("↑ 拖过虚线出牌 · 松手取消", "↑ Drag past the line to play · release to cancel");
       hc = 0x90D0FFFF;
     }
     TextStyle st = ts(F12, hc, CENTER);
@@ -628,7 +634,7 @@ void App::drawCombat(bool top) {
     R().text(kBot / 2, 201, hint, st);
   } else if (aiming_ && selCard && canAct) {
     // S09 D-pad targeting: the arrow runs from the raised card to the enemy picked with ←→.
-    std::string hint = alive.size() > 1 ? "←→ 选择目标 · A 打出 · B 取消" : "A 打出 · B 取消";
+    std::string hint = alive.size() > 1 ? tr("←→ 选择目标 · A 打出 · B 取消", "←→ Target · A Play · B Cancel") : tr("A 打出 · B 取消", "A Play · B Cancel");
     TextStyle st = ts(F12, 0x90FF90FF, CENTER);
     float w = R().measure(hint, st);
     gfx::rect(kBot / 2 - w / 2 - 6, 200, w + 12, 16, 0x000000B0);

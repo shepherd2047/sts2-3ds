@@ -20,7 +20,7 @@ uint32_t nextCodepoint(const std::string& s, size_t& i) {
   return cp;
 }
 
-bool Res::load(const std::function<void(float)>& progress) {
+bool Res::load(const std::function<void(float)>& progress, int lang) {
   // S01: the font and the strings load first, so the boot's loading frames can show a status line
   // (fontReady), then the atlas pages. Progress counts load steps: one per texture page, two per
   // text table (istringstream parsing is relatively slow on the 3DS's ARM11). On the preview the
@@ -41,57 +41,7 @@ bool Res::load(const std::function<void(float)>& progress) {
     if (progress) progress(std::min(0.99f, stepsDone / totalSteps));
   };
 
-  // One glyph page per size (font_<index>.t3t).
-  for (int i = 0; i < 2; ++i) {
-    fontTex_[i] = gfx::loadTexture("font/font_" + std::to_string(i) + ".t3t");
-    step(1);
-  }
-  if (!fontTex_[1]) fontTex_[1] = fontTex_[0];
-  if (!gfx::readFile("font/font.txt", data)) return false;
-  {
-    std::istringstream in(data);
-    std::string tag;
-    while (in >> tag) {
-      if (tag == "size") {
-        int idx, px, lh, asc;
-        in >> idx >> px >> lh >> asc;
-        fonts_[idx].px = px;
-        fonts_[idx].lineHeight = (float)lh;
-        fonts_[idx].ascent = (float)asc;
-      } else {
-        int idx;
-        uint32_t cp;
-        Glyph g;
-        in >> idx >> cp >> g.x >> g.y >> g.w >> g.h >> g.ox >> g.oy >> g.adv;
-        fonts_[idx].glyphs[cp] = g;
-      }
-    }
-  }
-  step(2);
-
-  if (!gfx::readFile("loc.txt", data)) return false;
-  {
-    size_t pos = 0;
-    while (pos < data.size()) {
-      size_t nl = data.find('\n', pos);
-      if (nl == std::string::npos) nl = data.size();
-      std::string line = data.substr(pos, nl - pos);
-      pos = nl + 1;
-      size_t tab = line.find('\t');
-      if (tab == std::string::npos) continue;
-      std::string v;
-      for (size_t i = tab + 1; i < line.size(); ++i) {
-        if (line[i] == '\\' && i + 1 < line.size()) {
-          ++i;
-          v += line[i] == 'n' ? '\n' : line[i];
-        } else {
-          v += line[i];
-        }
-      }
-      strings_[line.substr(0, tab)] = v;
-    }
-  }
-  step(2);
+  if (!loadText(lang, step)) return false;
 
   {
     std::istringstream in(atlasTxt);
@@ -120,6 +70,90 @@ bool Res::load(const std::function<void(float)>& progress) {
   }
   if (progress) progress(1.f);
   return fontTex_[0] && !atlasPages_.empty();
+}
+
+// Y3: the glyph pages, glyph table and strings of one language.
+bool Res::loadText(int lang, const std::function<void(float)>& step) {
+  std::string data;
+  lang_ = lang == 1 ? 1 : 0;
+  lang = lang_;
+  // One glyph page per size (<prefix>_<index>.t3t); only the active language's pages are loaded.
+  const std::string prefix = lang == 1 ? "font/eng" : "font/font";
+  for (int i = 0; i < 2; ++i) {
+    fontTex_[i] = gfx::loadTexture(prefix + "_" + std::to_string(i) + ".t3t");
+    step(1);
+  }
+  if (!fontTex_[1]) fontTex_[1] = fontTex_[0];
+  if (!gfx::readFile(prefix == "font/eng" ? "font/eng.txt" : "font/font.txt", data)) return false;
+  {
+    std::istringstream in(data);
+    std::string tag;
+    while (in >> tag) {
+      if (tag == "size") {
+        int idx, px, lh, asc;
+        in >> idx >> px >> lh >> asc;
+        fonts_[idx].px = px;
+        fonts_[idx].lineHeight = (float)lh;
+        fonts_[idx].ascent = (float)asc;
+      } else {
+        int idx;
+        uint32_t cp;
+        Glyph g;
+        in >> idx >> cp >> g.x >> g.y >> g.w >> g.h >> g.ox >> g.oy >> g.adv;
+        fonts_[idx].glyphs[cp] = g;
+      }
+    }
+  }
+  step(2);
+
+  if (!gfx::readFile(lang == 1 ? "loc_eng.txt" : "loc.txt", data)) return false;
+  {
+    size_t pos = 0;
+    while (pos < data.size()) {
+      size_t nl = data.find('\n', pos);
+      if (nl == std::string::npos) nl = data.size();
+      std::string line = data.substr(pos, nl - pos);
+      pos = nl + 1;
+      size_t tab = line.find('\t');
+      if (tab == std::string::npos) continue;
+      std::string v;
+      for (size_t i = tab + 1; i < line.size(); ++i) {
+        if (line[i] == '\\' && i + 1 < line.size()) {
+          ++i;
+          v += line[i] == 'n' ? '\n' : line[i];
+        } else {
+          v += line[i];
+        }
+      }
+      strings_[line.substr(0, tab)] = v;
+    }
+  }
+  step(2);
+
+  return fontTex_[0] != nullptr;
+}
+
+bool Res::setLanguage(int lang) {
+  if (lang == lang_ && fontTex_[0]) return true;
+  gfx::Texture* old[2] = {fontTex_[0], fontTex_[1]};
+  for (int i = 0; i < 2; ++i) {
+    fontTex_[i] = nullptr;
+    fonts_[i] = Font{};
+  }
+  if (old[0]) gfx::freeTexture(old[0]);
+  if (old[1] && old[1] != old[0]) gfx::freeTexture(old[1]);
+  strings_.clear();
+  bool ok = loadText(lang, [](float) {});
+  if (!ok && lang != 0) {  // missing English files: back to Chinese rather than no text at all
+    for (int i = 0; i < 2; ++i) {
+      if (fontTex_[i] && (i == 0 || fontTex_[i] != fontTex_[0])) gfx::freeTexture(fontTex_[i]);
+      fontTex_[i] = nullptr;
+      fonts_[i] = Font{};
+    }
+    strings_.clear();
+    ok = loadText(0, [](float) {});
+  }
+  return ok;
 }
 
 Sprite Res::sprite(const std::string& name) const {

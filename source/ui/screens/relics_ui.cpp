@@ -81,12 +81,12 @@ void App::drawRelicOffer(bool top) {
     gfx::rect(kTop / 2.f - 60, 54, 120, 2, style::kPanelHi);
     if (chest && !chestOpen_) {
       R().text(kTop / 2, 110, L("gameplay_ui.TREASURE_BANNER"), ts(F16, col::white, CENTER));
-      R().text(kTop / 2, 136, "点击下方的宝箱打开", ts(F12, col::gray, CENTER));
+      R().text(kTop / 2, 136, tr("点击下方的宝箱打开", "Tap the chest below to open it"), ts(F12, col::gray, CENTER));
       return;
     }
     if (!rel) return;
     // The focused relic, large, with its name, rarity and description on a panel.
-    static const char* rarities[] = {"", "初始", "普通", "罕见", "稀有", "商店", "事件", "先古"};
+    const char* rarities[] = {"", tr("初始", "Starter"), tr("普通", "Common"), tr("罕见", "Uncommon"), tr("稀有", "Rare"), tr("商店", "Shop"), tr("事件", "Event"), tr("先古", "Ancient")};
     int rr = (int)rel->rarity;
     std::string desc = describeRelic(rel);
     const float pw = 340, px = (kTop - pw) / 2, py = 62, big = 64;
@@ -101,7 +101,7 @@ void App::drawRelicOffer(bool top) {
     TextStyle nt = ts(F16, col::gold, CENTER, pw - 16);
     nt.scale = 1.2f;
     R().text(cx, py + big + 14, L("relics." + rel->locKey + ".title"), nt);
-    R().text(cx, py + big + 38, std::string("遗物 · ") + (rr >= 0 && rr < 8 ? rarities[rr] : ""),
+    R().text(cx, py + big + 38, std::string(tr("遗物 · ", "Relic · ")) + (rr >= 0 && rr < 8 ? rarities[rr] : ""),
              ts(F12, col::gold, CENTER));
     R().text(cx, py + big + 56, desc, dt);
     return;
@@ -134,8 +134,8 @@ void App::drawRelicOffer(bool top) {
       const float hx = cx + 36, hw = kChestW - 72;
       bool open = widgets::hit(kChestId, hx, cy, hw, ch, canAct);
       widgets::focusRing(kChestId, hx, cy, hw, ch);
-      R().text(kBot / 2, cy + ch + 10, "点击宝箱打开", ts(F12, col::white, CENTER));
-      open |= widgets::button(kOpenId, kBot - style::kMargin - 96, style::kActionY, 96, style::kButtonH, "打开",
+      R().text(kBot / 2, cy + ch + 10, tr("点击宝箱打开", "Tap the chest to open it"), ts(F12, col::white, CENTER));
+      open |= widgets::button(kOpenId, kBot - style::kMargin - 96, style::kActionY, 96, style::kButtonH, tr("打开", "Open"),
                               widgets::Kind::Primary, canAct);
       widgets::endFrame();
       if (open && canAct) openChest(r);
@@ -192,11 +192,11 @@ void App::drawRelicOffer(bool top) {
   if (rel)  // the focused relic's name under the row (its description is on top)
     R().text(kBot / 2, rowY + kSlot + 6, L("relics." + rel->locKey + ".title"), ts(F16, col::white, CENTER, kBot - 20));
   if (!chest && n > 1)
-    R().text(kBot / 2, rowY + kSlot + 30, "点选遗物查看，再点一次拿取", ts(F12, col::gray, CENTER));
+    R().text(kBot / 2, rowY + kSlot + 30, tr("点选遗物查看，再点一次拿取", "Tap a relic to inspect, tap again to take it"), ts(F12, col::gray, CENTER));
 
-  bool skip = widgets::button(kSkipId, style::kMargin, style::kActionY, 96, style::kButtonH, "跳过",
+  bool skip = widgets::button(kSkipId, style::kMargin, style::kActionY, 96, style::kButtonH, tr("跳过", "Skip"),
                               widgets::Kind::Secondary, canAct);
-  if (widgets::button(kTakeId, kBot - style::kMargin - 96, style::kActionY, 96, style::kButtonH, "拿取",
+  if (widgets::button(kTakeId, kBot - style::kMargin - 96, style::kActionY, 96, style::kButtonH, tr("拿取", "Take"),
                       widgets::Kind::Primary, takeReady && rel != nullptr))
     take = focus_;
   widgets::endFrame();
@@ -236,7 +236,7 @@ void App::drawRelics(bool top) {
     drawSceneBg(true, 0.7f);
     drawTopBar();
     if (sel_ >= 0) drawRelicDetail(rels[sel_].get(), 84);
-    else R().text(kTop / 2, 100, "遗物（" + num(n) + " 个）", ts(F16, col::gold, CENTER));
+    else R().text(kTop / 2, 100, tr("遗物（", "Relics (") + num(n) + tr(" 个）", ")"), ts(F16, col::gold, CENTER));
     return;
   }
   drawSceneBg(false, 0.65f);
@@ -250,9 +250,9 @@ void App::drawRelics(bool top) {
     hits_.push_back({x, y, cell, cell, ID_RELIC0 + i});
   }
   gfx::rect(0, 196, kBot, 44, 0x000000A0);
-  button(10, 200, 100, 34, "返回", ID_BACK);
-  button(118, 200, 84, 34, "详情", ID_DETAIL, sel_ >= 0 && sel_ < n);
-  button(kBot - 110, 200, 100, 34, "牌组", ID_DECK);
+  button(10, 200, 100, 34, tr("返回", "Back"), ID_BACK);
+  button(118, 200, 84, 34, tr("详情", "Details"), ID_DETAIL, sel_ >= 0 && sel_ < n);
+  button(kBot - 110, 200, 100, 34, tr("牌组", "Deck"), ID_DECK);
 }
 
 void App::updateRelics(const gfx::Input& in) {
