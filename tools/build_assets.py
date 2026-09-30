@@ -914,6 +914,61 @@ def add_ui_art(g, a, packer, known):
             print('  power icon skipped', stem, e)
 
 
+def bake_packaging(g):
+    """H4: HOME menu art for the .3dsx / .cia, written next to the Makefile (all gitignored).
+
+    icon.png    48x48 SMDH icon (Ironclad character-select portrait on a dark red square)
+    banner.png  256x128 banner image (Ironclad character-select scene + the main-menu logo)
+    banner.wav  <= 3 s banner sound: the game's battle-start sting (debug_audio), cut and faded
+                by ffmpeg; a silent placeholder (with a warning) if ffmpeg is not installed.
+    """
+    import shutil
+    import subprocess
+    import wave
+    print('packaging (icon, banner)')
+    select = g.image('images/packed/character_select/char_select_ironclad.png')
+    icon = Image.new('RGBA', (48, 48), (40, 10, 10, 255))
+    head = select.crop((0, 0, select.width, select.width)).resize((48, 48), Image.LANCZOS)
+    icon.alpha_composite(head)
+    icon.save(os.path.join(ROOT, 'icon.png'))
+
+    # Banner: the character-select scene (as in bake_title_art) cropped to 2:1, darkened
+    # towards the left where the main-menu logo sits.
+    skel, atlas, load = g.spine('animations/character_select/ironclad/characterselect_ironclad_skel_data.tres')
+    scene, _ = spine_render.render(skel, atlas, load, scale=0.11, animation='animation')
+    crop_w = min(scene.width, scene.height * 2)
+    x0 = (scene.width - crop_w) // 2
+    scene = scene.crop((x0, 0, x0 + crop_w, crop_w // 2)).resize((256, 128), Image.LANCZOS)
+    banner = Image.new('RGBA', (256, 128), (20, 5, 5, 255))
+    banner.alpha_composite(scene)
+    shade = Image.linear_gradient('L').rotate(90).resize((256, 128))  # 255 left -> 0 right
+    dark = Image.new('RGBA', (256, 128), (15, 4, 4, 255))
+    dark.putalpha(shade.point(lambda v: int(v * 0.75)))
+    banner.alpha_composite(dark)
+    skel, atlas, load = g.spine('animations/backgrounds/mainmenu/logo/main_menu_logo_skel_data.tres')
+    logo, _ = spine_render.render(skel, atlas, load, scale=0.15, animation='animation')
+    logo = logo.crop(logo.getbbox())
+    logo.thumbnail((150, 110), Image.LANCZOS)
+    banner.alpha_composite(logo, (max(0, 80 - logo.width // 2), (128 - logo.height) // 2))
+    banner.save(os.path.join(ROOT, 'banner.png'))
+
+    wav = os.path.join(ROOT, 'banner.wav')
+    clip = 'debug_audio/battle_start_1.mp3'
+    ok = False
+    if shutil.which('ffmpeg') and clip in g.pck.files:
+        r = subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', 'pipe:0', '-t', '3',
+                            '-af', 'afade=t=out:st=2.4:d=0.6', '-ac', '1', '-ar', '22050',
+                            '-c:a', 'pcm_s16le', wav], input=g.pck.read(clip), capture_output=True)
+        ok = r.returncode == 0 and os.path.exists(wav)
+    if not ok:
+        print('  warning: ffmpeg (or the clip) not found, banner.wav is a silent placeholder')
+        with wave.open(wav, 'wb') as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(22050)
+            w.writeframes(bytes(2 * 22050))
+
+
 def build(args):
     global CARDS, POWERS, MONSTERS, RELICS, EVENTS, POTIONS, ENCHANTMENTS
     CARDS = sorted(set(CARDS_FIXED) | set(keys_from_source('CARD_HEADER')))
@@ -1072,10 +1127,7 @@ def build(args):
     # S04: the Random button and the selected-button outline (scenes/screens/char_select/char_select_button.tscn).
     packer.add('ui/random_select', fit_height(g.image('images/packed/character_select/char_select_random.png'), 120))
     packer.add('ui/char_select_outline', fit_height(g.image('images/packed/character_select/char_select_outline.png'), 120))
-    icon = Image.new('RGBA', (48, 48), (40, 10, 10, 255))
-    head = select.crop((0, 0, select.width, select.width)).resize((48, 48), Image.LANCZOS)
-    icon.alpha_composite(head)
-    icon.save(os.path.join(ROOT, 'icon.png'))
+    bake_packaging(g)  # H4: icon.png, banner.png, banner.wav
 
     print('boot and act titles')
     bake_boot_and_act_titles(g, packer, args)
@@ -1344,6 +1396,11 @@ if __name__ == '__main__':
     ap.add_argument('--pck', help='path to "Slay the Spire 2.pck" (default: Steam install)')
     ap.add_argument('--font', default=None, help='CJK font (default: tools/fonts/*, else a system font)')
     ap.add_argument('--preview', action='store_true', help='also write PNG previews')
+    ap.add_argument('--packaging', action='store_true',
+                    help='only write icon.png, banner.png and banner.wav (used by make cia)')
     args = ap.parse_args()
+    if args.packaging:
+        bake_packaging(Game(args.pck) if args.pck else Game())
+        sys.exit(0)
     args.font = args.font or default_font()
     build(args)
