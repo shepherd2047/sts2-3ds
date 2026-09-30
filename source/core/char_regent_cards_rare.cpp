@@ -414,7 +414,7 @@ struct Guards : IroncladT<Guards> {
 
 // HeavenlyDrill.cs: X cost, Attack, AnyEnemy. Damage 8, X hits; X doubles when X >= 4 (Energy).
 struct HeavenlyDrill : IroncladT<HeavenlyDrill> {
-  CARD_HEADER(HeavenlyDrill, "HEAVENLY_DRILL", -1, Attack, Rare, AnyEnemy)
+  CARD_HEADER(HeavenlyDrill, "HEAVENLY_DRILL", 0, Attack, Rare, AnyEnemy)
     costsX = true;
     addVar("Damage", 8);
     addVar("Energy", 4);
