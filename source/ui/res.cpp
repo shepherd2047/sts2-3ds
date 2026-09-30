@@ -21,43 +21,31 @@ uint32_t nextCodepoint(const std::string& s, size_t& i) {
 }
 
 bool Res::load(const std::function<void(float)>& progress) {
-  std::string data;
-  if (!gfx::readFile("gfx/atlas.txt", data)) return false;
-  int pageCount = 1;  // for progress only
-  if (progress) {
-    std::istringstream in(data);
+  // S01: the font and the strings load first, so the boot's loading frames can show a status line
+  // (fontReady), then the atlas pages. Progress counts load steps: one per texture page, two per
+  // text table (istringstream parsing is relatively slow on the 3DS's ARM11). On the preview the
+  // whole load takes ~0.3 s: atlas pages ~85 %, glyph pages ~11 %, font.txt + loc.txt ~4 %.
+  std::string atlasTxt, data;
+  if (!gfx::readFile("gfx/atlas.txt", atlasTxt)) return false;
+  int pageCount = 1;
+  {
+    std::istringstream in(atlasTxt);
     std::string name;
     int page, x, y, w, h, ax, ay;
     while (in >> name >> page >> x >> y >> w >> h >> ax >> ay) pageCount = std::max(pageCount, page + 1);
   }
-  {
-    std::istringstream in(data);
-    std::string name;
-    int page, x, y, w, h, ax, ay;
-    while (in >> name >> page >> x >> y >> w >> h >> ax >> ay) {
-      while ((int)atlasPages_.size() <= page) {
-        atlasPages_.push_back(gfx::loadTexture("gfx/atlas_" + std::to_string(atlasPages_.size()) + ".t3t"));
-        if (progress) progress(std::min(0.95f, (float)atlasPages_.size() / (float)pageCount));
-      }
-      Sprite s;
-      s.tex = atlasPages_[page];
-      s.x = x; s.y = y; s.w = w; s.h = h; s.ax = ax; s.ay = ay;
-      sprites_[name] = s;
-    }
-  }
-  // 9-slice margins (gfx/nine.txt: name left top right bottom, in baked pixels).
-  if (gfx::readFile("gfx/nine.txt", data)) {
-    std::istringstream in(data);
-    std::string name;
-    int l, t, r, b;
-    while (in >> name >> l >> t >> r >> b) {
-      auto it = sprites_.find(name);
-      if (it != sprites_.end()) { it->second.nl = l; it->second.nt = t; it->second.nr = r; it->second.nb = b; }
-    }
-  }
+  const float totalSteps = 2.f + 2.f + 2.f + (float)pageCount;
+  float stepsDone = 0;
+  auto step = [&](float w) {
+    stepsDone += w;
+    if (progress) progress(std::min(0.99f, stepsDone / totalSteps));
+  };
 
   // One glyph page per size (font_<index>.t3t).
-  for (int i = 0; i < 2; ++i) fontTex_[i] = gfx::loadTexture("font/font_" + std::to_string(i) + ".t3t");
+  for (int i = 0; i < 2; ++i) {
+    fontTex_[i] = gfx::loadTexture("font/font_" + std::to_string(i) + ".t3t");
+    step(1);
+  }
   if (!fontTex_[1]) fontTex_[1] = fontTex_[0];
   if (!gfx::readFile("font/font.txt", data)) return false;
   {
@@ -79,6 +67,7 @@ bool Res::load(const std::function<void(float)>& progress) {
       }
     }
   }
+  step(2);
 
   if (!gfx::readFile("loc.txt", data)) return false;
   {
@@ -100,6 +89,33 @@ bool Res::load(const std::function<void(float)>& progress) {
         }
       }
       strings_[line.substr(0, tab)] = v;
+    }
+  }
+  step(2);
+
+  {
+    std::istringstream in(atlasTxt);
+    std::string name;
+    int page, x, y, w, h, ax, ay;
+    while (in >> name >> page >> x >> y >> w >> h >> ax >> ay) {
+      while ((int)atlasPages_.size() <= page) {
+        atlasPages_.push_back(gfx::loadTexture("gfx/atlas_" + std::to_string(atlasPages_.size()) + ".t3t"));
+        step(1);
+      }
+      Sprite s;
+      s.tex = atlasPages_[page];
+      s.x = x; s.y = y; s.w = w; s.h = h; s.ax = ax; s.ay = ay;
+      sprites_[name] = s;
+    }
+  }
+  // 9-slice margins (gfx/nine.txt: name left top right bottom, in baked pixels).
+  if (gfx::readFile("gfx/nine.txt", data)) {
+    std::istringstream in(data);
+    std::string name;
+    int l, t, r, b;
+    while (in >> name >> l >> t >> r >> b) {
+      auto it = sprites_.find(name);
+      if (it != sprites_.end()) { it->second.nl = l; it->second.nt = t; it->second.nr = r; it->second.nb = b; }
     }
   }
   if (progress) progress(1.f);

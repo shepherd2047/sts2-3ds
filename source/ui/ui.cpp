@@ -423,7 +423,7 @@ void App::draw() {
         break;
       default: break;
     }
-    if (top && scr == Screen::Map) drawActTitle();
+    if (scr == Screen::Map) drawActTitle(top);
     if (pauseOpen_) drawPause(top);  // Y2: over the room, under the fade and toasts
     drawTips(top);  // M13
     // F6: fade through black on a screen change (style::kFade seconds).

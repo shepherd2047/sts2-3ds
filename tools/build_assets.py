@@ -1257,7 +1257,8 @@ def build(args):
         'PROFILE_SCREEN', 'OPEN_PROFILE_SCREEN',  # S03: profile screen + the main menu's profile button
         'CUSTOM_RUN_SCREEN',  # M11+S05: the custom run screen
         'DAILY_RUN_MENU',  # M12: the daily run screen
-        'ENABLE_TUTORIALS'))  # M13: NAcceptTutorialsFtue's question
+        'ENABLE_TUTORIALS',  # M13: NAcceptTutorialsFtue's question
+        'LOADING_OVERLAY'))  # S01: the boot's loading status (NLoadingOverlay)
     take('ftues')  # M13: the first-time tips (Nodes.Ftue)
     # S21: the settings screen (tabs, setting names / descriptions, toasts, reset popups)
     take('settings_ui', lambda k: not k.startswith(('INPUT_SETTINGS', 'FEEDBACK', 'MODDING', 'DISCONNECT',
