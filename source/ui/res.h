@@ -51,8 +51,10 @@ struct TextStyle {
 
 class Res {
  public:
-  // progress (S01 boot): called with 0..1 as the atlas pages load, so the boot can draw frames.
+  // progress (S01 boot): called with 0..1 after each load step, so the boot can draw frames.
+  // The font and loc.txt load first; once fontReady(), text and L() work (atlas sprites not yet).
   bool load(const std::function<void(float)>& progress = nullptr);
+  bool fontReady() const { return fontTex_[0] != nullptr && !strings_.empty(); }
   Sprite sprite(const std::string& name) const;
   // Names of all atlas sprites that start with prefix, sorted (asset gallery, tests).
   std::vector<std::string> spriteNames(const std::string& prefix) const;

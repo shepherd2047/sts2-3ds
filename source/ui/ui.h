@@ -74,7 +74,7 @@ class App {
   bool updateBoot(const gfx::Input& in, double dt);  // true while the splash runs
   bool drawBoot(bool top);
   void updateActTitle(float dt);
-  void drawActTitle();  // top screen, over the map
+  void drawActTitle(bool top);  // the card on the top screen, a veil on the bottom (over the map)
   int actTitleAct_ = -1;  // act whose title card has been triggered this run
   float actTitleT_ = -1;  // seconds into the card; -1 = not showing
 

@@ -11,6 +11,13 @@
 //   then a pause of 2 s (0.5 s in fast mode) and the whole card fades out (1 s, quad out).
 // Both texts are pre-rendered in the game's own zhs fonts (act/name_<ID>, act/number_<n>,
 // build_assets.bake_boot_and_act_titles); plain loc text in the UI font is the fallback.
+// There is no per-character line: NActBanner shows only the act number and name (X6 checked the C#
+// and the loc tables for act-transition quotes; none exist).
+// Two screens (RGDSplus U01 "章节上屏"): the card itself is on the top screen; the bottom screen
+// (the map the player acts on, 320 px) gets only a light veil that follows the band's fade, so the
+// transition reads across both screens without covering the map controls.
+// Port addition: after kSkipMin, A or a tap fades the card out in kSkipOut. The input is not taken
+// (the banner never blocks the map in the C#: mouse_filter ignore), so scripted runs behave the same.
 #include "../ui_common.h"
 
 namespace ui {
@@ -18,6 +25,9 @@ namespace ui {
 namespace {
 constexpr float kK = kH / 1080.f;  // scene units -> top-screen px
 constexpr float kIn = 1.75f, kOut = 1.0f;
+constexpr float kSkipMin = 0.75f, kSkipOut = 0.35f;
+constexpr float kVeil = 0.2f;  // bottom-screen veil at full strength
+float skipT = -1;              // actTitleT_ when A / a tap skipped the card; -1 = not skipped
 
 float clamp01(float t) { return std::clamp(t, 0.f, 1.f); }
 float easeOutQuad(float t) { return 1.f - (1.f - t) * (1.f - t); }
@@ -54,25 +64,45 @@ void App::updateActTitle(float dt) {
   if (r.screen == Screen::Title) {  // every run starts (or resumes) from the title
     actTitleAct_ = -1;
     actTitleT_ = -1;
+    skipT = -1;
     return;
   }
   if (actTitleT_ >= 0) {
     actTitleT_ += dt;
-    if (actTitleT_ >= kIn + holdTime(fastMode_) + kOut) actTitleT_ = -1;
+    const float hold = holdTime(fastMode_);
+    // Skip: only while the card is what the player sees (the map, no page over it) and before its
+    // own fade-out. gfx::input() is this frame's reading, the same one App::update got.
+    bool visible = r.screen == Screen::Map && !mapView_ && !pauseOpen_ && !devOpen_ && !settingsOpen_ &&
+                   !deckOpen_ && !relicsOpen_ && !potionsOpen_ && !detailOpen();
+    const gfx::Input in = gfx::input();
+    if (visible && skipT < 0 && actTitleT_ >= kSkipMin && actTitleT_ < kIn + hold &&
+        ((in.down & gfx::BTN_A) || in.touchDown))
+      skipT = actTitleT_;
+    bool over = skipT >= 0 ? actTitleT_ - skipT >= kSkipOut : actTitleT_ >= kIn + hold + kOut;
+    if (over) actTitleT_ = skipT = -1;
   }
   if (r.screen == Screen::Map && !mapView_ && r.actIndex != actTitleAct_) {
     actTitleAct_ = r.actIndex;
     // Only before the act's first room (the start point is nodes[0]): a run resumed mid-act
     // opens its map without the card.
-    if (r.currentNode <= 0) actTitleT_ = 0;
+    if (r.currentNode <= 0) {
+      actTitleT_ = 0;
+      skipT = -1;
+    }
   }
 }
 
-void App::drawActTitle() {
+void App::drawActTitle(bool top) {
   if (actTitleT_ < 0) return;
   const float t = actTitleT_, hold = holdTime(fastMode_);
   float whole = t <= kIn + hold ? 1.f : 1.f - easeOutQuad(clamp01((t - kIn - hold) / kOut));
-  float bandA = 0.25f * clamp01((t - 0.5f) / 0.5f) * whole;
+  if (skipT >= 0) whole = std::min(whole, 1.f - easeOutQuad(clamp01((t - skipT) / kSkipOut)));
+  float bandIn = clamp01((t - 0.5f) / 0.5f) * whole;
+  if (!top) {  // the veil, inside the bottom screen's own 320 px
+    if (bandIn > 0) gfx::rect(0, 0, kBot, kH, (uint32_t)(kVeil * bandIn * 255.f + 0.5f));
+    return;
+  }
+  float bandA = 0.25f * bandIn;
   float nameA = clamp01((t - 0.25f) / 1.0f) * whole;
   float numA = clamp01((t - 0.5f) / 1.0f) * whole;
   float numTop = 450.f - 10.f * easeOutQuad(clamp01((t - 0.5f) / 1.25f));

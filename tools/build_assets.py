@@ -1247,7 +1247,8 @@ def build(args):
         'RUN_HISTORY', 'CONTINUE_RUN_INFO',
         'PROFILE_SCREEN', 'OPEN_PROFILE_SCREEN',  # S03: profile screen + the main menu's profile button
         'CUSTOM_RUN_SCREEN',  # M11+S05: the custom run screen
-        'DAILY_RUN_MENU'))  # M12: the daily run screen
+        'DAILY_RUN_MENU',  # M12: the daily run screen
+        'LOADING_OVERLAY'))  # S01: the boot's loading status (NLoadingOverlay)
     # S21: the settings screen (tabs, setting names / descriptions, toasts, reset popups)
     take('settings_ui', lambda k: not k.startswith(('INPUT_SETTINGS', 'FEEDBACK', 'MODDING', 'DISCONNECT',
                                                     'ANTI_ALIASING', 'ASPECT_RATIO', 'FULLSCREEN', 'MSAA',

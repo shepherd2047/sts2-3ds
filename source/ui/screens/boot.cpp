@@ -4,8 +4,8 @@
 // animates once, then the background eases to _logoBgColor #074254 (cubic, 2 s) and holds 1 s
 // before the main menu. A click / select / cancel skips (the logo fades out in 0.25 s, expo).
 // Here: both screens share the background colour and the bottom screen shows nothing else
-// (U01: "上下同底色 ... 启动时下屏不混入主菜单塔景"); while Res::load reads the atlas pages a thin
-// progress line is drawn on the bottom screen (the font is not loaded yet, so no text).
+// (U01: "上下同底色 ... 启动时下屏不混入主菜单塔景"); while Res::load runs, the bottom screen shows
+// the loading label and a progress line (loadingFrame). Skippable after kSkipMin.
 // Automated previews (STS_HIDDEN / STS_FIXED_STEP / STS_SCRIPT) skip all of it so scripted
 // frame numbers are unchanged; STS_BOOT=1 forces it (for screenshots of the splash itself).
 #include "../ui_common.h"
@@ -19,6 +19,7 @@ constexpr float kDrop = 0.5f;      // drop-in and fade-in
 constexpr float kDropPx = 800.f * kH / 1080.f;
 constexpr float kBgFade = 2.0f, kBgHold = 1.0f;
 constexpr float kSkipFade = 0.25f;
+constexpr float kSkipMin = 0.3f;   // seconds after loading before A / B / START / a tap skip
 // NLogoAnimation._Ready: scale = min(0.33 * size / bounds); a little larger on the 240 px screen.
 constexpr float kLogoFrac = 0.42f;
 
@@ -58,13 +59,23 @@ uint32_t mixColor(uint32_t a, uint32_t b, float t) {
   return out | 0xFF;
 }
 
+// One frame per Res::load step (romfs reads + texture uploads block the main loop, so there is no
+// animation in between). Top: black, as the game loads under a black screen. Bottom: the loading
+// status (NLoadingOverlay's main_menu_ui.LOADING_OVERLAY.label, once the font and strings are in:
+// Res::load reads them first) over a thin, non-interactive progress line (U01: "加载时显示状态，
+// 不伪造可点击进度条"). Everything stays inside the 320 px bottom screen.
 void loadingFrame(float progress) {
   gfx::beginFrame();
   gfx::screen(gfx::TOP, 0x000000FF);
   gfx::screen(gfx::BOTTOM, 0x000000FF);
-  const float w = 120, x = (kBot - w) / 2, y = kH / 2;
+  const float w = 160, x = std::round((kBot - w) / 2), y = std::round(kH / 2 + 6);
+  if (R().fontReady()) {
+    const std::string key = "main_menu_ui.LOADING_OVERLAY.label";
+    const std::string& label = R().loc(key);
+    if (label != key) R().text(kBot / 2, y - 8 - R().lineHeight(F12), label, ts(F12, col::gray, CENTER));
+  }
   gfx::rect(x, y, w, 2, 0xFFFFFF18);
-  gfx::rect(x, y, w * clamp01(progress), 2, style::kPanelEdge);
+  gfx::rect(x, y, std::round(w * clamp01(progress)), 2, style::kPanelEdge);
   gfx::endFrame();
 }
 }  // namespace
@@ -105,7 +116,8 @@ bool App::updateBoot(const gfx::Input& in, double dt) {
   } else if (!b.skel && logoT >= 0 && b.animEnd < 0) {
     b.animEnd = b.t;  // no logo baked: just the background ease
   }
-  bool skip = (in.down & (gfx::BTN_A | gfx::BTN_B | gfx::BTN_START)) || in.touchDown;
+  // A short minimum first, so a key still held from the Homebrew Launcher doesn't skip it unseen.
+  bool skip = b.t >= kSkipMin && ((in.down & (gfx::BTN_A | gfx::BTN_B | gfx::BTN_START)) || in.touchDown);
   if (skip && b.skipT < 0) {
     if (logoPlaying) b.skipT = b.t;
     else b.animEnd = b.t - kBgFade - kBgHold;  // before or after the logo: straight on

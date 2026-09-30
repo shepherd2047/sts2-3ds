@@ -421,7 +421,7 @@ void App::draw() {
         break;
       default: break;
     }
-    if (top && scr == Screen::Map) drawActTitle();
+    if (scr == Screen::Map) drawActTitle(top);
     if (pauseOpen_) drawPause(top);  // Y2: over the room, under the fade and toasts
     // F6: fade through black on a screen change (style::kFade seconds).
     if (transitionT_ > 0) gfx::rect(0, 0, top ? kTop : kBot, kH, 0x000000FF & (0xFFFFFF00 | (uint32_t)(transitionT_ * 255)));
