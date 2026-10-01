@@ -56,11 +56,12 @@ struct NostalgiaPower : Power {
 
 // PanachePower.cs: after every 5th card played (not counting the Panache card itself), deal Amount
 // unpowered damage to all enemies; the counter resets at the end of the turn.
-// PORT NOTE: the C# power is Instanced (one per Panache played, each with its own counter and
-// alreadyApplied flag); here one power stacks the damage and shares the counter, and a second Panache
-// played is counted toward it.
+// Instanced: each Panache played has its own counter and alreadyApplied flag (a second Panache counts
+// toward the first one's counter). The HUD shows CardsLeft.
 struct PanachePower : Power {
   POWER_HEADER(PanachePower, "PANACHE_POWER")
+  PowerInstanceType instanceType() const override { return PowerInstanceType::Instanced; }
+  int displayAmount() const override { return cardsLeft; }
   bool alreadyApplied = false;
   int cardsLeft = 5;
   Task<> afterCardPlayed(const CardPlay& p) override {
@@ -68,7 +69,7 @@ struct PanachePower : Power {
     if (alreadyApplied) {
       --cardsLeft;
       if (cardsLeft <= 0) {
-        flash = 1.f;
+        co_await wait(0.5);
         co_await cmd::damage(owner->combat->hittableEnemies(), Dec(amount), kUnpowered, owner, nullptr);
         cardsLeft = 5;
       }

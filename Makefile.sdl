@@ -19,7 +19,7 @@ endif
 CORE_SRC := $(wildcard source/core/*.cpp)
 EXTRA_PREVIEW_SRC := source/spine/spine.cpp source/gfx/gfx_common.cpp source/platform_sdl/gfx_sdl.cpp source/audio/audio.cpp source/platform_sdl/audio_sdl.cpp $(wildcard source/ui/*.cpp) $(wildcard source/ui/*/*.cpp) source/main.cpp
 SIM_SRC := test/sim.cpp
-TEST_SRC := test/enchant_test.cpp test/afflict_test.cpp test/quests_test.cpp test/badges_test.cpp test/character_test.cpp test/silent_test.cpp test/necrobinder_test.cpp test/regent_test.cpp test/colorless_test.cpp test/defect_test.cpp test/ascension_dump.cpp test/ascension_test.cpp test/progress_test.cpp test/settings_test.cpp test/profile_test.cpp test/history_test.cpp test/modifiers_test.cpp test/daily_test.cpp test/achievements_test.cpp test/tutorials_test.cpp test/save_errors_test.cpp test/safe_file_test.cpp test/model_dump.cpp
+TEST_SRC := test/enchant_test.cpp test/afflict_test.cpp test/quests_test.cpp test/badges_test.cpp test/character_test.cpp test/silent_test.cpp test/necrobinder_test.cpp test/regent_test.cpp test/colorless_test.cpp test/defect_test.cpp test/ascension_dump.cpp test/ascension_test.cpp test/progress_test.cpp test/settings_test.cpp test/profile_test.cpp test/history_test.cpp test/modifiers_test.cpp test/daily_test.cpp test/achievements_test.cpp test/tutorials_test.cpp test/save_errors_test.cpp test/safe_file_test.cpp test/model_dump.cpp test/instanced_test.cpp
 
 OBJ_DIR := build/obj
 
@@ -66,6 +66,11 @@ build/afflict_test: $(CORE_OBJS) $(OBJ_DIR)/test/afflict_test.o
 	$(CXX) $(BASE_CXXFLAGS) $^ -o $@
 
 build/quests_test: $(CORE_OBJS) $(OBJ_DIR)/test/quests_test.o
+	@mkdir -p build
+	$(CXX) $(BASE_CXXFLAGS) $^ -o $@
+
+# E6: instanced powers and the ITemporaryPower marker.
+build/instanced_test: $(CORE_OBJS) $(OBJ_DIR)/test/instanced_test.o
 	@mkdir -p build
 	$(CXX) $(BASE_CXXFLAGS) $^ -o $@
 
@@ -157,10 +162,11 @@ build/model_dump: $(CORE_OBJS) $(OBJ_DIR)/test/model_dump.o
 sim: build/sim
 	./build/sim 200
 
-check: build/enchant_test build/afflict_test build/quests_test build/character_test build/silent_test build/necrobinder_test build/regent_test build/colorless_test build/defect_test build/ascension_test build/ascension_dump build/progress_test build/settings_test build/profile_test build/history_test build/badges_test build/modifiers_test build/daily_test build/achievements_test build/tutorials_test build/save_errors_test build/safe_file_test build/model_dump
+check: build/enchant_test build/afflict_test build/quests_test build/character_test build/silent_test build/necrobinder_test build/regent_test build/colorless_test build/defect_test build/ascension_test build/ascension_dump build/progress_test build/settings_test build/profile_test build/history_test build/badges_test build/modifiers_test build/daily_test build/achievements_test build/tutorials_test build/save_errors_test build/safe_file_test build/model_dump build/instanced_test
 	./build/enchant_test
 	./build/afflict_test
 	./build/quests_test
+	./build/instanced_test
 	./build/character_test
 	./build/silent_test
 	./build/necrobinder_test

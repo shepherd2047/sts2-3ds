@@ -559,18 +559,18 @@ Task<> applyPower(std::unique_ptr<Power> power, Creature* target, Dec amount, Cr
     c->graveyard.push_back(std::move(power));  // listeners may still hold it
     co_return;
   }
-  if (Power* existing = target->power(p->id)) {
-    // PowerCmd.Apply -> ModifyAmount on the stack already there.
+  if (Power* existing = target->stackingInstance(*p, applier)) {
+    // PowerCmd.Apply -> ModifyAmount on the stack already there (FindExistingInstanceForStacking).
     co_await modifyPowerAmount(existing, amount, applier, src, silent);
     for (Model* m : givenModifiers) co_await m->afterModifyingPowerAmountGiven(existing);
     for (Model* m : receivedModifiers) co_await m->afterModifyingPowerAmountReceived(existing);
     co_return;
   }
   co_await p->beforeApplied(target, amount, applier, src);
-  if (target->power(p->id)) {
+  if (Power* stacked = target->stackingInstance(*p, applier)) {
     // beforeApplied can itself stack the same power (it never does for the
     // powers in this build, but keep PowerCmd's contract).
-    co_await modifyPowerAmount(target->power(p->id), amount, applier, src, silent);
+    co_await modifyPowerAmount(stacked, amount, applier, src, silent);
     co_return;
   }
   p->owner = target;

@@ -73,6 +73,7 @@ struct SubroutinePower : Power {
 // SynchronizePower: a TemporaryFocusPower (Focus that is removed at the end of the turn).
 struct SynchronizePower : TemporaryFocusPower {
   POWER_HEADER(SynchronizePower, "SYNCHRONIZE_POWER")
+  const char* internallyAppliedPower() const override { return "FocusPower"; }  // ITemporaryPower
 };
 
 // ThunderPower: whenever one of the owner's Lightning orbs is evoked, deal Amount Unpowered

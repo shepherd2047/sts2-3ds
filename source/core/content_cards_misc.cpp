@@ -57,6 +57,7 @@ struct Beckon : IroncladT<Beckon> {
 // FeedingFrenzyPower.cs: a TemporaryStrengthPower (copy of SetupStrikePower in powers.h).
 struct FeedingFrenzyPower : Power {
   POWER_HEADER(FeedingFrenzyPower, "FEEDING_FRENZY_POWER")
+  const char* internallyAppliedPower() const override { return "StrengthPower"; }  // ITemporaryPower
   Task<> beforeApplied(Creature* target, Dec amt, Creature* app, Card* src) override {
     co_await applyPower<StrengthPower>(target, amt, app, src, true);
   }

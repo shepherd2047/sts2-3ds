@@ -193,11 +193,13 @@ struct ChainsOfBindingPower : Power {
 
 struct Aeonglass;
 
-// WitheringPresencePower.cs: every 6 cards the player plays, a Wither lands in their hand.
-// PORT NOTE: the C# power is per-target and instanced; there is one player, so a counter
-// on the Aeonglass does the same (Amount = cards left).
+// WitheringPresencePower.cs: Instanced, one per player (Target): every 6 cards that player plays, a
+// Wither lands in their hand. The HUD shows CardsLeft.
 struct WitheringPresencePower : Power {
   POWER_HEADER(WitheringPresencePower, "WITHERING_PRESENCE_POWER")
+  PowerInstanceType instanceType() const override { return PowerInstanceType::Instanced; }
+  int displayAmount() const override { return cardsLeft; }
+  int cardsLeft = 6;  // DynamicVars["CardsLeft"]
   Task<> afterCardPlayed(const CardPlay& p) override;
 };
 
@@ -555,7 +557,11 @@ struct Aeonglass : Monster {
   int minHp() const override { return asc(kToughEnemies, 535, 512); }
   int maxHp() const override { return minHp(); }
   Task<> afterAddedToRoom() override {
-    co_await applyById("WitheringPresencePower", creature, 6, creature);
+    {  // one instance per player (CombatState.Players), Target = that player
+      auto wp = std::make_unique<WitheringPresencePower>();
+      wp->target = combat->player;
+      co_await cmd::applyPower(std::move(wp), creature, 6, creature, nullptr);
+    }
     co_await applyById("ArtifactPower", creature, 3, creature);
   }
   void buildMoves() override {
@@ -594,11 +600,13 @@ struct Aeonglass : Monster {
   }
 };
 
-Task<> WitheringPresencePower::afterCardPlayed(const CardPlay&) {
-  if (--amount > 0) co_return;
-  flash = 1.f;
+Task<> WitheringPresencePower::afterCardPlayed(const CardPlay& p) {
+  if (!target || ownerOf(p.card) != target) co_return;
+  if (--cardsLeft > 0) co_return;
+  co_await wait(0.5);
   if (owner->monster) co_await static_cast<Aeonglass*>(owner->monster.get())->addWither(Pile::Hand);
-  amount = 6;
+  flash = 1.f;
+  cardsLeft = 6;
 }
 
 template <class P> void regPower() { db::registerPower(P::kId, [] { return std::unique_ptr<Power>(new P()); }); }

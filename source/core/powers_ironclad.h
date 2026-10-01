@@ -206,6 +206,7 @@ struct JugglingPower : Power {
 // negative-Strength mirror of SetupStrikePower (powers.h).
 struct ManglePower : Power {
   POWER_HEADER(ManglePower, "MANGLE_POWER")
+  const char* internallyAppliedPower() const override { return "StrengthPower"; }  // ITemporaryPower
   Task<> beforeApplied(Creature* target, Dec amt, Creature* app, Card* src) override {
     co_await applyPower<StrengthPower>(target, -amt, app, src, true);
   }

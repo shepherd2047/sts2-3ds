@@ -77,6 +77,7 @@ struct DebilitatePower : Power {
 // EnfeeblingTouchPower.cs: TemporaryStrengthPower, IsPositive == false (mirror of SetupStrikePower).
 struct EnfeeblingTouchPower : Power {
   POWER_HEADER(EnfeeblingTouchPower, "ENFEEBLING_TOUCH_POWER")
+  const char* internallyAppliedPower() const override { return "StrengthPower"; }  // ITemporaryPower
   PowerType type() const override { return PowerType::Debuff; }
   Task<> beforeApplied(Creature* target, Dec amt, Creature* app, Card* src) override {
     co_await applyPower<StrengthPower>(target, -amt, app, src, true);

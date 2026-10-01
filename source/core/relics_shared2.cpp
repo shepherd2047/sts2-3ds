@@ -39,26 +39,12 @@ struct Toolbox : Relic {
   }
 };
 
-// The C# `power is ITemporaryPower` and its InternallyAppliedPower id (Strength / Dexterity / Focus).
-// PORT NOTE: no ITemporaryPower marker here; listed by id.
-const char* internallyAppliedPower(const Power& p) {
-  static const char* const kStrength[] = {"CoordinatePower", "DarkShacklesPower", "CrushUnderPower", "EnfeeblingTouchPower",
-                                          "DyingStarPower", "FeedingFrenzyPower", "FlexPotionPower", "ManglePower",
-                                          "MonarchsGazeStrengthDownPower", "PiercingWailPower", "ReptileTrinketPower",
-                                          "ShacklingPotionPower", "SetupStrikePower"};
-  static const char* const kDexterity[] = {"AnticipatePower", "FadePower", "HelicalDartPower", "SpeedPotionPower"};
-  static const char* const kFocus[] = {"FocusedStrikePower", "HotfixPower", "HyperbeamFocusDownPower", "SynchronizePower"};
-  for (const char* s : kStrength) if (p.id == s) return "StrengthPower";
-  for (const char* s : kDexterity) if (p.id == s) return "DexterityPower";
-  for (const char* s : kFocus) if (p.id == s) return "FocusPower";
-  return nullptr;
-}
-
 // UnsettlingLamp.cs (Rare): the first debuff-applying card each combat doubles every debuff it applies.
-// PORT NOTE: the C# keeps the PowerModel instances in DoubledPowers; only the internal power ids of the
-// temporary ones matter (HasDoubledTemporaryPowerSource), so those are stored instead (a fresh power object
-// can be destroyed after stacking). IsVisible is not checked (only AmbergrisPower is hidden, not ported);
-// RelicStatus.Active is display only.
+// DoubledPowers is only read through HasDoubledTemporaryPowerSource (the InternallyAppliedPower of each
+// doubled ITemporaryPower), so those ids are kept instead of the power objects (a fresh power object can be
+// destroyed after stacking).
+// PORT NOTE: IsVisible is not checked (only AmbergrisPower is hidden, not ported); RelicStatus.Active is
+// display only.
 struct UnsettlingLamp : Relic {
   RELIC_HEADER(UnsettlingLamp, "UNSETTLING_LAMP", Rare) }
   Card* triggeringCard = nullptr;
@@ -80,7 +66,7 @@ struct UnsettlingLamp : Relic {
     if (power->typeForAmount(amount) != PowerType::Debuff) co_return;
     if (target->power("ArtifactPower")) co_return;
     triggeringCard = src;
-    if (const char* in = internallyAppliedPower(*power)) doubledInternalIds.push_back(in);
+    if (const char* in = power->internallyAppliedPower()) doubledInternalIds.push_back(in);
   }
   Dec modifyPowerAmountGivenMultiplicative(Power* power, Creature*, Dec amount, Creature*, Card* src) override {
     if (!triggeringCard || src != triggeringCard || isFinishedTriggering) return Dec(1);

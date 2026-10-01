@@ -15,10 +15,12 @@ namespace {
 // with the right origin card; behaviour is entirely TemporaryFocusPower's (char_defect.h).
 struct FocusedStrikePower : TemporaryFocusPower {
   POWER_HEADER(FocusedStrikePower, "FOCUSED_STRIKE_POWER")
+  const char* internallyAppliedPower() const override { return "FocusPower"; }  // ITemporaryPower
 };
 
 struct HotfixPower : TemporaryFocusPower {
   POWER_HEADER(HotfixPower, "HOTFIX_POWER")
+  const char* internallyAppliedPower() const override { return "FocusPower"; }  // ITemporaryPower
 };
 
 // LightningRodPower (Models.Powers): a Counter stack; each of the owner's own energy resets
