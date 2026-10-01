@@ -155,10 +155,10 @@ struct SweepingGaze : IroncladT<SweepingGaze> {
 // BansheesCry.cs: 9 cost, deal 33 to all enemies. Costs 2 (Energy var) less for the rest of the
 // combat each time an Ethereal card is played (also counting those already played when this card
 // enters combat). Upgrade: -2 cost.
-// PORT NOTE: the C# counts CombatHistory.CardPlaysFinished entries with WasEthereal; this reads
-// Combat::etherealPlaysFinished (the one engine counter added for this card). The `IsClone` guard
-// (a clone already carries the reduction) is approximated by "has any this-combat cost modifier".
-// afterCardEnteredCombat only fires for cards generated mid-combat here, where it matters.
+// The earlier plays are the CardPlaysFinished entries with WasEthereal.
+// PORT NOTE: the `IsClone` guard (a clone already carries the reduction) is approximated by "has
+// any this-combat cost modifier" (no CloneOf link on Card). afterCardEnteredCombat only fires for
+// cards generated mid-combat here, where it matters.
 struct BansheesCry : IroncladT<BansheesCry> {
   CARD_HEADER(BansheesCry, "BANSHEES_CRY", 9, Attack, Rare, AllEnemies)
     addVar("Damage", 33);
@@ -168,7 +168,8 @@ struct BansheesCry : IroncladT<BansheesCry> {
   void onUpgrade() override { cost -= 2; }
   Task<> afterCardEnteredCombat(Card* card) override {
     if (card != this || !combat || !costMods.empty()) co_return;
-    addThisCombat(-combat->etherealPlaysFinished * val("Energy").toInt());
+    int n = combat->history.count([](const CombatHistoryEntry& e) { return e.kind == CombatHistoryEntry::CardPlayFinished && e.flag; });
+    addThisCombat(-n * val("Energy").toInt());
   }
   Task<> afterCardPlayed(const CardPlay& p) override {
     if (!p.card->has(kwEthereal)) co_return;

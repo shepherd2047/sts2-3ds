@@ -277,8 +277,8 @@ int main() {
     Fight f(true, {"DataDisk"});
     CHECK(f.c->player->powerAmount<FocusPower>() == 1);
   }
-  {  // EmotionChip: if unblocked damage was received since the last player-turn start, every
-    // queued orb's passive triggers (countAffectedByHooks) at the next player-turn start.
+  {  // EmotionChip: if HP was lost in the previous player turn (a not fully blocked
+    // DamageReceived entry), every queued orb's passive triggers (countAffectedByHooks).
     Fight f;
     auto* chip = f.addRelic("EmotionChip");
     runTask(cmd::channelOrb(*f.c, std::make_unique<LightningOrb>()));
@@ -286,11 +286,13 @@ int main() {
     runTask(chip->afterPlayerTurnStart());  // no damage taken yet: no trigger
     CHECK(hpSum == f.enemyHpSum());
     runTask([](Creature* t) -> Task<> { co_await cmd::damage(t, Dec(5), kUnblockable, nullptr, nullptr); }(f.c->player));
+    ++f.c->turnNumber, ++f.c->roundNumber;  // the damage is now last player turn's
     runTask(chip->afterPlayerTurnStart());
     CHECK(hpSum - f.enemyHpSum() == 3);  // LightningOrb::passiveVal(); orb stays queued
     CHECK(f.c->orbQueue.size() == 1);
     hpSum = f.enemyHpSum();
-    runTask(chip->afterPlayerTurnStart());  // flag consumed by the previous call: no repeat
+    ++f.c->turnNumber, ++f.c->roundNumber;  // two turns ago now: no repeat
+    runTask(chip->afterPlayerTurnStart());
     CHECK(hpSum == f.enemyHpSum());
   }
   {  // GoldPlatedCables: the front (oldest queued) orb's passive triggers one extra time.
@@ -605,7 +607,7 @@ int main() {
     size_t before = f.c->hand.size();
     f.play(a, f.enemy());
     CHECK(f.c->hand.size() == before);  // -1 played, +1 drawn
-    f.c->cardsPlayedThisTurn = 3;
+    for (int i = 0; i < 2; ++i) f.c->history.cardPlayFinished(*f.c, CardPlay{a});  // 3 finished this turn
     Card* b = f.c->addCard(db::card("Ftl"));
     f.toHand(b);
     before = f.c->hand.size();

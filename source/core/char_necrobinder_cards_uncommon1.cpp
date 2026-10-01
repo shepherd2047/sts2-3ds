@@ -219,23 +219,16 @@ struct DanseMacabre : IroncladT<DanseMacabre> {
 
 // DeathMarch.cs: deal 8 (+1 upgraded) + 4 (+2 upgraded) per card drawn this turn outside the
 // hand draw (CardDrawnEntry with !FromHandDraw).
-// PORT NOTE: the C# counts CombatHistory entries; this engine has no draw history, so each card
-// counts the draws it has itself observed this turn (afterCardDrawn). A copy generated mid-turn
-// misses the draws before it existed.
 struct DeathMarch : IroncladT<DeathMarch> {
   CARD_HEADER(DeathMarch, "DEATH_MARCH", 1, Attack, Uncommon, AnyEnemy)
     addVar("CalculationBase", 8);
     addVar("ExtraDamage", 4);
     addVar("CalculatedDamage", 0);
-    calcMultiplier = [](Card* c) { return static_cast<DeathMarch*>(c)->drawsThisTurn(); };
-  }
-  int drawTurn = -1, drawCount = 0;
-  int drawsThisTurn() const { return combat && drawTurn == combat->turnNumber ? drawCount : 0; }
-  Task<> afterCardDrawn(Card*, bool fromHandDraw) override {
-    if (fromHandDraw || !combat) return {};
-    if (drawTurn != combat->turnNumber) { drawTurn = combat->turnNumber; drawCount = 0; }
-    ++drawCount;
-    return {};
+    calcMultiplier = [](Card* c) {
+      return c->combat ? c->combat->history.countThisTurn(*c->combat, CombatHistoryEntry::CardDrawn,
+                                                          [](const CombatHistoryEntry& e) { return !e.flag; })  // !FromHandDraw
+                       : 0;
+    };
   }
   Task<> onPlay(CardPlay& p) override { co_await attackCalculated(p.target); }
   void onUpgrade() override {
@@ -259,18 +252,15 @@ struct Deathbringer : IroncladT<Deathbringer> {
 
 // DeathsDoor.cs: gain 6 (+1 upgraded) Block, and Repeat (2) more times if you applied Doom this
 // turn (a PowerReceivedEntry for DoomPower applied by the owner).
-// PORT NOTE: no power-received history: each card records the turn it last saw the player apply
-// Doom (afterPowerAmountChanged); a copy generated mid-turn misses earlier applications.
 struct DeathsDoor : IroncladT<DeathsDoor> {
   CARD_HEADER(DeathsDoor, "DEATHS_DOOR", 1, Skill, Uncommon, Self)
     addVar("Block", 6);
     addVar("Repeat", 2);
   }
-  int doomTurn = -1;
-  bool wasDoomAppliedThisTurn() const { return combat && doomTurn == combat->turnNumber; }
-  Task<> afterPowerAmountChanged(Power* p, Dec, Creature* applier, Card*) override {
-    if (combat && p->id == "DoomPower" && applier == combat->player) doomTurn = combat->turnNumber;
-    return {};
+  bool wasDoomAppliedThisTurn() const {
+    return combat && combat->history.countThisTurn(*combat, CombatHistoryEntry::PowerReceived, [&](const CombatHistoryEntry& e) {
+      return e.id == "DoomPower" && e.other == combat->player;
+    }) > 0;
   }
   Task<> onPlay(CardPlay&) override {
     int gains = 1;
@@ -359,17 +349,16 @@ struct EnfeeblingTouch : IroncladT<EnfeeblingTouch> {
 
 // Fetch.cs: 0 cost, OstyAttack. If Osty is alive, Osty hits for 3 (+3 upgraded); draw 1 card the
 // first time this card is played this turn.
-// PORT NOTE: "played this turn" is a per-card turn stamp (the C# reads CardPlaysFinished).
+// "Played this turn" = a CardPlayFinished entry of this card this turn (read before the attack).
 struct Fetch : IroncladT<Fetch> {
   CARD_HEADER(Fetch, "FETCH", 0, Attack, Uncommon, AnyEnemy)
     tags = tagOstyAttack;
     addVar("OstyDamage", 3);
     addVar("Cards", 1);
   }
-  int playedTurn = -1;
   Task<> onPlay(CardPlay& p) override {
-    bool already = playedTurn == combat->turnNumber;
-    playedTurn = combat->turnNumber;
+    bool already = combat->history.countThisTurn(*combat, CombatHistoryEntry::CardPlayFinished,
+                                                 [this](const CombatHistoryEntry& e) { return e.card == this; }) > 0;
     if (ostyMissing(*combat)) co_return;
     cmd::Attack a;
     a.damagePerHit = val("OstyDamage");

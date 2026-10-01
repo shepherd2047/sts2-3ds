@@ -113,6 +113,7 @@ Task<Creature*> summonOsty(Combat& c, int amount) {
     if (isReviving)
       for (Model* m : c.listeners()) co_await m->afterOstyRevived(c.osty);
   }
+  c.history.summoned(c, amount);  // History.Summoned
   co_return c.osty;
 }
 

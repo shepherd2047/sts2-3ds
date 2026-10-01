@@ -131,11 +131,11 @@ std::string App::describe(Card* c) {
       base = d.toInt();
       canonical = base;
       shown = cb ? std::max(0, cb->modifyBlock(cb->player, d, kMove, c).toInt()) : base;
+    } else if (cb && c->calcMultiplier && name.rfind("Calculated", 0) == 0) {
+      // CalculatedVar (Hits / Cards / Shivs / Channels ...): CalculationBase + CalculationExtra * multiplier.
+      base = shown = canonical = c->calculatedBlock().toInt();
     } else if (!v) {
       return "?";
-    } else if (name.rfind("Calculated", 0) == 0 && c->calcMultiplier && c->var("CalculationBase")) {
-      // CalculatedVar (Hits / Cards / Shivs / Channels ...): CalculationBase + CalculationExtra * multiplier.
-      base = shown = (c->val("CalculationBase") + c->val("CalculationExtra") * Dec(c->calcMultiplier(c))).toInt();
     } else if (name == "Damage") {
       base = v->base.toInt();
       shown = cb ? std::max(0, cb->modifyDamage(nullptr, cb->player, v->base, kMove, c).toInt()) : base;

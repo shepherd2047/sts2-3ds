@@ -192,18 +192,13 @@ struct Bolas : IroncladT<Bolas> {
   CARD_HEADER(Bolas, "BOLAS", 0, Attack, Rare, AnyEnemy)
     addVar("Damage", 3);
   }
-  // CardPlaysFinished entry of this card: round it happened in. `playedBy` guards against a copy
-  // (clone()) inheriting the original's history.
-  const Card* playedBy = nullptr;
-  int playedRound = -100;
-  Task<> onPlay(CardPlay& p) override {
-    co_await attack(p.target, val("Damage"));
-    playedBy = this;
-    playedRound = combat->roundNumber;
-  }
+  Task<> onPlay(CardPlay& p) override { co_await attack(p.target, val("Damage")); }
+  // A CardPlaysFinished entry of this card that HappenedLastPlayerTurn.
   Task<> beforeHandDraw() override {
-    if (playedBy == this && playedRound == combat->roundNumber - 1 && combat->pileOf(this) != Pile::Hand)
-      co_await cmd::moveCard(*combat, this, Pile::Hand);
+    bool played = combat->history.any([this](const CombatHistoryEntry& e) {
+      return e.kind == CombatHistoryEntry::CardPlayFinished && e.card == this && CombatHistory::happenedLastPlayerTurn(e, *combat);
+    });
+    if (played && combat->pileOf(this) != Pile::Hand) co_await cmd::moveCard(*combat, this, Pile::Hand);
   }
   void onUpgrade() override { upgradeVar("Damage", 1); }
 };

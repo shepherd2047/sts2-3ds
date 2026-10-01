@@ -65,7 +65,7 @@ Affliction* afflict(Card* card, std::unique_ptr<Affliction> a, int amount) {
   } else {
     card->affliction->amount += amount;  // the same stackable affliction (C# throws otherwise)
   }
-  c->afflictHistory.push_back({c->roundNumber, c->currentSide, card, afflictionId});  // History.CardAfflicted
+  c->history.cardAfflicted(*c, card, afflictionId);  // History.CardAfflicted
   return card->affliction.get();
 }
 

@@ -310,16 +310,13 @@ struct ThrummingHatchet : IroncladT<ThrummingHatchet> {
   CARD_HEADER(ThrummingHatchet, "THRUMMING_HATCHET", 1, Attack, Uncommon, AnyEnemy)
     addVar("Damage", 11);
   }
-  const Card* playedBy = nullptr;  // guards against a clone() inheriting the original's history
-  int playedRound = -100;
-  Task<> onPlay(CardPlay& p) override {
-    co_await attack(p.target, val("Damage"));
-    playedBy = this;
-    playedRound = combat->roundNumber;
-  }
+  Task<> onPlay(CardPlay& p) override { co_await attack(p.target, val("Damage")); }
+  // A CardPlaysFinished entry of this card that HappenedLastPlayerTurn.
   Task<> beforeHandDraw() override {
-    if (playedBy == this && playedRound == combat->roundNumber - 1 && combat->pileOf(this) != Pile::Hand)
-      co_await cmd::moveCard(*combat, this, Pile::Hand);
+    bool played = combat->history.any([this](const CombatHistoryEntry& e) {
+      return e.kind == CombatHistoryEntry::CardPlayFinished && e.card == this && CombatHistory::happenedLastPlayerTurn(e, *combat);
+    });
+    if (played && combat->pileOf(this) != Pile::Hand) co_await cmd::moveCard(*combat, this, Pile::Hand);
   }
   void onUpgrade() override { upgradeVar("Damage", 3); }
 };
