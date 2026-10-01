@@ -594,8 +594,40 @@ App::ChooseOneSpec App::combatChooseOneSpec() const {
 // Keys: D-pad moves the focus through the strip / grid / bar, A or X on a card opens its detail
 // (C# HolderPressed -> ShowCardDetail), B / Y close. Touch: the first tap focuses a card, a tap on
 // the focused card opens its detail. Rules are untouched: the view only reads the deck / piles.
-// PORT NOTE: 拼音顺序 compares titles by code point; needs a pinyin collation table (the C# uses the zh-CN culture's collation), as M8.
+// 拼音顺序 orders titles like the zh-CN culture's collation: by pinyin (tools/gen_pinyin.py table), ties by code point.
 namespace {
+struct PinyinRow { unsigned short cp, rank; };
+const PinyinRow kPinyin[] = {
+#include "../pinyin_table.inc"
+};
+// Collation key of one code point: CJK characters by pinyin rank, everything else (digits, Latin, '+') before them.
+int pinyinPrimary(unsigned cp) {
+  const PinyinRow* e = kPinyin + sizeof(kPinyin) / sizeof(kPinyin[0]);
+  const PinyinRow* r = std::lower_bound(kPinyin, e, cp, [](const PinyinRow& a, unsigned c) { return a.cp < c; });
+  return r != e && r->cp == cp ? 0x10000 + r->rank : (int)cp;
+}
+std::vector<unsigned> utf8Points(const std::string& s) {
+  std::vector<unsigned> out;
+  for (size_t i = 0; i < s.size();) {
+    unsigned char c = s[i];
+    int n = c < 0x80 ? 1 : c < 0xE0 ? 2 : c < 0xF0 ? 3 : 4;
+    unsigned cp = n == 1 ? c : c & (0xFF >> (n + 1));
+    for (int k = 1; k < n && i + k < s.size(); ++k) cp = cp << 6 | (s[i + k] & 0x3F);
+    out.push_back(cp);
+    i += n;
+  }
+  return out;
+}
+int comparePinyin(const std::string& a, const std::string& b) {
+  auto pa = utf8Points(a), pb = utf8Points(b);
+  size_t n = std::min(pa.size(), pb.size());
+  for (size_t i = 0; i < n; ++i) {
+    int x = pinyinPrimary(pa[i]), y = pinyinPrimary(pb[i]);
+    if (x != y) return x < y ? -1 : 1;
+  }
+  if (pa.size() != pb.size()) return pa.size() < pb.size() ? -1 : 1;
+  return a < b ? -1 : a == b ? 0 : 1;
+}
 constexpr int kVTab0 = 1401, kVSort0 = 1411, kVBack = 1421, kVUpgrades = 1422, kVDetail = 1423, kVRelics = 1424;
 constexpr float kVStripY = 2, kVStripH = 32;
 constexpr float kVY0 = 36, kVY1 = kGY1;  // the grid area under the strip
@@ -673,7 +705,7 @@ std::vector<Card*> App::listedCards() {
             case kObtained: d = cmp(index[a], index[b]); break;
             case kType: d = cmp((int)a->type, (int)b->type); break;
             case kCost: d = cmp(cost(a), cost(b)); break;
-            case kAlphabet: d = cmp(titles[a].compare(titles[b]), 0); break;
+            case kAlphabet: d = english() ? cmp(titles[a].compare(titles[b]), 0) : comparePinyin(titles[a], titles[b]); break;
           }
           if (o & 1) d = -d;
           if (d) return d < 0;

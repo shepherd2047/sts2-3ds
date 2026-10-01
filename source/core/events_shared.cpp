@@ -261,12 +261,11 @@ struct TeaMaster : Event {
   void calculateVars() override {
     addVar("BoneTeaCost", 50);
     addVar("EmberTeaCost", 150);
-    // The relics' descriptions, as their DynamicDescription formats them (zh text; PORT NOTE:
-    // hard-coded, so English shows Chinese: needs the event UI (ui/screens/event.cpp expandSmart) to expand a
-    // string var that holds a relic description recursively, then these become the relics' description keys).
-    setStr("BoneTeaDescription", "在你接下来的[blue]1[/blue]场战斗开始时，[gold]升级[/gold]你的初始手牌。");
-    setStr("EmberTeaDescription", "在接下来的[blue]5[/blue]场战斗开始时，获得[blue]2[/blue]点[gold]力量[/gold]。");
-    setStr("TeaOfDiscourtesyDescription", "在下一场战斗开始时，将[blue]2[/blue]张[gold]晕眩[/gold]放入你的[gold]抽牌堆[/gold]。");
+    // StringVar(ModelDb.Relic<X>().DynamicDescription.GetFormattedText()): "@relic:<Id>" makes the
+    // UI's expandSmart (ui/cardtext.cpp) expand that relic's description with the relic's own vars.
+    setStr("BoneTeaDescription", "@relic:BoneTea");
+    setStr("EmberTeaDescription", "@relic:EmberTea");
+    setStr("TeaOfDiscourtesyDescription", "@relic:TeaOfDiscourtesy");
   }
   std::vector<EventOption> initialOptions() override {
     std::vector<EventOption> o;
