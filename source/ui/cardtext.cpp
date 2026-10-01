@@ -67,6 +67,49 @@ static std::string condAlt(const std::string& alts, int v, const std::vector<std
   return {};
 }
 
+// {Name:choose(V1|V2|...):alt1|alt2|...[|fallback]}: the alternative whose option equals the value
+// (numeric compare when `numeric`, else string compare); a trailing extra alternative is the
+// fallback. Inside it "{}" is the value as shown and "{:fmt}" is "{Name:fmt}". Returns the
+// still-unexpanded alternative.
+static std::string chooseAlt(const std::string& name, const std::string& rest, bool numeric, int nv,
+                             const std::string& sv, const std::string& shown) {
+  size_t close = rest.find(')');
+  if (close == std::string::npos) return {};
+  auto options = splitAltsTop(rest.substr(7, close - 7));
+  size_t colon = rest.find(':', close);
+  auto alts = splitAltsTop(colon == std::string::npos ? std::string() : rest.substr(colon + 1));
+  int match = -1;
+  for (size_t k = 0; k < options.size(); ++k) {
+    if (numeric ? nv == std::atoi(options[k].c_str()) : sv == options[k]) { match = (int)k; break; }
+  }
+  if (alts.empty()) return {};
+  std::string chosen = match >= 0 ? alts[std::min((size_t)match, alts.size() - 1)]
+                       : alts.size() > options.size() ? alts.back() : std::string();
+  for (size_t p = 0; (p = chosen.find("{:", p)) != std::string::npos; p += name.size() + 2) chosen.replace(p, 1, "{" + name);
+  for (size_t p; (p = chosen.find("{}")) != std::string::npos;) chosen.replace(p, 2, shown);
+  return chosen;
+}
+
+// String-valued card vars of the C# CardModel description (CardType / TargetType).
+static const char* cardTypeName(CardType t) {
+  switch (t) {
+    case CardType::Attack: return "Attack";
+    case CardType::Skill: return "Skill";
+    case CardType::Power: return "Power";
+    case CardType::Status: return "Status";
+    default: return "Curse";
+  }
+}
+static const char* targetTypeName(TargetType t) {
+  switch (t) {
+    case TargetType::None: return "None";
+    case TargetType::Self: return "Self";
+    case TargetType::AnyEnemy: return "AnyEnemy";
+    case TargetType::AllEnemies: return "AllEnemies";
+    default: return "RandomEnemy";
+  }
+}
+
 // SmartFormat subset used by these cards: {Var:diff()}, {Var},
 // {InCombat:a|b}, {IfUpgraded:show:a|b}.
 std::string App::describe(Card* c) {
@@ -88,6 +131,9 @@ std::string App::describe(Card* c) {
       base = d.toInt();
       canonical = base;
       shown = cb ? std::max(0, cb->modifyBlock(cb->player, d, kMove, c).toInt()) : base;
+    } else if (cb && c->calcMultiplier && name.rfind("Calculated", 0) == 0) {
+      // CalculatedVar (Hits / Cards / Shivs / Channels ...): CalculationBase + CalculationExtra * multiplier.
+      base = shown = canonical = c->calculatedBlock().toInt();
     } else if (!v) {
       return "?";
     } else if (name == "Damage") {
@@ -131,9 +177,33 @@ std::string App::describe(Card* c) {
         return first ? expand(alts) : std::string();
       };
       auto raw = [&](const std::string& n) -> Dec { DynVar* v = c->var(n.c_str()); return v ? v->base : Dec(0); };
+      // Boolean description flags the card model computes (others: a non-zero var of that name).
+      auto flag = [&](const std::string& n) -> bool {
+        if (n == "IsOstyAlive") return cb && cb->osty && cb->osty->alive();
+        if (n == "GainsBlock") return c->gainsBlock();
+        return c->var(n.c_str()) && raw(n) != Dec(0);
+      };
       if (name == "InCombat") out += choose(rest, cb != nullptr);
       else if (name == "IfUpgraded") out += choose(rest.substr(rest.find(':') + 1), c->upgraded());
-      else if (rest.rfind("energyIcons", 0) == 0) {
+      else if (rest.rfind("choose(", 0) == 0) {
+        DynVar* v = c->var(name.c_str());
+        if (name == "CardType" || name == "TargetType") {
+          // MadScience keeps CardType as a 0/1/2 var (the option's position); otherwise the card's own type.
+          bool idx = v != nullptr;
+          size_t cl = rest.find(')');
+          auto opts = splitAltsTop(cl == std::string::npos ? std::string() : rest.substr(7, cl - 7));
+          int i = v ? v->base.toInt() : 0;
+          std::string sv = idx ? (i >= 0 && i < (int)opts.size() ? opts[i] : std::string())
+                               : name == "CardType" ? cardTypeName(c->type) : targetTypeName(c->target);
+          out += expand(chooseAlt(name, rest, false, 0, sv, sv));
+        } else if (v) {
+          out += expand(chooseAlt(name, rest, true, v->base.toInt(), "", value(name)));
+        } else {
+          out += expand(chooseAlt(name, rest, false, 0, "", ""));
+        }
+      } else if (rest.rfind("abs", 0) == 0) {
+        out += num(std::abs(raw(name).toInt()));
+      } else if (rest.rfind("energyIcons", 0) == 0) {
         // Energy icons: "{Energy:energyIcons()}" -> "2点能量"; "{energyPrefix:energyIcons(1)}" -> "点能量".
         out += energyText(name, raw(name).toInt(), name == "energyPrefix" ? std::string() : value(name));
       } else if (rest.rfind("starIcons", 0) == 0) {
@@ -147,11 +217,11 @@ std::string App::describe(Card* c) {
         int n = raw(name).toInt();
         out += expand(pluralAlt(parts.empty() ? std::string() : n == 1 || parts.size() < 2 ? parts[0] : parts[1], n));
       } else if (rest.rfind("cond:", 0) == 0) {
-        out += expand(condAlt(rest.substr(5), c->var(name.c_str()) ? raw(name).toInt() : 0, splitAltsTop(rest.substr(5))));
+        out += expand(condAlt(rest.substr(5), (name == "IsOstyAlive" || name == "GainsBlock") ? (int)flag(name) : c->var(name.c_str()) ? raw(name).toInt() : 0, splitAltsTop(rest.substr(5))));
       } else if (colon != std::string::npos && rest.find('|') != std::string::npos) {
         // A plain {Name:a|b} conditional on a flag this port doesn't model (e.g. IsMultiplayer,
         // or a per-card extra arg like MadScience's rider flags): missing means false, not "?".
-        out += choose(rest, c->var(name.c_str()) && raw(name) != Dec(0));
+        out += choose(rest, flag(name));
       } else {
         out += value(name);
       }
@@ -199,6 +269,7 @@ std::string expandSmart(const std::string& src, const std::vector<DynVar>& vars,
     if (strVars && strVars->count(n)) { const std::string& v = strVars->at(n); return R().hasLoc(v) ? L(v) : v; }
     return {};
   };
+  int nest = 0;
   std::function<std::string(const std::string&)> expand = [&](const std::string& s) -> std::string {
     std::string out;
     for (size_t i = 0; i < s.size();) {
@@ -223,24 +294,13 @@ std::string expandSmart(const std::string& src, const std::vector<DynVar>& vars,
       if (name == "InCombat") out += choose(rest, inCombat);
       else if (name == "IfUpgraded") out += choose(rest.substr(rest.find(':') + 1), upgraded);
       else if (rest.rfind("choose(", 0) == 0) {
-        size_t close = rest.find(')');
-        auto options = splitAlts(rest.substr(7, close - 7));
-        auto alts = splitAlts(rest.substr(rest.find(':', close) + 1));
         bool isNumeric = find(name) != nullptr;
         std::string sv = isNumeric ? std::string() : strOf(name);
-        int match = -1;
-        for (size_t k = 0; k < options.size(); ++k) {
-          bool eq = isNumeric ? raw(name) == Dec(atoi(options[k].c_str())) : sv == options[k];
-          if (eq) { match = (int)k; break; }
-        }
-        std::string chosen = match >= 0 ? alts[std::min((size_t)match, alts.size() - 1)]
-                             : alts.size() > options.size() ? alts.back() : std::string();
-        std::string selfRef = isNumeric ? num(raw(name).toInt()) : sv;
-        size_t p;
-        while ((p = chosen.find("{}")) != std::string::npos) chosen.replace(p, 2, selfRef);
-        out += expand(chosen);
+        int nv = isNumeric ? raw(name).toInt() : 0;
+        out += expand(chooseAlt(name, rest, isNumeric, nv, sv, isNumeric ? num(nv) : sv));
       } else if (rest.rfind("energyIcons", 0) == 0)
         out += energyText(name, raw(name).toInt(), num(raw(name).toInt()));
+      else if (rest.rfind("abs", 0) == 0) out += num(std::abs(raw(name).toInt()));
       else if (rest.rfind("starIcons", 0) == 0) out += num(raw(name).toInt()) + "[icon:star]";
       else if (rest.rfind("percentMore", 0) == 0) out += num(((raw(name) - Dec(1)) * Dec(100)).toInt());
       else if (rest.rfind("percentLess", 0) == 0) out += num(((Dec(1) - raw(name)) * Dec(100)).toInt());
@@ -256,7 +316,12 @@ std::string expandSmart(const std::string& src, const std::vector<DynVar>& vars,
         bool v = find(name) ? raw(name) != Dec(0) : strVars && strVars->count(name) && strOf(name) != "";
         out += choose(rest, v);
       } else if (find(name)) out += num(raw(name).toInt());
-      else if (strVars && strVars->count(name)) out += strOf(name);
+      else if (strVars && strVars->count(name)) {
+        // A string var may itself hold loc text with {...} (recursive string vars); bounded nesting.
+        std::string sv = strOf(name);
+        if (sv.find('{') == std::string::npos || nest >= 4) out += sv;
+        else { ++nest; out += expand(sv); --nest; }
+      }
       else out += "?";
     }
     return out;
@@ -274,7 +339,8 @@ static std::string enchantmentCardText(Card* c) {
     std::vector<DynVar> vars = e->vars;
     vars.push_back({"Amount", Dec(e->amount), Dec(e->amount)});
     std::string key = "enchantments." + e->locKey + ".extraCardText";
-    if (R().hasLoc(key)) out += "[purple]" + expandSmart(L(key), vars, c->combat != nullptr) + "[/purple]";
+    std::map<std::string, std::string> sv{{"TargetType", targetTypeName(c->target)}, {"CardType", cardTypeName(c->type)}};
+    if (R().hasLoc(key)) out += "[purple]" + expandSmart(L(key), vars, c->combat != nullptr, &sv) + "[/purple]";
   }
   // A4: then the affliction's extraCardText (AfflictionModel.DynamicExtraCardText), also purple.
   if (Affliction* a = c->affliction.get(); a && a->hasExtraCardText()) {

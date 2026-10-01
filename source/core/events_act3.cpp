@@ -163,14 +163,14 @@ struct ForgottenSoul : Relic {
 
 // ================================================================ powers (TinkerTime riders)
 
-// StranglePower.cs: whenever the applier plays a card, the owner loses HP.
-// PORT NOTE: not instanced per applier (single player, so identical).
+// StranglePower.cs: whenever the applier plays a card, the owner loses HP. InstancedPerApplier.
 struct StranglePower : Power {
   POWER_HEADER(StranglePower, "STRANGLE_POWER")
   PowerType type() const override { return PowerType::Debuff; }
+  PowerInstanceType instanceType() const override { return PowerInstanceType::InstancedPerApplier; }
   std::map<Card*, int> amountsForPlayedCards;
   Task<> beforeCardPlayed(const CardPlay& p) override {
-    if (ownerOf(p.card) == nullptr) co_return;
+    if (!applier || !applier->isPlayer || ownerOf(p.card) != applier) co_return;  // Applier.Player plays it
     amountsForPlayedCards[p.card] = amount;
   }
   Task<> afterCardPlayed(const CardPlay& p) override {
@@ -233,7 +233,6 @@ const char* const kRiderNames[] = {"None", "Sapping", "Violence", "Choking", "En
 // MadScience.cs: an attack, skill or power chosen in the event, with a rider effect.
 // The description's SmartFormat flags are exposed as 0/1 vars: "CardType" (0 Attack, 1 Skill,
 // 2 Power), "HasRider" and one per rider name.
-// PORT NOTE: App::describe needs `{CardType:choose(A|B|C):x|y|z}` and `{Flag:a|b}` support.
 struct MadScience : IroncladT<MadScience> {
   CARD_HEADER(MadScience, "MAD_SCIENCE", 1, Attack, Token, AnyEnemy)
     addVar("Damage", 12);
@@ -425,12 +424,8 @@ struct Reflections : Event {
     return {option("INITIAL", "TOUCH_A_MIRROR", [this] { return touchAMirror(); }),
             option("INITIAL", "SHATTER", [this] { return shatter(); })};
   }
-  // CardCmd.Downgrade: rebuild the card at one upgrade level lower.
-  Card* downgrade(Card* c) {
-    auto n = db::card(c->id);
-    for (int i = 1; i < c->upgradeLevel; ++i) n->upgrade();
-    return run->transformCard(c, std::move(n));
-  }
+  // CardCmd.Downgrade: back to the base card (all upgrade levels), in place.
+  void downgrade(Card* c) { cmd::downgradeCard(c); }
   Task<> touchAMirror() {
     std::vector<Card*> upgraded;
     for (auto& c : run->deck) if (c->upgraded()) upgraded.push_back(c.get());

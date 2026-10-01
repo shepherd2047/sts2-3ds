@@ -7,8 +7,7 @@
 //  * Driftwood (CardReward.CanReroll), PaelsWing (CardRewardAlternative "SACRIFICE"): the card reward
 //    screen has no reroll / alternative buttons.
 //  * PaelsLegion, Byrdpip: pets.  GoldenCompass: golden path map.  FurCoat: map marks.
-//    ToyBox: wax relics.  WingedBoots: free map travel.
-//  * DowsingRod: the Dowsing quest card (Quest cards do not exist).  ScrollBoxes: bundle screen.
+//    ToyBox: wax relics.  (WingedBoots, DowsingRod, ScrollBoxes: quests.cpp, E2.)
 //    MassiveScroll: multiplayer only.
 #include "cards.h"
 #include "colorless.h"
@@ -166,18 +165,13 @@ struct WhisperingEarring : Relic {
 struct PaelsEye : Relic {
   RELIC_HEADER(PaelsEye, "PAELS_EYE", Ancient) }
   bool usedThisCombat = false;
-  int playedRound = -1;  // round of the last CardPlaysFinished entry that was not an auto-play
   bool anyCardsPlayedThisTurn() const {
     if (combat->turnNumber == 1 && run->hasRelic("WhisperingEarring")) return true;
-    return playedRound == combat->roundNumber;
+    return combat->history.countThisTurn(*combat, CombatHistoryEntry::CardPlayFinished,
+                                         [](const CombatHistoryEntry& e) { return !e.autoPlay; }) > 0;
   }
   Task<> beforeCombatStart() override {
     usedThisCombat = false;
-    playedRound = -1;
-    return {};
-  }
-  Task<> afterCardPlayed(const CardPlay& p) override {
-    if (combat && !p.autoPlay) playedRound = combat->roundNumber;
     return {};
   }
   bool shouldTakeExtraTurn() override { return combat && !usedThisCombat && !anyCardsPlayedThisTurn(); }

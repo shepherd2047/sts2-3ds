@@ -75,7 +75,15 @@ struct SovereignBlade : IroncladT<SovereignBlade> {
   }
   bool createdThroughForge = false;
 
-  void addDamage(Dec amount) { if (auto* v = var("Damage")) v->base += amount; }
+  // CurrentDamage / CurrentRepeats: the values AfterDowngraded restores.
+  Dec currentDamage = 10, currentRepeats = 1;
+  void addDamage(Dec amount) {
+    if (auto* v = var("Damage")) { v->base += amount; currentDamage = v->base; }
+  }
+  void afterDowngraded() override {
+    if (auto* v = var("Damage")) v->base = currentDamage;
+    if (auto* v = var("Repeat")) v->base = currentRepeats;
+  }
 
   // CardModel.GainsBlock override: true while the player has Parry (block preview only).
   bool gainsBlock() const override {
@@ -96,9 +104,6 @@ struct SovereignBlade : IroncladT<SovereignBlade> {
     c->createdThroughForge = false;
     return c;
   }
-  // PORT NOTE: AfterDowngraded (restoring Damage/Repeat to the values from before a temporary
-  // enchant/upgrade preview) isn't modeled — this engine has no downgrade mechanic, as noted in
-  // content_rare.cpp (Thrash).
 };
 
 }  // namespace

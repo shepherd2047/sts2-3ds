@@ -74,25 +74,21 @@ struct MasterPlannerPower : Power {
   }
 };
 
-// NightmarePower.cs: at the next hand draw, `amount` copies of the chosen card join the hand, then the power goes.
-// PORT NOTE: the C# power is Instanced (one power per Nightmare played, each with its own card); here a single
-// power keeps one (card, copies) entry per play, in application order. `amount` is the sum of the entries.
+// NightmarePower.cs: Instanced (one per Nightmare played, each with its own card). At the next hand draw,
+// `amount` copies of the chosen card join the hand, then the power goes.
 struct NightmarePower : Power {
   POWER_HEADER(NightmarePower, "NIGHTMARE_POWER")
-  struct Entry { std::unique_ptr<Card> card; int copies; };
-  std::vector<Entry> entries;
+  PowerInstanceType instanceType() const override { return PowerInstanceType::Instanced; }
+  std::unique_ptr<Card> selectedCard;
   Task<> beforeHandDraw() override {
-    for (Entry& e : entries) {
-      for (int i = 0; i < e.copies; ++i) co_await cmd::addGeneratedCard(*owner->combat, e.card->clone(), Pile::Hand);
-    }
-    entries.clear();
+    if (selectedCard)
+      for (int i = 0; i < amount; ++i) co_await cmd::addGeneratedCard(*owner->combat, selectedCard->clone(), Pile::Hand);
     co_await cmd::removePower(this);
   }
   // SetSelectedCard: a clone of the chosen card, without its affliction.
-  void setSelectedCard(Card* c, int copies) {
-    auto copy = c->clone();
-    cmd::clearAffliction(copy.get());
-    entries.push_back({std::move(copy), copies});
+  void setSelectedCard(Card* c) {
+    selectedCard = c->clone();
+    cmd::clearAffliction(selectedCard.get());
   }
 };
 
@@ -384,8 +380,8 @@ struct Nightmare : IroncladT<Nightmare> {
   Task<> onPlay(CardPlay&) override {
     auto picked = co_await cmd::selectCards(*combat, "NIGHTMARE", combat->hand, 1, 1);
     if (picked.empty()) co_return;
-    co_await applyPower<NightmarePower>(me(), Dec(3), me(), this);
-    if (auto* pw = me()->get<NightmarePower>()) pw->setSelectedCard(picked[0], 3);
+    auto* pw = co_await applyPowerGet<NightmarePower>(me(), Dec(3), me(), this);
+    if (pw) pw->setSelectedCard(picked[0]);
   }
   void onUpgrade() override { cost -= 1; }
 };

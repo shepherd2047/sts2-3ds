@@ -95,6 +95,7 @@ struct EscapeArtistPower : Power {
 struct SwipePower : Power {
   POWER_HEADER(SwipePower, "SWIPE_POWER")
   StackType stackType() const override { return StackType::Single; }
+  PowerInstanceType instanceType() const override { return PowerInstanceType::Instanced; }
   std::unique_ptr<Card> stolenCard;  // the deck version, taken out of the run's deck
   Task<> afterDeath(Creature* c) override {
     if (c != owner || !stolenCard || !owner->combat || !owner->combat->run) co_return;
@@ -420,14 +421,14 @@ struct ThievingHopper : Monster {
 
   // _stealPriorities: Uncommon, then Common/Rare(/Event), then Basic(/Quest), then Ancient or
   // Imbued (the first three skip Imbued cards). Only cards with a DeckVersion can be stolen.
-  // PORT NOTE: CardRarity.Event / Quest have no counterpart (event cards are Token or Ancient
-  // here), so an event card falls to the Ancient tier or to no tier.
+  // PORT NOTE: CardRarity.Event has no counterpart (event cards are Token or Ancient here), so an
+  // event card falls to the Ancient tier or to no tier.
   static int stealTier(const Card& c) {
     if (c.enchantment && c.enchantment->id == "Imbued") return 3;
     switch (c.rarity) {
       case Rarity::Uncommon: return 0;
       case Rarity::Common: case Rarity::Rare: return 1;
-      case Rarity::Basic: return 2;
+      case Rarity::Basic: case Rarity::Quest: return 2;
       case Rarity::Ancient: return 3;
       default: return -1;
     }

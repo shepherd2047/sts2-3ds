@@ -82,8 +82,7 @@ struct Goopy : EnchantmentT<Goopy> {
 };
 
 // Inky.cs: the card also applies 1 Weak (to all enemies for an AllEnemies card).
-// PORT NOTE: the "to ALL enemies" part of the extra card text needs {TargetType:choose(...)}, which the
-// card text expander does not know; it shows only "Apply N Weak".
+// The extra card text's "to ALL enemies" part is {TargetType:choose(AllEnemies):...} (the card's target type).
 struct Inky : EnchantmentT<Inky> {
   ENCHANTMENT_HEADER(Inky, "INKY")
     addVar("WeakPower", 1);

@@ -286,6 +286,14 @@ void App::drawMap(bool top) {
       spr(circle, x - cs / 2, y - cs / 2, cs, cs, (ink.traveled & ~0xFFu) | 0xF2, 1.f);
       gfx::popTransform();
     }
+    if (!n.quests.empty()) {  // MapPoint.Quests (E2: SpoilsMap's treasure): NMapPoint's quest mark
+      Sprite q = R().sprite("map/quest");
+      if (q) spr(q, x + sz / 2 - 6, y - sz / 2 - 6, 12, 12);
+      else {
+        gfx::circle(x + sz / 2 - 1, y - sz / 2 + 1, 5.5f, 0xE0B040FF);
+        R().text(x + sz / 2 - 1, y - sz / 2 - 6, "!", ts(F12, 0x2E241AFF, CENTER));
+      }
+    }
     if (i == r.currentNode) spr(R().sprite("map/marker"), x - 7, y - sz / 2 - 14, 14, 16);
   }
 

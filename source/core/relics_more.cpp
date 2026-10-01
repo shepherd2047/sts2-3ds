@@ -218,9 +218,10 @@ struct IceCream : Relic {
   bool shouldResetEnergy() override { return !combat || combat->turnNumber == 1; }
 };
 
-// ---- JuzuBracelet (Common): "?" rooms are never fights (Run::rollUnknownRoom). ----
+// ---- JuzuBracelet (Common): "?" rooms are never fights (ModifyUnknownMapPointRoomTypes). ----
 struct JuzuBracelet : Relic {
   RELIC_HEADER(JuzuBracelet, "JUZU_BRACELET", Common) }
+  int modifyUnknownMapPointRoomTypes(int types) override { return types & ~roomBit(RoomType::Monster); }
 };
 
 // ---- LastingCandy (Uncommon): every other combat's card reward offers an extra Power. ----

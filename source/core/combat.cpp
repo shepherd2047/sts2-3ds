@@ -85,6 +85,7 @@ Task<> Monster::performMove() {
   move->performedAtLeastOnce = true;
   attackLog.clear();
   co_await move->perform(targets);
+  combat->history.monsterPerformedMove(*combat, creature, move->id);  // History.MonsterPerformedMove
   // Debug (STS_ASC_CHECK=1): the damage dealt by the move must be the damage its intent showed.
   static const bool check = getenv("STS_ASC_CHECK") != nullptr;
   if (check && !attackLog.empty())
@@ -459,7 +460,7 @@ Task<std::vector<DamageResult>> damage(std::vector<Creature*> targets, Dec amoun
   }
 
   std::vector<Creature*> killedCreatures;
-  for (auto& r : results) c.damageHistory.push_back({c.roundNumber, c.currentSide, r.receiver, dealer, props});
+  for (auto& r : results) c.history.damageReceived(c, r, dealer, src);  // History.DamageReceived
   for (auto& r : results) {
     Creature* t = r.receiver;
     if (r.blockBroken) {
@@ -535,6 +536,7 @@ Task<Dec> gainBlock(Creature* cr, Dec amount, int props, Card* src, bool fast) {
   Dec modified = dmax(c->modifyBlock(cr, amount, props, src), 0);
   if (modified > Dec(0)) {
     cr->block = std::min(cr->block + modified.toInt(), 999999999);
+    c->history.blockGained(*c, cr, modified.toInt(), props, src);  // History.BlockGained
     c->push({VisualEvent::Block, cr, modified.toInt()});
     co_await (fast ? scaledWait(0, 0.03) : scaledWait(0.1, 0.25));
   }
@@ -583,8 +585,8 @@ Task<> applyPower(std::unique_ptr<Power> power, Creature* target, Dec amount, Cr
     c->graveyard.push_back(std::move(power));  // listeners may still hold it
     co_return;
   }
-  if (Power* existing = target->power(p->id)) {
-    // PowerCmd.Apply -> ModifyAmount on the stack already there.
+  if (Power* existing = target->stackingInstance(*p, applier)) {
+    // PowerCmd.Apply -> ModifyAmount on the stack already there (FindExistingInstanceForStacking).
     co_await modifyPowerAmount(existing, amount, applier, src, silent);
     for (Model* m : givenModifiers) co_await m->afterModifyingPowerAmountGiven(existing);
     for (Model* m : receivedModifiers) co_await m->afterModifyingPowerAmountReceived(existing);
@@ -595,15 +597,16 @@ Task<> applyPower(std::unique_ptr<Power> power, Creature* target, Dec amount, Cr
     c->graveyard.push_back(std::move(power));
     co_return;
   }
-  if (target->power(p->id)) {
+  if (Power* stacked = target->stackingInstance(*p, applier)) {
     // beforeApplied can itself stack the same power (it never does for the
     // powers in this build, but keep PowerCmd's contract).
-    co_await modifyPowerAmount(target->power(p->id), amount, applier, src, silent);
+    co_await modifyPowerAmount(stacked, amount, applier, src, silent);
     co_return;
   }
   p->owner = target;
   p->amount = amount.toInt();
   target->powers.push_back(std::move(power));
+  c->history.powerReceived(*c, p, amount.toInt(), applier);  // History.PowerReceived
   if (!silent) {
     p->flash = 1.f;
     c->push({p->type() == PowerType::Buff ? VisualEvent::PowerUp : VisualEvent::PowerDown, target, p->amount, p->locKey});
@@ -619,6 +622,7 @@ Task<int> modifyPowerAmount(Power* p, Dec offset, Creature* applier, Card* src, 
   Creature* owner = p->owner;
   Combat* c = owner ? owner->combat : nullptr;
   if (!c || c->ending) co_return 0;
+  c->history.powerReceived(*c, p, offset.toInt(), applier);  // History.PowerReceived
   int newAmount = p->amount + offset.toInt();
   int change = newAmount - p->amount;
   p->amount = newAmount;
@@ -684,6 +688,7 @@ Task<std::vector<Card*>> drawCards(Combat& c, Dec count, bool fromHandDraw) {
     c.hand.push_back(card);
     result.push_back(card);
     ++c.cardsDrawnThisCombat;
+    c.history.cardDrawn(c, card, fromHandDraw);  // History.CardDrawn
     co_await wait(0.08);
     for (Model* m : c.listeners()) co_await m->afterCardDrawnEarly(card, fromHandDraw);
     for (Model* m : c.listeners()) co_await m->afterCardDrawn(card, fromHandDraw);
@@ -705,6 +710,7 @@ Task<> exhaustCard(Combat& c, Card* card, bool causedByEthereal) {
   c.removeFromPiles(card);
   c.exhaust.push_back(card);
   c.push({VisualEvent::CardExhaust, nullptr, 0, card->locKey});
+  c.history.cardExhausted(c, card);  // History.CardExhausted
   co_await wait(0.2);
   for (Model* m : c.listeners()) co_await m->afterCardExhausted(card, causedByEthereal);
 }
@@ -716,7 +722,7 @@ Task<> discardCards(Combat& c, std::vector<Card*> cards, int drawAfter) {
     if (k->isSlyThisTurn()) sly.push_back(k);
     c.removeFromPiles(k);
     c.discard.push_back(k);
-    c.discardHistory.push_back({c.roundNumber, c.currentSide, k});
+    c.history.cardDiscarded(c, k);  // History.CardDiscarded
     for (Model* m : c.listeners()) co_await m->afterCardDiscarded(k);
   }
   if (drawAfter > 0) co_await drawCards(c, drawAfter);
@@ -790,6 +796,7 @@ Task<> channelOrb(Combat& c, std::unique_ptr<Orb> orb) {
   // PORT NOTE: CustomScaledWait(0.1, 0.25) collapses to a fixed wait (single player: always "IsMe").
   co_await scaledWait(0.1, 0.25);
   if (raw->id == "LightningOrb") ++c.lightningOrbsChanneled;
+  c.history.orbChanneled(c, raw->id);  // History.OrbChanneled
   for (Model* m : c.listeners()) co_await m->afterOrbChanneled(raw);
 }
 
@@ -812,13 +819,16 @@ Task<> gainStars(Combat& c, int amount) {
   int before = c.stars;
   c.stars = std::max(0, c.stars + amount);
   if (c.stars > before) c.starsGainedThisTurn += c.stars - before;
+  if (c.stars != before) c.history.starsModified(c, c.stars - before);  // History.StarsModified
   for (Model* m : c.listeners()) co_await m->afterStarsGained(amount);
 }
 
 // PlayerCmd.LoseStars: no hook (AfterStarsSpent only fires when a card's star cost is paid).
 Task<> loseStars(Combat& c, int amount) {
   if (c.ending) co_return;
+  int before = c.stars;
   c.stars = std::max(0, c.stars - amount);
+  if (c.stars != before) c.history.starsModified(c, c.stars - before);  // History.StarsModified
   co_return;
 }
 
@@ -845,6 +855,7 @@ Task<> loseMaxHp(Creature* cr, int amount) {
 Task<Card*> addGeneratedCard(Combat& c, std::unique_ptr<Card> card, Pile to, bool top) {
   Card* raw = c.addCard(std::move(card));
   ++c.cardsGeneratedThisCombat;  // CombatHistory.CardGenerated
+  c.history.cardGenerated(c, raw, raw->createdByPlayer);
   co_await moveCard(c, raw, to, top);
   for (Model* m : c.listeners()) co_await m->afterCardEnteredCombat(raw);
   co_return raw;
@@ -861,11 +872,13 @@ Task<Card*> transform(Combat& c, Card* card, std::unique_ptr<Card> into) {
   auto& v = c.pile(p);
   auto it = std::find(v.begin(), v.end(), card);
   if (it != v.end()) *it = raw;
+  if (p != Pile::None) c.history.cardGenerated(c, raw, true);  // CardCmd.Transform (combat pile)
   co_await wait(0.2);
   co_return raw;
 }
 
 void upgradeCard(Card* card) { card->upgrade(); }
+void downgradeCard(Card* card) { if (card) card->downgrade(); }
 
 Task<> addStatusCards(Combat& c, std::string cardId, Pile to, int count, bool byPlayer) {
   // CardPileCmd.AddGeneratedCardsToCombat: add them all, then Hook.AfterCardGeneratedForCombat for
@@ -875,6 +888,7 @@ Task<> addStatusCards(Combat& c, std::string cardId, Pile to, int count, bool by
     Card* card = c.addCard(db::card(cardId));
     card->createdByPlayer = byPlayer;
     co_await moveCard(c, card, to);
+    c.history.cardGenerated(c, card, byPlayer);  // History.CardGenerated
     added.push_back(card);
   }
   for (Card* card : added)
@@ -962,6 +976,7 @@ Task<> Attack::execute(Combat& c) {
     std::vector<Creature*> ts = target ? std::vector<Creature*>{target} : valid;
     results.push_back(co_await damage(ts, amount, props, attacker, source));
   }
+  c.history.creatureAttacked(c, attacker, results);  // History.CreatureAttacked
   for (Model* m : c.listeners()) co_await m->afterAttack(*this);  // Hook.AfterAttack (once per Execute)
 }
 
@@ -1246,7 +1261,10 @@ Task<> Combat::playCard(Card* card, Creature* target, bool autoPlay, bool forceE
       if (payExcess) { starsSpent += (spent - energy) * 2; spent = energy; }
     }
     energy -= std::max(spent, 0);
+    if (spent > 0) history.energySpent(*this, spent);  // History.EnergySpent
+    int starsBefore = stars;
     stars = std::max(0, stars - starsSpent);
+    if (stars != starsBefore) history.starsModified(*this, stars - starsBefore);  // History.StarsModified
   }
   card->lastStarsSpent = starsSpent;
   if (card->costsX) {
@@ -1301,10 +1319,12 @@ Task<> Combat::playCard(Card* card, Creature* target, bool autoPlay, bool forceE
     }
     CardPlay cp{card, target, result, autoPlay, spent, i, playCount};
     for (Model* m : listeners()) co_await m->beforeCardPlayed(cp);
+    history.cardPlayStarted(*this, cp);  // History.CardPlayStarted
     co_await card->onPlay(cp);
     // CardModel.OnPlayWrapper: the enchantment's OnPlay follows the card's own effect.
     if (card->enchantment && player->alive()) co_await card->enchantment->onPlay(cp);
     if (card->affliction && player->alive()) co_await card->affliction->onPlay(cp);  // then the affliction's
+    if (player->alive()) history.cardPlayFinished(*this, cp);  // History.CardPlayFinished
     ++cardPlaysFinishedThisCombat;
     ++cardPlaysFinishedThisTurn;  // CardPlayFinished entry precedes Hook.AfterCardPlayed
     if (player->alive() && !over) {
@@ -1314,7 +1334,6 @@ Task<> Combat::playCard(Card* card, Creature* target, bool autoPlay, bool forceE
     if (card->type == CardType::Skill) ++skillsFinishedThisTurn;  // CardPlayFinishedEntry (LunarBlast)
     if (card->type == CardType::Attack) ++attackPlaysFinishedThisTurn;
     if (card->tags & tagShiv) ++shivPlaysFinishedThisTurn;
-    if (card->has(kwEthereal)) ++etherealPlaysFinished;  // BansheesCry
   }
   card->clearCostMods(Card::kWhenPlayed);  // AfterCardPlayedCleanup
 

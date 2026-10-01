@@ -13,12 +13,18 @@ namespace {
 // PORT NOTE: (1) this engine's modifyCardPlayResultLocation hook has no ResourceInfo, so "energy
 // spent == 0" is derived as autoPlay || (X-cost ? xValue == 0 : energyCost(card) == 0); (2) there
 // is no card position in a Pile result, so the card goes to the end of the hand (Pile::Hand)
-// rather than CardPilePosition.Top; (3) AfterApplied's seeding from the
-// combat history (0-cost attacks already played this turn) is not possible without a card-play
-// history, so the counter starts at 0; (4) DisplayAmount (remaining count) is not modeled.
+// rather than CardPilePosition.Top; (3) DisplayAmount (remaining count) is not modeled.
+// AfterApplied seeds the counter from the Attack CardPlaysStarted this turn that spent no energy.
 struct FeralPower : Power {
   POWER_HEADER(FeralPower, "FERAL_POWER")
   int zeroCostAttacksPlayed = 0;
+  Task<> afterApplied(Creature*, Card*) override {
+    Combat* c = owner->combat;
+    zeroCostAttacksPlayed = c->history.countThisTurn(*c, CombatHistoryEntry::CardPlayStarted, [](const CombatHistoryEntry& e) {
+      return e.card->type == CardType::Attack && e.amount == 0;  // Resources.EnergyValue == 0
+    });
+    return {};
+  }
   Pile modifyCardPlayResultLocation(Card* card, bool autoPlay, Pile pile) override {
     if (ownerOf(card) != owner) return pile;
     if (card->type != CardType::Attack) return pile;
@@ -55,16 +61,15 @@ struct HailstormPower : Power {
 };
 
 // IterationPower: the first Status card drawn each turn draws Amount cards.
-// PORT NOTE: the C# counts CardDrawnEntry history this turn; this engine has no draw history,
-// so the power counts Status draws itself (from when it was applied, keyed by round number).
+// "First" = at most one Status CardDrawn entry this turn (the draw itself is already logged).
 struct IterationPower : Power {
   POWER_HEADER(IterationPower, "ITERATION_POWER")
-  int statusDrawsRound = -1, statusDraws = 0;
   Task<> afterCardDrawn(Card* card, bool) override {
     if (ownerOf(card) != owner || card->type != CardType::Status) co_return;
     Combat* c = owner->combat;
-    if (statusDrawsRound != c->roundNumber) { statusDrawsRound = c->roundNumber; statusDraws = 0; }
-    if (++statusDraws <= 1) {
+    int statusDraws = c->history.countThisTurn(*c, CombatHistoryEntry::CardDrawn,
+                                               [](const CombatHistoryEntry& e) { return e.card->type == CardType::Status; });
+    if (statusDraws <= 1) {
       flash = 1.f;
       co_await cmd::drawCards(*c, Dec(amount));
     }
@@ -218,20 +223,21 @@ struct FightThrough : IroncladT<FightThrough> {
 };
 
 // Ftl.cs: 0-cost attack; draws while fewer than PlayMax cards were played this turn.
-// PORT NOTE: the C# counts CardPlaysFinished this turn; this engine only has
-// Combat::cardsPlayedThisTurn (plays started, including the one in progress), so inside onPlay
-// the count is reduced by one to exclude the FTL being played. ShouldGlowGoldInternal (card
-// glow while a draw is still possible) has no Card hook in this engine and is dropped (UI).
+// Counts the CardPlaysFinished this turn (the FTL in progress is not finished yet).
+// PORT NOTE: ShouldGlowGoldInternal (card glow while a draw is still possible) has no Card hook
+// in this engine and is dropped (UI).
 struct Ftl : IroncladT<Ftl> {
   CARD_HEADER(Ftl, "FTL", 0, Attack, Uncommon, AnyEnemy)
     addVar("Damage", 5);
     addVar("PlayMax", 3);
     addVar("Cards", 1);
   }
-  bool canDrawCard(int played) { return played < val("PlayMax").toInt(); }
+  bool canDrawCard() {
+    return combat->history.countThisTurn(*combat, CombatHistoryEntry::CardPlayFinished) < val("PlayMax").toInt();
+  }
   Task<> onPlay(CardPlay& p) override {
     co_await attack(p.target, val("Damage"));
-    if (canDrawCard(combat->cardsPlayedThisTurn - 1)) co_await drawCards(val("Cards"));
+    if (canDrawCard()) co_await drawCards(val("Cards"));
   }
   void onUpgrade() override { upgradeVar("Damage", 1); upgradeVar("PlayMax", 1); }
 };

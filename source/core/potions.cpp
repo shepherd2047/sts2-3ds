@@ -44,6 +44,7 @@ struct DuplicationPower : Power {
 // TemporaryStrengthPower / TemporaryDexterityPower with the potion as OriginModel.
 template <class Stat, int Sign> struct TemporaryStatPower : Power {
   PowerType type() const override { return Sign > 0 ? PowerType::Buff : PowerType::Debuff; }
+  const char* internallyAppliedPower() const override { return Stat::kId; }  // ITemporaryPower
   Task<> beforeApplied(Creature* target, Dec amt, Creature* app, Card* src) override {
     co_await applyPower<Stat>(target, amt * Dec(Sign), app, src, true);
   }
@@ -680,6 +681,7 @@ Task<> Run::usePotion(int slot, Creature* target) {
   if (p->combat) p->combat->push({VisualEvent::Anim, player.get(), 0, "Cast"});
   co_await wait(0.2);
   co_await p->onUse(target);
+  if (p->combat && player->alive()) p->combat->history.potionUsed(*p->combat, p->id, target);  // History.PotionUsed
   for (Model* m : listeners()) co_await m->afterPotionUsed();  // Hook.AfterPotionUsed
   if (p->combat) co_await p->combat->checkWinCondition();
 }

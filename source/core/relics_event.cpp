@@ -7,10 +7,10 @@
 // relics_shared2.cpp (A5); PaelsGrowth (CloneRestSiteOption); the enchanting event relics (BeautifulBracelet,
 // TriBoomerang, ElectricShrymp, PaelsClaw, NutritiousSoup, Glitter, SilkenTress, SilverCrucible)
 // are in relics_enchant.cpp (A3c); Byrdpip (pets +
-// ByrdonisEgg hatching); WingedBoots (free travel on the map); DowsingRod (quest cards);
+// ByrdonisEgg hatching); WingedBoots and DowsingRod are in quests.cpp (E2);
 // Driftwood (card reward reroll); PaelsWing (sacrificing card rewards);
 // PaelsLegion (pets); GoldenCompass (golden path); FurCoat (map marks); ToyBox (wax relics);
-// WhisperingEarring (turn-1 autoplay); ScrollBoxes (bundle screen); SeaGlass / PrismaticGem
+// WhisperingEarring (turn-1 autoplay); ScrollBoxes (quests.cpp, E2); SeaGlass / PrismaticGem
 // (other characters' card pools as reward sources); Kaleidoscope (needs the unlock state);
 // MassiveScroll (multiplayer only).
 #include "cards.h"

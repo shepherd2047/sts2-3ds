@@ -65,24 +65,24 @@ struct FurnacePower : Power {
   }
 };
 
-// MonologuePower.cs: every card played after it was applied grants Strength for the rest of the
-// turn (removed, and the Strength taken back, at the end of the turn).
-// PORT NOTE: the C# power is Instanced (one instance per Monologue played, each with its own
-// StrengthApplied and Data); this engine stacks powers by id, so `amount` counts the instances
-// (each one grants PowerVar Strength = 1 per card, the card never upgrades it) and a card grants
-// amount-at-BeforeCardPlayed Strength. Same totals; the HUD shows the instance count instead of
-// StrengthApplied.
+// MonologuePower.cs: Instanced (one per Monologue played). Every card played after it was applied
+// grants `strength` Strength (PowerVar, set by the card) for the rest of the turn (removed, and the
+// Strength taken back, at the end of the turn). The HUD shows StrengthApplied, no number while 0.
 struct MonologuePower : Power {
   POWER_HEADER(MonologuePower, "MONOLOGUE_POWER")
+  PowerInstanceType instanceType() const override { return PowerInstanceType::Instanced; }
+  StackType stackType() const override { return strengthApplied != 0 ? StackType::Counter : StackType::Single; }
+  int displayAmount() const override { return strengthApplied; }
+  int strength = 1;  // DynamicVars.Strength (PowerVar<StrengthPower>(1))
   int strengthApplied = 0;
-  // Data.amountsForPlayedCards: the power amount when each card started playing, so cards that
-  // began before this was applied (Monologue itself) don't trigger it.
+  // Data.amountsForPlayedCards: the Strength each card that started playing after this was applied
+  // will grant (Monologue itself began before, so it doesn't trigger it).
   std::vector<std::pair<Card*, int>> amountsForPlayedCards;
 
   Task<> beforeCardPlayed(const CardPlay& cp) override {
     if (ownerOf(cp.card) != owner) co_return;
-    for (auto& e : amountsForPlayedCards) if (e.first == cp.card) { e.second = amount; co_return; }
-    amountsForPlayedCards.push_back({cp.card, amount});
+    for (auto& e : amountsForPlayedCards) if (e.first == cp.card) co_return;
+    amountsForPlayedCards.push_back({cp.card, strength});
   }
   Task<> afterCardPlayed(const CardPlay& cp) override {
     if (ownerOf(cp.card) != owner) co_return;
@@ -92,7 +92,7 @@ struct MonologuePower : Power {
       amountsForPlayedCards.erase(amountsForPlayedCards.begin() + i);
       flash = 1.f;
       co_await applyPower<StrengthPower>(owner, value, owner, nullptr, true);
-      strengthApplied += value;
+      strengthApplied += strength;
       co_return;
     }
   }
@@ -297,15 +297,13 @@ struct KinglyKick : IroncladT<KinglyKick> {
 
 // KinglyPunch.cs: 1 cost, Attack, AnyEnemy. Damage 8; gains Increase (4) damage each time it is
 // drawn.
-// PORT NOTE: AfterDowngraded (adding ExtraDamage back after a downgrade) isn't modeled, this
-// engine has no downgrade mechanic (see SovereignBlade in char_regent.cpp). extraDamage is still
-// tracked like the C#'s ExtraDamage.
 struct KinglyPunch : IroncladT<KinglyPunch> {
   CARD_HEADER(KinglyPunch, "KINGLY_PUNCH", 1, Attack, Uncommon, AnyEnemy)
     addVar("Damage", 8);
     addVar("Increase", 4);
   }
   Dec extraDamage = 0;
+  void afterDowngraded() override { upgradeVar("Damage", extraDamage); }
   Task<> onPlay(CardPlay& p) override { co_await attack(p.target, val("Damage")); }
   Task<> afterCardDrawn(Card* c, bool) override {
     if (c != this) co_return;
@@ -381,8 +379,8 @@ struct Monologue : IroncladT<Monologue> {
     addVar("Power", 1);
   }
   Task<> onPlay(CardPlay&) override {
-    // The C# sets the new instance's Strength var to the card's Power var (1, never upgraded).
-    co_await applyPower<MonologuePower>(me(), 1, me(), this);
+    auto* pw = co_await applyPowerGet<MonologuePower>(me(), 1, me(), this);
+    if (pw) pw->strength = val("Power").toInt();  // the new instance's Strength var = the card's Power var
   }
   void onUpgrade() override { keywords |= kwRetain; }
 };

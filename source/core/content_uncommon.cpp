@@ -155,16 +155,12 @@ struct EvilEye : IroncladT<EvilEye> {
   CARD_HEADER(EvilEye, "EVIL_EYE", 1, Skill, Uncommon, Self)
     addVar("Block", 8);
   }
-  bool exhaustedThisTurn = false;
   Task<> onPlay(CardPlay&) override {
+    // A CardExhausted entry this turn.
+    bool exhaustedThisTurn = combat->history.countThisTurn(*combat, CombatHistoryEntry::CardExhausted) > 0;
     int gains = exhaustedThisTurn ? 2 : 1;
     for (int i = 0; i < gains; ++i) co_await block(val("Block"));
   }
-  Task<> afterCardExhausted(Card* card, bool) override {
-    if (ownerOf(card) == me()) exhaustedThisTurn = true;
-    return {};
-  }
-  Task<> afterPlayerTurnStart() override { exhaustedThisTurn = false; return {}; }
   void onUpgrade() override { upgradeVar("Block", 3); }
 };
 
@@ -329,9 +325,12 @@ struct Rampage : IroncladT<Rampage> {
     addVar("Damage", 10);
     addVar("Increase", 5);
   }
+  Dec extraDamageFromPlays = 0;
+  void afterDowngraded() override { upgradeVar("Damage", extraDamageFromPlays); }
   Task<> onPlay(CardPlay& p) override {
     co_await attack(p.target, val("Damage"));
     upgradeVar("Damage", val("Increase"));
+    extraDamageFromPlays += val("Increase");
   }
   void onUpgrade() override { upgradeVar("Increase", 5); }
 };
@@ -364,16 +363,16 @@ struct Spite : IroncladT<Spite> {
     addVar("Damage", 5);
     addVar("Repeat", 2);
   }
-  bool lostHpThisTurn = false;
+  // A DamageReceived entry with unblocked damage on the owner this turn.
+  bool lostHpThisTurn() const {
+    return combat->history.countThisTurn(*combat, CombatHistoryEntry::DamageReceived, [&](const CombatHistoryEntry& e) {
+      return e.actor == combat->player && e.unblocked > 0;
+    }) > 0;
+  }
   Task<> onPlay(CardPlay& p) override {
-    int hits = lostHpThisTurn ? val("Repeat").toInt() : 1;
+    int hits = lostHpThisTurn() ? val("Repeat").toInt() : 1;
     co_await attack(p.target, val("Damage"), hits);
   }
-  Task<> afterDamageReceived(Creature* target, const DamageResult& r, int, Creature*, Card*) override {
-    if (target == me() && r.unblocked > 0) lostHpThisTurn = true;
-    return {};
-  }
-  Task<> afterPlayerTurnStart() override { lostHpThisTurn = false; return {}; }
   void onUpgrade() override { upgradeVar("Repeat", 1); }
 };
 
@@ -385,28 +384,24 @@ struct Stampede : IroncladT<Stampede> {
   void onUpgrade() override { cost -= 1; }
 };
 
-// PORT NOTE: the C# cost reduction is driven by combat-history entries
-// (CardPlaysFinished this turn); this build has no such log, so a per-card
-// counter of attacks played by the owner approximates it.
+// Entering combat mid-turn, the cost drops by the Attack CardPlaysFinished this turn.
+// PORT NOTE: IsClone (a clone already carries the reduction) is approximated by "has a cost
+// modifier" (no CloneOf link on Card).
 struct Stomp : IroncladT<Stomp> {
   CARD_HEADER(Stomp, "STOMP", 3, Attack, Uncommon, AllEnemies)
     addVar("Damage", 12);
   }
-  int attacksThisTurn = 0;
   Task<> onPlay(CardPlay&) override { co_await attackAll(val("Damage")); }
-  Task<> afterCardPlayed(const CardPlay& p) override {
-    if (ownerOf(p.card) == me() && p.card->type == CardType::Attack) ++attacksThisTurn;
-    return {};
-  }
   Task<> afterCardEnteredCombat(Card* card) override {
-    if (card == this) addThisTurn(-attacksThisTurn);
+    if (card != this || !combat || !costMods.empty()) return {};
+    addThisTurn(-combat->history.countThisTurn(*combat, CombatHistoryEntry::CardPlayFinished,
+                                               [](const CombatHistoryEntry& e) { return e.card->type == CardType::Attack; }));
     return {};
   }
   Task<> beforeCardPlayed(const CardPlay& p) override {
     if (ownerOf(p.card) == me() && p.card->type == CardType::Attack) addThisTurn(-1);
     return {};
   }
-  Task<> afterPlayerTurnStart() override { attacksThisTurn = 0; return {}; }
   void onUpgrade() override { upgradeVar("Damage", 3); }
 };
 

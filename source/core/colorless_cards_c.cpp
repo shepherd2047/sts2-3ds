@@ -19,38 +19,13 @@ void stableShuffleCards(std::vector<Card*>& v, Rng& rng) {
   rng.shuffle(v);
 }
 
-// The C# `power is ITemporaryPower` (same list as the Necrobinder cards' isTemporaryPower).
-// PORT NOTE: this engine has no ITemporaryPower marker; TemporaryStrengthPower subclasses share the
-// "TEMPORARY_" loc keys, the rest are listed by id.
-bool isTemporaryPowerC(Power* p) {
-  if (p->locKey.rfind("TEMPORARY_", 0) == 0) return true;
-  return p->id == "ManglePower" || p->id == "EnfeeblingTouchPower" || p->id == "CrushUnderPower" ||
-         p->id == "PlowPower" || p->id == "DarkShacklesPower" || p->id == "MonarchsGazeStrengthDownPower";
-}
-
-// PowerInstanceType.Instanced: a fresh power next to any existing one of the same id (cmd::applyPower stacks
-// by id). PORT NOTE: Hook.ModifyPowerAmountReceived is skipped (only ever relevant to debuffs); Creature::get
-// finds the first instance only.
-template <class P> P* addInstancedPower(Creature* owner, int amount, Creature* applier) {
-  Combat* c = owner->combat;
-  if (!c || c->ending) return nullptr;
-  auto p = std::make_unique<P>();
-  P* raw = p.get();
-  raw->owner = owner;
-  raw->applier = applier;
-  raw->amount = amount;
-  raw->flash = 1.f;
-  owner->powers.push_back(std::move(p));
-  c->push({VisualEvent::PowerUp, owner, amount, raw->locKey});
-  return raw;
-}
-
 // ================================================================ powers
 
 // RollingBoulderPower.cs: Buff, Counter, Instanced. At the start of your turn deal Amount Unpowered damage
 // to all enemies, then Amount grows by 5 (the DamageVar).
 struct RollingBoulderPower : Power {
   POWER_HEADER(RollingBoulderPower, "ROLLING_BOULDER_POWER")
+  PowerInstanceType instanceType() const override { return PowerInstanceType::Instanced; }
   Task<> afterPlayerTurnStart() override {
     flash = 1.f;
     co_await cmd::damage(owner->combat->hittableEnemies(), Dec(amount), kUnpowered, owner, nullptr);
@@ -75,6 +50,7 @@ struct StratagemPower : Power {
 // at 1 it deals `damage` Unpowered damage to all enemies and goes away.
 struct TheBombPower : Power {
   POWER_HEADER(TheBombPower, "THE_BOMB_POWER")
+  PowerInstanceType instanceType() const override { return PowerInstanceType::Instanced; }
   int damage = 40;  // DynamicVars.Damage, set by TheBomb (SetDamage)
   Task<> beforeSideTurnEnd(Side, const std::vector<Creature*>& participants) override {
     if (!contains(participants, owner)) co_return;
@@ -119,7 +95,7 @@ struct Rend : IroncladT<Rend> {
     int n = 0;
     if (target)
       for (auto& p : target->powers)
-        if (p->typeForAmount(Dec(p->amount)) == PowerType::Debuff && !isTemporaryPowerC(p.get())) ++n;
+        if (p->typeForAmount(Dec(p->amount)) == PowerType::Debuff && !p->isTemporary()) ++n;
     return n;
   }
   Task<> onPlay(CardPlay& p) override {
@@ -163,8 +139,7 @@ struct RollingBoulder : IroncladT<RollingBoulder> {
     addVar("IncrementAmount", 5);
   }
   Task<> onPlay(CardPlay&) override {
-    addInstancedPower<RollingBoulderPower>(me(), val("RollingBoulderPower").toInt(), me());
-    co_return;
+    co_await applyPower<RollingBoulderPower>(me(), val("RollingBoulderPower"), me(), this);
   }
   void onUpgrade() override { upgradeVar("RollingBoulderPower", 5); }
 };
@@ -294,9 +269,8 @@ struct TheBomb : IroncladT<TheBomb> {
     addVar("BombDamage", 40);
   }
   Task<> onPlay(CardPlay&) override {
-    TheBombPower* p = addInstancedPower<TheBombPower>(me(), val("Turns").toInt(), me());
+    TheBombPower* p = co_await applyPowerGet<TheBombPower>(me(), val("Turns"), me(), this);
     if (p) p->damage = val("BombDamage").toInt();
-    co_return;
   }
   void onUpgrade() override { upgradeVar("BombDamage", 10); }
 };
@@ -336,16 +310,13 @@ struct ThrummingHatchet : IroncladT<ThrummingHatchet> {
   CARD_HEADER(ThrummingHatchet, "THRUMMING_HATCHET", 1, Attack, Uncommon, AnyEnemy)
     addVar("Damage", 11);
   }
-  const Card* playedBy = nullptr;  // guards against a clone() inheriting the original's history
-  int playedRound = -100;
-  Task<> onPlay(CardPlay& p) override {
-    co_await attack(p.target, val("Damage"));
-    playedBy = this;
-    playedRound = combat->roundNumber;
-  }
+  Task<> onPlay(CardPlay& p) override { co_await attack(p.target, val("Damage")); }
+  // A CardPlaysFinished entry of this card that HappenedLastPlayerTurn.
   Task<> beforeHandDraw() override {
-    if (playedBy == this && playedRound == combat->roundNumber - 1 && combat->pileOf(this) != Pile::Hand)
-      co_await cmd::moveCard(*combat, this, Pile::Hand);
+    bool played = combat->history.any([this](const CombatHistoryEntry& e) {
+      return e.kind == CombatHistoryEntry::CardPlayFinished && e.card == this && CombatHistory::happenedLastPlayerTurn(e, *combat);
+    });
+    if (played && combat->pileOf(this) != Pile::Hand) co_await cmd::moveCard(*combat, this, Pile::Hand);
   }
   void onUpgrade() override { upgradeVar("Damage", 3); }
 };

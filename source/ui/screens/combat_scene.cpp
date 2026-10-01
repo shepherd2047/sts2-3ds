@@ -106,7 +106,7 @@ void drawPowerRow(Creature* c, float x, float y, float bw) {
       TextStyle at = ts(F12, debuff ? 0xFF5555FF : col::white, RIGHT, 0, 0.8f);
       at.shadow = false;
       at.outline = 0x000000FF;
-      R().text(px + icon + 2, py + icon - R().lineHeight(F12) * 0.8f + 3, num(p->amount), at);
+      R().text(px + icon + 2, py + icon - R().lineHeight(F12) * 0.8f + 3, num(p->displayAmount()), at);
     }
   }
 }
@@ -546,7 +546,7 @@ std::vector<InspectTip> inspectTips(Run& r, Combat& cb, Creature* c) {
     std::string k = "powers." + p->locKey + ".title";
     t.title = R().hasLoc(k) ? L(k) : p->id;
     if (p->stackType() == StackType::Counter) {
-      t.amount = num(p->amount);
+      t.amount = num(p->displayAmount());
       t.amountCol = p->typeForAmount(Dec(p->amount)) == PowerType::Debuff ? 0xFF5555FF : col::white;
     }
     t.desc = powerText(r, p);

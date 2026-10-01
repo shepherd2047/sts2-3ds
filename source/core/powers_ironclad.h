@@ -186,9 +186,15 @@ struct JuggernautPower : Power {
 
 struct JugglingPower : Power {
   POWER_HEADER(JugglingPower, "JUGGLING_POWER")
-  // PORT NOTE: C# seeds this from the combat's card-play history at apply
-  // time; this engine keeps no such log, so it starts at 0 instead.
   int attacksPlayedThisTurn = 0;
+  // Seeded from the Attack CardPlaysStarted this turn.
+  Task<> afterApplied(Creature*, Card*) override {
+    Combat* c = owner->combat;
+    attacksPlayedThisTurn = c->history.countThisTurn(*c, CombatHistoryEntry::CardPlayStarted, [&](const CombatHistoryEntry& e) {
+      return e.actor == owner && e.card->type == CardType::Attack;
+    });
+    return {};
+  }
   Task<> beforeCardPlayed(const CardPlay& p) override {
     if (ownerOf(p.card) != owner || p.card->type != CardType::Attack) co_return;
     ++attacksPlayedThisTurn;
@@ -210,6 +216,7 @@ struct JugglingPower : Power {
 // negative-Strength mirror of SetupStrikePower (powers.h).
 struct ManglePower : Power {
   POWER_HEADER(ManglePower, "MANGLE_POWER")
+  const char* internallyAppliedPower() const override { return "StrengthPower"; }  // ITemporaryPower
   Task<> beforeApplied(Creature* target, Dec amt, Creature* app, Card* src) override {
     co_await applyPower<StrengthPower>(target, -amt, app, src, true);
   }
@@ -352,29 +359,24 @@ struct TankPower : Power {
   }
 };
 
-// UnmovablePower: the C# version counts BlockGainedEntry history entries for
-// the current turn (excluding the in-progress cardPlay) to see if the block
-// bonus cap has been reached; PORT NOTE: this engine keeps no such per-play
-// history log, so a simple per-turn counter (incremented in afterBlockGained,
-// reset at side-turn-end) approximates it instead.
+// UnmovablePower: block from card or monster moves is doubled until the owner's card plays have
+// gained block Amount times this turn (BlockGainedEntry with a CardPlay, not counting the card
+// play in progress; a card's CardPlay is its current play, CombatHistory::currentPlay).
 struct UnmovablePower : Power {
   POWER_HEADER(UnmovablePower, "UNMOVABLE_POWER")
-  int blocksThisTurn = 0;
   Dec modifyBlockMultiplicative(Creature* target, Dec, int props, Card* src) override {
     if (!target->isPlayer) return 1;
     if (!(props & kMove)) return 1;  // IsCardOrMonsterMove
     if (src && ownerOf(src) != owner) return 1;
-    if (blocksThisTurn >= amount) return 1;
+    Combat* c = owner->combat;
+    int current = 0;
+    if (src && c->pileOf(src) == Pile::Play)
+      if (auto* p = c->history.currentPlay(*c, src)) current = p->playSeq;
+    int n = c->history.countThisTurn(*c, CombatHistoryEntry::BlockGained, [&](const CombatHistoryEntry& e) {
+      return e.playSeq != 0 && (e.props & kMove) && e.playSeq != current;
+    });
+    if (n >= amount) return 1;
     return 2;
-  }
-  Task<> afterBlockGained(Creature* target, Dec amt, int props, Card* src) override {
-    // History counts only block that came from a card play.
-    if (target == owner && amt > Dec(0) && (props & kMove) && src && ownerOf(src) == owner) ++blocksThisTurn;
-    return {};
-  }
-  Task<> afterSideTurnEnd(Side side, const std::vector<Creature*>& participants) override {
-    if (side == Side::Player && contains(participants, owner)) blocksThisTurn = 0;
-    return {};
   }
 };
 

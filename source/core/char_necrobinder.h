@@ -27,7 +27,7 @@ struct DieForYouPower : Power {
 // OstyCmd.Summon: summon Osty with `amount` HP (the player is always the summoner and owner; no
 // multiplayer), or -- if Osty is already alive -- raise its max HP by `amount` instead. Returns
 // Osty's creature (only null if amount == 0 and Osty has never been summoned this combat).
-// PORT NOTE: Hook.ModifySummonAmount / Hook.AfterSummon and the CombatHistory entry are not
+// Records CombatHistory.Summoned. PORT NOTE: Hook.ModifySummonAmount / Hook.AfterSummon are not
 // ported; no relic or card in this package needs them yet.
 Task<Creature*> summonOsty(Combat& c, int amount);
 

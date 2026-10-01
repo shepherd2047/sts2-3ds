@@ -132,6 +132,7 @@ struct TerritorialPower : Power {
 // TemporaryStrengthPower (via SetupStrikePower).
 struct SetupStrikePower : Power {
   POWER_HEADER(SetupStrikePower, "TEMPORARY_STRENGTH_POWER")
+  const char* internallyAppliedPower() const override { return "StrengthPower"; }  // ITemporaryPower
   Task<> beforeApplied(Creature* target, Dec amt, Creature* app, Card* src) override {
     co_await applyPower<StrengthPower>(target, amt, app, src, true);
   }

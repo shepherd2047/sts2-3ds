@@ -238,6 +238,28 @@ int main() {
     // cleared at the end of the turn; the new hand's first 2 draws are Bound again
     CHECK(countAfflicted(f.c, "Bound") == 2);
   }
+  {  // CardCmd.Downgrade (E5): back to the base card, keeping the affliction; AfterDowngraded
+     // restores what plays added (Claw's Damage), cards with no such state just reset.
+    Fight f(8);
+    Card* strike = f.card("StrikeIronclad");
+    strike->upgrade();
+    CHECK(strike->upgraded() && strike->val("Damage") == Dec(9));
+    cmd::afflict(strike, "Bound", 1);
+    cmd::downgradeCard(strike);
+    CHECK(!strike->upgraded() && strike->val("Damage") == Dec(6) && strike->afflictedWith("Bound"));
+    Card* claw = f.generate("Claw");
+    CHECK(claw != nullptr);
+    if (claw) {
+      claw->upgrade();  // Damage 4, Increase 3
+      f.play(claw);     // every Claw gains Increase: Damage 7
+      CHECK(claw->val("Damage") == Dec(7));
+      cmd::downgradeCard(claw);
+      CHECK(!claw->upgraded() && claw->val("Increase") == Dec(2));
+      CHECK(claw->val("Damage") == Dec(6));  // 3 base + the 3 gained from the play
+      cmd::downgradeCard(claw);              // idempotent
+      CHECK(claw->val("Damage") == Dec(6));
+    }
+  }
   printf("afflict_test: %d checks, %d failures\n", checks, failures);
   return failures ? 1 : 0;
 }
