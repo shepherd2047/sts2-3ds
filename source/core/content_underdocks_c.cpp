@@ -23,7 +23,7 @@ template <class M> std::unique_ptr<Monster> mk() { return std::make_unique<M>();
 
 // PhantasmalGardener: the first time each turn a card's attack deals unblocked damage to the
 // owner, it gains Amount Block (unpowered), once the whole attack has finished (AfterAttack).
-// PORT NOTE: the BlockStart/BlockEnd animations and sfx are dropped.
+// PORT NOTE (n/a: visual): the BlockStart/BlockEnd animations and sfx are dropped.
 struct SkittishPower : Power {
   POWER_HEADER(SkittishPower, "SKITTISH_POWER")
   bool hasGainedBlockThisTurn = false;
@@ -45,8 +45,8 @@ struct SkittishPower : Power {
 
 // SkulkingColony: at most Amount HP can be lost per turn; the rest of every hit is ignored.
 // The counter resets when any side's turn starts.
-// PORT NOTE: HpDisplay.InfiniteWithNumbers (the HP bar showing infinity once the cap is
-// reached) and the power's DisplayAmount (remaining cap) have no counterpart.
+// PORT NOTE: missing engine feature Creature::hpDisplay (HpDisplay enum, game.h): the HP bar showing
+// infinity once the cap is reached is dropped, and Hellraiser's IsInfinite check cannot see it.
 struct HardenedShellPower : Power {
   POWER_HEADER(HardenedShellPower, "HARDENED_SHELL_POWER")
   int damageReceivedThisTurn = 0;
@@ -91,7 +91,7 @@ struct PhantasmalGardener : Monster {
   int maxHp() const override { return asc(kToughEnemies, 32, 31); }
   Task<> afterAddedToRoom() override { co_await applyToSelf<SkittishPower>(asc(kToughEnemies, 7, 6)); }
   void buildMoves() override {
-    // PORT NOTE: CurrentScale / EnlargeTriggers only drive the sprite size; dropped.
+    // PORT NOTE (n/a: visual): CurrentScale / EnlargeTriggers only drive the sprite size; dropped.
     auto* bite = machine.add<MoveState>("BITE_MOVE");
     bite->perform = [this](Targets) { return attack(asc(kDeadlyEnemies, 5, 5)); };
     bite->intents = {attackIntent(asc(kDeadlyEnemies, 5, 5))};
@@ -185,9 +185,9 @@ struct TerrorEel : Monster {
     terror->followUp = crash;
     machine.start(crash);
   }
-  // PORT NOTE: the C# VigorPower is consumed after any powered attack command of its owner
-  // (AfterAttack); the shared engine VigorPower only consumes it on card attacks, so the eel's
-  // Crash takes off the Vigor it started with itself.
+  // PORT NOTE: powers.h VigorPower::beforeAttack skips monster attacks (source null and attacker is
+  // a monster) but the C# only skips a non-null non-card ModelSource (FromMonster leaves it null), so
+  // there Vigor is consumed after the monster's attack; the eel's Crash takes off the Vigor itself.
   Task<> crashMove() {
     int vigor = 0;
     if (auto* v = creature->get<VigorPower>()) vigor = v->amount;

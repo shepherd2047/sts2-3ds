@@ -141,8 +141,9 @@ struct FreeAttackPower : Power {
 // HellraiserPower autoplays drawn Strikes. The C# version only chains
 // indefinitely when every hittable enemy has infinite HP (a concept this
 // engine doesn't model), and otherwise resets a safety counter every draw;
-// PORT NOTE: since we can't detect "infinite HP", we always keep the 9-per-turn
-// safety cap that the original used to stop runaway chains in that case.
+// PORT NOTE: missing engine feature Creature::hpDisplay / HpDisplay.IsInfinite (game.h): since we
+// can't detect "infinite HP", we always keep the 9-per-turn safety cap that the original used
+// to stop runaway chains in that case.
 struct HellraiserPower : Power {
   POWER_HEADER(HellraiserPower, "HELLRAISER_POWER")
   StackType stackType() const override { return StackType::Single; }
@@ -262,7 +263,7 @@ struct OneTwoPunchPower : Power {
 
 // PlatingPower: the C# version scales its per-turn decrement by the player
 // count in multiplayer (GetScaledAmountForMultiplayer / the "Decrement" var);
-// PORT NOTE: single player, so that scaling factor is always 1.
+// PORT NOTE (n/a: single-player): single player, so that scaling factor is always 1.
 struct PlatingPower : Power {
   POWER_HEADER(PlatingPower, "PLATING_POWER")
   int decrementAmount = 1;

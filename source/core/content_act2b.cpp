@@ -25,7 +25,7 @@ Intent kindIntent(Intent::Kind k, int count = 0) { Intent i; i.kind = k; i.count
 template <class M> std::unique_ptr<Monster> mk() { return std::make_unique<M>(); }
 
 // CreatureCmd.Escape: the creature leaves the room alive (no death hooks).
-// PORT NOTE: the UI has no escape animation; the death animation is played instead.
+// PORT NOTE (n/a: visual): the UI has no escape animation; the death animation is played instead.
 Task<> escapeCreature(Creature* c) {
   c->combat->push({VisualEvent::Death, c, 0});
   c->hp = 0;
@@ -91,7 +91,8 @@ struct EscapeArtistPower : Power {
 
 // Holds the card the Hopper stole; it comes back if the Hopper is killed.
 // PORT NOTE: the C# adds a SpecialCardReward to the room's loot; here the card goes
-// straight back into the deck.
+// straight back into the deck. Missing engine feature: a Run::RewardItem/RewardKind for a
+// SpecialCardReward (a fixed card claimed into the deck) fed from a Combat-side list.
 struct SwipePower : Power {
   POWER_HEADER(SwipePower, "SWIPE_POWER")
   StackType stackType() const override { return StackType::Single; }
@@ -201,7 +202,7 @@ struct ToughEgg : Monster {
   int minHp() const override { return asc(kToughEnemies, 15, 14); }
   int maxHp() const override { return asc(kToughEnemies, 19, 18); }
   Task<> afterAddedToRoom() override {
-    // PORT NOTE: the C# only ever creates unhatched eggs here (IsHatched is for save/restore).
+    // PORT NOTE (n/a: equivalent): the C# only ever creates unhatched eggs here (IsHatched is for save/restore).
     co_await applyToSelf<HatchPower>(combat->currentSide != Side::Enemy ? 1 : 2);
   }
   void buildMoves() override {
@@ -421,8 +422,8 @@ struct ThievingHopper : Monster {
 
   // _stealPriorities: Uncommon, then Common/Rare(/Event), then Basic(/Quest), then Ancient or
   // Imbued (the first three skip Imbued cards). Only cards with a DeckVersion can be stolen.
-  // PORT NOTE: CardRarity.Event has no counterpart (event cards are Token or Ancient here), so an
-  // event card falls to the Ancient tier or to no tier.
+  // PORT NOTE: missing engine feature Rarity::Event (game.h, CardRarity.Event): event cards are
+  // Token or Ancient here, so an event card falls to the Ancient tier or to no tier.
   static int stealTier(const Card& c) {
     if (c.enchantment && c.enchantment->id == "Imbued") return 3;
     switch (c.rarity) {

@@ -38,7 +38,7 @@ struct Burn : IroncladT<Burn> {
   Task<> onTurnEndInHand() override { co_await cmd::damage(me(), val("Damage"), kUnpowered | kMove, nullptr, this); }
 };
 
-// PORT NOTE: the portrait / "+N" title of a fake-upgraded Wither is not shown.
+// PORT NOTE (n/a: visual): the portrait / "+N" title of a fake-upgraded Wither is not shown.
 struct Wither : IroncladT<Wither> {
   CARD_HEADER(Wither, "WITHER", -1, Status, Status, None)
     keywords = kwUnplayable;
