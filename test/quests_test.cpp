@@ -191,15 +191,15 @@ int main() {
     CHECK(st > 1);
   }
 
-  {  // ByrdonisEgg: Hatch needs the Byrdpip relic
+  {  // ByrdonisEgg: rest sites offer Hatch (obtain Byrdpip, pets_test.cpp)
     Run r;
     r.start(18);
     r.addCardToDeck(db::card("ByrdonisEgg"));
     std::vector<int> opts = {0, 1};
     bool added = false;
     for (Model* m : r.listeners()) added = m->tryModifyRestSiteOptions(opts) || added;
-    CHECK(added == db::relicRegistered("Byrdpip"));
-    CHECK(std::find(opts.begin(), opts.end(), 7) != opts.end() || !db::relicRegistered("Byrdpip"));
+    CHECK(added && db::relicRegistered("Byrdpip"));
+    CHECK(std::find(opts.begin(), opts.end(), 7) != opts.end());
   }
 
   {  // WingedBoots: free travel to the next row, three off-path moves

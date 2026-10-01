@@ -15,16 +15,14 @@ template <class E> void reg() { db::registerEvent(E::kId, [] { return std::uniqu
 // kept out of every card pool and CardFactory's in-combat generation); only the rarity label differs.
 
 // ByrdonisEgg.cs: unplayable quest card; rest sites offer Hatch (HatchRestSiteOption, Run::restSite
-// option 7: obtain Byrdpip). PORT NOTE: the Byrdpip relic (AfterObtained: transform every ByrdonisEgg to ByrdSwoop,
-// PlayerCmd.AddPet of the Byrdpip monster) is not ported (relics files; needs its pet monster), so the option is only
-// offered once a "Byrdpip" relic is registered.
+// option 7: obtain Byrdpip, pets.cpp, which turns the eggs into ByrdSwoops and adds the pet).
 struct ByrdonisEgg : IroncladT<ByrdonisEgg> {
   CARD_HEADER(ByrdonisEgg, "BYRDONIS_EGG", -1, Quest, Quest, None)
     keywords = kwUnplayable;
     maxUpgradeLevel = 0;
   }
   bool tryModifyRestSiteOptions(std::vector<int>& options) override {
-    if (!inDeck() || !db::relicRegistered("Byrdpip")) return false;
+    if (!inDeck()) return false;
     if (std::find(options.begin(), options.end(), 7) == options.end()) options.push_back(7);  // one Hatch per player
     return true;
   }

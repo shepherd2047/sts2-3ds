@@ -4,7 +4,7 @@
 // PaelsWing (card reward alternatives). Translated from MegaCrit.Sts2.Core.Models.Relics.
 //
 // Still locked (unregistered, so no Ancient offers them):
-//  * PaelsLegion, Byrdpip: pets.  GoldenCompass: golden path map.  FurCoat: map marks.
+//  * GoldenCompass: golden path map.  FurCoat: map marks.  (PaelsLegion, Byrdpip: pets.cpp.)
 //    ToyBox: wax relics.  (WingedBoots, DowsingRod, ScrollBoxes: quests.cpp, E2.)
 //    MassiveScroll: multiplayer only.
 #include "cards.h"

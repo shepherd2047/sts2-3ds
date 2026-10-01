@@ -6,7 +6,7 @@
 // Elsewhere: LeadPaperweight in relics_shared2.cpp (A5); PaelsGrowth, SeaGlass, PrismaticGem,
 // Kaleidoscope, WhisperingEarring, Driftwood, PaelsWing in relics_ancient2.cpp; the enchanting event
 // relics in relics_enchant.cpp (A3c); WingedBoots, DowsingRod, ScrollBoxes in quests.cpp (E2).
-// Still unregistered: Byrdpip, PaelsLegion (pets, ByrdonisEgg hatching); GoldenCompass (golden path);
+// Byrdpip, PaelsLegion (pets) are in pets.cpp. Still unregistered: GoldenCompass (golden path);
 // FurCoat (map marks); ToyBox (wax relics); MassiveScroll (multiplayer only).
 #include "cards.h"
 #include "char_defect.h"

@@ -6,9 +6,9 @@
 // Pool diff (SharedRelicPool + the five character pools + Event pool vs RELIC_HEADER): every shared and
 // character relic is now registered; the Ancient-ish ones (SeaGlass, PrismaticGem, PaelsGrowth,
 // LeadPaperweight, Kaleidoscope, WhisperingEarring) are in relics_ancient2.cpp (A6). Still skipped
-// (systems that are not built): Byrdpip, PaelsLegion (pets), FurCoat (map marks), GoldenCompass
+// (systems that are not built): FurCoat (map marks), GoldenCompass
 // (golden path), MassiveScroll (multiplayer only), ToyBox (wax relics). DowsingRod, ScrollBoxes and
-// WingedBoots are in quests.cpp (E2).
+// WingedBoots are in quests.cpp (E2); Byrdpip, PaelsLegion in pets.cpp.
 #include "colorless.h"
 #include "game.h"
 
