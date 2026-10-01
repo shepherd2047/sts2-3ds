@@ -109,7 +109,7 @@ struct MonologuePower : Power {
 // ================================================================ token cards
 
 // MinionDiveBomb.cs: created by Charge. 0 cost, Attack, Token, Exhaust, tag Minion. Damage 13.
-// PORT NOTE: drops the attacker anim / dive-bomb vfx.
+// PORT NOTE (n/a: visual): drops the attacker anim / dive-bomb vfx.
 struct MinionDiveBomb : IroncladT<MinionDiveBomb> {
   CARD_HEADER(MinionDiveBomb, "MINION_DIVE_BOMB", 0, Attack, Token, AnyEnemy)
     keywords = kwExhaust;

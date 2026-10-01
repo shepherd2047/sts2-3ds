@@ -42,7 +42,7 @@ struct GalacticDust : Relic {
     int need = const_cast<GalacticDust*>(this)->val("Stars").toInt();
     return need > 0 ? starsSpent % need : 0;
   }
-  // PORT NOTE: the ~1s "activating" display flip (IsActivating) is a cosmetic UI-only detail.
+  // PORT NOTE (n/a: visual): the ~1s "activating" display flip (IsActivating) is a cosmetic UI-only detail.
   Task<> afterStarsSpent(int amount) override {
     starsSpent += amount;
     int need = val("Stars").toInt();

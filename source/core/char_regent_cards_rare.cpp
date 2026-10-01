@@ -104,8 +104,8 @@ struct MonarchsGazePower : Power {
 };
 
 // RoyaltiesPower.cs: after combat, an extra GoldReward of Amount.
-// PORT NOTE: AfterCombatEnd + CombatRoom.AddExtraReward is Combat::extraRewardGold here
-// (a one-field hook read by Run::combatRewards).
+// PORT NOTE (n/a: equivalent): AfterCombatEnd + CombatRoom.AddExtraReward is
+// Combat::extraRewardGold here (a one-field hook read by Run::combatRewards).
 struct RoyaltiesPower : Power {
   POWER_HEADER(RoyaltiesPower, "ROYALTIES_POWER")
   Task<> afterPowerAmountChanged(Power* p, Dec amt, Creature*, Card*) override {
@@ -116,7 +116,8 @@ struct RoyaltiesPower : Power {
 
 // SwordSagePower.cs: every Sovereign Blade replays Amount extra times (BaseReplayCount).
 // PORT NOTE: IsClone (CardModel.CreateClone results, which already carry the replay count) is
-// approximated by Card::isDupe.
+// approximated by Card::isDupe; needs a Card::cloneOf / isClone link set by Card::clone() (game.h)
+// to be exact (e.g. Dual Wield copies of a Sovereign Blade get the replays twice).
 struct SwordSagePower : Power {
   POWER_HEADER(SwordSagePower, "SWORD_SAGE_POWER")
   static void tryAddReplays(Card* card, int n) {
@@ -151,9 +152,7 @@ struct TyrannyPower : Power {
 
 // VoidFormPower.cs: the first Amount cards played each turn cost 0 energy and 0 stars.
 // Data.cardsPlayedThisTurn is a plain member.
-// PORT NOTE: the C# maxes cardsPlayedThisTurn out on apply / amount change (HideTemporaryZero-
-// CostVisual) because VoidForm ends the turn; done in afterPowerAmountChanged, which also fires
-// for the first application.
+// The C# maxes cardsPlayedThisTurn out before apply / amount change (HideTemporaryZeroCostVisual).
 struct VoidFormPower : Power {
   POWER_HEADER(VoidFormPower, "VOID_FORM_POWER")
   int cardsPlayedThisTurn = 0;
@@ -167,7 +166,7 @@ struct VoidFormPower : Power {
     cardsPlayedThisTurn = 999999999;
     co_return;
   }
-  Task<> afterPowerAmountChanged(Power* p, Dec, Creature*, Card*) override {
+  Task<> beforePowerAmountChanged(Power* p, Dec, Creature*, Creature*, Card*) override {
     if (p == this) cardsPlayedThisTurn = 999999999;
     co_return;
   }

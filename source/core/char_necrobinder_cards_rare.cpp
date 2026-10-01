@@ -156,9 +156,9 @@ struct SweepingGaze : IroncladT<SweepingGaze> {
 // combat each time an Ethereal card is played (also counting those already played when this card
 // enters combat). Upgrade: -2 cost.
 // The earlier plays are the CardPlaysFinished entries with WasEthereal.
-// PORT NOTE: the `IsClone` guard (a clone already carries the reduction) is approximated by "has
-// any this-combat cost modifier" (no CloneOf link on Card). afterCardEnteredCombat only fires for
-// cards generated mid-combat here, where it matters.
+// PORT NOTE (n/a: equivalent): the `IsClone` guard (a clone already carries the reduction) is
+// "has any this-combat cost modifier" (no CloneOf link on Card; Card::clone copies the modifiers, and an
+// original with none has seen no Ethereal play, so the history count would be 0 anyway).
 struct BansheesCry : IroncladT<BansheesCry> {
   CARD_HEADER(BansheesCry, "BANSHEES_CRY", 9, Attack, Rare, AllEnemies)
     addVar("Damage", 33);
@@ -264,9 +264,8 @@ struct Hang : IroncladT<Hang> {
 // Misery.cs: 0 cost, deal 7 (+2 upgraded, +Retain), then copy every debuff the target had before
 // the hit onto every other hittable enemy (stacking onto ones they already have).
 // A temporary power's amount is merged into its InternallyAppliedPower's entry (`debuffAmounts[internal] +=
-// temp.Amount`). PORT NOTE: the copies are fresh powers from the registry, not ClonePreservingMutability
-// clones, so per-instance state beyond amount/applier is not copied (no debuff in this build has any that
-// matters on another enemy).
+// temp.Amount`). PORT NOTE (n/a: equivalent): the copies are fresh powers from the registry, not
+// ClonePreservingMutability clones; no debuff has per-instance state beyond amount/applier.
 struct Misery : IroncladT<Misery> {
   CARD_HEADER(Misery, "MISERY", 0, Attack, Rare, AnyEnemy)
     addVar("Damage", 7);
@@ -474,8 +473,8 @@ struct Squeeze : IroncladT<Squeeze> {
 
 // TheScythe.cs: 2 cost Exhaust, deal Damage (13 base + permanent increases); each play permanently
 // raises this card's (and its deck version's) damage by Increase 5 (+2 upgraded).
-// PORT NOTE: the C# tracks CurrentDamage / IncreasedDamage as saved properties; here the Damage var
-// itself is bumped (vars are saved by name), on this card and on Card::deckVersion.
+// PORT NOTE (n/a: equivalent): the C# tracks CurrentDamage / IncreasedDamage as saved properties; here
+// the Damage var itself is bumped (vars are saved by name), on this card and on Card::deckVersion.
 struct TheScythe : IroncladT<TheScythe> {
   CARD_HEADER(TheScythe, "THE_SCYTHE", 2, Attack, Rare, AnyEnemy)
     keywords = kwExhaust;
