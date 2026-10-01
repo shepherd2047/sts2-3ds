@@ -67,8 +67,9 @@ struct HistoryCourse : Relic {
     thisTurn = nullptr;
     if (!combat || combat->turnNumber == 1 || !lastTurn) co_return;
     doFlash();
-    std::unique_ptr<Card> dupe = lastTurn->clone();  // CardModel.CreateDupe
+    std::unique_ptr<Card> dupe = lastTurn->createClone();  // CardModel.CreateDupe: CreateClone, IsDupe, no Exhaust
     dupe->isDupe = true;
+    dupe->removeKeyword(kwExhaust);
     Card* raw = combat->addCard(std::move(dupe));
     co_await cmd::autoPlay(*combat, raw, nullptr);
   }
@@ -200,12 +201,12 @@ struct WarHistorianRepy : Event {
   }
   void removeFirstLanternKey() {
     for (auto& c : run->deck)
-      if (c->id == "LanternKey") { run->removeCardFromDeck(c.get()); return; }
+      if (c->id == "LanternKey") { cmd::completeQuest(*run, c.get()); run->removeCardFromDeck(c.get()); return; }
   }
   void removeAllLanternKeys() {
     std::vector<Card*> keys;
     for (auto& c : run->deck) if (c->id == "LanternKey") keys.push_back(c.get());
-    for (Card* c : keys) run->removeCardFromDeck(c);
+    for (Card* c : keys) { cmd::completeQuest(*run, c); run->removeCardFromDeck(c); }
   }
 };
 

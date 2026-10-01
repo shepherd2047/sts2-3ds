@@ -10,10 +10,8 @@ namespace {
 
 // FeralPower (Models.Powers): the first N attacks each turn that cost 0 energy return to the
 // top of the hand instead of being discarded.
-// PORT NOTE: engine feature missing: modifyCardPlayResultLocation returns only a Pile, with no
-// CardPilePosition, so the card goes to the end of the hand rather than CardPilePosition.Top. (The hook also
-// has no ResourceInfo, so "energy spent == 0" is derived as autoPlay || (X-cost ? xValue == 0 :
-// energyCost(card) == 0), which gives the same result; DisplayAmount is UI only.)
+// PORT NOTE: the hook has no ResourceInfo, so "energy spent == 0" is derived as autoPlay || (X-cost ?
+// xValue == 0 : energyCost(card) == 0), which gives the same result; DisplayAmount is UI only.
 // AfterApplied seeds the counter from the Attack CardPlaysStarted this turn that spent no energy.
 struct FeralPower : Power {
   POWER_HEADER(FeralPower, "FERAL_POWER")
@@ -25,14 +23,14 @@ struct FeralPower : Power {
     });
     return {};
   }
-  Pile modifyCardPlayResultLocation(Card* card, bool autoPlay, Pile pile) override {
-    if (ownerOf(card) != owner) return pile;
-    if (card->type != CardType::Attack) return pile;
+  CardLocation modifyCardPlayResult(Card* card, bool autoPlay, CardLocation loc) override {
+    if (ownerOf(card) != owner) return loc;
+    if (card->type != CardType::Attack) return loc;
     bool zeroEnergy = autoPlay || (card->costsX ? card->xValue == 0 : owner->combat->energyCost(card) <= 0);
-    if (!zeroEnergy) return pile;
-    if (card->isDupe) return pile;
-    if (zeroCostAttacksPlayed >= amount) return pile;
-    return Pile::Hand;
+    if (!zeroEnergy) return loc;
+    if (card->isDupe) return loc;
+    if (zeroCostAttacksPlayed >= amount) return loc;
+    return {Pile::Hand, PilePosition::Top};
   }
   Task<> afterModifyingCardPlayResultLocation(Card*, Pile) override {
     flash = 1.f;

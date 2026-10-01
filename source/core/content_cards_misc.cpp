@@ -296,7 +296,10 @@ struct Dowsing : IroncladT<Dowsing> {
     if (run->currentNode < 0 || run->nodes[run->currentNode].type != RoomType::Unknown) co_return;  // MapPointType.Unknown
     int roomsEntered = 5 - val("Rooms").toInt() + 1;  // RoomsEntered++
     var("Rooms")->base = Dec(5 - roomsEntered);
-    if (roomsEntered >= 5) run->transformCard(this, db::card("Abundance"));  // CompleteQuest + TransformTo<Abundance>
+    if (roomsEntered >= 5) {
+      cmd::completeQuest(*run, this);
+      run->transformCard(this, db::card("Abundance"));  // TransformTo<Abundance>
+    }
   }
 };
 
@@ -347,7 +350,8 @@ struct SpoilsMap : IroncladT<SpoilsMap> {
     int gold = val("Gold").toInt();
     Run* r = run;
     co_await r->gainGold(gold);
-    r->removeCardFromDeck(this);  // CompleteQuest + CardPileCmd.RemoveFromDeck (frees this card)
+    cmd::completeQuest(*r, this);
+    r->removeCardFromDeck(this);  // CardPileCmd.RemoveFromDeck (frees this card)
     co_return gold;
   }
 };

@@ -74,6 +74,10 @@ void ioRecord(Archive& a, RunRecord& r) {
     a.tag("DAILY");
     a.io(r.dailyDate);
   }
+  if (version >= 5) {  // run history lists
+    a.tag("CHOICES");
+    ioPathLists(a, r.path);
+  }
   a.tag("DECK");
   int n = (int)r.deck.size();
   a.io(n);
@@ -142,6 +146,47 @@ void ioPath(Archive& a, Path& path) {
       }
     }
   }
+}
+
+namespace {
+void ioChoices(Archive& a, std::vector<Choice>& v) {
+  int n = (int)v.size();
+  a.io(n);
+  n = a.count(n);
+  if (a.reading) v.assign((size_t)std::clamp(n, 0, 1000), Choice{});
+  for (auto& c : v) {
+    a.io(c.id);
+    a.io(c.upgrades);
+    a.io(c.picked);
+  }
+}
+MapPoint* currentPoint(Run& run) {
+  if (run.mapHistory.empty() || run.mapHistory.back().empty()) return nullptr;
+  return &run.mapHistory.back().back();
+}
+}  // namespace
+
+void ioPathLists(Archive& a, Path& path) {
+  for (auto& act : path)
+    for (auto& p : act) {
+      ioChoices(a, p.cardChoices);
+      ioChoices(a, p.relicChoices);
+      a.io(p.downgradedCards);
+      a.io(p.completedQuests);
+    }
+}
+
+void noteCardChoice(Run& run, const std::string& cardId, int upgrades, bool picked) {
+  if (MapPoint* p = currentPoint(run)) p->cardChoices.push_back({cardId, upgrades, picked});
+}
+void noteRelicChoice(Run& run, const std::string& relicId, bool picked) {
+  if (MapPoint* p = currentPoint(run)) p->relicChoices.push_back({relicId, 0, picked});
+}
+void noteDowngraded(Run& run, const std::string& cardId) {
+  if (MapPoint* p = currentPoint(run)) p->downgradedCards.push_back(cardId);
+}
+void noteQuestCompleted(Run& run, const std::string& cardId) {
+  if (MapPoint* p = currentPoint(run)) p->completedQuests.push_back(cardId);
 }
 
 std::string RunRecord::save() const {

@@ -11,8 +11,6 @@ template <class E> void reg() { db::registerEvent(E::kId, [] { return std::uniqu
 }  // namespace
 
 // ---------------------------------------------------------------- cards given by events
-// PORT NOTE (n/a: equivalent): CardRarity.Event has no counterpart here; event cards use Token (both are
-// kept out of every card pool and CardFactory's in-combat generation); only the rarity label differs.
 
 // ByrdonisEgg.cs: unplayable quest card; rest sites offer Hatch (HatchRestSiteOption, Run::restSite
 // option 7: obtain Byrdpip, pets.cpp, which turns the eggs into ByrdSwoops and adds the pet).
@@ -62,7 +60,7 @@ struct Guilty : IroncladT<Guilty> {
 
 // Peck.cs
 struct Peck : IroncladT<Peck> {
-  CARD_HEADER(Peck, "PECK", 1, Attack, Token, AnyEnemy)
+  CARD_HEADER(Peck, "PECK", 1, Attack, Event, AnyEnemy)
     addVar("Damage", 2);
     addVar("Repeat", 3);
   }
@@ -86,7 +84,7 @@ struct ToricToughnessPower : Power {
 
 // ToricToughness.cs
 struct ToricToughness : IroncladT<ToricToughness> {
-  CARD_HEADER(ToricToughness, "TORIC_TOUGHNESS", 2, Skill, Token, Self)
+  CARD_HEADER(ToricToughness, "TORIC_TOUGHNESS", 2, Skill, Event, Self)
     addVar("Turns", 2);
     addVar("Block", 5);
   }

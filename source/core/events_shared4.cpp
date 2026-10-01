@@ -7,8 +7,6 @@
 // screen has a potion button). STS_FAKE_FIGHT=1 turns leaving the shop into that throw (debug).
 // PORT NOTE (n/a: visual): the merchant's dialogue, the NFakeMerchant scene and the purchase-failure lines
 // are not ported.
-// PORT NOTE: the relic-choice history (OnEventFinished: PlayerMapPointHistoryEntry.RelicChoices for the
-// unbought relics) is not ported; history.h::MapPoint records no card / relic / event choice lists.
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -271,6 +269,9 @@ struct FakeMerchant : Event {
       for (Model* m : run->listeners()) co_await m->afterItemPurchased(price);
       if (run->died) break;
     }
+    // OnEventFinished (not when the fight started): the unbought relics go to RelicChoices (not picked).
+    if (!startedFight)
+      for (auto& it : run->shop) if (it.relic) history::noteRelicChoice(*run, it.relic->id, false);
     run->shop.clear();
     finished = true;
   }

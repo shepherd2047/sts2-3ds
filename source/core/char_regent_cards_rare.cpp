@@ -433,7 +433,7 @@ struct HeirloomHammer : IroncladT<HeirloomHammer> {
     auto picked = co_await cmd::selectCards(*combat, "HEIRLOOM_HAMMER", options, 1, 1);
     if (!picked.empty()) {
       int n = val("Repeat").toInt();
-      for (int i = 0; i < n; ++i) co_await cmd::addGeneratedCard(*combat, picked[0]->clone(), Pile::Hand);
+      for (int i = 0; i < n; ++i) co_await cmd::addGeneratedCard(*combat, picked[0]->createClone(), Pile::Hand);
     }
   }
   void onUpgrade() override { upgradeVar("Damage", 5); }

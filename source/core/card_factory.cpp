@@ -9,7 +9,7 @@ namespace db {
 
 bool canGenerateInCombat(const Card& c) {
   return c.canBeGeneratedInCombat() && c.rarity != Rarity::Basic && c.rarity != Rarity::Ancient &&
-         c.rarity != Rarity::Token;
+         c.rarity != Rarity::Event;
 }
 
 std::vector<std::string> filterForCombat(const std::vector<std::string>& ids) {

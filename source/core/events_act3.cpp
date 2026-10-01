@@ -33,6 +33,7 @@ std::vector<Card*> upgradableSample(Run& r, Rng& rng, int n) {
 // CreatureCmd.Escape: the creature leaves the room alive (no death hooks).
 // PORT NOTE (n/a: visual): the UI has no escape animation; the death animation is played instead.
 Task<> escapeCreature(Creature* c) {
+  c->combat->escapedEnemyIds.push_back(c->monster->id);  // CombatState.CreatureEscaped
   c->combat->push({VisualEvent::Death, c, 0});
   c->hp = 0;
   c->removed = true;
@@ -234,7 +235,7 @@ const char* const kRiderNames[] = {"None", "Sapping", "Violence", "Choking", "En
 // The description's SmartFormat flags are exposed as 0/1 vars: "CardType" (0 Attack, 1 Skill,
 // 2 Power), "HasRider" and one per rider name.
 struct MadScience : IroncladT<MadScience> {
-  CARD_HEADER(MadScience, "MAD_SCIENCE", 1, Attack, Token, AnyEnemy)
+  CARD_HEADER(MadScience, "MAD_SCIENCE", 1, Attack, Event, AnyEnemy)
     addVar("Damage", 12);
     addVar("Block", 8);
     addVar("SappingWeak", 2);
@@ -250,6 +251,7 @@ struct MadScience : IroncladT<MadScience> {
     configure(CardType::Attack, kNone);
   }
   int rider = kNone;
+  bool gainsBlock() const override { return type == CardType::Skill; }  // GainsBlock => TinkerTimeType == Skill
   void configure(CardType t, int r) {
     type = t;
     target = t == CardType::Attack ? TargetType::AnyEnemy : TargetType::Self;

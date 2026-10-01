@@ -50,6 +50,15 @@ struct Room {
   bool operator==(const Room&) const = default;
 };
 
+// CardChoiceHistoryEntry / ModelChoiceHistoryEntry: a card or relic that was on offer at a map point and
+// whether it was taken (`id` = card or relic id; `upgrades` = the card's upgrade level, cards only).
+struct Choice {
+  std::string id;
+  int upgrades = 0;
+  bool picked = false;
+  bool operator==(const Choice&) const = default;
+};
+
 // MapPointHistoryEntry: one map point (floor). Usually one room; an event that starts a fight
 // adds the fight, the last boss adds TheArchitect.
 struct MapPoint {
@@ -62,6 +71,12 @@ struct MapPoint {
   int goldSpent = 0;                       // gold paid at the merchant (LoseGold Spent)
   int damageTaken = 0;                     // unblocked damage the player took (CreatureCmd.Damage)
   std::vector<std::string> restChoices;    // rest site option ids: HEAL, SMITH, LIFT, DIG, COOK, KINDLE, CLONE
+  // Run history lists (PlayerMapPointHistoryEntry.CardChoices / RelicChoices / DowngradedCards /
+  // CompletedQuests); run.sav version 11 and history record version 5 add them (ioPathLists).
+  std::vector<Choice> cardChoices;               // CardReward / SpecialCardReward / shop stock not taken (and the picks)
+  std::vector<Choice> relicChoices;              // RelicCmd.Obtain (picked), RelicReward skipped, unbought shop relics
+  std::vector<std::string> downgradedCards;      // CardCmd.Downgrade of a deck card
+  std::vector<std::string> completedQuests;      // PlayerCmd.CompleteQuest
   bool tracked = true;
   // The badge inputs and `tracked` are not part of equality (ioPath alone drops them).
   bool operator==(const MapPoint& o) const { return type == o.type && rooms == o.rooms && goldGained == o.goldGained; }
@@ -89,7 +104,8 @@ struct RunRecord {
   // the badges. Version 1 records still load (no badge data: tracked == false on every point).
   // 3 (M11): game mode (custom), the seed text and the modifiers; older records: standard, none.
   // 4 (M12): the daily run's date (GameMode.Daily); older records: not daily.
-  static constexpr int kVersion = 4;
+  // 5: the per-point card / relic choices, downgraded cards and completed quests (older: none).
+  static constexpr int kVersion = 5;
 
   uint64_t seq = 0;          // 1, 2, 3... per profile (set by append); higher = newer
   uint64_t seed = 0;         // Run::seed (the numeric seed; the typed seed text is not kept)
@@ -125,6 +141,15 @@ struct RunRecord {
 
 // The path's token stream (shared by the record file and run.sav, save.cpp).
 void ioPath(Archive& a, Path& path);
+// The per-point choice / downgrade / quest lists (record version 5, run.sav version 11); the path is
+// already read. Older files leave them empty.
+void ioPathLists(Archive& a, Path& path);
+
+// ---- run-time recording (Run::mapHistory's current point; no-ops before the first point) ----
+void noteCardChoice(Run& run, const std::string& cardId, int upgrades, bool picked);
+void noteRelicChoice(Run& run, const std::string& relicId, bool picked);
+void noteDowngraded(Run& run, const std::string& cardId);
+void noteQuestCompleted(Run& run, const std::string& cardId);
 
 // ---- ScoreUtility ------------------------------------------------------------------------
 int floorScore(const Path& path);            // GetScoreForFloor: points * 10 * (act + 1)

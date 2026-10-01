@@ -735,7 +735,7 @@ struct MusicBox : Relic {
   Task<> afterCardPlayed(const CardPlay& p) override {
     if (p.card != playing || !combat) co_return;
     doFlash();
-    auto copy = p.card->clone();
+    auto copy = p.card->createClone();
     copy->keywords |= kwEthereal;
     usedThisTurn = true;
     playing = nullptr;
