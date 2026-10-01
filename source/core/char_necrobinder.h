@@ -11,11 +11,11 @@ namespace sts {
 // instead (ModifyUnblockedDamageTarget); Osty stays in combat (dead) rather than leaving the
 // room when it dies, ready to be revived (ShouldCreatureBeRemovedFromCombatAfterDeath), and the
 // power itself survives Osty's death so it can re-arm on revival (ShouldPowerBeRemovedAfterOwnerDeath).
-// PORT NOTE: ShouldAllowHitting (a dead Osty can't receive powers) is not ported; no system in
-// this package applies a power to a dead Osty.
+// ShouldAllowHitting: like the C#, no dead creature (not only Osty) can receive powers while it exists.
 struct DieForYouPower : Power {
   POWER_HEADER(DieForYouPower, "DIE_FOR_YOU_POWER")
   StackType stackType() const override { return StackType::Single; }
+  bool shouldAllowHitting(Creature* creature) override { return creature->alive(); }
   bool removedAfterOwnerDeath() const override { return false; }
   bool shouldCreatureBeRemovedFromCombatAfterDeath(Creature* creature) override { return creature != owner; }
   Creature* modifyUnblockedDamageTarget(Creature* target, Dec, int props, Creature*) override {

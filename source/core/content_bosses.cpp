@@ -80,6 +80,8 @@ struct IllusionPower : Power {
   std::string followUpStateId;
   bool shouldPowerBeRemovedOnDeath(Power* p) override { return p->type() == PowerType::Debuff; }
   bool shouldCreatureBeRemovedFromCombatAfterDeath(Creature* c) override { return c != owner; }
+  // ShouldAllowHitting: no powers while reviving (IsReviving: from its death until the revive heal).
+  bool shouldAllowHitting(Creature* c) override { return c != owner || owner->alive(); }
   Task<> afterApplied(Creature*, Card*) override {
     if (!owner->get<MinionPower>()) co_await applyPower<MinionPower>(owner, 1, nullptr, nullptr, true);
   }
