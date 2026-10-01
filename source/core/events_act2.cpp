@@ -53,7 +53,7 @@ struct UltimateDefend : IroncladT<UltimateDefend> {
 
 // Exterminate.cs
 struct Exterminate : IroncladT<Exterminate> {
-  CARD_HEADER(Exterminate, "EXTERMINATE", 1, Attack, Token, AllEnemies)
+  CARD_HEADER(Exterminate, "EXTERMINATE", 1, Attack, Event, AllEnemies)
     addVar("Damage", 3);
     addVar("Repeat", 4);
   }
@@ -63,7 +63,7 @@ struct Exterminate : IroncladT<Exterminate> {
 
 // Squash.cs
 struct Squash : IroncladT<Squash> {
-  CARD_HEADER(Squash, "SQUASH", 1, Attack, Token, AnyEnemy)
+  CARD_HEADER(Squash, "SQUASH", 1, Attack, Event, AnyEnemy)
     addVar("Damage", 10);
     addVar("VulnerablePower", 2);
   }
@@ -76,7 +76,7 @@ struct Squash : IroncladT<Squash> {
 
 // Metamorphosis.cs: shuffle random free Attacks into the draw pile.
 struct Metamorphosis : IroncladT<Metamorphosis> {
-  CARD_HEADER(Metamorphosis, "METAMORPHOSIS", 2, Skill, Token, Self)
+  CARD_HEADER(Metamorphosis, "METAMORPHOSIS", 2, Skill, Event, Self)
     keywords = kwExhaust;
     addVar("Cards", 3);
   }
@@ -98,7 +98,7 @@ struct Metamorphosis : IroncladT<Metamorphosis> {
 
 // Enlightenment.cs: every card in hand costs at most 1 (this turn; upgraded: this combat).
 struct Enlightenment : IroncladT<Enlightenment> {
-  CARD_HEADER(Enlightenment, "ENLIGHTENMENT", 0, Skill, Token, Self)
+  CARD_HEADER(Enlightenment, "ENLIGHTENMENT", 0, Skill, Event, Self)
     keywords = kwExhaust;
   }
   Task<> onPlay(CardPlay&) override {

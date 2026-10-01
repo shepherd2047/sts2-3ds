@@ -122,7 +122,7 @@ struct BurningSticks : Relic {
     if (usedThisCombat || !combat || card->type != CardType::Skill) co_return;
     doFlash();
     usedThisCombat = true;
-    co_await cmd::addGeneratedCard(*combat, card->clone(), Pile::Hand);
+    co_await cmd::addGeneratedCard(*combat, card->createClone(), Pile::Hand);
   }
 };
 
