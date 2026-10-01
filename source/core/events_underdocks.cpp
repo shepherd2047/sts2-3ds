@@ -84,8 +84,8 @@ struct GlowwaterPotion : Potion {
 namespace {
 
 // FresnelLens.cs: card rewards (and any card added to the deck) that gain block get Nimble 2.
-// PORT NOTE: the merchant's card list (ModifyMerchantCardCreationResults) has no hook; a bought
-// card is enchanted when it enters the deck instead.
+// PORT NOTE (n/a: equivalent): the merchant's card list (ModifyMerchantCardCreationResults) shows no Nimble
+// in the port; a bought card is enchanted when it enters the deck instead (TryModifyCardBeingAddedToDeck).
 struct FresnelLens : Relic {
   RELIC_HEADER(FresnelLens, "FRESNEL_LENS", Event)
     addVar("NimbleAmount", 2);
@@ -390,7 +390,7 @@ struct EndlessConveyor : Event {
 };
 
 // PunchOff.cs (needs floor >= 6): grab a relic from the brawling constructs for an Injury, or fight.
-// PORT NOTE: the combat-layout page (the two constructs punching each other behind the event
+// PORT NOTE (n/a: visual): the combat-layout page (the two constructs punching each other behind the event
 // text, LayoutType.Combat) is UI only and not shown; the option texts carry the event.
 struct PunchOff : Event {
   EVENT_HEADER(PunchOff, "PUNCH_OFF")

@@ -5,8 +5,10 @@
 // The C# fight starts when a Foul Potion is thrown at the merchant: FoulPotion::onUse (events_shared2.cpp)
 // fires shopChoice with kFoulPotionThrow (the potion is already spent by Run::usePotion; the shop
 // screen has a potion button). STS_FAKE_FIGHT=1 turns leaving the shop into that throw (debug).
-// PORT NOTE: the merchant's dialogue, the NFakeMerchant scene, the purchase-failure lines and the
-// relic-choice history (OnEventFinished) are not ported.
+// PORT NOTE (n/a: visual): the merchant's dialogue, the NFakeMerchant scene and the purchase-failure lines
+// are not ported.
+// PORT NOTE: the relic-choice history (OnEventFinished: PlayerMapPointHistoryEntry.RelicChoices for the
+// unbought relics) is not ported; history.h::MapPoint records no card / relic / event choice lists.
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>

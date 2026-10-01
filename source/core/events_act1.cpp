@@ -11,10 +11,12 @@ template <class E> void reg() { db::registerEvent(E::kId, [] { return std::uniqu
 }  // namespace
 
 // ---------------------------------------------------------------- cards given by events
-// PORT NOTE: CardRarity.Event has no counterpart here; event cards use Token.
+// PORT NOTE (n/a: equivalent): CardRarity.Event has no counterpart here; event cards use Token (both are
+// kept out of every card pool and CardFactory's in-combat generation); only the rarity label differs.
 
 // ByrdonisEgg.cs: unplayable quest card; rest sites offer Hatch (HatchRestSiteOption, Run::restSite
-// option 7: obtain Byrdpip). PORT NOTE: Byrdpip (a pet relic) is not ported yet, so the option is only
+// option 7: obtain Byrdpip). PORT NOTE: the Byrdpip relic (AfterObtained: transform every ByrdonisEgg to ByrdSwoop,
+// PlayerCmd.AddPet of the Byrdpip monster) is not ported (relics files; needs its pet monster), so the option is only
 // offered once a "Byrdpip" relic is registered.
 struct ByrdonisEgg : IroncladT<ByrdonisEgg> {
   CARD_HEADER(ByrdonisEgg, "BYRDONIS_EGG", -1, Quest, Quest, None)
@@ -247,8 +249,15 @@ struct LuminousChoir : Event {
   EVENT_HEADER(LuminousChoir, "LUMINOUS_CHOIR")
   void calculateVars() override { addVar("Gold", 149 - rng().nextInt(0, 50)); }
   bool isAllowed(Run& r) override {
-    // PORT NOTE: IsAllowed compares against the rolled gold (99..149); the lowest is used here.
-    return r.gold >= 100;
+    // IsAllowed runs on the canonical model: the base Gold var (149), before CalculateVars rolls it
+    // down; and RelicGrabBag.HasAvailableRelics (some rarity deque still holds an allowed relic).
+    if (r.gold < 149) return false;
+    r.removeDisallowedRelics();
+    for (RelicRarity k : {RelicRarity::Common, RelicRarity::Uncommon, RelicRarity::Rare, RelicRarity::Shop}) {
+      auto it = r.relicBag.find(k);
+      if (it != r.relicBag.end() && !it->second.empty()) return true;
+    }
+    return false;
   }
   std::vector<EventOption> initialOptions() override {
     std::vector<EventOption> o;

@@ -31,7 +31,7 @@ std::vector<Card*> upgradableSample(Run& r, Rng& rng, int n) {
 }
 
 // CreatureCmd.Escape: the creature leaves the room alive (no death hooks).
-// PORT NOTE: the UI has no escape animation; the death animation is played instead.
+// PORT NOTE (n/a: visual): the UI has no escape animation; the death animation is played instead.
 Task<> escapeCreature(Creature* c) {
   c->combat->push({VisualEvent::Death, c, 0});
   c->hp = 0;
@@ -108,7 +108,7 @@ struct Decay : IroncladT<Decay> {
 // ================================================================ relics
 
 // BigMushroom.cs: +20 max HP, but 2 fewer cards on the first turn of each combat.
-// PORT NOTE: the creature is not scaled up (NCombatRoom Grow).
+// PORT NOTE (n/a: visual): the creature is not scaled up (NCombatRoom Grow).
 struct BigMushroom : Relic {
   RELIC_HEADER(BigMushroom, "BIG_MUSHROOM", Event)
     addVar("MaxHp", 20);
@@ -526,7 +526,8 @@ struct Trial : Event {
                        option("REJECT", "DOUBLE_DOWN", [this] { return doubleDown(); })});
     co_return;
   }
-  // PORT NOTE: the C# opens the abandon-run popup; here the run just ends.
+  // PORT NOTE: the C# opens NAbandonRunConfirmPopup (confirm, then abandon the run to the title); the port has no
+  // in-run confirm popup / abandon route reachable from an event (Run::abandon is pause-menu driven), so the player just dies.
   Task<> doubleDown() { co_await run->loseHp(owner()->hp); }
 
   void setTrialFinished(const std::string& resultPage) {

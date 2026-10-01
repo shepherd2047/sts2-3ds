@@ -3,12 +3,12 @@
 // CrystalSphereItem + CrystalSphereItems/*) plus OneOffSynchronizer.DoLocalCrystalSphereRewards.
 // The minigame's state (events_crystal.h) is shown by ui/screens/crystal_ui.cpp.
 //
-// PORT NOTE: the fortune teller's lines (NCrystalSphereDialogue) use Rng.Chaotic in C#; here a
+// PORT NOTE (n/a: visual): the fortune teller's lines (NCrystalSphereDialogue) use Rng.Chaotic in C#; here a
 // private stream seeded from the run seed, so they never touch the game's RNG.
 // The rewards go through Run::offerRewards (RewardsSet.Offer: Hook.ModifyRewards, i.e. Driftwood's
 // reroll) and the card rewards through Run::makeCardReward (CardFactory.CreateForReward with its hooks).
-// PORT NOTE: RewardsSet sorts with List.Sort (unstable); a stable sort keeps same-kind rewards in
-// reveal order.
+// PORT NOTE (n/a: equivalent): RewardsSet sorts with List.Sort (introsort); a set of at most 16 rewards
+// (the minigame places 15) is an insertion sort, which is stable, like the stable sort used here.
 #include <algorithm>
 
 #include "cards.h"
@@ -138,7 +138,7 @@ struct CrystalSphere : Event {
     return true;
   }
 
-  // PopulateItems. PORT NOTE (faithful quirk): a failed try keeps the items already placed and
+  // PopulateItems. Faithful quirk: a failed try keeps the items already placed and
   // listed, and every try hooks Revealed again on the whole list, so an item from an earlier try
   // would be rewarded once per hook. Placement practically never fails on the 11x11 grid.
   bool populateItems() {

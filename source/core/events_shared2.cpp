@@ -54,7 +54,7 @@ struct FoulPotion : Potion {
     }
     // Out of combat (usable only at a merchant, see passesCustomUsabilityCheck): the merchant pays
     // 100 gold; the FakeMerchant starts its fight (FakeMerchant.FoulPotionThrown, via shopChoice).
-    // PORT NOTE: ShowPotionVfx / NMerchantRoom.FoulPotionThrown (splat, merchant reaction) dropped.
+    // PORT NOTE (n/a: visual): ShowPotionVfx / NMerchantRoom.FoulPotionThrown (splat, merchant reaction) dropped.
     if (run->currentEvent && run->currentEvent->id == "FakeMerchant") {
       run->shopChoice.fire(kFoulPotionThrow);
       co_return;
