@@ -114,10 +114,8 @@ struct RoyaltiesPower : Power {
   }
 };
 
-// SwordSagePower.cs: every Sovereign Blade replays Amount extra times (BaseReplayCount).
-// PORT NOTE: IsClone (CardModel.CreateClone results, which already carry the replay count) is
-// approximated by Card::isDupe; needs a Card::cloneOf / isClone link set by Card::clone() (game.h)
-// to be exact (e.g. Dual Wield copies of a Sovereign Blade get the replays twice).
+// SwordSagePower.cs: every Sovereign Blade replays Amount extra times (BaseReplayCount); a clone
+// (CardModel.CreateClone) already carries the replay count.
 struct SwordSagePower : Power {
   POWER_HEADER(SwordSagePower, "SWORD_SAGE_POWER")
   static void tryAddReplays(Card* card, int n) {
@@ -128,7 +126,7 @@ struct SwordSagePower : Power {
     for (Card* k : owner->combat->allCards()) tryAddReplays(k, amt.toInt());
   }
   Task<> afterCardEnteredCombat(Card* card) override {
-    if (!card->isDupe) tryAddReplays(card, amount);
+    if (!card->isClone()) tryAddReplays(card, amount);
     co_return;
   }
   Task<> afterRemoved(Creature* oldOwner) override {

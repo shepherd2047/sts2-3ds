@@ -149,8 +149,6 @@ struct WaterfallGiant : Monster {
     co_await attack(steamEruptionDamage);
     if (creature->alive()) co_await cmd::kill({creature});
   }
-  // PORT NOTE: missing engine feature Creature::hpDisplay (HpDisplay enum, game.h): InfiniteWithoutNumbers
-  // is not modeled; the bar shows the raw HP and Hellraiser cannot see the giant as infinite.
   void triggerAboutToBlowState() {
     isAboutToBlow = true;
     // The animator's "Dead" trigger is gated on !IsAboutToBlow: drop the Death visual that
@@ -160,6 +158,7 @@ struct WaterfallGiant : Monster {
       if (it->kind == VisualEvent::Death && it->who == creature) { ev.erase(std::next(it).base()); break; }
     creature->maxHp = 999999999;  // CreatureCmd.SetMaxAndCurrentHp
     creature->hp = 999999999;
+    creature->hpDisplay = HpDisplay::InfiniteWithoutNumbers;
     setMoveImmediate(aboutToBlow, true);
   }
 };

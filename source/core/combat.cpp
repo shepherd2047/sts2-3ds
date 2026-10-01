@@ -2,6 +2,8 @@
 // CombatManager turn loop, reduced to one local player.
 #include <algorithm>
 #include <cstdio>
+#include <iterator>
+#include <string_view>
 
 #include "achievements.h"
 #include "badges.h"
@@ -300,6 +302,23 @@ int Combat::modifyOrbPassiveTriggerCount(Orb* orb, int count) {
   return count;
 }
 
+// CardModel.GainsBlock: the cards whose C# override is `GainsBlock => true` (sorted ids).
+bool Card::gainsBlock() const {
+  static const char* const kIds[] = {
+      "Armaments", "Backflip", "BloodWall", "Blur", "BoneShards", "BoostAway", "BootSequence", "Bulwark",
+      "ChargeBattery", "CloakAndDagger", "CloakOfStars", "Colossus", "Compact", "Constellation", "CosmicIndifference",
+      "Dash", "DeathsDoor", "DefendDefect", "DefendIronclad", "DefendNecrobinder", "DefendRegent", "DefendSilent",
+      "Deflect", "Defy", "Delay", "DemonicShield", "DodgeAndRoll", "Entrench", "Equilibrium", "EscapePlan", "EvilEye",
+      "ExpectAFight", "FightThrough", "Finesse", "Fisticuffs", "FlameBarrier", "GatherLight", "GeneticAlgorithm",
+      "Glacier", "Glasswork", "Glitterstream", "GraveWarden", "HandTrick", "Hologram", "IAmInvincible", "Impervious",
+      "Intercept", "IronWave", "Leap", "LegSweep", "Lift", "LightningRod", "ManifestAuthority", "Melancholy", "Mimic",
+      "MinionSacrifice", "Mirage", "NegativePulse", "PanicButton", "ParticleWall", "Patter", "PullAggro", "Rally",
+      "Reflect", "Relax", "Sacrifice", "SecondWind", "ShadowShield", "ShrugItOff", "Stack", "Survivor", "Taunt",
+      "TheGambit", "ToricToughness", "TrueGrit", "UltimateDefend", "Undeath", "Untouchable"};
+  return std::binary_search(std::begin(kIds), std::end(kIds), id,
+                            [](const auto& a, const auto& b) { return std::string_view(a) < std::string_view(b); });
+}
+
 // OrbModel.TriggerPassive.
 Task<> Orb::triggerPassive(Creature* target) {
   if (!owner || !owner->combat) co_return;
@@ -308,7 +327,7 @@ Task<> Orb::triggerPassive(Creature* target) {
   for (Model* m : c->listeners()) co_await m->afterModifyingOrbPassiveTriggerCount(this);
   for (int i = 0; i < triggerCount; ++i) {
     co_await passive(target);
-    // PORT NOTE: CustomScaledWait(0.1, 0.25) collapses to a fixed wait (single player: always "IsMe").
+    // PORT NOTE (n/a: single-player): CustomScaledWait(0.1, 0.25) is always the local player's wait ("IsMe").
     co_await scaledWait(0.1, 0.25);
   }
 }
@@ -793,7 +812,7 @@ Task<> channelOrb(Combat& c, std::unique_ptr<Orb> orb) {
   if (c.orbCapacity == 0) co_return;  // OrbQueue.TryEnqueue: Capacity == 0 -> false, nothing else happens
   Orb* raw = orb.get();
   c.orbQueue.push_back(std::move(orb));
-  // PORT NOTE: CustomScaledWait(0.1, 0.25) collapses to a fixed wait (single player: always "IsMe").
+  // PORT NOTE (n/a: single-player): CustomScaledWait(0.1, 0.25) is always the local player's wait ("IsMe").
   co_await scaledWait(0.1, 0.25);
   if (raw->id == "LightningOrb") ++c.lightningOrbsChanneled;
   c.history.orbChanneled(c, raw->id);  // History.OrbChanneled
@@ -1006,7 +1025,10 @@ Task<> Combat::runCombat() {
         if (a.kind == PlayerAction::EndTurn) break;
         if (a.kind == PlayerAction::UsePotion) {
           playerPhase = false;
+          ++cardOrPotionEffectDepth;  // PotionModel.OnUseWrapper: Begin/EndCardOrPotionEffect
           co_await run->usePotion(a.potionSlot, a.target);
+          --cardOrPotionEffectDepth;
+          if (!over && player->alive()) co_await checkForEmptyHand();  // then CheckForEmptyHand
           playerPhase = !over;
           if (over) break;
           continue;
@@ -1041,6 +1063,7 @@ Task<> Combat::runCombat() {
     // Enemy side: StartTurn runs the whole enemy turn and switches back.
   }
   inProgress = false;
+  phase = TurnPhase::None;
   if (won) {
     // CombatManager.EndCombatInternal: run-level hooks, relics still listen.
     for (Model* m : run->listeners()) co_await m->afterCombatEnd();
@@ -1054,9 +1077,11 @@ Task<> Combat::startTurn() {
   if (currentSide == Side::Player) starting.push_back(player);
   else for (auto* e : enemies) if (!e->removed) starting.push_back(e);
 
+  phase = TurnPhase::None;  // CombatManager.StartTurn: SetPhaseForAllPlayers(None)
   for (auto* cr : starting)
     for (auto& p : cr->powers) p->amountOnTurnStart = p->amount;
   for (Model* m : listeners()) co_await m->beforeSideTurnStart(currentSide, starting);
+  if (currentSide == Side::Player) phase = TurnPhase::Start;
 
   if (currentSide == Side::Player) {
     if (turnNumber > 1) { banner = "玩家回合"; bannerTime = 1.0f; }
@@ -1095,10 +1120,14 @@ Task<> Combat::startTurn() {
       co_await o->afterTurnStartOrbTrigger();
     }
     co_await checkWinCondition();
-    // CombatManager.RunAutoPrePlayPhase: Hook.AfterAutoPrePlayPhaseEntered (Imbued auto-plays).
+    // CombatManager.RunAutoPrePlayPhase: CheckForEmptyHand, Hook.AfterAutoPrePlayPhaseEntered
+    // (Imbued auto-plays), then the Play phase.
+    phase = TurnPhase::AutoPrePlay;
+    if (!over) co_await checkForEmptyHand();
     if (!over) for (Model* m : listeners()) co_await m->afterAutoPrePlayPhaseEnteredEarly();
     if (!over) for (Model* m : listeners()) co_await m->afterAutoPrePlayPhaseEntered();
     if (!over) for (Model* m : listeners()) co_await m->afterAutoPrePlayPhaseEnteredLate();
+    phase = TurnPhase::Play;
   } else {
     co_await checkWinCondition();
     if (!over) co_await executeEnemyTurn();
@@ -1167,7 +1196,9 @@ Task<> Combat::endEnemyTurn() {
 
 Task<> Combat::endPlayerTurnPhaseOne() {
   std::vector<Creature*> ps{player};
+  phase = TurnPhase::AutoPostPlay;
   for (Model* m : listeners()) co_await m->afterAutoPostPlayPhaseEntered();
+  phase = TurnPhase::End;
   for (Model* m : listeners()) co_await m->beforeSideTurnEndVeryEarly(Side::Player, ps);
   for (Model* m : listeners()) co_await m->beforeSideTurnEndEarly(Side::Player, ps);
   for (Model* m : listeners()) co_await m->beforeSideTurnEnd(Side::Player, ps);
@@ -1249,10 +1280,10 @@ Task<bool> Combat::checkWinCondition() {
   co_return false;
 }
 
-Task<> Combat::playCard(Card* card, Creature* target, bool autoPlay, bool forceExhaust) {
+Task<> Combat::playCard(Card* card, Creature* target, bool autoPlay, bool forceExhaust, bool spendResources) {
   // CardModel.SpendResources: X-cost cards spend everything and capture X.
   int spent = 0, starsSpent = 0;
-  if (!autoPlay) {
+  if (!autoPlay || spendResources) {
     spent = card->costsX ? energy : energyCost(card);
     starsSpent = card->costsStarsX ? stars : std::max(0, starCost(card));
     if (!card->costsX && spent > energy) {
@@ -1266,13 +1297,18 @@ Task<> Combat::playCard(Card* card, Creature* target, bool autoPlay, bool forceE
     stars = std::max(0, stars - starsSpent);
     if (stars != starsBefore) history.starsModified(*this, stars - starsBefore);  // History.StarsModified
   }
-  card->lastStarsSpent = starsSpent;
+  // CardCmd.AutoPlay without skipXCapture: X is the current energy (nothing is spent) and
+  // LastStarsSpent the current stars (star X) or the star cost.
+  bool captureNow = autoPlay && !spendResources;
+  int xCaptured = captureNow ? energy : spent;
+  int starsCaptured = captureNow ? (card->costsStarsX ? stars : std::max(0, starCost(card))) : starsSpent;
+  card->lastStarsSpent = starsCaptured;
   if (card->costsX) {
-    card->xValue = spent;
+    card->xValue = xCaptured;
     for (Model* m : listeners()) card->xValue = m->modifyXValue(card, card->xValue);  // Hook.ModifyXValue
   }
   if (card->costsStarsX) {
-    card->starXValue = starsSpent;
+    card->starXValue = starsCaptured;
     for (Model* m : listeners()) card->starXValue = m->modifyXValue(card, card->starXValue);  // Hook.ModifyXValue
   }
   ++cardsPlayedThisTurn;
@@ -1282,16 +1318,17 @@ Task<> Combat::playCard(Card* card, Creature* target, bool autoPlay, bool forceE
   play.push_back(card);
 
   // GetResultLocationForCardPlay + Hook.ModifyCardPlayResultLocation
-  Pile result = Pile::Discard;
-  if (card->type == CardType::Power) result = Pile::None;
-  else if (card->has(kwExhaust) || forceExhaust) result = Pile::Exhaust;
-  if (card->isDupe) result = Pile::None;
+  CardLocation location;  // Discard, Bottom
+  if (card->type == CardType::Power) location.pile = Pile::None;
+  else if (card->has(kwExhaust) || forceExhaust) location.pile = Pile::Exhaust;
+  if (card->isDupe) location.pile = Pile::None;
   std::vector<Model*> locationModifiers;
   for (Model* m : listeners()) {
-    Pile before = result;
-    result = m->modifyCardPlayResultLocation(card, autoPlay, result);
-    if (result != before) locationModifiers.push_back(m);
+    CardLocation before = location;
+    location = m->modifyCardPlayResult(card, autoPlay, location);
+    if (location != before) locationModifiers.push_back(m);
   }
+  Pile result = location.pile;
   for (Model* m : locationModifiers) co_await m->afterModifyingCardPlayResultLocation(card, result);
 
   // Hook.ModifyCardPlayCount
@@ -1310,6 +1347,7 @@ Task<> Combat::playCard(Card* card, Creature* target, bool autoPlay, bool forceE
   push({VisualEvent::CardPlayed, player, (int)card->type, card->id});
   if (card->type != CardType::Attack) push({VisualEvent::Anim, player, 0, "Cast"});
   co_await wait(autoPlay ? 0.3 : 0.1);
+  ++cardOrPotionEffectDepth;  // CombatManager.BeginCardOrPotionEffect
   for (int i = 0; i < playCount; ++i) {
     if (over || ending || player->dead()) break;
     if (card->target == TargetType::AnyEnemy && (!target || target->dead())) {
@@ -1335,17 +1373,30 @@ Task<> Combat::playCard(Card* card, Creature* target, bool autoPlay, bool forceE
     if (card->type == CardType::Attack) ++attackPlaysFinishedThisTurn;
     if (card->tags & tagShiv) ++shivPlaysFinishedThisTurn;
   }
+  --cardOrPotionEffectDepth;  // EndCardOrPotionEffect
   card->clearCostMods(Card::kWhenPlayed);  // AfterCardPlayedCleanup
 
-  // Move to the result pile if nothing else moved it.
+  // Move to the result pile if nothing else moved it (CardPileCmd.Add at the location's position:
+  // Top = index 0 of the pile list).
   if (pileOf(card) == Pile::Play) {
     removeFromPiles(card);
+    bool top = location.position == PilePosition::Top;
     if (result == Pile::Exhaust) co_await cmd::exhaustCard(*this, card);
-    else if (result == Pile::Discard) discard.push_back(card);
-    else if (result == Pile::Hand) co_await cmd::moveCard(*this, card, Pile::Hand);
-    else if (result == Pile::Draw) co_await cmd::moveCard(*this, card, Pile::Draw);
+    else if (result == Pile::Discard) { if (top) discard.insert(discard.begin(), card); else discard.push_back(card); }
+    else if (result == Pile::Hand) {
+      if (top && (int)hand.size() < kMaxHand) hand.insert(hand.begin(), card);
+      else co_await cmd::moveCard(*this, card, Pile::Hand);
+    } else if (result == Pile::Draw) co_await cmd::moveCard(*this, card, Pile::Draw, top);
   }
   co_await checkWinCondition();
+  if (player->alive()) co_await checkForEmptyHand();  // CardModel.OnPlayWrapper: CheckForEmptyHand
+}
+
+// CombatManager.CheckForEmptyHand: Hook.AfterHandEmptied once the hand is empty, unless a card or
+// potion effect is still running (its own check comes when it finishes) or the fight is over.
+Task<> Combat::checkForEmptyHand() {
+  if (over || ending || cardOrPotionEffectDepth > 0 || !hand.empty()) co_return;
+  for (Model* m : listeners()) co_await m->afterHandEmptied();
 }
 
 }  // namespace sts

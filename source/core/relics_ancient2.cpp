@@ -142,8 +142,8 @@ struct Kaleidoscope : Relic {
 
 // WhisperingEarring.cs: +1 energy; on turn 1 the first playable hand card is played over and over
 // (up to 13). Card selections during it take the first options (VakuuCardSelector, Combat::autoSelectFirst).
-// AfterAutoPrePlayPhaseEnteredLate. PORT NOTE (needs a Combat::playCard mode that spends resources first, then auto-plays with skipXCapture): cards are played with Combat::playCard(autoPlay =
-// false) because that is what spends the energy (SpendResources), so they are not flagged as auto-plays.
+// AfterAutoPrePlayPhaseEnteredLate: card.SpendResources() then CardCmd.AutoPlay(skipXCapture) =
+// Combat::playCard(autoPlay, spendResources).
 struct WhisperingEarring : Relic {
   RELIC_HEADER(WhisperingEarring, "WHISPERING_EARRING", Ancient) addVar("Energy", 1); }
   Dec modifyMaxEnergy(Dec amount) override { return amount + val("Energy"); }
@@ -167,7 +167,7 @@ struct WhisperingEarring : Relic {
         if (h.empty()) break;
         target = h.front();
       }  // AnyAlly / AnyPlayer: single player, no target needed
-      co_await c.playCard(card, target, false, false);
+      co_await c.playCard(card, target, true, false, true);
     }
     c.autoSelectFirst = false;
   }

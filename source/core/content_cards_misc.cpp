@@ -136,7 +136,7 @@ struct Abundance : IroncladT<Abundance> {
 
 // ByrdSwoop.cs
 struct ByrdSwoop : IroncladT<ByrdSwoop> {
-  CARD_HEADER(ByrdSwoop, "BYRD_SWOOP", 0, Attack, Token, AnyEnemy)
+  CARD_HEADER(ByrdSwoop, "BYRD_SWOOP", 0, Attack, Event, AnyEnemy)
     addVar("Damage", 14);
   }
   Task<> onPlay(CardPlay& p) override { co_await attack(p.target, val("Damage")); }
@@ -145,7 +145,7 @@ struct ByrdSwoop : IroncladT<ByrdSwoop> {
 
 // Caltrops.cs
 struct Caltrops : IroncladT<Caltrops> {
-  CARD_HEADER(Caltrops, "CALTROPS", 1, Power, Token, Self)
+  CARD_HEADER(Caltrops, "CALTROPS", 1, Power, Event, Self)
     addVar("ThornsPower", 3);
   }
   Task<> onPlay(CardPlay&) override {
@@ -157,7 +157,7 @@ struct Caltrops : IroncladT<Caltrops> {
 
 // Clash.cs: only playable while every card in hand is an Attack.
 struct Clash : IroncladT<Clash> {
-  CARD_HEADER(Clash, "CLASH", 0, Attack, Token, AnyEnemy)
+  CARD_HEADER(Clash, "CLASH", 0, Attack, Event, AnyEnemy)
     addVar("Damage", 14);
   }
   bool shouldPlay(Card* c) override {
@@ -172,7 +172,7 @@ struct Clash : IroncladT<Clash> {
 
 // Distraction.cs: a random Skill of the character's pool, free this turn.
 struct Distraction : IroncladT<Distraction> {
-  CARD_HEADER(Distraction, "DISTRACTION", 1, Skill, Token, Self)
+  CARD_HEADER(Distraction, "DISTRACTION", 1, Skill, Event, Self)
     keywords = kwExhaust;
   }
   Task<> onPlay(CardPlay&) override {
@@ -186,7 +186,7 @@ struct Distraction : IroncladT<Distraction> {
 
 // DualWield.cs: copy an Attack or Power in hand.
 struct DualWield : IroncladT<DualWield> {
-  CARD_HEADER(DualWield, "DUAL_WIELD", 1, Skill, Token, Self)
+  CARD_HEADER(DualWield, "DUAL_WIELD", 1, Skill, Event, Self)
     addVar("Cards", 1);
   }
   Task<> onPlay(CardPlay&) override {
@@ -197,7 +197,7 @@ struct DualWield : IroncladT<DualWield> {
     if (picked.empty()) co_return;
     Card* selection = picked[0];
     for (int i = 0; i < val("Cards").toInt(); ++i) {
-      auto copy = selection->clone();
+      auto copy = selection->createClone();
       copy->isDupe = false;
       co_await cmd::addGeneratedCard(*combat, std::move(copy), Pile::Hand);
     }
@@ -207,7 +207,7 @@ struct DualWield : IroncladT<DualWield> {
 
 // Entrench.cs: double the block (gain block equal to the current block, unpowered).
 struct Entrench : IroncladT<Entrench> {
-  CARD_HEADER(Entrench, "ENTRENCH", 2, Skill, Token, Self)
+  CARD_HEADER(Entrench, "ENTRENCH", 2, Skill, Event, Self)
   }
   bool gainsBlock() const override { return true; }
   Task<> onPlay(CardPlay&) override {
@@ -218,7 +218,7 @@ struct Entrench : IroncladT<Entrench> {
 
 // FeedingFrenzy.cs: temporary Strength.
 struct FeedingFrenzy : IroncladT<FeedingFrenzy> {
-  CARD_HEADER(FeedingFrenzy, "FEEDING_FRENZY", 0, Skill, Token, Self)
+  CARD_HEADER(FeedingFrenzy, "FEEDING_FRENZY", 0, Skill, Event, Self)
     addVar("StrengthPower", 5);
   }
   Task<> onPlay(CardPlay&) override {
@@ -229,7 +229,7 @@ struct FeedingFrenzy : IroncladT<FeedingFrenzy> {
 
 // HelloWorld.cs
 struct HelloWorld : IroncladT<HelloWorld> {
-  CARD_HEADER(HelloWorld, "HELLO_WORLD", 1, Power, Token, Self)
+  CARD_HEADER(HelloWorld, "HELLO_WORLD", 1, Power, Event, Self)
   }
   Task<> onPlay(CardPlay&) override { co_await applyPower<HelloWorldPower>(me(), Dec(1), me(), this); }
   void onUpgrade() override { addKeyword(kwInnate); }
@@ -237,7 +237,7 @@ struct HelloWorld : IroncladT<HelloWorld> {
 
 // Outmaneuver.cs
 struct Outmaneuver : IroncladT<Outmaneuver> {
-  CARD_HEADER(Outmaneuver, "OUTMANEUVER", 1, Skill, Token, Self)
+  CARD_HEADER(Outmaneuver, "OUTMANEUVER", 1, Skill, Event, Self)
     addVar("Energy", 2);
   }
   Task<> onPlay(CardPlay&) override {
@@ -248,7 +248,7 @@ struct Outmaneuver : IroncladT<Outmaneuver> {
 
 // Rebound.cs
 struct Rebound : IroncladT<Rebound> {
-  CARD_HEADER(Rebound, "REBOUND", 1, Attack, Token, AnyEnemy)
+  CARD_HEADER(Rebound, "REBOUND", 1, Attack, Event, AnyEnemy)
     addVar("Damage", 9);
   }
   Task<> onPlay(CardPlay& p) override {
@@ -260,7 +260,7 @@ struct Rebound : IroncladT<Rebound> {
 
 // RipAndTear.cs: 2 hits at random enemies.
 struct RipAndTear : IroncladT<RipAndTear> {
-  CARD_HEADER(RipAndTear, "RIP_AND_TEAR", 1, Attack, Token, RandomEnemy)
+  CARD_HEADER(RipAndTear, "RIP_AND_TEAR", 1, Attack, Event, RandomEnemy)
     addVar("Damage", 7);
   }
   Task<> onPlay(CardPlay&) override { co_await attackRandom(val("Damage"), 2); }
@@ -269,7 +269,7 @@ struct RipAndTear : IroncladT<RipAndTear> {
 
 // Stack.cs: block equal to the discard pile size (+3 base when upgraded).
 struct Stack : IroncladT<Stack> {
-  CARD_HEADER(Stack, "STACK", 1, Skill, Token, Self)
+  CARD_HEADER(Stack, "STACK", 1, Skill, Event, Self)
     addVar("CalculationBase", 0);
     addVar("CalculationExtra", 1);
     addVar("CalculatedBlock", 0);

@@ -8,8 +8,7 @@
 // mapgen.cpp. This file has the Run helpers and the relics that hand out quests or use the map
 // hooks: DowsingRod, WingedBoots, ScrollBoxes (Neow).
 //
-// PORT NOTE: PlayerCmd.CompleteQuest only records the quest in the run history's
-// MapPointHistoryEntry.CompletedQuests, which history.h does not have; it is not recorded.
+// PORT NOTE (n/a: owner): PlayerCmd.CompleteQuest only adds to MapPointHistoryEntry.CompletedQuests, which the port's history format does not keep.
 #include <algorithm>
 
 #include "card_factory.h"
@@ -105,8 +104,7 @@ struct WingedBoots : Relic {
 
 // ScrollBoxes.cs (Ancient, Neow): choose one of two bundles (2 Commons + 1 Uncommon each, six distinct
 // cards; a Defect bundle is 3 Claws 1% of the time) from the Rewards stream.
-// PORT NOTE: there are no card unlocks, so CanGenerateBundles (IsAllowedAtNeow) only checks the pool
-// sizes, which every character passes.
+// PORT NOTE (n/a: owner): every card is unlocked, so CanGenerateBundles (IsAllowedAtNeow) only checks the pool sizes, which every character passes.
 struct ScrollBoxes : Relic {
   RELIC_HEADER(ScrollBoxes, "SCROLL_BOXES", Ancient) }
 

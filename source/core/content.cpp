@@ -42,7 +42,7 @@ struct Anger : IroncladT<Anger> {
   }
   Task<> onPlay(CardPlay& p) override {
     co_await attack(p.target, val("Damage"));
-    auto copy = clone();
+    auto copy = createClone();  // CardModel.CreateClone
     Card* c = combat->addCard(std::move(copy));
     co_await cmd::moveCard(*combat, c, Pile::Discard);
   }

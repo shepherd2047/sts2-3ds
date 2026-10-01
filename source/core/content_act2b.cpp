@@ -422,15 +422,13 @@ struct ThievingHopper : Monster {
     machine.start(thievery);
   }
 
-  // _stealPriorities: Uncommon, then Common/Rare(/Event), then Basic(/Quest), then Ancient or
+  // _stealPriorities: Uncommon, then Common/Rare/Event, then Basic/Quest, then Ancient or
   // Imbued (the first three skip Imbued cards). Only cards with a DeckVersion can be stolen.
-  // PORT NOTE: missing engine feature Rarity::Event (game.h, CardRarity.Event): event cards are
-  // Token or Ancient here, so an event card falls to the Ancient tier or to no tier.
   static int stealTier(const Card& c) {
     if (c.enchantment && c.enchantment->id == "Imbued") return 3;
     switch (c.rarity) {
       case Rarity::Uncommon: return 0;
-      case Rarity::Common: case Rarity::Rare: return 1;
+      case Rarity::Common: case Rarity::Rare: case Rarity::Event: return 1;
       case Rarity::Basic: case Rarity::Quest: return 2;
       case Rarity::Ancient: return 3;
       default: return -1;

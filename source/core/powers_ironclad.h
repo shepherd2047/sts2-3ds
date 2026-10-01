@@ -138,21 +138,24 @@ struct FreeAttackPower : Power {
   }
 };
 
-// HellraiserPower autoplays drawn Strikes. The C# version only chains
-// indefinitely when every hittable enemy has infinite HP (a concept this
-// engine doesn't model), and otherwise resets a safety counter every draw;
-// PORT NOTE: missing engine feature Creature::hpDisplay / HpDisplay.IsInfinite (game.h): since we
-// can't detect "infinite HP", we always keep the 9-per-turn safety cap that the original used
-// to stop runaway chains in that case.
+// HellraiserPower autoplays drawn Strikes. While every hittable enemy shows infinite HP
+// (HpDisplay.IsInfinite: Hardened Shell at its cap, an about-to-blow Waterfall Giant) at most 9
+// such auto-plays happen per turn; otherwise the counter resets on every draw.
 struct HellraiserPower : Power {
   POWER_HEADER(HellraiserPower, "HELLRAISER_POWER")
   StackType stackType() const override { return StackType::Single; }
   int infiniteAutoPlaysThisTurn = 0;
   Task<> afterCardDrawnEarly(Card* card, bool) override {
     if (ownerOf(card) != owner || !(card->tags & tagStrike)) co_return;
-    if (infiniteAutoPlaysThisTurn >= 9) co_return;
-    ++infiniteAutoPlaysThisTurn;
-    co_await cmd::autoPlay(*owner->combat, card, nullptr);
+    bool play = true;
+    auto hittable = owner->combat->hittableEnemies();
+    if (std::all_of(hittable.begin(), hittable.end(), [](Creature* c) { return c->hpInfinite(); })) {
+      if (infiniteAutoPlaysThisTurn >= 9) play = false;  // (the cap-reached thought bubble is visual)
+      ++infiniteAutoPlaysThisTurn;
+    } else {
+      infiniteAutoPlaysThisTurn = 0;
+    }
+    if (play) co_await cmd::autoPlay(*owner->combat, card, nullptr);
   }
   Task<> afterSideTurnEnd(Side, const std::vector<Creature*>& participants) override {
     if (contains(participants, owner)) infiniteAutoPlaysThisTurn = 0;
@@ -202,7 +205,7 @@ struct JugglingPower : Power {
     if (attacksPlayedThisTurn == 3) {
       flash = 1.f;
       for (int i = 0; i < amount; ++i) {
-        auto clone = p.card->clone();
+        auto clone = p.card->createClone();
         co_await cmd::addGeneratedCard(*owner->combat, std::move(clone), Pile::Hand);
       }
     }

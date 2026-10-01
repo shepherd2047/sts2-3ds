@@ -2,8 +2,8 @@
 // entries (Entities/Merchant/*.cs), CardFactory.CreateForMerchant, RelicFactory
 // .PullNextRelicFromBack. The two colorless card slots (Uncommon, Rare; A9) follow the five
 // character slots; the Foul Potion throw is FoulPotion::onUse (events_shared2.cpp) via the
-// shop screen's potion button. PORT NOTE: the merchant's dialogue on entering and the
-// BoughtColorless map-history entry are not ported.
+// shop screen's potion button.
+// PORT NOTE (n/a: visual): no merchant dialogue on entering; the BoughtColorless history entry is not kept (history format, owner).
 #include <algorithm>
 #include <cmath>
 

@@ -10,7 +10,8 @@
 // A daily run is GameMode.Daily: run.sav / the run history keep its date (Run::dailyDate), and like
 // a custom run it never raises the ascension level (ProgressSaveManager.UpdateWithRunData).
 //
-// PORT NOTE: no time server and no leaderboard. The date is the console's / PC's local date (the C#
+// PORT NOTE (n/a: owner): offline daily: local date, no time server, no leaderboard (only a local best).
+// No time server and no leaderboard. The date is the console's / PC's local date (the C#
 // asks Mega Crit's time server and falls back to DateTimeOffset.UtcNow, i.e. the UTC date), and the
 // only score kept is the profile's local best per date (Progress::dailyBest, progress.sav v2). The
 // score is ScoreUtility.CalculateScore (the game over screen's score), not the leaderboard's encoded

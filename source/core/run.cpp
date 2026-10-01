@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <cstring>
 #include <ctime>
 #include <set>
 
@@ -99,21 +100,24 @@ bool Run::hasRelic(const std::string& id) const {
 }
 
 // RunManager: the shared bag (shared pool) then the player's bag (shared + the character's
-// pools), both from the UpFront stream; each rarity deque is shuffled once.
-// PORT NOTE: C# shuffles the deques in dictionary insertion order; here in rarity order.
+// pools), both from the UpFront stream; each rarity deque is shuffled once, in the order the
+// rarities first appear in the pool (RelicGrabBag._deques is a Dictionary: insertion order).
 void Run::populateRelicBags() {
   relicBag.clear();
   sharedRelicBag.clear();
   Rng& r = rng("UpFront");
   auto fill = [&](std::map<RelicRarity, std::vector<std::string>>& bag, std::vector<std::string> ids) {
+    std::vector<RelicRarity> order;
     for (auto& id : ids) {
       auto rel = db::relic(id);
       if (!rel) continue;  // not ported yet
       RelicRarity k = rel->rarity;
-      if (k == RelicRarity::Common || k == RelicRarity::Uncommon || k == RelicRarity::Rare || k == RelicRarity::Shop)
+      if (k == RelicRarity::Common || k == RelicRarity::Uncommon || k == RelicRarity::Rare || k == RelicRarity::Shop) {
+        if (!bag.count(k)) order.push_back(k);
         bag[k].push_back(id);
+      }
     }
-    for (auto& [k, v] : bag) r.shuffle(v);
+    for (RelicRarity k : order) r.shuffle(bag[k]);
   };
   fill(sharedRelicBag, db::sharedRelicPool());
   std::vector<std::string> all = db::sharedRelicPool();
@@ -127,8 +131,8 @@ void Run::populateRelicBags() {
 
 // RelicModel.IsBeforeAct3TreasureChest: TotalFloor < 41 (38 in multiplayer, not supported here).
 // These relics override IsAllowed with it (and stop dropping from the Act 3 treasure chest on).
-// PORT NOTE: kept as an id list instead of per-class overrides so the older relic files stay untouched;
-// LastingCandy's extra "first run as Ironclad" exclusion (UnlockState.NumberOfRuns == 0) is not ported.
+// Kept as an id list instead of per-class overrides (same result).
+// PORT NOTE (n/a: owner): LastingCandy is not dropped for an Ironclad on the profile's first run (UnlockState.NumberOfRuns == 0).
 static bool relicAllowed(Relic& rel, Run& run) {
   static const char* const kLimited[] = {
       "AmethystAubergine", "BookOfFiveRings", "BowlerHat", "DragonFruit", "FrozenEgg", "Girya", "JuzuBracelet",
@@ -225,19 +229,20 @@ static std::unique_ptr<Event> modifyNextEvent(Run& r, std::unique_ptr<Event> e) 
 
 // ActModel.PullNextEvent + RoomSet.EnsureNextEventIsValid: the next allowed event not
 // seen this run; when all are used up, repeats are allowed.
+// The pointer stays at events[eventsVisited % size]; entering the event room advances it
+// (RoomSet.MarkVisited, Run::main). With nothing valid left the next event repeats as is.
 std::unique_ptr<Event> Run::pullNextEvent() {
-  for (int pass = 0; pass < 2; ++pass) {
-    for (size_t i = 0; i < eventQueue.size(); ++i) {
-      const std::string& id = eventQueue[i];
-      bool seen = std::find(visitedEvents.begin(), visitedEvents.end(), id) != visitedEvents.end();
-      if (pass == 0 && seen) continue;
-      auto e = db::event(id);
-      if (!e || !e->isAllowed(*this)) continue;
-      eventQueue.erase(eventQueue.begin() + (long)i);
-      return modifyNextEvent(*this, std::move(e));
-    }
+  RoomSet& rs = rooms[actIndex];
+  if (rs.events.empty()) return modifyNextEvent(*this, nullptr);
+  auto next = [&]() -> const std::string& { return rs.events[(size_t)rs.eventsVisited % rs.events.size()]; };
+  for (size_t i = 0; i < rs.events.size(); ++i) {
+    const std::string& id = next();
+    bool seen = std::find(visitedEvents.begin(), visitedEvents.end(), id) != visitedEvents.end();
+    auto e = db::event(id);
+    if (e && e->isAllowed(*this) && !seen) return modifyNextEvent(*this, std::move(e));
+    ++rs.eventsVisited;
   }
-  return modifyNextEvent(*this, nullptr);
+  return modifyNextEvent(*this, db::event(next()));  // "All unique events exhausted, allowing repetition"
 }
 
 Task<> Run::runEvent(std::unique_ptr<Event> e) {
@@ -298,6 +303,8 @@ Card* Run::addCardToDeck(std::unique_ptr<Card> c) {
   Card* added = deck.back().get();
   for (auto& rel : relics) rel->afterCardAddedToDeck(added);
   // Hoarder.AfterCardChangedPiles: a new deck card brings two clones (which don't copy again).
+  // A transformed card is not copied (transformCard sets `hoarding`): CardCmd.Transform reports the
+  // deck as its old pile, and Hoarder only copies cards coming from no pile.
   if (!hoarding && hasModifier("Hoarder")) {
     hoarding = true;
     for (int i = 0; i < 2; ++i) addCardToDeck(added->clone());
@@ -311,21 +318,58 @@ void Run::removeCardFromDeck(Card* c) {
   deck.erase(std::remove_if(deck.begin(), deck.end(), [&](const std::unique_ptr<Card>& d) { return d.get() == c; }), deck.end());
 }
 
-// CardCmd.Transform on a deck card: the original leaves the deck, the replacement joins it at the
-// end through the same Hook.ModifyCardBeingAddedToDeck / AfterCardChangedPiles as any new deck card
-// (the eggs, Bing Bong, Hoarder, Fresnel Lens).
+// CardCmd.Transform (deck pile): RemoveFromCurrentPile, Hook.ModifyCardBeingAddedToDeck (the eggs),
+// AddInternal at the end of the deck, Hook.AfterCardChangedPiles(oldPile: Deck) -- Lucky Fysh,
+// Book of Five Rings, Bing Bong, Darkstone Periapt react, Hoarder does not.
 Card* Run::transformCard(Card* c, std::unique_ptr<Card> into) {
   if (!into || !c->isTransformable()) return c;  // CardCmd.Transform skips Eternal cards
-  removeCardFromDeck(c);
-  return addCardToDeck(std::move(into));
+  auto it = std::find_if(deck.begin(), deck.end(), [&](const std::unique_ptr<Card>& d) { return d.get() == c; });
+  if (it == deck.end()) return addCardToDeck(std::move(into));
+  std::unique_ptr<Card> original = std::move(*it);  // alive until the hooks ran (Dowsing transforms itself)
+  deck.erase(it);
+  bool wasHoarding = hoarding;
+  hoarding = true;
+  Card* added = addCardToDeck(std::move(into));
+  hoarding = wasHoarding;
+  return added;
 }
 
-// CardFactory transform: a random card of the character's pool (Common/Uncommon/Rare),
-// never the card itself. PORT NOTE: C# also weights by rarity odds; this picks uniformly.
+// CardFactory.CreateRandomCardForTransform(original, isInCombat: false, rng): one uniform NextItem over
+// GetDefaultTransformationOptions -- the original's own pool (the colorless pool for Quest cards and
+// Event / Ancient / Token rarities), Common/Uncommon/Rare only unless the
+// original is a Status or Curse, never the original's id; pool order.
 std::unique_ptr<Card> Run::randomTransformFor(Card* c, Rng& rr) {
-  auto pool = db::characterCards(characterId, [&](const Card& x) {
-    return x.id != c->id && (x.rarity == Rarity::Common || x.rarity == Rarity::Uncommon || x.rarity == Rarity::Rare);
-  });
+  static const char* const kCursePool[] = {"AscendersBane", "BadLuck", "Clumsy", "CurseOfTheBell", "Debt", "Decay",
+                                           "Doubt", "Enthralled", "Folly", "Greed", "Guilty", "Injury", "Normality",
+                                           "PoorSleep", "Regret", "Shame", "SporeMind", "Writhe"};
+  static const char* const kStatusPool[] = {"Beckon", "Burn", "Dazed", "Debris", "FranticEscape", "Infection",
+                                            "Wither", "Slimed", "Soot", "Toxic", "Void", "Wound"};
+  bool anyRarity = c->rarity == Rarity::Status || c->rarity == Rarity::Curse;
+  auto keep = [&](const Card& x) {
+    return x.id != c->id &&
+           (anyRarity || x.rarity == Rarity::Common || x.rarity == Rarity::Uncommon || x.rarity == Rarity::Rare);
+  };
+  std::vector<std::string> pool;
+  auto fromList = [&](const char* const* ids, size_t n) {
+    for (size_t i = 0; i < n; ++i)
+      if (auto x = db::card(ids[i]); x && keep(*x)) pool.push_back(ids[i]);
+  };
+  bool colorlessPool = c->type == CardType::Quest || c->rarity == Rarity::Ancient || c->rarity == Rarity::Event ||
+                       c->rarity == Rarity::Token || c->rarity == Rarity::Quest || db::isColorless(c->id);
+  if (colorlessPool) {
+    pool = db::colorlessCards(keep);
+  } else if (c->rarity == Rarity::Curse) {
+    fromList(kCursePool, sizeof kCursePool / sizeof *kCursePool);
+  } else if (c->rarity == Rarity::Status) {
+    fromList(kStatusPool, sizeof kStatusPool / sizeof *kStatusPool);
+  } else {
+    std::string owner = characterId;  // CardModel.Pool: the character pool that lists the card
+    for (auto& ch : db::allCharacters()) {
+      const auto& all = db::character(ch).cardPool;
+      if (std::find(all.begin(), all.end(), c->id) != all.end()) { owner = ch; break; }
+    }
+    pool = db::characterCards(owner, keep);
+  }
   if (pool.empty()) return nullptr;
   return db::card(rr.nextItem(pool));
 }
@@ -573,8 +617,8 @@ void Run::start(uint64_t s, const std::string& charId, int ascensionLevel) {
   gold = ch.startingGold;
   floor = 0;
   deck.clear();
-  // PORT NOTE: cards / relics of a character that is not ported yet are skipped, so its run
-  // starts with what exists (db::characterPlayable says whether it is complete).
+  // Guard: an id that is not registered is skipped (every character is complete:
+  // db::characterPlayable).
   for (auto& id : ch.starterDeck) if (auto c = db::card(id)) { progress::markCardSeen(c->id); deck.push_back(std::move(c)); }
   relics.clear();
   for (auto& id : ch.startingRelics) {
@@ -654,6 +698,7 @@ void Run::start(uint64_t s, const std::string& charId, int ascensionLevel) {
   runTime = 0;
   // Debug: STS_ACT=2|3 starts the run in that act.
   const char* startAct = getenv("STS_ACT");
+  generateRooms();  // RunManager.GenerateRooms, after InitializeNewRun (the relic bags)
   enterAct(startAct ? std::atoi(startAct) - 1 : 0);
 }
 
@@ -670,66 +715,133 @@ std::string Run::actMusic() const {
   return options[Rng(seed, "bg_music").nextInt(0, (int)options.size())];
 }
 
-// RunManager.EnterAct + ActModel.GenerateRooms for one act. PORT NOTE: C# generates every
-// act's rooms up front from Rng.UpFront; here each act draws from the Encounters/Events
-// streams when it is entered. Encounter lists fall back when an act's pool isn't ported
-// yet (elites -> normal fights, boss -> elites -> normal fights) so a run can always go on.
-void Run::enterAct(int index) {
-  actIndex = std::clamp(index, 0, kActs - 1);
-  const db::ActDef& a = act();
-  eventQueue.clear();
-  for (auto& id : a.events) if (db::event(id)) eventQueue.push_back(id);
-  for (auto& id : db::sharedEvents()) if (db::event(id)) eventQueue.push_back(id);
-  rng("Events").shuffle(eventQueue);
+namespace {
 
-  weakQueue = registered(a.weak);
-  normalQueue = registered(a.normal);
-  eliteQueue = registered(a.elites);
-  std::vector<std::string> bosses = registered(a.bosses);
-  if (weakQueue.empty()) weakQueue = normalQueue;
-  if (normalQueue.empty()) normalQueue = weakQueue;
-  if (normalQueue.empty()) weakQueue = normalQueue = registered(db::acts()[0].normal);
-  if (eliteQueue.empty()) eliteQueue = normalQueue;
-  if (bosses.empty()) bosses = registered(a.elites);
-  if (bosses.empty()) bosses = normalQueue;
-  Rng& er = rng("Encounters");
-  er.shuffle(weakQueue);
-  er.shuffle(normalQueue);
-  er.shuffle(eliteQueue);
-  bossId = er.nextItem(bosses);
-  fightsThisAct = 0;
-  // The act's Ancient (ActModel.GenerateRooms: act 1 is always Neow). Debug starts
-  // (STS_ENCOUNTER / STS_ROOM / STS_EVENT / STS_NO_NEOW) skip it so scripts reach the map.
-  // Hive / Glory roll one of their three (plus the shared Darv if this act got him,
-  // RunManager.GenerateRooms: Darv goes to act 2, act 3 or neither). Only registered events.
-  ancientId.clear();
-  bool firstRoom = floor == 0;
-  bool debugStart = firstRoom && (getenv("STS_ENCOUNTER") || getenv("STS_ROOM") || getenv("STS_EVENT") || getenv("STS_NO_NEOW"));
-  Rng& up = rng("UpFront");
-  if (firstRoom) {
-    std::vector<std::string> shared = {"Darv"};
-    up.shuffle(shared);
-    for (auto& s : sharedAncients) s.clear();
-    for (int a = 1; a < kActs; ++a) {
-      int count = up.nextInt((int)shared.size() + 1);
-      sharedAncients[a].assign(shared.begin(), shared.begin() + count);
-      shared.erase(shared.begin(), shared.begin() + count);
+// GrabBag<EncounterModel> (Helpers/GrabBag.cs): weighted picks (every weight 1 here), removed when grabbed.
+struct EncounterGrabBag {
+  std::vector<std::string> entries;
+  double totalWeight = 0;
+  void add(const std::string& id) { entries.push_back(id); totalWeight += 1.0; }
+  int grabIndex(Rng& rng) {
+    double num = rng.nextDouble() * totalWeight, acc = 0;
+    for (size_t i = 0; i < entries.size(); ++i) {
+      acc += 1.0;
+      if (num < acc) return (int)i;
     }
+    return -1;
+  }
+  // GrabAndRemove(rng, predicate): rolls until the predicate holds (-1 / "" if nothing matches).
+  std::string grabAndRemove(Rng& rng, const std::function<bool(const std::string&)>& pred = nullptr) {
+    if (pred && std::none_of(entries.begin(), entries.end(), pred)) return "";
+    int i;
+    do i = grabIndex(rng);
+    while (pred && i >= 0 && !pred(entries[(size_t)i]));
+    if (i < 0) return "";
+    std::string id = entries[(size_t)i];
+    totalWeight -= 1.0;
+    entries.erase(entries.begin() + i);
+    return id;
+  }
+};
+
+bool sharesTags(const std::string& a, const std::string& b) {  // EncounterModel.SharesTagsWith
+  const auto& ta = db::encounterTags(a);
+  const auto& tb = db::encounterTags(b);
+  for (auto& t : ta)
+    if (std::find(tb.begin(), tb.end(), t) != tb.end()) return true;
+  return false;
+}
+
+// ActModel.AddWithoutRepeatingTags: never the previous encounter or one sharing a tag with it,
+// unless nothing else is left.
+void addWithoutRepeatingTags(std::vector<std::string>& encounters, EncounterGrabBag& bag, Rng& rng) {
+  std::string last = encounters.empty() ? "" : encounters.back();
+  std::string id = bag.grabAndRemove(rng, [&](const std::string& e) {
+    return last.empty() || (!sharesTags(e, last) && e != last);
+  });
+  if (id.empty()) id = bag.grabAndRemove(rng);
+  if (!id.empty()) encounters.push_back(id);
+}
+
+}  // namespace
+
+// RunManager.GenerateRooms: the shared Ancients (Darv) split over acts 2 and 3, then
+// ActModel.GenerateRooms for every act -- events shuffled, NumberOfWeakEncounters weak and
+// then regular fights up to BaseNumberOfRooms, 15 elites (grab bags refilled when empty, no
+// repeated tags in a row), the boss, the Ancient -- and DoubleBoss's second boss for the last
+// act, all from Rng.UpFront at the run start. Only registered encounters / events; a pool that
+// isn't ported falls back (elites -> normal fights, boss -> elites -> normal fights).
+// PORT NOTE (n/a: owner): no Epoch-locked events and no ApplyDiscoveryOrderModifications (first-run boss / encounter order).
+void Run::generateRooms() {
+  Rng& up = rng("UpFront");
+  std::vector<std::string> shared = {"Darv"};  // UnlockState.SharedAncients
+  up.shuffle(shared);
+  std::vector<std::string> sharedSubset[kActs];
+  for (int a = 1; a < kActs; ++a) {
+    int count = up.nextInt((int)shared.size() + 1);
+    sharedSubset[a].assign(shared.begin(), shared.begin() + count);
+    shared.erase(shared.begin(), shared.begin() + count);
   }
   static const std::vector<std::string> actAncients[kActs] = {
       {"Neow"}, {"Orobas", "Pael", "Tezcatara"}, {"Nonupeipe", "Tanx", "Vakuu"}};
-  std::vector<std::string> candidates;
-  for (auto& id : actAncients[actIndex]) if (db::event(id)) candidates.push_back(id);
-  for (auto& id : sharedAncients[actIndex]) if (db::event(id)) candidates.push_back(id);
-  if (!candidates.empty() && !debugStart) ancientId = up.nextItem(candidates);
-  if (const char* forced = getenv("STS_ANCIENT"); forced && db::event(forced) && !debugStart) ancientId = forced;
-  // RunManager.GenerateRooms: DoubleBoss gives the last act a second boss (another of its bosses, UpFront stream).
-  secondBossId.clear();
-  if (hasAscension(kDoubleBoss) && actIndex == kActs - 1) {
-    std::vector<std::string> others;
-    for (auto& b : bosses) if (b != bossId) others.push_back(b);
-    if (!others.empty()) secondBossId = up.nextItem(others);
+  for (int i = 0; i < kActs; ++i) {
+    const db::ActDef* found = i < (int)actIds.size() ? db::act(actIds[i]) : nullptr;
+    if (!found)
+      for (auto& d : db::acts()) if (d.index == i && d.isDefault) { found = &d; break; }
+    const db::ActDef& a = found ? *found : db::acts()[0];
+    RoomSet& rs = rooms[i];
+    rs = RoomSet{};
+    for (auto& id : a.events) if (db::event(id)) rs.events.push_back(id);
+    for (auto& id : db::sharedEvents()) if (db::event(id)) rs.events.push_back(id);
+    up.shuffle(rs.events);
+
+    std::vector<std::string> weak = registered(a.weak), normal = registered(a.normal);
+    std::vector<std::string> elites = registered(a.elites), bosses = registered(a.bosses);
+    if (weak.empty()) weak = normal;
+    if (normal.empty()) normal = weak;
+    if (normal.empty()) weak = normal = registered(db::acts()[0].normal);
+    if (elites.empty()) elites = normal;
+    if (bosses.empty()) bosses = registered(a.elites);
+    if (bosses.empty()) bosses = normal;
+    EncounterGrabBag weakBag;
+    for (int n = 0; n < a.weakCount; ++n) {
+      if (weakBag.entries.empty()) for (auto& id : weak) weakBag.add(id);
+      addWithoutRepeatingTags(rs.normal, weakBag, up);
+    }
+    EncounterGrabBag regularBag;
+    for (int n = a.weakCount; n < a.baseRooms; ++n) {
+      if (regularBag.entries.empty()) for (auto& id : normal) regularBag.add(id);
+      addWithoutRepeatingTags(rs.normal, regularBag, up);
+    }
+    EncounterGrabBag eliteBag;
+    for (int n = 0; n < 15; ++n) {
+      if (eliteBag.entries.empty()) for (auto& id : elites) eliteBag.add(id);
+      addWithoutRepeatingTags(rs.elites, eliteBag, up);
+    }
+    rs.boss = up.nextItem(bosses);
+    std::vector<std::string> ancients;  // GetUnlockedAncients + the shared subset
+    for (auto& id : actAncients[i]) if (db::event(id)) ancients.push_back(id);
+    for (auto& id : sharedSubset[i]) if (db::event(id)) ancients.push_back(id);
+    rs.ancient = up.nextItem(ancients);
+    if (i == kActs - 1 && hasAscension(kDoubleBoss)) {
+      std::vector<std::string> others;
+      for (auto& b : bosses) if (b != rs.boss) others.push_back(b);
+      rs.secondBoss = up.nextItem(others);
+    }
   }
+}
+
+// RunManager.EnterAct: the act's RoomSet (generateRooms) and a new map.
+void Run::enterAct(int index) {
+  actIndex = std::clamp(index, 0, kActs - 1);
+  const RoomSet& rs = rooms[actIndex];
+  bossId = rs.boss;
+  secondBossId = rs.secondBoss;
+  // The act's Ancient (act 1: Neow). Debug starts (STS_ENCOUNTER / STS_ROOM / STS_EVENT /
+  // STS_NO_NEOW) skip it so scripts reach the map; STS_ANCIENT forces one.
+  bool debugStart = floor == 0 && (getenv("STS_ENCOUNTER") || getenv("STS_ROOM") || getenv("STS_EVENT") || getenv("STS_NO_NEOW"));
+  ancientId = debugStart ? "" : rs.ancient;
+  if (const char* forced = getenv("STS_ANCIENT"); forced && db::event(forced) && !debugStart) ancientId = forced;
   // SetActInternal: UnknownMapPointOdds.ResetToBase.
   unknownMonsterOdds = 0.1f;
   unknownTreasureOdds = 0.02f;
@@ -750,6 +862,7 @@ Task<> Run::enterAncient() {
   auto e = db::event(ancientId);
   if (!e) co_return;
   currentRoomCount = 1;
+  ++rooms[actIndex].eventsVisited;  // an EventRoom: RoomSet.MarkVisited(Event)
   historyPoint(history::PointType::Ancient);  // an Ancient's map point resolves to an Event room
   historyRoom(history::RoomKind::Event, ancientId);
   // AncientEventModel.BeforeEventStarted: heal to full (Neow starts from 0 HP); WearyTraveler heals 80%.
@@ -874,9 +987,35 @@ Rarity Run::rollRarity(RoomType room) {
   return result;
 }
 
-// PORT NOTE: the C# compares (decimal)float with a decimal; here both are doubles.
+// (decimal)rng.NextFloat(): .NET's float -> decimal conversion keeps 7 significant digits
+// (DecCalc.VarDecFromR4, round half to even). The odds are multiples of 0.125, exact in a double,
+// so comparing mant / 10^power with them gives the decimal comparison.
+static double decimalFromFloat(float f) {
+  if (f <= 0.f) return 0.0;
+  uint32_t bits;
+  std::memcpy(&bits, &f, sizeof bits);
+  int exp = (int)((bits >> 23) & 0xFF) - 126;
+  if (exp < -94) return 0.0;
+  double dbl = f;
+  int power = 6 - ((exp * 19728) >> 16);
+  static const double kPow10[] = {1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11, 1e12, 1e13, 1e14,
+                                  1e15, 1e16, 1e17, 1e18, 1e19, 1e20, 1e21, 1e22, 1e23, 1e24, 1e25, 1e26, 1e27, 1e28};
+  if (power >= 0) {
+    if (power > 28) power = 28;
+    dbl *= kPow10[power];
+  } else if (power != -1 || dbl >= 1e7) {
+    dbl /= kPow10[-power];
+  } else {
+    power = 0;
+  }
+  if (dbl < 1e6 && power < 28) { dbl *= 10; ++power; }
+  double mant = std::nearbyint(dbl);  // round half to even
+  if (power >= 0) return mant / kPow10[power];
+  return mant * kPow10[-power];
+}
+
 void Run::rollCardUpgrade(Card& c, double baseChance) {
-  double num = rng("Rewards").nextFloat();
+  double num = decimalFromFloat(rng("Rewards").nextFloat());
   if (!c.upgradable()) return;
   double odds = baseChance;
   if (c.rarity != Rarity::Rare) odds += actIndex * (hasAscension(kScarcity) ? 0.125 : 0.25);
@@ -918,7 +1057,9 @@ Task<bool> Run::fight(const std::string& encounterId) {
   rng("Shuffle").shuffle(c.draw);
   for (Model* m : c.listeners()) m->modifyShuffleOrder(c.draw, true);  // CardPile.RandomizeOrderInternal
 
-  for (auto& m : enc->generate(rng("Encounters"))) { progress::markMonsterSeen(m->id); c.createEnemy(std::move(m)); }
+  // EncounterModel.GenerateMonstersWithSlots: its own Rng(seed + TotalFloor + hash(id)).
+  Rng encounterRng(seed + (uint64_t)floor, enc->id);
+  for (auto& m : enc->generate(encounterRng)) { progress::markMonsterSeen(m->id); c.createEnemy(std::move(m)); }
 
   screen = Screen::Combat;
   // CombatRoom.EnterInternal: Hook.AfterRoomEntered once the fight is set up.
@@ -990,6 +1131,7 @@ Task<> Run::main() {
       if (const char* id = getenv("STS_EVENT"); forcedEvent && id) e = db::event(id);
       if (!e) e = pullNextEvent();
       if (e) {
+        ++rooms[actIndex].eventsVisited;  // RoomSet.MarkVisited(Event)
         historyRoom(history::RoomKind::Event, e->id);
         co_await runEvent(std::move(e));
         if (died) { recordRunEnd(*this, progress::RunOutcome::Loss); screen = Screen::GameOver; co_return; }
@@ -1003,7 +1145,7 @@ Task<> Run::main() {
       continue;
     }
     if (type == RoomType::Unknown) {
-      // PORT NOTE: no registered event is left; say so and move on.
+      // Guard: the act has no registered event at all (never the case with the full event list).
       for (Model* m : listeners()) co_await m->afterRoomEntered(type);
       historyRoom(history::RoomKind::Event);
       placeholderText = "事件（尚未实现）";
@@ -1015,16 +1157,14 @@ Task<> Run::main() {
     if (type == RoomType::Monster || type == RoomType::Elite || type == RoomType::Boss) {
       std::string id;
       if (type == RoomType::Boss) id = bossIdAt(choice);  // NBossMapPoint: SecondBossEncounter at its node
-      else if (type == RoomType::Elite) {
-        // ActModel.GenerateRooms: elites come from a grab bag, refilled when empty.
-        id = eliteQueue.front();
-        std::rotate(eliteQueue.begin(), eliteQueue.begin() + 1, eliteQueue.end());
-      } else if (fightsThisAct < act().weakCount) {
-        id = weakQueue[fightsThisAct % weakQueue.size()];
-      } else {
-        id = normalQueue[(fightsThisAct - act().weakCount) % normalQueue.size()];
+      else {
+        // ActModel.PullNextEncounter (RoomSet.NextNormal/EliteEncounter), then MarkVisited.
+        RoomSet& rs = rooms[actIndex];
+        auto& list = type == RoomType::Elite ? rs.elites : rs.normal;
+        int& visited = type == RoomType::Elite ? rs.elitesVisited : rs.normalVisited;
+        if (!list.empty()) id = list[(size_t)visited % list.size()];
+        ++visited;
       }
-      if (type == RoomType::Monster) ++fightsThisAct;
       // Debug: STS_ENCOUNTER=<EncounterId> makes the first fight that encounter.
       if (const char* forced = getenv("STS_ENCOUNTER"); forced && floor == 1 && db::encounter(forced)) id = forced;
       if (!devNextEncounter.empty() && db::encounter(devNextEncounter)) { id = devNextEncounter; devNextEncounter.clear(); }
@@ -1044,8 +1184,7 @@ Task<> Run::main() {
         // ProceedFromTerminalRewardsScreen). The run ends after the second boss
         // (CombatManager: CurrentMapCoord == SecondBossMapPoint).
         if (int second = secondBossNode(); second >= 0 && currentNode != second) continue;
-        // PORT NOTE: no save point here (the C# saves the finished boss room); quitting during the
-        // ending resumes at the last map save.
+        // PORT NOTE (n/a: owner): no save point here (saves are only made at map choices); quitting during the ending resumes at the last map save.
         screen = Screen::Event;
         // RunManager.EnterNextAct -> EnterRoom(TheArchitect): a room of the boss's map point.
         if (auto e = db::event("TheArchitect")) { historyRoom(history::RoomKind::Event, e->id); co_await runEvent(std::move(e)); }

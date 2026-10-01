@@ -9,7 +9,8 @@
 //   <root>/profile<N>/run.sav     the run in progress of slot N (1..3)
 //   <root>/profile<N>/progress.sav  M1 progress of slot N
 //   <root>/profile<N>/history/NN.run  M2 run history of slot N (history.h)
-// PORT NOTE: the C# nests these under profile<N>/saves/ and names them *.save; the port keeps
+// PORT NOTE (n/a: owner): flat profile<N>/*.sav files instead of the C#'s profile<N>/saves/*.save.
+// The C# nests these under profile<N>/saves/ and names them *.save; the port keeps
 // its .sav names and a flat per-profile directory. Slot names are a port addition (the C#
 // profiles are unnamed); S03 edits them with the 3DS software keyboard.
 //
