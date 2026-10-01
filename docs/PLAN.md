@@ -469,7 +469,7 @@ group is one engine package; file:line lists are in the H5 merge commit report.
 | E5 | Card downgrade (AfterDowngraded) | 6 cards / relics; done 2026-09-30 (subagent, merged by lead) |
 | E6 | Instanced powers + ITemporaryPower marker | ~15 powers, events, relics; done 2026-09-30 (subagent, merged by lead) |
 | E7 | Missing hooks: damage cap, BeforeDamageReceived, AttackCommand before/after, AfterModifyingCardPlayResultLocation, ShouldAllowHitting, Early/Late variants, AfterBlockBroken order, RelicCmd OnRemoved, HasUponPickupEffect, extra turn (Ambergris) | ~25 notes; done 2026-09-30 (subagent, merged by lead) |
-| E8 | Card-reward creation options, transformCard running the added-to-deck hook, Player.CanUseOrRemovePotions, custom reward screens / special rewards | ~15 notes; in progress (subagent, 2026-09-30) |
+| E8 | Card-reward creation options, transformCard running the added-to-deck hook, Player.CanUseOrRemovePotions, custom reward screens / special rewards | ~15 notes; done 2026-09-30 (subagent, merged by lead; owner OK on the reward-screen buttons) |
 | E9 | Card-text formatter: `{CardType:choose}`, `{TargetType:choose}`, recursive string vars, Calculated* display | 4 notes + in-combat numbers; done 2026-09-30 (subagent, merged by lead) |
 
 UI/VFX-only, single-player-only, owner-decision and reviewed RNG notes stay as they are (n/a for H6).

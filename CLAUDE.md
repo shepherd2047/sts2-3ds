@@ -129,9 +129,9 @@ make cia                        # also sts2-3ds.cia (title id 000400000FA57200, 
   `/Users/m/dev/sts2-build-lock.sh` is replaced with `cp` + `mv` (atomic: running instances keep the
   old file). Run it with `run_in_background` and wait for the
   notification; no sleep-polling. Check the wait log: the target is under 1 minute.
-- Agents work in `isolation: worktree`, seed the build with
-  `cp -c -R -p "<main repo>/build" build && find build -type f -exec touch {} +` (APFS clone, no
-  disk cost), commit on their branch, never push, never edit PLAN.md / CLAUDE.md, and end with a
+- Agents work in `isolation: worktree` and start from a clean `build/` (no copying or touching
+  another tree's objects: that makes make skip changed files and tests run stale code; ccache makes
+  the first build fast anyway), commit on their branch, never push, never edit PLAN.md / CLAUDE.md, and end with a
   report: what changed, PORT NOTEs removed/left, shared core files touched, save-version change, tests.
 - Packages that edit the same core files (game.h, combat.cpp, run.cpp) can run in parallel, but the
   lead merges them one by one: preview with `git merge-tree --write-tree --name-only main <branch>`,
