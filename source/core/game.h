@@ -760,6 +760,34 @@ struct Creature {
   bool isPrimaryEnemy() const { return side == Side::Enemy && !isSecondaryEnemy(); }
 };
 
+// ---------------------------------------------------------------- card creation options (E8)
+
+// CardCreationOptions (Runs/CardCreationOptions.cs): the pools, odds and flags CardFactory.CreateForReward
+// (Run::createForReward, card_rewards.cpp) draws with, and which hooks may change them.
+enum class CardSource { None, Encounter, Shop, Other };                                   // CardCreationSource
+enum class RarityOdds { RegularEncounter, EliteEncounter, BossEncounter, Shop, Uniform };  // CardRarityOddsType
+enum CardCreationFlag : uint32_t {                                                         // CardCreationFlags
+  ccNoRarityModification = 1, ccNoUpgradeRoll = 2, ccNoHookUpgrades = 4, ccNoModifyHooks = 8,
+  ccNoCardPoolModifications = 0x10, ccNoCardModelModifications = 0x20, ccForceRarityOddsChange = 0x40,
+  ccIsCardReward = 0x80, ccIsFromCombat = 0x100
+};
+struct CardCreationOptions {
+  static constexpr const char* kColorless = "Colorless";  // ColorlessCardPool in `pools`
+  std::vector<std::string> pools;           // CardPools: character ids (their CardPool) or kColorless
+  std::function<bool(const Card&)> filter;  // CardPoolFilter
+  CardSource source = CardSource::Other;
+  RarityOdds odds = RarityOdds::RegularEncounter;
+  uint32_t flags = 0;
+  Rng* rng = nullptr;                       // RngOverride (null: the Rewards stream)
+  RoomType room = RoomType::Unknown;        // port-only: the room offering it (LavaLamp's CurrentRoom check)
+  bool has(uint32_t f) const { return (flags & f) == f; }
+  CardCreationOptions& with(uint32_t f) { flags |= f; return *this; }
+  // CardCreationOptions.ForRoom (combat / shop), ForNonCombatWithDefaultOdds / ...UniformOdds.
+  static CardCreationOptions forRoom(const std::string& characterId, RoomType room);
+  static CardCreationOptions forNonCombat(std::vector<std::string> pools, bool uniform,
+                                          std::function<bool(const Card&)> filter = nullptr);
+};
+
 // ---------------------------------------------------------------- relics
 
 struct Relic : Model {
@@ -774,7 +802,16 @@ struct Relic : Model {
   virtual bool showCounter() const { return false; }
   virtual int displayAmount() const { return 0; }
   virtual bool allowedInShops() const { return true; }
-  virtual bool addsColorlessToCardRewards() const { return false; }  // ModifyCardRewardCreationOptions (DingyRug)
+  // Hook.ModifyCardRewardCreationOptions (DingyRug, PrismaticGem), per card of CardFactory.CreateForReward.
+  virtual void modifyCardRewardCreationOptions(CardCreationOptions&) {}
+  // TryModifyRewardsLate setting CardReward.CanReroll (Driftwood), for every RewardsSet.
+  virtual bool makesCardRewardsRerollable() { return false; }
+  // TryModifyCardRewardAlternatives (PaelsWing): the CardRewardAlternative OptionId it adds (an
+  // EndSelectionAndCompleteReward option), and its OnSelect.
+  virtual const char* cardRewardAlternative() { return nullptr; }
+  virtual Task<> onCardRewardAlternative() { return {}; }
+  // TryModifyRestSiteHealRewards (DreamCatcher): adds rows through Run::addRestSiteHealReward.
+  virtual void modifyRestSiteHealRewards() {}
   // RelicModel.IsAllowed: pruned from the grab bags on every pull (Run::removeDisallowedRelics).
   // The IsBeforeAct3TreasureChest relics are handled by an id list in run.cpp.
   virtual bool isAllowed(Run&) { return true; }
@@ -785,14 +822,13 @@ struct Relic : Model {
   virtual int extraCombatGold(RoomType) { return 0; }
   virtual std::vector<RoomType> extraCardRewards(RoomType) { return {}; }  // odds of each extra reward
   // TryModifyCardRewardOptions (late = ...Late): Lasting Candy, Lava Lamp, the eggs.
-  virtual void modifyCardReward(std::vector<std::unique_ptr<Card>>&, RoomType, bool /*late*/) {}
+  virtual void modifyCardReward(std::vector<std::unique_ptr<Card>>&, const CardCreationOptions&, bool /*late*/) {}
   virtual bool shouldGenerateTreasure() { return true; }  // Hook.ShouldGenerateTreasure (SilverCrucible)
   // TryModifyCardBeingAddedToDeck / ModifyMerchantCardCreationResults (the eggs).
   virtual bool upgradesNewCard(const Card&) { return false; }
   virtual void afterCardAddedToDeck(Card*) {}  // AfterCardChangedPiles(Deck) for new cards
   virtual Task<> afterUnknownRoomEntered() { return {}; }  // Planisphere
   virtual void restSiteAction(int /*option*/) {}  // Girya's Lift
-  virtual bool allCharacterCardPools() { return false; }  // ModifyCardRewardCreationOptions (Prismatic Gem)
 
   Creature* owner() const;  // the player
   void doFlash() { flash = 1.f; }
@@ -1129,6 +1165,7 @@ struct Event {
   virtual std::vector<EventOption> initialOptions() = 0;        // GenerateInitialOptions
   virtual void calculateVars() {}                               // CalculateVars (before the first page)
   virtual Task<> onStart() { return {}; }                       // custom-layout events (FakeMerchant): runs before the option loop; setting `finished` ends the event
+  virtual void onEventFinished() {}                             // OnEventFinished (EnsureCleanup from SetEventFinished)
 
   Rng& rng() { return *rngPtr; }
   Creature* owner();
@@ -1143,6 +1180,7 @@ struct Event {
   void setFinished(const std::string& pageName) {  // SetEventFinished(L10NLookup(page.description))
     descKey = page(pageName) + ".description";
     options.clear();
+    if (!finished) onEventFinished();
     finished = true;
   }
   DynVar* var(const char* n) { for (auto& v : vars) if (v.name == n) return &v; return nullptr; }
@@ -1237,14 +1275,45 @@ struct Run {
   // as a nested sub-screen; skipping it puts the same (un-rerolled) options back and the row stays,
   // matching CardReward.OnSelect returning false. A Potion row whose claim fails (belt full, C#
   // PotionReward.OnSelect / PotionProcureFailureReason.TooFull) also stays.
-  enum class RewardKind { Gold, Potion, Relic, Card };
+  enum class RewardKind { Gold, Potion, Relic, Card, SpecialCard };
   struct RewardItem {
     RewardKind kind;
     int gold = 0;                              // Gold: the amount, not yet granted
+    bool goldStolenBack = false;               // Gold: GoldReward.wasGoldStolenBack (COMBAT_REWARD_GOLD_STOLEN)
     std::unique_ptr<Potion> potion;            // Potion: the rolled potion, not yet in the belt
     std::unique_ptr<Relic> relic;              // Relic: the rolled relic, not yet obtained
     std::vector<std::unique_ptr<Card>> cards;  // Card: the options currently on offer
+    std::unique_ptr<Card> card;                // SpecialCard: the card it adds (SpecialCardReward)
+    // Card (E8, CardReward): the options it was populated with (count 0 = fixed cards, no reroll),
+    // CanReroll / CanSkip, and AfterGenerated (run after every populate, rerolls included).
+    CardCreationOptions cardOptions;
+    int cardCount = 0;
+    bool canReroll = false, canSkip = true;
+    std::function<void(std::vector<std::unique_ptr<Card>>&)> afterGenerated;
   };
+  // CardReward(options, count): a Card row populated now (CardFactory.CreateForReward with
+  // IsCardReward, then AfterGenerated).
+  RewardItem makeCardReward(CardCreationOptions o, int count,
+                            std::function<void(std::vector<std::unique_ptr<Card>>&)> afterGenerated = nullptr);
+  // RewardsCmd.OfferCustom / RewardsSet.Offer: Hook.ModifyRewards (Driftwood), the sort by
+  // RewardsSetIndex, then the claimable list. `terminal` (a combat room's set) keeps the list up
+  // until Proceed; a custom set also closes once every reward is taken.
+  Task<> offerRewards(std::vector<RewardItem> items, bool terminal = false);
+  // CombatRoom.AddExtraReward for rows with a payload (SpecialCardReward, a stolen-back GoldReward):
+  // added after the room's own rewards by the next combatRewards, then cleared.
+  std::vector<RewardItem> roomExtraRewards;
+  // The open Card row's CardRewardAlternative ids besides Skip ("REROLL", "SACRIFICE"): the UI
+  // fires rewardChoice with rewardCards.size() + i for alternative i.
+  std::vector<std::string> rewardAlternatives;
+  // CardFactory.CreateForReward (card_rewards.cpp): `count` distinct cards, the creation-options
+  // hooks per card, the upgrade roll, then TryModifyCardRewardOptions(Late) unless NoModifyHooks.
+  std::vector<std::unique_ptr<Card>> createForReward(const CardCreationOptions& o, int count);
+  void runCardRewardHooks(std::vector<std::unique_ptr<Card>>& cards, const CardCreationOptions& o);
+  // Player.CanUseOrRemovePotions: false while some events run (the belt can't be used or emptied).
+  bool canUseOrRemovePotions = true;
+  // HealRestSiteOption.ExecuteRestSiteHeal: the rows Hook.ModifyRestSiteHealRewards adds (DreamCatcher).
+  void addRestSiteHealReward(RewardItem item) { restSiteHealRewards.push_back(std::move(item)); }
+  std::vector<RewardItem> restSiteHealRewards;
   // CombatRoom.ExtraRewards: rewards added after the room's own by the event that started the fight
   // (PunchOff: Relic, Potion). Populated (rolled) by the next combatRewards, then cleared.
   std::vector<RewardKind> extraRewards;

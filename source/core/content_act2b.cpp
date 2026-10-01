@@ -90,15 +90,18 @@ struct EscapeArtistPower : Power {
 };
 
 // Holds the card the Hopper stole; it comes back if the Hopper is killed.
-// PORT NOTE: the C# adds a SpecialCardReward to the room's loot; here the card goes
-// straight back into the deck.
+// The room's loot gets a SpecialCardReward with it (CombatRoom.AddExtraReward; claimed from the
+// reward screen, lost if skipped).
 struct SwipePower : Power {
   POWER_HEADER(SwipePower, "SWIPE_POWER")
   StackType stackType() const override { return StackType::Single; }
   std::unique_ptr<Card> stolenCard;  // the deck version, taken out of the run's deck
   Task<> afterDeath(Creature* c) override {
     if (c != owner || !stolenCard || !owner->combat || !owner->combat->run) co_return;
-    owner->combat->run->addCardToDeck(std::move(stolenCard));
+    Run::RewardItem item;
+    item.kind = Run::RewardKind::SpecialCard;
+    item.card = std::move(stolenCard);
+    owner->combat->run->roomExtraRewards.push_back(std::move(item));
   }
 };
 

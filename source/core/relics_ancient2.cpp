@@ -1,10 +1,9 @@
 // Package A6: the remaining Ancient relics (Neow, Orobas, Pael) whose systems now exist:
 // SeaGlass, PrismaticGem, PaelsGrowth (+ the CLONE rest site option, Run::restSite option 6),
-// LeadPaperweight, Kaleidoscope, WhisperingEarring. Translated from MegaCrit.Sts2.Core.Models.Relics.
+// LeadPaperweight, Kaleidoscope, WhisperingEarring; E8: Driftwood, PaelsWing (card reward
+// alternatives). Translated from MegaCrit.Sts2.Core.Models.Relics.
 //
 // Still locked (unregistered, so no Ancient offers them):
-//  * Driftwood (CardReward.CanReroll), PaelsWing (CardRewardAlternative "SACRIFICE"): the card reward
-//    screen has no reroll / alternative buttons.
 //  * PaelsEye: ShouldTakeExtraTurn / AfterTakingExtraTurn (extra turn system).
 //  * PaelsLegion, Byrdpip: pets.  GoldenCompass: golden path map.  FurCoat: map marks.
 //    ToyBox: wax relics.  WingedBoots: free map travel.
@@ -68,13 +67,22 @@ struct SeaGlass : Relic {
   }
 };
 
-// PrismaticGem.cs: +1 energy; card rewards draw from every character's pool (Run::cardReward asks
-// allCharacterCardPools). PORT NOTE: the union is over all playable characters in game order (all
-// characters are unlocked), and applies to every Run::cardReward call.
+// PrismaticGem.cs: +1 energy; card rewards draw from every character's pool
+// (ModifyCardRewardCreationOptions: UnlockState.CharacterCardPools.Union(CardPools), unless the pools
+// are all colorless). PORT NOTE: CharacterCardPools is every character in game order (all unlocked).
 struct PrismaticGem : Relic {
   RELIC_HEADER(PrismaticGem, "PRISMATIC_GEM", Ancient) addVar("Energy", 1); }
   Dec modifyMaxEnergy(Dec amount) override { return amount + val("Energy"); }
-  bool allCharacterCardPools() override { return true; }
+  void modifyCardRewardCreationOptions(CardCreationOptions& o) override {
+    if (o.has(ccNoCardPoolModifications) || !o.has(ccIsCardReward)) return;
+    bool allColorless = true;
+    for (auto& p : o.pools) if (p != CardCreationOptions::kColorless) allColorless = false;
+    if (allColorless) return;
+    std::vector<std::string> pools = db::allCharacters();
+    for (auto& p : o.pools)
+      if (std::find(pools.begin(), pools.end(), p) == pools.end()) pools.push_back(p);
+    o.pools = std::move(pools);
+  }
 };
 
 // PaelsGrowth.cs: enchant a card with Clone (4); the CLONE rest site option (Run::restSite, id 6)
@@ -90,8 +98,12 @@ struct PaelsGrowth : Relic {
 // LeadPaperweight.cs: choose 1 of 2 colorless cards (skippable).
 struct LeadPaperweight : Relic {
   RELIC_HEADER(LeadPaperweight, "LEAD_PAPERWEIGHT", Ancient) }
+  // CreateForReward(2, CardCreationOptions(ColorlessCardPool, Other, RegularEncounter)): with the
+  // upgrade roll and the card reward hooks.
   Task<> afterObtained() override {
-    co_await run->chooseCardFor(colorlessRewardCards(*run, 2));
+    CardCreationOptions o;
+    o.pools = {CardCreationOptions::kColorless};
+    co_await run->chooseCardFor(run->createForReward(o, 2));
   }
 };
 
@@ -161,7 +173,36 @@ struct WhisperingEarring : Relic {
   }
 };
 
+// Driftwood.cs: TryModifyRewardsLate -- every card reward can be rerolled once (CardReward.CanReroll,
+// the REROLL CardRewardAlternative; Run::offerRewards).
+struct Driftwood : Relic {
+  RELIC_HEADER(Driftwood, "DRIFTWOOD", Ancient) }
+  bool makesCardRewardsRerollable() override { return true; }
+};
+
+// PaelsWing.cs: card rewards get a SACRIFICE alternative (ends and completes the reward); every
+// Sacrifices (2) sacrificed rewards obtain the next relic from the front of the grab bag.
+struct PaelsWing : Relic {
+  RELIC_HEADER(PaelsWing, "PAELS_WING", Ancient) addVar("Sacrifices", 2); }
+  int rewardsSacrificed = 0;  // [SavedProperty] RewardsSacrificed
+  void persist(Archive& a) override { a.io(rewardsSacrificed); }
+  bool showCounter() const override { return true; }
+  int displayAmount() const override {
+    int n = const_cast<PaelsWing*>(this)->val("Sacrifices").toInt();
+    return n > 0 ? rewardsSacrificed % n : 0;
+  }
+  const char* cardRewardAlternative() override { return "SACRIFICE"; }
+  Task<> onCardRewardAlternative() override {  // OnSacrifice
+    ++rewardsSacrificed;
+    doFlash();
+    if (rewardsSacrificed % val("Sacrifices").toInt() == 0)  // RelicFactory.PullNextRelicFromFront(Owner)
+      co_await run->obtainRelic(run->pullRelicFromFront(run->relicBag, run->rollRelicRarity(run->rng("Rewards"))));
+  }
+};
+
 void registerRelicsAncient2() {
+  reg<Driftwood>();
+  reg<PaelsWing>();
   reg<SeaGlass>();
   reg<PrismaticGem>();
   reg<PaelsGrowth>();

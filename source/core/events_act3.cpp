@@ -429,7 +429,9 @@ struct Reflections : Event {
   Card* downgrade(Card* c) {
     auto n = db::card(c->id);
     for (int i = 1; i < c->upgradeLevel; ++i) n->upgrade();
-    return run->transformCard(c, std::move(n));
+    for (auto& d : run->deck)  // in place, no added-to-deck hooks (DowngradeInternal)
+      if (d.get() == c) { d = std::move(n); return d.get(); }
+    return c;
   }
   Task<> touchAMirror() {
     std::vector<Card*> upgraded;
@@ -562,13 +564,11 @@ struct Trial : Event {
   }
   Task<> nondescriptGuilty() {
     run->addCardToDeck(db::card("Doubt"));
-    for (int i = 0; i < 2; ++i) {  // two CardRewards with 3 cards each
-      run->rewardCards = run->cardReward(RoomType::Monster, 3);
-      run->screen = Screen::Reward;
-      int pick = co_await run->rewardChoice.next();
-      if (pick >= 0 && pick < (int)run->rewardCards.size()) run->addCardToDeck(std::move(run->rewardCards[(size_t)pick]));
-      run->rewardCards.clear();
-    }
+    // RewardsCmd.OfferCustom: two CardRewards (ForNonCombatWithDefaultOdds(character pool), 3 cards).
+    std::vector<Run::RewardItem> rows;
+    for (int i = 0; i < 2; ++i)
+      rows.push_back(run->makeCardReward(CardCreationOptions::forNonCombat({run->characterId}, false), 3));
+    co_await run->offerRewards(std::move(rows));
     setTrialFinished("NONDESCRIPT_GUILTY");
   }
   Task<> nondescriptInnocent() {

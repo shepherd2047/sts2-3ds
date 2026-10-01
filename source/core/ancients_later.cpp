@@ -5,7 +5,7 @@
 // Ancient options only offer registered relics (like Neow). Not ported yet, so never
 // offered: ElectricShrymp, PaelsClaw, PaelsGrowth, NutritiousSoup, Glitter,
 // BeautifulBracelet, TriBoomerang (enchantments); SeaGlass, PrismaticGem (other
-// characters); Driftwood (reward reroll), PaelsWing (sacrifice a card reward), PaelsEye
+// characters); PaelsEye
 // (extra turn), PaelsLegion (pets), GoldenCompass (golden path map), FurCoat (map marks),
 // ToyBox (wax relics), WhisperingEarring (turn-1 autoplay). Eternal curses can be removed.
 #include <algorithm>

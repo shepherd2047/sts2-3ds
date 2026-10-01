@@ -90,13 +90,16 @@ struct ThieveryPower : Power {
 };
 
 // FatGremlin: the stolen gold, returned when it is killed.
-// PORT NOTE: the C# adds an extra GoldReward (wasGoldStolenBack) to the room's loot; here the
-// gold goes straight back to the player when the gremlin dies.
+// The room's loot gets an extra GoldReward (wasGoldStolenBack) of it (CombatRoom.AddExtraReward).
 struct HeistPower : Power {
   POWER_HEADER(HeistPower, "HEIST_POWER")
   Task<> afterDeath(Creature* c) override {
     if (c != owner || amount <= 0 || !owner->combat || !owner->combat->run) co_return;
-    co_await owner->combat->run->gainGold(amount);
+    Run::RewardItem item;
+    item.kind = Run::RewardKind::Gold;
+    item.gold = amount;
+    item.goldStolenBack = true;
+    owner->combat->run->roomExtraRewards.push_back(std::move(item));
   }
 };
 

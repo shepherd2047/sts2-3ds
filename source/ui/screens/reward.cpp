@@ -22,6 +22,7 @@ static App::ChooseOneSpec rewardChooseSpec(const Run& r) {
   App::ChooseOneSpec s;
   for (auto& c : r.rewardCards) s.cards.push_back(c.get());
   s.canSkip = true;
+  for (auto& id : r.rewardAlternatives) s.alts.push_back(L("card_reward_ui.OPTION_" + id + ".name"));  // E8
   if (!r.rewardItems.empty()) {
     s.title = tr("战斗胜利！", "Victory!");
     s.sub = L("gameplay_ui.COMBAT_REWARD_ADD_CARD");
@@ -69,7 +70,18 @@ void App::drawReward(bool top) {
     switch (item.kind) {
       case Run::RewardKind::Gold:
         icon = "ui/reward_money";
-        label = num(item.gold) + tr(" 金币", " Gold");
+        if (item.goldStolenBack) {  // GoldReward(wasGoldStolenBack): COMBAT_REWARD_GOLD_STOLEN
+          label = L("gameplay_ui.COMBAT_REWARD_GOLD_STOLEN");
+          for (size_t p; (p = label.find("{gold}")) != std::string::npos;) label.replace(p, 6, num(item.gold));
+        } else {
+          label = num(item.gold) + tr(" 金币", " Gold");
+        }
+        break;
+      case Run::RewardKind::SpecialCard:  // SpecialCardReward: COMBAT_REWARD_ADD_SPECIAL_CARD
+        icon = "ui/reward_special_card";
+        label = L("gameplay_ui.COMBAT_REWARD_ADD_SPECIAL_CARD");
+        for (size_t p; (p = label.find("{Card}")) != std::string::npos;)
+          label.replace(p, 6, item.card ? cardTitle(item.card.get()) : "?");
         break;
       case Run::RewardKind::Potion:
         icon = "potion/" + item.potion->locKey;
@@ -106,6 +118,7 @@ void App::updateReward(const gfx::Input& in) {
     if ((in.down & gfx::BTN_X) && f >= 0 && f < (int)r.rewardItems.size()) {
       if (r.rewardItems[f].relic) inspectRelic(r.rewardItems[f].relic.get());
       else if (r.rewardItems[f].potion) inspectPotion(r.rewardItems[f].potion.get());
+      else if (r.rewardItems[f].card) inspectCard(r.rewardItems[f].card.get());
     }
     return;
   }

@@ -184,17 +184,22 @@ struct WarHistorianRepy : Event {
     removeAllLanternKeys();
     co_await unlockChest();
   }
-  // PORT NOTE: RewardsCmd.OfferCustom (one combined reward screen) is replaced by the potion /
-  // relic offer screens in the same order; all four rewards are rolled first, as Populate does.
+  // RewardsCmd.OfferCustom: two potion and two relic rewards, populated in that order.
   Task<> unlockChest() {
-    auto p1 = run->randomPotion(run->rng("Rewards"), false);
-    auto p2 = run->randomPotion(run->rng("Rewards"), false);
-    auto r1 = rewardRelic(*run);
-    auto r2 = rewardRelic(*run);
-    co_await run->offerPotion(std::move(p1));
-    co_await run->offerPotion(std::move(p2));
-    co_await run->offerRelic(std::move(r1), false);
-    co_await run->offerRelic(std::move(r2), false);
+    std::vector<Run::RewardItem> rows;
+    for (int i = 0; i < 2; ++i) {
+      Run::RewardItem p;
+      p.kind = Run::RewardKind::Potion;
+      p.potion = run->randomPotion(run->rng("Rewards"), false);
+      rows.push_back(std::move(p));
+    }
+    for (int i = 0; i < 2; ++i) {
+      Run::RewardItem r;
+      r.kind = Run::RewardKind::Relic;
+      r.relic = rewardRelic(*run);
+      if (r.relic) rows.push_back(std::move(r));
+    }
+    co_await run->offerRewards(std::move(rows));
   }
   Task<> unlockCage() {
     // FreedRepy (RunState.ExtraFields, meta) is n/a.

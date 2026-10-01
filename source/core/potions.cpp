@@ -662,7 +662,7 @@ void Run::discardPotion(int slot) {
 bool Run::canUsePotion(int slot) const {
   if (slot < 0 || slot >= (int)potions.size() || !potions[slot]) return false;
   const Potion& p = *potions[slot];
-  if (p.usage == PotionUsage::Automatic) return false;
+  if (p.usage == PotionUsage::Automatic || !canUseOrRemovePotions) return false;  // Player.CanUseOrRemovePotions
   if (inCombat(this)) return combat->playerPhase;
   return p.usage == PotionUsage::AnyTime && !combat && p.passesCustomUsabilityCheck();
 }

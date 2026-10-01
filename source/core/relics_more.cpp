@@ -164,8 +164,8 @@ struct DragonFruit : Relic {
 // ---- The eggs (Rare): new cards of one type are upgraded (rewards, merchant, deck). ----
 template <CardType T> struct EggRelic : Relic {
   bool upgradesNewCard(const Card& c) override { return c.type == T && c.upgradable(); }
-  void modifyCardReward(std::vector<std::unique_ptr<Card>>& cards, RoomType, bool late) override {
-    if (late) upgradeOfType(cards, T);
+  void modifyCardReward(std::vector<std::unique_ptr<Card>>& cards, const CardCreationOptions& o, bool late) override {
+    if (late && !o.has(ccNoHookUpgrades)) upgradeOfType(cards, T);
   }
 };
 struct FrozenEgg : EggRelic<CardType::Power> { RELIC_HEADER(FrozenEgg, "FROZEN_EGG", Rare) } };
@@ -231,16 +231,38 @@ struct LastingCandy : Relic {
   bool showCounter() const override { return true; }
   int displayAmount() const override { return combatRewardsSeen % 2; }
   Task<> afterCombatVictory() override { ++combatRewardsSeen; return {}; }
-  void modifyCardReward(std::vector<std::unique_ptr<Card>>& cards, RoomType room, bool late) override {
-    if (late || !isCombatRoom(room) || combatRewardsSeen % 2 != 0) return;
-    auto ids = db::characterCards(run->characterId, [&](const Card& c) {
-      if (c.type != CardType::Power || c.rarity == Rarity::Basic || c.rarity == Rarity::Ancient) return false;
-      for (auto& o : cards) if (o && o->id == c.id) return false;
-      return true;
-    });
-    if (ids.empty()) return;
+  // TryModifyCardRewardOptions: a combat room's own card reward (Encounter, IsCardReward, IsFromCombat)
+  // gets one more card: CreateForReward(1) over the same pools, odds and filter, Powers not offered yet
+  // (any Power if every one is), as Source Other with NoModifyHooks | NoCardPoolModifications.
+  void modifyCardReward(std::vector<std::unique_ptr<Card>>& cards, const CardCreationOptions& o, bool late) override {
+    if (late || o.source != CardSource::Encounter || combatRewardsSeen % 2 != 0 || !o.has(ccIsCardReward | ccIsFromCombat))
+      return;
+    auto options = [&](bool allowDupes) {
+      CardCreationOptions q = o;
+      std::vector<std::string> offered;
+      for (auto& k : cards) if (k) offered.push_back(k->id);
+      auto base = o.filter;
+      q.filter = [base, allowDupes, offered](const Card& c) {
+        return (!base || base(c)) && c.type == CardType::Power &&
+               (allowDupes || std::find(offered.begin(), offered.end(), c.id) == offered.end());
+      };
+      q.source = CardSource::Other;
+      q.flags = ccNoModifyHooks | ccNoCardPoolModifications;
+      return q;
+    };
+    auto any = [](const CardCreationOptions& q) {
+      for (auto& pool : q.pools)
+        if (!(pool == CardCreationOptions::kColorless ? db::colorlessCards(q.filter) : db::characterCards(pool, q.filter)).empty())
+          return true;
+      return false;
+    };
+    CardCreationOptions q = options(false);
+    if (!any(q)) q = options(true);
+    if (!any(q)) return;
+    auto extra = run->createForReward(q, 1);
+    if (extra.empty()) return;
     doFlash();
-    cards.push_back(db::card(run->rng("Rewards").nextItem(ids)));
+    cards.push_back(std::move(extra[0]));
   }
 };
 
@@ -253,8 +275,8 @@ struct LavaLamp : Relic {
     if (target == owner() && r.unblocked > 0 && !(props & kUnblockable)) tookDamage = true;
     return {};
   }
-  void modifyCardReward(std::vector<std::unique_ptr<Card>>& cards, RoomType room, bool late) override {
-    if (!late || !isCombatRoom(room) || tookDamage) return;
+  void modifyCardReward(std::vector<std::unique_ptr<Card>>& cards, const CardCreationOptions& o, bool late) override {
+    if (!late || !isCombatRoom(o.room) || tookDamage) return;  // CurrentRoom is CombatRoom
     for (auto& c : cards) if (c && c->upgradable()) c->upgrade();
   }
 };
@@ -297,8 +319,13 @@ struct MiniatureTent : Relic {
 // ---- Orrery (Shop): on pickup, five card rewards. ----
 struct Orrery : Relic {
   RELIC_HEADER(Orrery, "ORRERY", Shop) addVar("Cards", 5); }
+  // RewardsCmd.OfferCustom of Cards CardRewards (character pool, Source Other, RegularEncounter odds).
   Task<> afterObtained() override {
-    for (int i = 0; i < val("Cards").toInt(); ++i) co_await run->chooseCardFor(run->cardReward(RoomType::Monster, 3));
+    std::vector<Run::RewardItem> rows;
+    CardCreationOptions o;
+    o.pools = {run->characterId};
+    for (int i = 0; i < val("Cards").toInt(); ++i) rows.push_back(run->makeCardReward(o, 3));
+    co_await run->offerRewards(std::move(rows));
   }
 };
 
@@ -393,6 +420,15 @@ struct TheAbacus : Relic {
 // ---- TinyMailbox (Uncommon): resting also gives two potion rewards (Run::restSite). ----
 struct TinyMailbox : Relic {
   RELIC_HEADER(TinyMailbox, "TINY_MAILBOX", Uncommon) }
+  void modifyRestSiteHealRewards() override {  // TryModifyRestSiteHealRewards: two PotionRewards
+    for (int i = 0; i < 2; ++i) {
+      Run::RewardItem item;
+      item.kind = Run::RewardKind::Potion;
+      item.potion = run->randomPotion(run->rng("Rewards"), false);
+      run->addRestSiteHealReward(std::move(item));
+    }
+    doFlash();
+  }
 };
 
 // ---- VeryHotCocoa (Ancient): 4 energy on turn 1. ----

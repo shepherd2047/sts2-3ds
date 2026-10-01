@@ -164,12 +164,20 @@ struct BrainLeech : Event {
   Task<> rip() {
     co_await run->loseHp(val("RipHpLoss").toInt());
     if (run->died) co_return;
-    // CardReward(ForNonCombatWithDefaultOdds(ColorlessCardPool), 3 cards), RewardCount times.
-    for (int i = 0; i < val("RewardCount").toInt(); ++i) co_await run->chooseCardFor(colorlessRewardCards(*run, 3));
+    // RewardCount times: OfferCustom(CardReward(ForNonCombatWithDefaultOdds(ColorlessCardPool) |
+    // NoRarityModification | NoCardPoolModifications, 3)).
+    for (int i = 0; i < val("RewardCount").toInt(); ++i) {
+      auto o = CardCreationOptions::forNonCombat({CardCreationOptions::kColorless}, false);
+      std::vector<Run::RewardItem> rows;
+      rows.push_back(run->makeCardReward(o.with(ccNoRarityModification | ccNoCardPoolModifications), 3));
+      co_await run->offerRewards(std::move(rows));
+    }
     setFinished("RIP");
   }
   Task<> shareKnowledge() {
-    auto cards = run->cardReward(RoomType::Monster, val("FromCardChoiceCount").toInt());
+    // CardFactory.CreateForReward(FromCardChoiceCount, ForNonCombatWithDefaultOdds(character pool)).
+    auto cards = run->createForReward(CardCreationOptions::forNonCombat({run->characterId}, false),
+                                      val("FromCardChoiceCount").toInt());
     co_await pickCardsForDeck(*run, std::move(cards), "events." + page("SHARE_KNOWLEDGE") + ".selectionScreenPrompt", 1);
     setFinished("SHARE_KNOWLEDGE");
   }
@@ -289,6 +297,8 @@ struct ThisOrThat : Event {
 // RanwidTheElder.cs (acts 2-3): trade a potion, 100 gold or a relic for a relic.
 struct RanwidTheElder : Event {
   EVENT_HEADER(RanwidTheElder, "RANWID_THE_ELDER")
+  Task<> onStart() override { run->canUseOrRemovePotions = false; co_return; }  // BeforeEventStarted
+  void onEventFinished() override { run->canUseOrRemovePotions = true; }
   bool isAllowed(Run& r) override {
     bool potion = false;
     for (auto& p : r.potions) if (p) potion = true;

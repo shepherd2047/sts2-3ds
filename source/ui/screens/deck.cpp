@@ -30,7 +30,7 @@ constexpr float kGY0 = 0, kGY1 = 194;                              // grid area 
 constexpr float kGCellGap = (kBot - kGPerRow * kGW) / (kGPerRow + 1);
 constexpr float kTapSlop = 5;
 constexpr int kSelCancel = 1301, kSelDetail = 1302, kSelConfirm = 1303, kSelBack = 1304;
-constexpr int kOneSkip = 1311, kOneDetail = 1312, kOnePick = 1313, kOneCard0 = 1320;
+constexpr int kOneSkip = 1311, kOneDetail = 1312, kOnePick = 1313, kOneAlt0 = 1314, kOneCard0 = 1320;
 
 // The frame's input as App::update saw it, for the action-bar widgets drawn later in the frame
 // (a second gfx::input() in the same frame would not report the key presses again).
@@ -476,6 +476,7 @@ int App::chooseOneUpdate(const ChooseOneSpec& s, const gfx::Input& in) {
     if (id == kOneSkip && s.canSkip) return take(-1);
     if (id == kOnePick && o.sel >= 0) return take(o.sel);
     if (id == kOneDetail && o.sel >= 0) inspectCard(s.cards, o.sel);
+    if (id >= kOneAlt0 && id < kOneAlt0 + (int)s.alts.size()) return take(n + (id - kOneAlt0));  // E8: an alternative
     if (id >= kOneCard0 && id < kOneCard0 + n) {
       return take(id - kOneCard0);  // one tap takes the card
     }
@@ -533,6 +534,14 @@ void App::chooseOneDraw(const ChooseOneSpec& s, bool top) {
   if (widgets::button(kOneDetail, dx, style::kActionY, 60, style::kButtonH, tr("详情", "Details"), widgets::Kind::Secondary,
                       o.sel >= 0 && o.sel < n))
     o.pending = kOneDetail;
+  if (!s.alts.empty()) {  // E8: CardRewardAlternatives (REROLL, SACRIFICE) between 详情 and 选择
+    const float ax = dx + 60 + style::kGap, aw = kBot - style::kMargin - 90 - style::kGap - ax;
+    const int na = (int)s.alts.size();
+    const float bw = (aw - (na - 1) * style::kGap) / na;
+    for (int i = 0; i < na; ++i)
+      if (widgets::button(kOneAlt0 + i, ax + i * (bw + style::kGap), style::kActionY, bw, style::kButtonH, s.alts[i]))
+        o.pending = kOneAlt0 + i;
+  }
   if (widgets::button(kOnePick, kBot - style::kMargin - 90, style::kActionY, 90, style::kButtonH, tr("选择", "Select"),
                       widgets::Kind::Primary, o.sel >= 0 && o.sel < n))
     o.pending = kOnePick;

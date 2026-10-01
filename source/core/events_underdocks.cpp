@@ -90,7 +90,7 @@ struct FresnelLens : Relic {
   RELIC_HEADER(FresnelLens, "FRESNEL_LENS", Event)
     addVar("NimbleAmount", 2);
   }
-  void modifyCardReward(std::vector<std::unique_ptr<Card>>& cards, RoomType, bool late) override {
+  void modifyCardReward(std::vector<std::unique_ptr<Card>>& cards, const CardCreationOptions&, bool late) override {
     if (!late) return;
     doFlash();
     for (auto& c : cards) enchantIfValid(c.get());
@@ -118,17 +118,16 @@ struct DarkstonePeriapt : Relic {
   }
 };
 
-// DreamCatcher.cs: resting to heal also offers a card reward (3 cards, monster odds).
-// PORT NOTE: TryModifyRestSiteHealRewards has no hook; the reward is offered from afterRestSiteHeal.
+// DreamCatcher.cs: resting to heal also offers a card reward (TryModifyRestSiteHealRewards:
+// CardReward(ForRoom(Monster), 3)).
 struct DreamCatcher : Relic {
   RELIC_HEADER(DreamCatcher, "DREAM_CATCHER", Event)
   }
-  Task<> afterRestSiteHeal() override {
+  void modifyRestSiteHealRewards() override {
+    CardCreationOptions o = CardCreationOptions::forRoom(run->characterId, RoomType::Monster);
+    o.room = RoomType::Rest;
+    run->addRestSiteHealReward(run->makeCardReward(o, 3));
     doFlash();
-    auto cards = run->cardReward(RoomType::Monster, 3);
-    for (bool late : {false, true})
-      for (auto& rel : run->relics) rel->modifyCardReward(cards, RoomType::Monster, late);
-    co_await run->chooseCardFor(std::move(cards));
   }
 };
 

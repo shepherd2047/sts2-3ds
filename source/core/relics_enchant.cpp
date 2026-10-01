@@ -6,11 +6,10 @@
 // Still skipped: PaelsGrowth (its CLONE rest site
 // option, CloneRestSiteOption, is not ported; the Clone enchantment exists in enchantments_b.cpp).
 //
-// PORT NOTE (all reward relics): Relic::modifyCardReward has no CardCreationOptions; the flags
-// IsCardReward / NoCardPoolModifications are implied (it is only called for card rewards), and the
-// reward cards are fresh copies, so they are enchanted / upgraded in place instead of via
-// CloneCard + CardCreationResult.ModifyCard. AfterModifyingCardRewardOptions runs at the end of
-// the late pass.
+// Reward relics: Relic::modifyCardReward gets the CardCreationOptions (E8) and checks the same flags
+// as the C#. The offered cards are fresh copies, so they are enchanted / upgraded in place (the
+// same result as CloneCard + CardCreationResult.ModifyCard). AfterModifyingCardRewardOptions runs
+// at the end of the late pass.
 // PORT NOTE: "CardCmd.Preview" / NCardEnchantVfx and the enchant preview screen are UI (S13).
 #include "game.h"
 
@@ -80,7 +79,7 @@ struct PunchDagger : Relic {
 // WingCharm.cs: one random card of every card reward gets Swift 1.
 struct WingCharm : Relic {
   RELIC_HEADER(WingCharm, "WING_CHARM", Shop) addVar("SwiftAmount", 1); }
-  void modifyCardReward(std::vector<std::unique_ptr<Card>>& cards, RoomType, bool late) override {
+  void modifyCardReward(std::vector<std::unique_ptr<Card>>& cards, const CardCreationOptions&, bool late) override {
     if (!late) return;
     auto swift = db::enchantment("Swift");
     std::vector<Card*> fits;
@@ -147,7 +146,7 @@ struct PaelsClaw : Relic {
 // Glitter.cs: every offered reward card that can hold Glam gets Glam 1.
 struct Glitter : Relic {
   RELIC_HEADER(Glitter, "GLITTER", Ancient) }
-  void modifyCardReward(std::vector<std::unique_ptr<Card>>& cards, RoomType, bool late) override {
+  void modifyCardReward(std::vector<std::unique_ptr<Card>>& cards, const CardCreationOptions&, bool late) override {
     if (late) enchantRewards(cards, "Glam", 1);
   }
 };
@@ -157,8 +156,8 @@ struct Glitter : Relic {
 struct SilkenTress : Relic {
   RELIC_HEADER(SilkenTress, "SILKEN_TRESS", Ancient) }
   Task<> afterObtained() override { run->gold = 0; co_return; }  // PlayerCmd.LoseGold(all)
-  void modifyCardReward(std::vector<std::unique_ptr<Card>>& cards, RoomType, bool late) override {
-    if (!late || usedUp) return;
+  void modifyCardReward(std::vector<std::unique_ptr<Card>>& cards, const CardCreationOptions& o, bool late) override {
+    if (!late || !o.has(ccIsCardReward) || usedUp) return;
     enchantRewards(cards, "Glam", 1);
     usedUp = true;  // AfterModifyingCardRewardOptions
   }
@@ -173,8 +172,8 @@ struct SilverCrucible : Relic {
   bool showCounter() const override { return const_cast<SilverCrucible*>(this)->val("Cards").toInt() > 0 && timesUsed < const_cast<SilverCrucible*>(this)->val("Cards").toInt(); }
   int displayAmount() const override { return const_cast<SilverCrucible*>(this)->val("Cards").toInt() - timesUsed; }
   void checkUsedUp() { usedUp = timesUsed >= val("Cards").toInt() && treasureRoomsEntered > 0; }
-  void modifyCardReward(std::vector<std::unique_ptr<Card>>& cards, RoomType, bool late) override {
-    if (!late || timesUsed >= val("Cards").toInt()) return;
+  void modifyCardReward(std::vector<std::unique_ptr<Card>>& cards, const CardCreationOptions& o, bool late) override {
+    if (!late || timesUsed >= val("Cards").toInt() || !o.has(ccIsCardReward)) return;
     for (auto& c : cards) if (c && c->upgradable()) c->upgrade();
     ++timesUsed;  // AfterModifyingCardRewardOptions
     checkUsedUp();
