@@ -59,4 +59,6 @@ for a in "${clean[@]}"; do
   if [ $skip = 1 ]; then sed '/^MAKEFLAGS += -j/d' "$a" > .sched.mk; mk+=(.sched.mk); skip=0; continue; fi
   [ "$a" = "-f" ] && skip=1; mk+=("$a")
 done
-timeout "$T" make -j${#held} CXX="ccache c++" "${mk[@]}"
+# ccache only for the host build (Makefile.sdl); the 3DS Makefile uses devkitARM's own compiler.
+cx=(); [[ " ${clean[*]} " == *" Makefile.sdl "* ]] && cx=(CXX="ccache c++")
+timeout "$T" make -j${#held} "${cx[@]}" "${mk[@]}"
