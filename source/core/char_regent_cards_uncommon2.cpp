@@ -11,30 +11,21 @@ namespace {
 
 // ================================================================ powers used by one card here
 
-// OrbitPower.cs: every 4 energy spent grants Amount energy.
-// PORT NOTE: the C# power is Instanced (each Orbit played has its own energySpent/triggerCount);
-// this engine stacks powers by id, so the instances are rebuilt from `amount` lazily: at the first
-// afterEnergySpent after an amount increase a new instance is created (no spend can happen between
-// applying and that call, so it starts counting at the same moment as the C#). DisplayAmount
-// (4 - energySpent % 4) is not modeled.
+// OrbitPower.cs: Instanced (each Orbit played counts its own energy). Every 4 energy spent grants Amount
+// energy; the HUD shows the energy left to the next trigger.
 struct OrbitPower : Power {
   POWER_HEADER(OrbitPower, "ORBIT_POWER")
-  struct Inst { int amount = 0, energySpent = 0, triggerCount = 0; };
-  std::vector<Inst> insts;
+  PowerInstanceType instanceType() const override { return PowerInstanceType::Instanced; }
+  int displayAmount() const override { return 4 - energySpent % 4; }
+  int energySpent = 0, triggerCount = 0;  // Data
   Task<> afterEnergySpent(Card* card, int spent) override {
     if (ownerOf(card) != owner || spent <= 0) co_return;
-    int known = 0;
-    for (auto& i : insts) known += i.amount;
-    if (amount > known) { Inst n; n.amount = amount - known; insts.push_back(n); }
-    for (size_t k = 0; k < insts.size(); ++k) {
-      int a = insts[k].amount;
-      insts[k].energySpent += spent;
-      int triggers = insts[k].energySpent / 4 - insts[k].triggerCount;
-      if (triggers > 0) {
-        flash = 1.f;
-        co_await cmd::gainEnergy(*owner->combat, a * triggers);
-        insts[k].triggerCount += triggers;
-      }
+    energySpent += spent;
+    int triggers = energySpent / 4 - triggerCount;
+    if (triggers > 0) {
+      flash = 1.f;
+      co_await cmd::gainEnergy(*owner->combat, amount * triggers);
+      triggerCount += triggers;
     }
   }
 };

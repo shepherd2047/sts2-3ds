@@ -36,30 +36,29 @@ struct DataDisk : Relic {
 
 // EmotionChip.cs: if you lost HP last turn, trigger every queued orb's passive (countAffectedByHooks)
 // at the start of this turn.
-// PORT NOTE: the C# derives "lost HP in the previous player turn" from CombatHistory
-// (DamageReceivedEntry.HappenedLastPlayerTurn); this port tracks it with a flag set on unblocked
-// damage and consumed at the next player-turn start, which is equivalent for a single combatant
-// (exactly one player turn passes between two checks). Also drops the cosmetic RelicStatus
-// glow/Cmd.Wait(0.25f) pacing between orbs (no gameplay effect).
+// "Lost HP last turn" = a DamageReceived entry on the owner, not fully blocked, that
+// HappenedLastPlayerTurn. PORT NOTE: drops the cosmetic RelicStatus glow/Cmd.Wait(0.25f) pacing
+// between orbs (no gameplay effect).
 struct EmotionChip : Relic {
   RELIC_HEADER(EmotionChip, "EMOTION_CHIP", Rare) }
-  bool tookDamage = false;
+  bool lostHpInPreviousTurn() {
+    Creature* me = owner();
+    return combat && combat->history.any([&](const CombatHistoryEntry& e) {
+      return e.kind == CombatHistoryEntry::DamageReceived && e.actor == me && !e.fullyBlocked &&
+             CombatHistory::happenedLastPlayerTurn(e, *combat);
+    });
+  }
   Task<> afterDamageReceived(Creature* target, const DamageResult& result, int, Creature*, Card*) override {
-    if (!combat || !combat->inProgress || target != owner() || result.unblocked <= 0) co_return;
-    doFlash();
-    tookDamage = true;
-    co_return;
+    if (combat && combat->inProgress && target == owner() && result.unblocked > 0) doFlash();
+    return {};
   }
   Task<> afterPlayerTurnStart() override {
-    bool trigger = tookDamage;
-    tookDamage = false;
-    if (!trigger || !combat) co_return;
+    if (!combat || !lostHpInPreviousTurn()) co_return;
     doFlash();
     std::vector<Orb*> orbs;
     for (auto& o : combat->orbQueue) orbs.push_back(o.get());
     for (Orb* o : orbs) co_await cmd::orbPassive(*combat, o, nullptr, true);
   }
-  Task<> afterCombatEnd() override { tookDamage = false; return {}; }
 };
 
 // GoldPlatedCables.cs: the front (oldest queued) orb's passive triggers one extra time.

@@ -44,6 +44,7 @@ struct DuplicationPower : Power {
 // TemporaryStrengthPower / TemporaryDexterityPower with the potion as OriginModel.
 template <class Stat, int Sign> struct TemporaryStatPower : Power {
   PowerType type() const override { return Sign > 0 ? PowerType::Buff : PowerType::Debuff; }
+  const char* internallyAppliedPower() const override { return Stat::kId; }  // ITemporaryPower
   Task<> beforeApplied(Creature* target, Dec amt, Creature* app, Card* src) override {
     co_await applyPower<Stat>(target, amt * Dec(Sign), app, src, true);
   }
@@ -70,32 +71,35 @@ struct SpeedPotionPower : TemporaryStatPower<DexterityPower, 1> {
   POWER_HEADER(SpeedPotionPower, "TEMPORARY_DEXTERITY_POWER")
 };
 
-// GigantificationPower: the next attack card's powered damage is tripled. PORT NOTE: the
-// C# pins the first AttackCommand (BeforeAttack/AfterAttack); here the first attack card
-// played is pinned (BeforeCardPlayed/AfterCardPlayed), the same for every Ironclad card.
+// GigantificationPower: the owner's next attack card's powered damage is tripled; the first
+// AttackCommand of such a card is pinned (BeforeAttack) and its AfterAttack uses one stack.
 struct GigantificationPower : Power {
   POWER_HEADER(GigantificationPower, "GIGANTIFICATION_POWER")
-  Card* pinned = nullptr;
-  Task<> beforeCardPlayed(const CardPlay& p) override {
-    if (!pinned && p.card->type == CardType::Attack && ownerOf(p.card) == owner) pinned = p.card;
+  const cmd::Attack* pinned = nullptr;
+  Card* pinnedSource = nullptr;
+  Task<> beforeAttack(cmd::Attack& a) override {
+    Card* card = a.source;
+    if (!card || ownerOf(card) != owner || card->type != CardType::Attack || !isPoweredAttack(a.props) || pinned) return {};
+    pinned = &a;
+    pinnedSource = card;
     return {};
   }
   Dec modifyDamageMultiplicative(Creature*, Dec, int props, Creature*, Card* src) override {
-    if (!src || ownerOf(src) != owner || src->type != CardType::Attack || !isPoweredAttack(props)) return 1;
-    return !pinned || src == pinned ? Dec(3) : Dec(1);
+    if (!src || ownerOf(src) != owner || !isPoweredAttack(props)) return 1;
+    return !pinned || src == pinnedSource ? Dec(3) : Dec(1);
   }
-  Task<> afterCardPlayed(const CardPlay& p) override {
-    if (p.card == pinned) {
-      pinned = nullptr;
-      co_await cmd::decrement(this);
-    }
+  Task<> afterAttack(const cmd::Attack& a) override {
+    if (&a != pinned) co_return;
+    pinned = nullptr;
+    pinnedSource = nullptr;
+    co_await cmd::decrement(this);
   }
 };
 
 struct BufferPower : Power {
   POWER_HEADER(BufferPower, "BUFFER_POWER")
   bool used = false;
-  Dec modifyHpLostAfterOsty(Creature* target, Dec amount, int, Creature*, Card*) override {
+  Dec modifyHpLostAfterOstyLate(Creature* target, Dec amount, int, Creature*, Card*) override {
     if (target != owner || amount <= Dec(0)) return amount;
     used = true;
     return 0;
@@ -677,6 +681,7 @@ Task<> Run::usePotion(int slot, Creature* target) {
   if (p->combat) p->combat->push({VisualEvent::Anim, player.get(), 0, "Cast"});
   co_await wait(0.2);
   co_await p->onUse(target);
+  if (p->combat && player->alive()) p->combat->history.potionUsed(*p->combat, p->id, target);  // History.PotionUsed
   for (Model* m : listeners()) co_await m->afterPotionUsed();  // Hook.AfterPotionUsed
   if (p->combat) co_await p->combat->checkWinCondition();
 }

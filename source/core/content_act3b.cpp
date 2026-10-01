@@ -52,10 +52,13 @@ struct Wither : IroncladT<Wither> {
 
 // ================================================================ powers
 
-// IntangiblePower.cs: HP lost is capped at 1; ticks down at the end of the enemy turn.
-// PORT NOTE: no damage-cap hook, so only the HP loss (after block) is capped.
+// IntangiblePower.cs: damage (before block) and HP lost are capped at 1; ticks down at the end of
+// the enemy turn.
 struct IntangiblePower : Power {
   POWER_HEADER(IntangiblePower, "INTANGIBLE_POWER")
+  Dec modifyDamageCap(Creature* target, int, Creature*, Card*) override {
+    return target == owner ? Dec(1) : kNoDamageCap;
+  }
   Dec modifyHpLostAfterOsty(Creature* target, Dec amount, int, Creature*, Card*) override {
     if (target != owner || amount < Dec(1)) return amount;
     flash = 1.f;
@@ -93,14 +96,23 @@ struct EnragePower : Power {
   }
 };
 
-// PainfulStabsPower.cs: each unblocked powered hit on the player adds Wounds to the discard.
+// PainfulStabsPower.cs: after each of the owner's attacks, Amount Wounds go to the discard pile
+// for every hit that dealt the player unblocked damage.
 struct PainfulStabsPower : Power {
   POWER_HEADER(PainfulStabsPower, "PAINFUL_STABS_POWER")
   bool removedAfterOwnerDeath() const override { return false; }
-  Task<> afterDamageReceived(Creature* target, const DamageResult& r, int props, Creature* dealer, Card*) override {
-    if (dealer != owner || !target->isPlayer || !isPoweredAttack(props) || r.unblocked <= 0) co_return;
+  Task<> afterAttack(const cmd::Attack& a) override {
+    if (a.attacker != owner || a.targetSide() == owner->side || !isPoweredAttack(a.props)) co_return;
+    bool anyUnblocked = false, anyPlayer = false;
+    int n = 0;
+    for (auto& hit : a.results)
+      for (auto& r : hit) {
+        if (r.unblocked > 0) anyUnblocked = true;
+        if (r.receiver && r.receiver->isPlayer) { anyPlayer = true; if (r.unblocked > 0) ++n; }
+      }
+    if (!anyUnblocked || !anyPlayer || n == 0) co_return;
+    co_await cmd::addStatusCards(*owner->combat, "Wound", Pile::Discard, amount * n);
     flash = 1.f;
-    co_await cmd::addStatusCards(*owner->combat, "Wound", Pile::Discard, amount);
   }
 };
 
@@ -132,17 +144,6 @@ struct HexPower : Power {
   }
 };
 
-// Card downgrade for DampenPower (CardCmd.Downgrade): back to a fresh card's numbers.
-// PORT NOTE: keyword / target changes from the upgrade are restored from a fresh copy too.
-void downgradeCard(Card* c) {
-  auto fresh = db::card(c->id);
-  c->vars = fresh->vars;
-  c->cost = fresh->cost;
-  c->keywords = fresh->keywords;
-  c->target = fresh->target;
-  c->upgradeLevel = 0;
-}
-
 // DampenPower.cs: upgraded cards are downgraded until the casters die.
 struct DampenPower : Power {
   POWER_HEADER(DampenPower, "DAMPEN_POWER")
@@ -154,7 +155,7 @@ struct DampenPower : Power {
     for (Card* c : owner->combat->allCards()) {
       if (!c->upgraded()) continue;
       downgraded.push_back({c, c->upgradeLevel});
-      downgradeCard(c);
+      cmd::downgradeCard(c);
     }
     flash = 1.f;
     co_return;
@@ -204,11 +205,13 @@ struct ChainsOfBindingPower : Power {
 
 struct Aeonglass;
 
-// WitheringPresencePower.cs: every 6 cards the player plays, a Wither lands in their hand.
-// PORT NOTE: the C# power is per-target and instanced; there is one player, so a counter
-// on the Aeonglass does the same (Amount = cards left).
+// WitheringPresencePower.cs: Instanced, one per player (Target): every 6 cards that player plays, a
+// Wither lands in their hand. The HUD shows CardsLeft.
 struct WitheringPresencePower : Power {
   POWER_HEADER(WitheringPresencePower, "WITHERING_PRESENCE_POWER")
+  PowerInstanceType instanceType() const override { return PowerInstanceType::Instanced; }
+  int displayAmount() const override { return cardsLeft; }
+  int cardsLeft = 6;  // DynamicVars["CardsLeft"]
   Task<> afterCardPlayed(const CardPlay& p) override;
 };
 
@@ -220,6 +223,8 @@ struct AdaptablePower : Power {
   bool removedAfterOwnerDeath() const override { return false; }
   bool shouldStopCombatFromEnding() override { return true; }
   bool shouldCreatureBeRemovedFromCombatAfterDeath(Creature* c) override { return c != owner; }
+  // ShouldAllowHitting: no powers while reviving (IsReviving: from its death until RespawnMove).
+  bool shouldAllowHitting(Creature* c) override { return c != owner || owner->alive(); }
   Task<> afterDeath(Creature* c) override;
 };
 
@@ -566,7 +571,11 @@ struct Aeonglass : Monster {
   int minHp() const override { return asc(kToughEnemies, 535, 512); }
   int maxHp() const override { return minHp(); }
   Task<> afterAddedToRoom() override {
-    co_await applyById("WitheringPresencePower", creature, 6, creature);
+    {  // one instance per player (CombatState.Players), Target = that player
+      auto wp = std::make_unique<WitheringPresencePower>();
+      wp->target = combat->player;
+      co_await cmd::applyPower(std::move(wp), creature, 6, creature, nullptr);
+    }
     co_await applyById("ArtifactPower", creature, 3, creature);
   }
   void buildMoves() override {
@@ -605,11 +614,13 @@ struct Aeonglass : Monster {
   }
 };
 
-Task<> WitheringPresencePower::afterCardPlayed(const CardPlay&) {
-  if (--amount > 0) co_return;
-  flash = 1.f;
+Task<> WitheringPresencePower::afterCardPlayed(const CardPlay& p) {
+  if (!target || ownerOf(p.card) != target) co_return;
+  if (--cardsLeft > 0) co_return;
+  co_await wait(0.5);
   if (owner->monster) co_await static_cast<Aeonglass*>(owner->monster.get())->addWither(Pile::Hand);
-  amount = 6;
+  flash = 1.f;
+  cardsLeft = 6;
 }
 
 template <class P> void regPower() { db::registerPower(P::kId, [] { return std::unique_ptr<Power>(new P()); }); }

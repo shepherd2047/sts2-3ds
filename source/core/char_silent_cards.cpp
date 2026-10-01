@@ -15,6 +15,7 @@ namespace {
 // Ironclad's SetupStrikePower/StrengthPower pair in content.cpp).
 struct AnticipatePower : Power {
   POWER_HEADER(AnticipatePower, "TEMPORARY_DEXTERITY_POWER")
+  const char* internallyAppliedPower() const override { return "DexterityPower"; }  // ITemporaryPower
   Task<> beforeApplied(Creature* target, Dec amt, Creature* app, Card* src) override {
     co_await applyPower<DexterityPower>(target, amt, app, src, true);
   }
@@ -36,6 +37,7 @@ struct AnticipatePower : Power {
 // takes Strength away for the rest of the turn, restored at the end of it.
 struct PiercingWailPower : Power {
   POWER_HEADER(PiercingWailPower, "TEMPORARY_STRENGTH_DOWN")
+  const char* internallyAppliedPower() const override { return "StrengthPower"; }  // ITemporaryPower
   PowerType type() const override { return PowerType::Debuff; }
   Task<> beforeApplied(Creature* target, Dec amt, Creature* app, Card* src) override {
     co_await applyPower<StrengthPower>(target, -amt, app, src, true);

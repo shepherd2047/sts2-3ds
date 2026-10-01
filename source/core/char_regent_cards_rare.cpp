@@ -28,6 +28,7 @@ struct ArsenalPower : Power {
 // mirror of SetupStrikePower, same as ManglePower in powers_ironclad.h).
 struct DyingStarPower : Power {
   POWER_HEADER(DyingStarPower, "DYING_STAR_POWER")
+  const char* internallyAppliedPower() const override { return "StrengthPower"; }  // ITemporaryPower
   PowerType type() const override { return PowerType::Debuff; }
   Task<> beforeApplied(Creature* target, Dec amt, Creature* app, Card* src) override {
     co_await applyPower<StrengthPower>(target, -amt, app, src, true);
@@ -49,6 +50,7 @@ struct DyingStarPower : Power {
 // MonarchsGazeStrengthDownPower.cs: same temporary negative Strength, origin Monarch's Gaze.
 struct MonarchsGazeStrengthDownPower : Power {
   POWER_HEADER(MonarchsGazeStrengthDownPower, "MONARCHS_GAZE_STRENGTH_DOWN_POWER")
+  const char* internallyAppliedPower() const override { return "StrengthPower"; }  // ITemporaryPower
   PowerType type() const override { return PowerType::Debuff; }
   Task<> beforeApplied(Creature* target, Dec amt, Creature* app, Card* src) override {
     co_await applyPower<StrengthPower>(target, -amt, app, src, true);
@@ -211,28 +213,21 @@ struct Arsenal : IroncladT<Arsenal> {
 // BeatIntoShape.cs: 1 cost, Attack, AnyEnemy. Damage 5, then Forge CalculationBase 5 +
 // CalculationExtra 5 per powered attack damage the player dealt this turn to the target,
 // not counting the hit(s) this card just made.
-// PORT NOTE: the multiplier reads Combat::damageHistory (a one-vector hook for the C#'s
-// DamageReceivedEntry history). The multiplier needs the target; before the card is played
-// (card text preview) it has none and counts 0.
 struct BeatIntoShape : IroncladT<BeatIntoShape> {
   CARD_HEADER(BeatIntoShape, "BEAT_INTO_SHAPE", 1, Attack, Rare, AnyEnemy)
     addVar("Damage", 5);
     addVar("CalculationBase", 5);
     addVar("CalculationExtra", 5);
     addVar("CalculatedForge", 0);
-    calcMultiplier = [](Card* c) { return static_cast<BeatIntoShape*>(c)->hitsOn(static_cast<BeatIntoShape*>(c)->lastTarget); };
+    calcMultiplierT = [](Card* c, Creature* t) { return static_cast<BeatIntoShape*>(c)->hitsOn(t); };
   }
-  Creature* lastTarget = nullptr;
   int hitsOn(Creature* target) const {
     if (!target || !combat) return 0;
-    int n = 0;
-    for (auto& e : combat->damageHistory)
-      if (e.receiver == target && e.dealer == combat->player && isPoweredAttack(e.props) &&
-          e.round == combat->roundNumber && e.side == combat->currentSide) ++n;
-    return n;
+    return combat->history.countThisTurn(*combat, CombatHistoryEntry::DamageReceived, [&](const CombatHistoryEntry& e) {
+      return e.actor == target && e.other == combat->player && isPoweredAttack(e.props);
+    });
   }
   Task<> onPlay(CardPlay& p) override {
-    lastTarget = p.target;
     cmd::Attack a;
     a.damagePerHit = val("Damage");
     a.attacker = me();
@@ -240,7 +235,7 @@ struct BeatIntoShape : IroncladT<BeatIntoShape> {
     a.single = p.target;
     co_await a.execute(*combat);
     // CalculatedVar.Calculate(target) - Results.Count * CalculationExtra
-    Dec amount = calculatedBlock() - Dec((int)a.results.size()) * val("CalculationExtra");
+    Dec amount = calculatedBlock(p.target) - Dec((int)a.results.size()) * val("CalculationExtra");
     co_await cmd::forge(*combat, amount, this);
   }
   void onUpgrade() override {
@@ -270,16 +265,15 @@ struct BigBang : IroncladT<BigBang> {
 };
 
 // Bombardment.cs: 3 cost, Attack, AnyEnemy, Exhaust. Damage 18. Whenever a turn starts with this
-// in the Exhaust pile, it is played for free (AfterAutoPrePlayPhaseEnteredEarly).
-// PORT NOTE: the C# uses the "Early" hook so another auto-pre-play effect (Mayhem) that also
-// exhausts it can't double-trigger; this engine has only afterAutoPrePlayPhaseEntered.
+// in the Exhaust pile, it is played for free (AfterAutoPrePlayPhaseEnteredEarly, so another
+// auto-pre-play effect (Mayhem) that also exhausts it can't double-trigger).
 struct Bombardment : IroncladT<Bombardment> {
   CARD_HEADER(Bombardment, "BOMBARDMENT", 3, Attack, Rare, AnyEnemy)
     keywords = kwExhaust;
     addVar("Damage", 18);
   }
   Task<> onPlay(CardPlay& p) override { co_await attack(p.target, val("Damage")); }
-  Task<> afterAutoPrePlayPhaseEntered() override {
+  Task<> afterAutoPrePlayPhaseEnteredEarly() override {
     if (combat->pileOf(this) == Pile::Exhaust) co_await cmd::autoPlay(*combat, this, nullptr);
   }
   void onUpgrade() override { upgradeVar("Damage", 6); }

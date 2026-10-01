@@ -224,6 +224,12 @@ void App::drawCombat(bool top) {
   float atx = 0, aty = 0;
   if (arrow && centers_.count(tgt)) { atx = centers_[tgt].first; aty = centers_[tgt].second; }
   else arrow = false;
+  // E4: hand previews of target-dependent numbers (Bully, Times Up, ...) follow the aimed enemy.
+  for (Card* hc : cb->hand) hc->previewTarget = nullptr;
+  if (tgt && tgt != cb->player) {
+    if (drag_.down && drag_.moved && drag_.armed && drag_.card) drag_.card->previewTarget = tgt;
+    else if (aiming_ && selCard) selCard->previewTarget = tgt;
+  }
   const uint32_t reticleTint = !arrowValid ? 0xB0B0B0C0 : arrowAlly ? 0x9CFFC8FF : 0xFFFFFFFF;
 
   if (top) {

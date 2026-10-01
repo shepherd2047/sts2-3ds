@@ -84,6 +84,7 @@ int rarityOrder(Rarity r) {
     case Rarity::Ancient: return 5;
     case Rarity::Status: return 6;
     case Rarity::Curse: return 7;
+    case Rarity::Quest: return 9;
     case Rarity::Token: return 10;
   }
   return 11;
@@ -134,7 +135,8 @@ void build() {
     auto it = pools.find(id);
     if (it != pools.end()) bits = it->second;
     if (card->rarity == Rarity::Ancient) bits |= 1u << kAncients;
-    bool miscRarity = card->rarity == Rarity::Token || card->rarity == Rarity::Status || card->rarity == Rarity::Curse;
+    bool miscRarity = card->rarity == Rarity::Token || card->rarity == Rarity::Status || card->rarity == Rarity::Curse ||
+                      card->rarity == Rarity::Quest;
     // Event / quest cards (no own rarity in this port) sit in no pool: the misc filter.
     if (miscRarity || (!bits && !inSomePool.count(id) && !db::isColorless(id))) bits |= 1u << kMisc;
     if (!bits) continue;  // multiplayer-only
@@ -227,6 +229,7 @@ std::string typeName(CardType t) {
     case CardType::Power: return L("gameplay_ui.CARD_TYPE.POWER");
     case CardType::Status: return tr("状态", "Status");
     case CardType::Curse: return tr("诅咒", "Curse");
+    case CardType::Quest: return L("gameplay_ui.CARD_TYPE.QUEST");
   }
   return "";
 }
@@ -240,6 +243,7 @@ std::string rarityName(Rarity r) {
     case Rarity::Token: return tr("衍生", "Token");
     case Rarity::Status: return tr("状态", "Status");
     case Rarity::Curse: return tr("诅咒", "Curse");
+    case Rarity::Quest: return L("gameplay_ui.CARD_RARITY.QUEST");
   }
   return "";
 }

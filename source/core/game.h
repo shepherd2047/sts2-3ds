@@ -13,6 +13,7 @@
 #include <string>
 #include <vector>
 
+#include "combat_history.h"
 #include "dec.h"
 #include "history.h"
 #include "rng.h"
@@ -30,6 +31,7 @@ struct Combat;
 struct Run;
 struct Modifier;  // M11 run modifiers (modifiers.h)
 struct Affliction;  // A4 (afflictions.cpp)
+namespace cmd { struct Attack; }  // AttackCommand (Model::beforeAttack / afterAttack)
 
 // AscensionLevel (Entities.Ascension): a run at level N has every level <= N (Run::hasAscension).
 enum AscensionLevel : int {
@@ -38,13 +40,17 @@ enum AscensionLevel : int {
 };
 
 enum class Side { Player, Enemy };
-enum class CardType { Attack, Skill, Power, Status, Curse };
-enum class Rarity { Basic, Common, Uncommon, Rare, Ancient, Token, Status, Curse };
+enum class CardType { Attack, Skill, Power, Status, Curse, Quest };  // Quest: E2 (quests.cpp)
+enum class Rarity { Basic, Common, Uncommon, Rare, Ancient, Token, Status, Curse, Quest };
 enum class TargetType { None, Self, AnyEnemy, AllEnemies, RandomEnemy };
 enum class PowerType { Buff, Debuff };
 enum class StackType { Counter, Single };
+// PowerInstanceType: Instanced powers add a new instance on every apply; InstancedPerApplier stacks onto
+// the instance from the same applier (PowerCmd.FindExistingInstanceForStacking).
+enum class PowerInstanceType { None, Instanced, InstancedPerApplier };
 enum class Pile { None, Draw, Hand, Discard, Exhaust, Play };
 enum class RoomType { Monster, Elite, Rest, Treasure, Unknown, Boss, Start, Shop, Ancient };
+inline int roomBit(RoomType t) { return 1 << (int)t; }  // a set of room types (modifyUnknownMapPointRoomTypes)
 enum class RelicRarity { None, Starter, Common, Uncommon, Rare, Shop, Event, Ancient };
 enum class PotionRarity { None, Common, Uncommon, Rare, Event, Token };
 enum class PotionUsage { CombatOnly, AnyTime, Automatic };
@@ -53,6 +59,8 @@ enum class PotionUsage { CombatOnly, AnyTime, Automatic };
 enum : int { kUnblockable = 2, kUnpowered = 4, kMove = 8, kSkipHurtAnim = 16 };
 inline bool isPoweredAttack(int p) { return (p & kMove) && !(p & kUnpowered); }
 inline bool isPoweredBlock(int p) { return (p & kMove) && !(p & kUnpowered); }
+// Model::modifyDamageCap's "no cap" (decimal.MaxValue).
+inline constexpr Dec kNoDamageCap = Dec::fromRaw(INT64_MAX);
 
 enum Keyword : int { kwExhaust = 1, kwUnplayable = 2, kwEthereal = 4, kwInnate = 8, kwRetain = 16, kwSly = 32, kwEternal = 64 };
 enum CardTag : int { tagStrike = 1, tagDefend = 2, tagMinion = 4, tagOstyAttack = 8, tagShiv = 16, tagSovereignBlade = 32 };
@@ -88,19 +96,32 @@ struct Model {
   virtual Dec modifyBlockMultiplicative(Creature*, Dec, int, Card*) { return 1; }
   virtual Dec modifyHpLostBeforeOsty(Creature*, Dec amount, int, Creature*, Card*) { return amount; }
   virtual Dec modifyHpLostAfterOsty(Creature*, Dec amount, int, Creature*, Card*) { return amount; }
+  virtual Dec modifyHpLostBeforeOstyLate(Creature*, Dec amount, int, Creature*, Card*) { return amount; }  // HardenedShellPower
+  virtual Dec modifyHpLostAfterOstyLate(Creature*, Dec amount, int, Creature*, Card*) { return amount; }   // BufferPower, TheBoot
+  // Hook.ModifyDamageCap (Intangible, Hard to Kill): the lowest cap applies, after the multipliers.
+  virtual Dec modifyDamageCap(Creature* /*target*/, int /*props*/, Creature* /*dealer*/, Card*) { return kNoDamageCap; }
   // Hook.ModifyUnblockedDamageTarget: redirect unblocked damage to a different creature
   // (DieForYouPower redirects a powered hit meant for the player onto Osty).
   virtual Creature* modifyUnblockedDamageTarget(Creature* target, Dec /*unblocked*/, int /*props*/, Creature* /*dealer*/) { return target; }
   virtual Dec modifyHandDraw(Dec amount) { return amount; }
 
   virtual Task<> beforeCombatStart() { return {}; }
+  virtual Task<> beforeCombatStartLate() { return {}; }
+  virtual Task<> afterCombatVictoryEarly() { return {}; }
   virtual Task<> afterCombatVictory() { return {}; }
   virtual Task<> beforeSideTurnStart(Side, const std::vector<Creature*>&) { return {}; }
   virtual Task<> afterSideTurnStart(Side, const std::vector<Creature*>&) { return {}; }
+  virtual Task<> afterSideTurnStartLate(Side, const std::vector<Creature*>&) { return {}; }
   virtual Task<> afterPlayerTurnStart() { return {}; }
+  virtual Task<> afterPlayerTurnStartLate() { return {}; }
   virtual Task<> beforeSideTurnEnd(Side, const std::vector<Creature*>&) { return {}; }
   virtual Task<> afterSideTurnEnd(Side, const std::vector<Creature*>&) { return {}; }
+  virtual Task<> afterSideTurnEndLate(Side, const std::vector<Creature*>&) { return {}; }
+  // Hook.BeforeDamageReceived: after ModifyDamage, before block is taken (ThornsPower).
+  virtual Task<> beforeDamageReceived(Creature*, Dec /*amount*/, int, Creature* /*dealer*/, Card*) { return {}; }
   virtual Task<> afterDamageReceived(Creature*, const DamageResult&, int, Creature*, Card*) { return {}; }
+  // Hook.AfterBlockBroken: per damage result, before AfterCurrentHpChanged; still runs while combat is ending.
+  virtual Task<> afterBlockBroken(Creature* /*target*/, Creature* /*breaker*/) { return {}; }
   virtual Task<> afterDeath(Creature*) { return {}; }
   virtual Task<> beforeCardPlayed(const CardPlay&) { return {}; }
   virtual Task<> afterCardPlayed(const CardPlay&) { return {}; }
@@ -111,6 +132,7 @@ struct Model {
   virtual Task<> beforeSideTurnEndEarly(Side, const std::vector<Creature*>&) { return {}; }
   virtual Task<> afterAutoPostPlayPhaseEntered() { return {}; }  // player's turn is about to end
   virtual Task<> afterCardExhausted(Card*, bool /*causedByEthereal*/) { return {}; }
+  virtual Task<> afterCardDrawnEarly(Card*, bool /*fromHandDraw*/) { return {}; }
   virtual Task<> afterCardDrawn(Card*, bool /*fromHandDraw*/) { return {}; }
   virtual Task<> afterBlockGained(Creature*, Dec /*amount*/, int /*props*/, Card*) { return {}; }
   virtual Task<> afterCardEnteredCombat(Card*) { return {}; }
@@ -122,16 +144,21 @@ struct Model {
   virtual Dec modifyMaxEnergy(Dec amount) { return amount; }
   virtual int modifyCardPlayCount(Card*, Creature*, int count) { return count; }
   virtual Pile modifyCardPlayResultLocation(Card*, bool /*autoPlay*/, Pile pile) { return pile; }
+  virtual Task<> afterModifyingCardPlayResultLocation(Card*, Pile) { return {}; }  // only the models that changed it
   // TryModifyEnergyCostInCombat / ...Late: return the new cost (or `cost` unchanged).
   virtual int modifyEnergyCost(Card*, int cost) { return cost; }
   virtual int modifyEnergyCostLate(Card*, int cost) { return cost; }
   // Added for act 1 monsters.
   virtual bool shouldStopCombatFromEnding() { return false; }
+  // Hook.ShouldTakeExtraTurn / AfterTakingExtraTurn (AmbergrisPower, PaelsEye): another player turn instead of the enemies'.
+  virtual bool shouldTakeExtraTurn() { return false; }
+  virtual Task<> afterTakingExtraTurn() { return {}; }
   virtual Task<> afterCreatureAddedToCombat(Creature*) { return {}; }
   virtual bool shouldPlay(Card*) { return true; }  // Hook.ShouldPlay (RingingPower, ...)
   virtual bool shouldAfflict(Card*, Affliction*) { return true; }  // Hook.ShouldAfflict (A4)
   // Illusions stay in the room (dead) with their buffs and revive.
   virtual bool shouldCreatureBeRemovedFromCombatAfterDeath(Creature*) { return true; }
+  virtual bool shouldAllowHitting(Creature*) { return true; }  // Hook.ShouldAllowHitting (Creature.CanReceivePowers)
   virtual bool shouldPowerBeRemovedOnDeath(Power*) { return true; }
   // Hook.ModifyPowerAmountReceived (ArtifactPower): return true and set `out` to change
   // the amount a creature is about to receive; the modifier then gets the After... call.
@@ -148,8 +175,21 @@ struct Model {
   // Added for relics (Hook.* of the same names).
   virtual Task<> afterCombatEnd() { return {}; }              // victory, before afterCombatVictory
   virtual Task<> afterRoomEntered(RoomType) { return {}; }
+  // E2 (quests.cpp): map / "?"-room / deck-card run hooks. Run::listeners() puts the deck cards
+  // first (RunState.IterateHookListeners), so a deck card hears every run-level hook, also during
+  // a combat, with combat == nullptr: card overrides of run hooks check Card::inDeck().
+  virtual Task<> beforeRoomEntered(RoomType) { return {}; }  // Hook.BeforeRoomEntered (resolved type; Unknown = event)
+  virtual int modifyUnknownMapPointRoomTypes(int types) { return types; }  // roomBit set; Unknown = Event
+  virtual std::string modifyNextEvent(const std::string& eventId) { return eventId; }  // Hook.ModifyNextEvent
+  virtual bool shouldAllowFreeTravel() { return false; }  // Hook.ShouldAllowFreeTravel (MapTravel)
+  virtual void modifyGeneratedMap(int /*actIndex*/) {}      // Hook.ModifyGeneratedMap: may replace Run::nodes
+  virtual void modifyGeneratedMapLate(int /*actIndex*/) {}  // also run on a loaded map (SavedActMap)
+  virtual void afterMapGenerated(int /*actIndex*/) {}       // Hook.AfterMapGenerated (quest markers)
+  virtual void beforeCardRemoved(Card*) {}                  // Hook.BeforeCardRemoved (CardPileCmd.RemoveFromDeck)
+  virtual bool tryModifyRestSiteOptions(std::vector<int>& /*options*/) { return false; }  // Run::restOptions ids
   virtual Task<> afterBlockCleared(Creature*) { return {}; }
   virtual Task<> afterEnergyReset() { return {}; }
+  virtual Task<> afterEnergyResetLate() { return {}; }
   virtual Task<> beforeHandDraw() { return {}; }
   virtual Task<> afterCurrentHpChanged(Creature*, Dec /*delta*/) { return {}; }
   virtual Dec modifyRestSiteHealAmount(Creature*, Dec amount) { return amount; }
@@ -170,7 +210,9 @@ struct Model {
   virtual bool shouldForcePotionReward(RoomType) { return false; }
   virtual bool shouldProcurePotion() { return true; }  // Sozu
   // Added for enchantments (Hook.AfterAutoPrePlayPhaseEntered / BeforeFlush / ModifyShuffleOrder).
+  virtual Task<> afterAutoPrePlayPhaseEnteredEarly() { return {}; }
   virtual Task<> afterAutoPrePlayPhaseEntered() { return {}; }  // player turn set up, before the play phase
+  virtual Task<> afterAutoPrePlayPhaseEnteredLate() { return {}; }
   virtual Task<> beforeFlush() { return {}; }                   // player turn ends, before the hand is discarded
   virtual void modifyShuffleOrder(std::vector<Card*>& /*cards*/, bool /*isInitialShuffle*/) {}  // index 0 = top
   virtual Task<> afterCardDiscarded(Card*) { return {}; }  // Hook.AfterCardDiscarded (CardCmd.Discard only, not the end-of-turn flush)
@@ -194,7 +236,9 @@ struct Model {
   virtual Task<> afterOrbEvoked(Orb*, const std::vector<Creature*>& /*targets*/) { return {}; }
 
   // Added for the Necrobinder's relics (X4.1; Hook.* of the same names).
-  virtual Task<> afterAttack(Creature* /*attacker*/) { return {}; }  // Hook.AfterAttack (AttackCommand.Execute, once per card)
+  // Hook.BeforeAttack / AfterAttack: once per AttackCommand.Execute (or AttackContext, cmd::beginAttackContext).
+  virtual Task<> beforeAttack(cmd::Attack&) { return {}; }
+  virtual Task<> afterAttack(const cmd::Attack&) { return {}; }
   // Added for the Necrobinder's uncommons (X4.3b): Hook.AfterDamageGiven (per damage result, before AfterDamageReceived)
   // and Hook.AfterCardPlayedLate (after every AfterCardPlayed of that play).
   virtual Task<> afterDamageGiven(Creature* /*dealer*/, const DamageResult&, int /*props*/, Creature* /*target*/, Card*) { return {}; }
@@ -283,6 +327,7 @@ struct Power : Model {
   std::string locKey;  // e.g. "STRENGTH_POWER"
   Creature* owner = nullptr;
   Creature* applier = nullptr;
+  Creature* target = nullptr;  // PowerModel.Target (per-player instanced powers: Thievery, Heist, ...)
   int amount = 0;
   int amountOnTurnStart = 0;
   bool skipNextDurationTick = false;
@@ -291,6 +336,12 @@ struct Power : Model {
   virtual PowerType type() const { return PowerType::Buff; }
   virtual StackType stackType() const { return StackType::Counter; }
   virtual bool allowNegative() const { return false; }
+  virtual PowerInstanceType instanceType() const { return PowerInstanceType::None; }
+  // ITemporaryPower.InternallyAppliedPower: the id of the power a temporary power applies under the
+  // hood (TemporaryStrength/Dexterity/FocusPower subclasses); null = not an ITemporaryPower.
+  virtual const char* internallyAppliedPower() const { return nullptr; }
+  bool isTemporary() const { return internallyAppliedPower() != nullptr; }  // `power is ITemporaryPower`
+  virtual int displayAmount() const { return amount; }  // PowerModel.DisplayAmount (UI)
   virtual bool ownerIsSecondaryEnemy() const { return false; }  // MinionPower
   virtual bool removedAfterOwnerDeath() const { return true; }  // ShouldPowerBeRemovedAfterOwnerDeath
   // ShouldOwnerDeathTriggerFatal: false when the owner can come back (Decimillipede segments),
@@ -509,19 +560,30 @@ struct Card : Model {
   EnchantSlot enchantment;  // CardModel.Enchantment (null = none)
   AfflictSlot affliction;   // CardModel.Affliction (null = none; combat cards only)
   DeckLink deckVersion;     // CardModel.DeckVersion (combat cards only)
+  // Owner.RunState for run-level hooks: set on the deck cards by Run::listeners() (a combat copy
+  // keeps its deck card's value). inDeck() = CardModel.Pile.Type == PileType.Deck (quests.cpp).
+  Run* run = nullptr;
+  bool inDeck() const;
 
   // Hand-view calculation for CalculatedDamageVar (Body Slam, Perfected Strike).
   std::function<int(Card*)> calcMultiplier;
+  // Target-aware multiplier (CalculatedVar.WithMultiplier((card, target) => ...)); target may be null
+  // (no target hovered: the C# counts 0). Preferred over calcMultiplier when set.
+  std::function<int(Card*, Creature*)> calcMultiplierT;
+  Creature* previewTarget = nullptr;  // UI only: the creature a hand card is being aimed at (hand preview numbers)
 
   virtual ~Card() = default;
   virtual Task<> onPlay(CardPlay&) { return {}; }
   virtual void onUpgrade() {}
+  virtual void afterDowngraded() {}  // CardModel.AfterDowngraded: restore state kept outside the vars
   virtual bool canBeGeneratedInCombat() const { return true; }  // CardModel.CanBeGeneratedInCombat (colorless pool helpers)
   // After a save is read back (vars, cost, keywords restored): rebuild state kept outside the vars.
   virtual void afterLoad() {}
   // HasTurnEndInHandEffect / OnTurnEndInHand (Burn, Infection, ...)
   virtual bool hasTurnEndInHandEffect() const { return false; }
   virtual Task<> onTurnEndInHand() { return {}; }
+  // A quest card's reward when its map quest is completed (SpoilsMap.OnQuestComplete): the gold given.
+  virtual Task<int> onQuestComplete() { co_return 0; }
   virtual std::unique_ptr<Card> clone() const = 0;
 
   // CardEnergyCost setters.
@@ -549,6 +611,7 @@ struct Card : Model {
   bool upgraded() const { return upgradeLevel > 0; }
   bool upgradable() const { return upgradeLevel < maxUpgradeLevel; }
   void upgrade() { if (upgradable()) { ++upgradeLevel; onUpgrade(); } }
+  void downgrade();  // CardModel.DowngradeInternal (afflictions.cpp)
   // CardModel.Keywords: the card's own keywords plus those its affliction's power adds (Hexed).
   bool has(int kw) const { return (keywords & kw) != 0 || (affliction && (affliction->addedKeywords() & kw) != 0); }
   bool afflictedWith(const char* afflictionId) const { return affliction && affliction->id == afflictionId; }
@@ -581,8 +644,9 @@ struct Card : Model {
   void upgradeVar(const char* n, Dec by) { if (auto* v = var(n)) v->base += by; }
   void addVar(const char* n, Dec v) { vars.push_back({n, v, v}); }
 
-  Dec calculatedDamage();  // CalculatedDamageVar: CalculationBase + ExtraDamage * multiplier
-  Dec calculatedBlock();   // CalculatedBlockVar: CalculationBase + CalculationExtra * multiplier
+  Dec calculatedDamage(Creature* target = nullptr);  // CalculatedDamageVar: CalculationBase + ExtraDamage * multiplier
+  Dec calculatedBlock(Creature* target = nullptr);   // CalculatedBlockVar: CalculationBase + CalculationExtra * multiplier
+  int calcMult(Creature* target) { return calcMultiplierT ? calcMultiplierT(this, target ? target : previewTarget) : calcMultiplier ? calcMultiplier(this) : 0; }
 };
 
 template <class Derived> struct CardT : Card {
@@ -745,7 +809,29 @@ struct Creature {
     for (auto& p : powers) if (p->id == id) return p.get();
     return nullptr;
   }
+  // GetPower / GetPower<T>: the first instance (instanced powers can have several, see powerInstances).
   template <class P> P* get() { return static_cast<P*>(power(P::kId)); }
+  // GetPowerInstances(id) / GetPowerInstances<T>: every instance with that id, in application order.
+  std::vector<Power*> powerInstances(const std::string& id) {
+    std::vector<Power*> v;
+    for (auto& p : powers) if (p->id == id) v.push_back(p.get());
+    return v;
+  }
+  template <class P> std::vector<P*> instances() {
+    std::vector<P*> v;
+    for (auto& p : powers) if (p->id == P::kId) v.push_back(static_cast<P*>(p.get()));
+    return v;
+  }
+  // PowerCmd.FindExistingInstanceForStacking: the instance an application of `p` from `applier` stacks onto.
+  Power* stackingInstance(const Power& p, Creature* applier) {
+    switch (p.instanceType()) {
+      case PowerInstanceType::Instanced: return nullptr;
+      case PowerInstanceType::InstancedPerApplier:
+        for (auto& q : powers) if (q->id == p.id && q->applier == applier) return q.get();
+        return nullptr;
+      default: return power(p.id);
+    }
+  }
   template <class P> int powerAmount() { auto* p = get<P>(); return p ? p->amount : 0; }
   // `Powers.All(p => p.ShouldOwnerDeathTriggerFatal())`, checked before the killing blow.
   bool deathIsFatal() const {
@@ -878,31 +964,18 @@ struct Combat {
   std::vector<std::unique_ptr<Power>> graveyard;  // removed powers, freed with the combat
   std::vector<std::unique_ptr<Enchantment>> enchantGraveyard;  // cleared enchantments (listener snapshots may still hold them)
   std::vector<std::unique_ptr<Affliction>> afflictGraveyard;   // cleared afflictions (same reason)
-  // CombatHistory.CardAfflicted entries (round + side), for ChainsOfBindingPower's per-turn count.
-  struct AfflictEntry { int round; Side side; Card* card; std::string afflictionId; };
-  std::vector<AfflictEntry> afflictHistory;
+  CombatHistory history;  // CombatManager.History (combat_history.h)
+  // CardAfflicted entries this turn (ChainsOfBindingPower's per-turn count).
   int afflictionsThisTurn(const char* afflictionId) const {
-    int n = 0;
-    for (auto& e : afflictHistory) if (e.round == roundNumber && e.side == currentSide && e.afflictionId == afflictionId) ++n;
-    return n;
+    return history.countThisTurn(*this, CombatHistoryEntry::CardAfflicted, [&](const CombatHistoryEntry& e) { return e.id == afflictionId; });
   }
   int skillPlaysStartedThisTurn = 0;  // CombatHistory.CardPlaysStarted of Skills this turn (SmoggyPower)
   bool debugAfflictDone = false;      // STS_AFFLICT / SIM_AFFLICT applied (combat.cpp)
   std::vector<Creature*> stayingDead;             // being killed but not leaving (illusions)
   std::vector<Card*> draw, hand, discard, exhaust, play;
-  // CombatHistory.CardDiscarded entries (round + side they happened in), for "discarded this turn".
-  struct DiscardEntry { int round; Side side; Card* card; };
-  std::vector<DiscardEntry> discardHistory;
   int cardsDrawnThisCombat = 0;  // CombatHistory CardDrawnEntry count (Murder, X1.4)
-  int discardsThisTurn() const {
-    int n = 0;
-    for (auto& e : discardHistory) if (e.round == roundNumber && e.side == currentSide) ++n;
-    return n;
-  }
+  int discardsThisTurn() const { return history.countThisTurn(*this, CombatHistoryEntry::CardDiscarded); }
 
-  // CombatHistory.DamageReceived entries (BeatIntoShape); one per DamageResult.
-  struct DamageEntry { int round; Side side; Creature* receiver; Creature* dealer; int props; };
-  std::vector<DamageEntry> damageHistory;
   int extraRewardGold = 0;  // CombatRoom.AddExtraReward(GoldReward) (RoyaltiesPower); Run::combatRewards adds the row
   int energy = 0, maxEnergy = 3;
   int stars = 0;  // PlayerCombatState.Stars (Regent's second resource; char_regent.h/.cpp)
@@ -913,7 +986,6 @@ struct Combat {
   int turnNumber = 1, roundNumber = 1;
   int cardsPlayedThisTurn = 0;  // CombatHistory.CardPlaysStarted this turn (player)
   int skillsFinishedThisTurn = 0;  // CardPlaysFinished of Skills this turn (LunarBlast, X3.3a)
-  int etherealPlaysFinished = 0;  // CardPlaysFinished with WasEthereal, whole combat (BansheesCry, X4.4)
   int attackPlaysFinishedThisTurn = 0;  // CombatHistory.CardPlaysFinished this turn: Attack plays (Finisher, X1.3a)
   int cardPlaysFinishedThisCombat = 0;  // CombatHistory.CardPlaysFinished, whole combat (GoldAxe, A1a)
   int cardPlaysFinishedThisTurn = 0;  // CardPlaysFinished of all types this turn, bumped before AfterCardPlayed (PaleBlueDot, X3.3b)
@@ -923,6 +995,7 @@ struct Combat {
   int energySpentThisTurn = 0;  // EnergySpentEntry amounts this turn (HelixDrill, X2.4)
   int lightningOrbsChanneled = 0;  // OrbChanneledEntry of LightningOrbs this combat (Voltaic, X2.4)
   Side currentSide = Side::Player;
+  bool extraTurn = false;  // CombatTurnState.PlayersTakingExtraTurn is not empty (single player)
   bool inProgress = false, ending = false, over = false, won = false;
   bool playerPhase = false;  // UI may submit actions
   bool autoSelectFirst = false;  // VakuuCardSelector: cmd::selectCards takes the first options (Whispering Earring)
@@ -943,6 +1016,7 @@ struct Combat {
   int maxEnergyNow();
   bool isValidTarget(Card* c, Creature* t);
   std::vector<Creature*> hittableEnemies();
+  bool canReceivePowers(Creature* c);  // Creature.CanReceivePowers (Hook.ShouldAllowHitting)
   std::vector<Creature*> aliveEnemies();
 
   // hooks (Hook.*)
@@ -1010,6 +1084,7 @@ Task<Card*> addGeneratedCard(Combat& c, std::unique_ptr<Card> card, Pile to, boo
 Task<> autoPlay(Combat& c, Card* card, Creature* target = nullptr);  // CardCmd.AutoPlay
 Task<Card*> transform(Combat& c, Card* card, std::unique_ptr<Card> into);  // CardCmd.Transform
 void upgradeCard(Card* card);  // CardCmd.Upgrade
+void downgradeCard(Card* card);  // CardCmd.Downgrade
 Task<> addStatusCards(Combat& c, std::string cardId, Pile to, int count, bool byPlayer = false);  // byPlayer: creator == Owner
 Task<std::vector<Card*>> selectCards(Combat& c, std::string prompt, std::vector<Card*> options, int minCount, int maxCount);
 Task<> autoPlayFromDrawPile(Combat& c, int count, bool forceExhaust);
@@ -1055,7 +1130,12 @@ struct Attack {
   int props = kMove;
   std::vector<std::vector<DamageResult>> results;
   Task<> execute(Combat& c);
+  Side targetSide() const;  // AttackCommand.TargetSide
 };
+// AttackContext: groups plain damage calls into one attack for Hook.BeforeAttack / AfterAttack.
+// Fill `a` (attacker, source, allOpponents), begin, push each hit into a.results, end.
+Task<> beginAttackContext(Combat& c, Attack& a);
+Task<> endAttackContext(Combat& c, Attack& a);
 }  // namespace cmd
 
 template <class P> Task<> applyPower(Creature* target, Dec amount, Creature* applier, Card* src, bool silent = false);
@@ -1070,6 +1150,9 @@ struct MapNode {
   float x = 0, y = 0;     // layout in map space
   float jx = 0, jy = 0;   // NMapScreen jitter in native map units (±21, ±25)
   float angle = 0;        // icon tilt in degrees (NextGaussianFloat(0, 8))
+  // MapPoint.Quests: ids of the models that marked this point (SpoilsMap). Not saved: a loaded map
+  // gets them back from the ModifyGeneratedMapLate / AfterMapGenerated hooks, as in the C#.
+  std::vector<std::string> quests;
 };
 
 // StandardActMap (+ MapPathPruning, MapPostProcessing, Overgrowth.GetMapPointTypes):
@@ -1081,6 +1164,9 @@ std::vector<MapNode> generateStandardActMap(Rng& mapRng, int actIndex, int numOf
 // are given (so GetMapPointTypes draws nothing) and elites may ignore the placement rules.
 struct MapTypeCounts { int unknowns = 0, rests = 0, elites = 5; bool elitesIgnoreRules = false; };
 std::vector<MapNode> generateStandardActMap(Rng& mapRng, int actIndex, const MapTypeCounts& counts, bool hasSecondBoss);
+// E2: SpoilsActMap (SpoilsMap's act map, every path through one centred treasure), same indexing.
+// `counts` (BigGameHunter) replaces GetMapPointTypes; null = roll them.
+std::vector<MapNode> generateSpoilsActMap(Rng& mapRng, int actIndex, int numOfElites, const MapTypeCounts* counts);
 
 struct Encounter {
   std::string id;
@@ -1314,6 +1400,18 @@ struct Run {
   bool ancientPending = false;      // the act starts with its Ancient (Run::main runs it first)
   Task<> enterAncient();
   Task<> chooseCardFor(std::vector<std::unique_ptr<Card>> options);  // CardSelectCmd.FromChooseACardScreen -> deck
+  // E2 (quests.cpp): CardSelectCmd.FromChooseABundleScreen -> deck. The bundles go to rewardCards one
+  // after the other, rewardBundleSize cards each; rewardChoice answers with the bundle index.
+  Task<> chooseBundleFor(std::vector<std::vector<std::unique_ptr<Card>>> bundles);
+  int rewardBundleSize = 1;
+  // E2: the map point before the current one (RunState.VisitedMapCoords[^2], WingedBoots) and
+  // RunState.CurrentRoomCount (1 in a map point's room, 2 in an event's fight).
+  int previousNode = -1;
+  int currentRoomCount = 0;
+  bool spoilsActMap = false;     // the map being generated is a SpoilsActMap (BigGameHunter keeps it)
+  void runLateMapHooks();       // ModifyGeneratedMapLate + AfterMapGenerated on Run::nodes (new or loaded map)
+  Task<> beforeRoomEntered(RoomType type);  // Hook.BeforeRoomEntered
+  Task<int> handleSpoilsMap();   // OneOffSynchronizer.TryHandleSpoilsMap (treasure rooms)
   Signal<int> placeholderDone;
   // UnknownMapPointOdds: current odds of the non-event outcomes of a "?" room.
   float unknownMonsterOdds = 0.1f, unknownTreasureOdds = 0.02f, unknownShopOdds = 0.03f;
@@ -1523,6 +1621,20 @@ template <class P> Task<> applyPower(Creature* target, Dec amount, Creature* app
   // (after Hook.ModifyPowerAmountReceived either way).
   if (target->combat && target->combat->ending) co_return;
   co_await cmd::applyPower(std::make_unique<P>(), target, amount, applier, src, silent);
+}
+
+// PowerCmd.Apply<T> returning the power: the new instance, or the one it stacked onto (null when the
+// application was blocked, e.g. by Artifact, or the stack dropped to 0). Needed for instanced powers,
+// whose new instance is not `target->get<P>()`.
+template <class P> Task<P*> applyPowerGet(Creature* target, Dec amount, Creature* applier, Card* src, bool silent = false) {
+  if (target->combat && target->combat->ending) co_return nullptr;
+  auto fresh = std::make_unique<P>();
+  P* raw = fresh.get();
+  Power* stack = target->stackingInstance(*raw, applier);
+  co_await cmd::applyPower(std::move(fresh), target, amount, applier, src, silent);
+  Power* want = stack ? stack : raw;
+  for (auto& q : target->powers) if (q.get() == want) co_return static_cast<P*>(want);
+  co_return nullptr;
 }
 
 template <class P> Task<> Monster::applyToSelf(Dec amount) {

@@ -169,12 +169,18 @@ struct Normality : IroncladT<Normality> {
   }
 };
 
-// LanternKey.cs: unplayable quest card. PORT NOTE: its act-3 hooks (ModifyUnknownMapPointRoomTypes
-// / ModifyNextEvent -> WarHistorianRepy) need run-level hooks on deck cards and the Quest card type.
+// LanternKey.cs: unplayable quest card. In act 3 (Glory, index 2) every "?" room is an event and
+// every event is WarHistorianRepy (events_shared3.cpp), which takes the key.
 struct LanternKey : IroncladT<LanternKey> {
-  CARD_HEADER(LanternKey, "LANTERN_KEY", -1, Status, Token, Self)
+  CARD_HEADER(LanternKey, "LANTERN_KEY", -1, Quest, Quest, Self)
     keywords = kwUnplayable;
     maxUpgradeLevel = 0;
+  }
+  int modifyUnknownMapPointRoomTypes(int types) override {
+    return run && run->actIndex == 2 ? roomBit(RoomType::Unknown) : types;
+  }
+  std::string modifyNextEvent(const std::string& eventId) override {
+    return run && run->actIndex == 2 ? std::string("WarHistorianRepy") : eventId;
   }
 };
 

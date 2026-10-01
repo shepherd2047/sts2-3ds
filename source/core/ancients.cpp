@@ -319,8 +319,8 @@ struct PrecariousShears : Relic {
 namespace {
 // Neow.PositiveOptions / CurseOptions and the coin-flip extras, as in the C#. Relics that
 // aren't registered (their systems are missing) count as not allowed at Neow.
-// PORT NOTE: not ported: MassiveScroll (multiplayer only), ScrollBoxes (bundle screen),
-// WingedBoots (free travel), DowsingRod (quest cards).
+// PORT NOTE: not ported: MassiveScroll (multiplayer only). ScrollBoxes, WingedBoots and DowsingRod
+// are in quests.cpp (E2).
 const std::vector<std::string> kPositive = {
     "ArcaneScroll", "BoomingConch", "FishingRod", "GoldenPearl", "Kaleidoscope", "LeadPaperweight", "LostCoffer",
     "MassiveScroll", "NeowsTorment", "NewLeaf", "PhialHolster", "PreciseScissors", "ScrollBoxes", "WingedBoots"};

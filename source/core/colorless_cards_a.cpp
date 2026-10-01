@@ -21,11 +21,12 @@ void stableShuffleCards(std::vector<Card*>& v, Rng& rng) {
 
 // ================================================================ powers
 
-// AutomationPower.cs: every 10 cards drawn, gain Amount energy. PORT NOTE: the C# power is Instanced (one
-// per Automation played, each with its own 10-card counter); here one power stacks the energy and shares
-// the counter.
+// AutomationPower.cs: Instanced (one per Automation played, each with its own 10-card counter). Every 10
+// cards drawn, gain Amount energy. The HUD shows cardsLeft.
 struct AutomationPower : Power {
   POWER_HEADER(AutomationPower, "AUTOMATION_POWER")
+  PowerInstanceType instanceType() const override { return PowerInstanceType::Instanced; }
+  int displayAmount() const override { return cardsLeft; }
   int cardsLeft = 10;
   Task<> afterCardDrawn(Card* card, bool) override {
     if (ownerOf(card) != owner) co_return;
@@ -59,6 +60,7 @@ struct CalamityPower : Power {
 // DarkShacklesPower.cs: TemporaryStrengthPower with IsPositive == false (see DyingStarPower).
 struct DarkShacklesPower : Power {
   POWER_HEADER(DarkShacklesPower, "DARK_SHACKLES_POWER")
+  const char* internallyAppliedPower() const override { return "StrengthPower"; }  // ITemporaryPower
   PowerType type() const override { return PowerType::Debuff; }
   Task<> beforeApplied(Creature* target, Dec amt, Creature* app, Card* src) override {
     co_await applyPower<StrengthPower>(target, -amt, app, src, true);
@@ -190,18 +192,13 @@ struct Bolas : IroncladT<Bolas> {
   CARD_HEADER(Bolas, "BOLAS", 0, Attack, Rare, AnyEnemy)
     addVar("Damage", 3);
   }
-  // CardPlaysFinished entry of this card: round it happened in. `playedBy` guards against a copy
-  // (clone()) inheriting the original's history.
-  const Card* playedBy = nullptr;
-  int playedRound = -100;
-  Task<> onPlay(CardPlay& p) override {
-    co_await attack(p.target, val("Damage"));
-    playedBy = this;
-    playedRound = combat->roundNumber;
-  }
+  Task<> onPlay(CardPlay& p) override { co_await attack(p.target, val("Damage")); }
+  // A CardPlaysFinished entry of this card that HappenedLastPlayerTurn.
   Task<> beforeHandDraw() override {
-    if (playedBy == this && playedRound == combat->roundNumber - 1 && combat->pileOf(this) != Pile::Hand)
-      co_await cmd::moveCard(*combat, this, Pile::Hand);
+    bool played = combat->history.any([this](const CombatHistoryEntry& e) {
+      return e.kind == CombatHistoryEntry::CardPlayFinished && e.card == this && CombatHistory::happenedLastPlayerTurn(e, *combat);
+    });
+    if (played && combat->pileOf(this) != Pile::Hand) co_await cmd::moveCard(*combat, this, Pile::Hand);
   }
   void onUpgrade() override { upgradeVar("Damage", 1); }
 };

@@ -7,10 +7,10 @@
 // relics_shared2.cpp (A5); PaelsGrowth (CloneRestSiteOption); the enchanting event relics (BeautifulBracelet,
 // TriBoomerang, ElectricShrymp, PaelsClaw, NutritiousSoup, Glitter, SilkenTress, SilverCrucible)
 // are in relics_enchant.cpp (A3c); Byrdpip (pets +
-// ByrdonisEgg hatching); WingedBoots (free travel on the map); DowsingRod (quest cards);
-// Driftwood (card reward reroll); PaelsWing (sacrificing card rewards); PaelsEye (extra turn);
+// ByrdonisEgg hatching); WingedBoots and DowsingRod are in quests.cpp (E2);
+// Driftwood (card reward reroll); PaelsWing (sacrificing card rewards);
 // PaelsLegion (pets); GoldenCompass (golden path); FurCoat (map marks); ToyBox (wax relics);
-// WhisperingEarring (turn-1 autoplay); ScrollBoxes (bundle screen); SeaGlass / PrismaticGem
+// WhisperingEarring (turn-1 autoplay); ScrollBoxes (quests.cpp, E2); SeaGlass / PrismaticGem
 // (other characters' card pools as reward sources); Kaleidoscope (needs the unlock state);
 // MassiveScroll (multiplayer only).
 #include "cards.h"
@@ -25,15 +25,23 @@ template <class R> void reg() { db::registerRelic(R::kId, [] { return std::uniqu
 
 // ---------------------------------------------------------------- potion
 
-// Ambergris.cs (Event rarity): heal 50% of max HP. PORT NOTE: AmbergrisPower (the extra turn:
-// ShouldTakeExtraTurn / AfterTakingExtraTurn) is not applied; this engine has no extra-turn
-// system yet, so only the heal happens.
+// AmbergrisPower.cs: while Amount > 0 the owner takes another turn instead of the enemies'
+// (Hook.ShouldTakeExtraTurn); each extra turn taken uses one. PORT NOTE: IsVisibleInternal is
+// false in the C#; here it is applied silently but still listed with the owner's powers.
+struct AmbergrisPower : Power {
+  POWER_HEADER(AmbergrisPower, "AMBERGRIS_POWER")
+  bool shouldTakeExtraTurn() override { return amount > 0 && owner && owner->isPlayer; }
+  Task<> afterTakingExtraTurn() override { co_await cmd::decrement(this); }
+};
+
+// Ambergris.cs (Event rarity): heal 50% of max HP; in combat, also take an extra turn (AmbergrisPower).
 struct Ambergris : Potion {
   POTION_HEADER(Ambergris, "AMBERGRIS", Event, AnyTime, Self) addVar("HealPercent", 50); }
   Task<> onUse(Creature* t) override {
     Dec amount = Dec(t->maxHp) * val("HealPercent") / Dec(100);
     if (run->combat && run->combat->inProgress && !run->combat->over) {
       co_await cmd::heal(t, amount);
+      co_await applyPower<AmbergrisPower>(t, 1, run->combat->player, nullptr, true);
       co_return;
     }
     t->hp = std::min(t->maxHp, t->hp + amount.toInt());
@@ -125,6 +133,7 @@ struct PhylacteryUnbound : Relic {
 }  // namespace
 
 void registerRelicsEvent() {
+  registerPowerType<AmbergrisPower>();
   db::registerPotion(Ambergris::kId, [] { return std::unique_ptr<Potion>(new Ambergris()); });
   reg<LostCoffer>();
   reg<PhialHolster>();

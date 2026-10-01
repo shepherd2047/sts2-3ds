@@ -17,6 +17,7 @@ namespace {
 // (powers_ironclad.h) under its own id (CrushUnder's own hover tip looks it up by name).
 struct CrushUnderPower : Power {
   POWER_HEADER(CrushUnderPower, "CRUSH_UNDER_POWER")
+  const char* internallyAppliedPower() const override { return "StrengthPower"; }  // ITemporaryPower
   Task<> beforeApplied(Creature* target, Dec amt, Creature* app, Card* src) override {
     co_await applyPower<StrengthPower>(target, -amt, app, src, true);
   }

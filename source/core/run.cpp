@@ -83,6 +83,11 @@ void Run::historyRoom(history::RoomKind type, const std::string& model) {
 
 std::vector<Model*> Run::listeners() {
   std::vector<Model*> out;
+  for (auto& c : deck) {  // RunState.IterateHookListeners: the deck cards (and enchantments) first (E2)
+    c->run = this;
+    out.push_back(c.get());
+    if (c->enchantment) out.push_back(c->enchantment.get());
+  }
   for (auto& r : relics) out.push_back(r.get());
   for (auto& m : modifiers) out.push_back(m.get());  // RunState.IterateHookListeners: modifiers after relics
   return out;
@@ -209,6 +214,15 @@ Task<> Run::chooseRelic(std::vector<std::unique_ptr<Relic>> rs, bool fromChest) 
 
 Creature* Event::owner() { return run->player.get(); }
 
+// Hook.ModifyNextEvent (E2: LanternKey turns act 3's events into WarHistorianRepy).
+static std::unique_ptr<Event> modifyNextEvent(Run& r, std::unique_ptr<Event> e) {
+  std::string id = e ? e->id : "", out = id;
+  for (Model* m : r.listeners()) out = m->modifyNextEvent(out);
+  if (out == id) return e;
+  auto replaced = db::event(out);
+  return replaced ? std::move(replaced) : std::move(e);
+}
+
 // ActModel.PullNextEvent + RoomSet.EnsureNextEventIsValid: the next allowed event not
 // seen this run; when all are used up, repeats are allowed.
 std::unique_ptr<Event> Run::pullNextEvent() {
@@ -220,10 +234,10 @@ std::unique_ptr<Event> Run::pullNextEvent() {
       auto e = db::event(id);
       if (!e || !e->isAllowed(*this)) continue;
       eventQueue.erase(eventQueue.begin() + (long)i);
-      return e;
+      return modifyNextEvent(*this, std::move(e));
     }
   }
-  return nullptr;
+  return modifyNextEvent(*this, nullptr);
 }
 
 Task<> Run::runEvent(std::unique_ptr<Event> e) {
@@ -256,7 +270,9 @@ Task<std::vector<Card*>> Run::selectFromDeck(std::string prompt, std::function<b
   // CardSelectCmd.FromDeckForRemoval / FromDeckForTransformation: Eternal cards are not offered.
   bool removal = prompt == "card_selection.TO_REMOVE", transform = prompt == "card_selection.TO_TRANSFORM";
   for (auto& c : deck)
-    if ((!filter || filter(c.get())) && !((removal || transform) && !c->isRemovable())) opts.push_back(c.get());
+    if ((!filter || filter(c.get())) && !((removal || transform) && !c->isRemovable()) &&
+        !(transform && c->type == CardType::Quest))  // FromDeckForTransformation skips Quest cards (E2)
+      opts.push_back(c.get());
   if (opts.empty()) co_return std::vector<Card*>{};
   deckChoice.prompt = std::move(prompt);
   deckChoice.options = std::move(opts);
@@ -291,6 +307,7 @@ Card* Run::addCardToDeck(std::unique_ptr<Card> c) {
 }
 
 void Run::removeCardFromDeck(Card* c) {
+  for (Model* m : listeners()) m->beforeCardRemoved(c);  // Hook.BeforeCardRemoved (E2)
   deck.erase(std::remove_if(deck.begin(), deck.end(), [&](const std::unique_ptr<Card>& d) { return d.get() == c; }), deck.end());
 }
 
@@ -335,9 +352,12 @@ Task<bool> Run::eventFight(const std::string& encounterId) {
   const Encounter* enc = db::encounter(encounterId);
   if (!enc) co_return true;
   historyRoom(historyFightKind(enc->room), encounterId);  // the event's fight is a room of its map point
+  ++currentRoomCount;  // the fight's room goes on top of the event's (E2)
+  co_await beforeRoomEntered(enc->room);
   bool won = co_await fight(encounterId);
   if (!won) { died = true; co_return false; }
   co_await combatRewards(enc->room);
+  --currentRoomCount;
   co_return true;
 }
 
@@ -528,9 +548,15 @@ RoomType Run::rollUnknownRoom() {
                                               {RoomType::Elite, &unknownEliteOdds},
                                               {RoomType::Treasure, &unknownTreasureOdds},
                                               {RoomType::Shop, &unknownShopOdds}};
-  bool juzu = hasRelic("JuzuBracelet");  // ModifyUnknownMapPointRoomTypes: no Monster
+  // Hook.ModifyUnknownMapPointRoomTypes (JuzuBracelet: no Monster; LanternKey: only Event) on
+  // {Monster, Elite, Treasure, Shop, Event}; Event (Unknown here) wins when allowed, else the first.
+  int types = roomBit(RoomType::Monster) | roomBit(RoomType::Elite) | roomBit(RoomType::Treasure) |
+              roomBit(RoomType::Shop) | roomBit(RoomType::Unknown);
+  for (Model* m : listeners()) types = m->modifyUnknownMapPointRoomTypes(types);
+  if (!(types & roomBit(RoomType::Unknown)))
+    for (auto& [t, p] : odds) if (types & roomBit(t)) { result = t; break; }
   for (auto& [t, p] : odds) {
-    if ((juzu && t == RoomType::Monster) || *p < 0) continue;
+    if (!(types & roomBit(t)) || *p < 0) continue;
     sum += *p;
     if (roll <= sum) { result = t; break; }
   }
@@ -538,6 +564,7 @@ RoomType Run::rollUnknownRoom() {
   const float base[] = {0.1f, deadly ? 0.1f : -1.f, 0.02f, 0.03f};
   for (int i = 0; i < 4; ++i) {
     if (odds[i].first == result) { *odds[i].second = base[i]; continue; }
+    if (!(types & roomBit(odds[i].first))) continue;  // only the allowed types grow
     if (*odds[i].second < 0 && base[i] < 0) continue;  // Elite without DeadlyEvents stays at -1
     // Hook.ModifyOddsIncreaseForUnrolledRoomType: DeadlyEvents doubles the treasure increase.
     float inc = deadly && odds[i].first == RoomType::Treasure ? base[i] * 2 : base[i];
@@ -745,6 +772,7 @@ void Run::enterAct(int index) {
   unknownEliteOdds = hasModifier("DeadlyEvents") ? 0.1f : -1.f;
   generateMap();
   currentNode = 0;  // the starting point (the Ancient's node)
+  previousNode = -1;  // RunState.RemoveStaleVisitedMapCoords
   nodes[0].visited = true;
   ancientPending = !ancientId.empty();
   modifiers::afterActEntered(*this);  // Hook.AfterActEntered: CursedRun
@@ -756,6 +784,7 @@ Task<> Run::enterAncient() {
   ancientPending = false;
   auto e = db::event(ancientId);
   if (!e) co_return;
+  currentRoomCount = 1;
   historyPoint(history::PointType::Ancient);  // an Ancient's map point resolves to an Event room
   historyRoom(history::RoomKind::Event, ancientId);
   // AncientEventModel.BeforeEventStarted: heal to full (Neow starts from 0 HP); WearyTraveler heals 80%.
@@ -785,6 +814,9 @@ void Run::generateMap() {
   // StandardActMap.CreateFor: hasSecondBoss = Act.HasSecondBoss (DoubleBoss rolled a second boss).
   nodes = generateStandardActMap(rng(stream.c_str()), actIndex, hasAscension(kSwarmingElites) ? 8 : 5,
                                  !secondBossId.empty());
+  // Hook.ModifyGeneratedMap, deck cards first (E2: SpoilsMap makes act 2 a SpoilsActMap), then BigGameHunter.
+  spoilsActMap = false;
+  for (Model* m : listeners()) m->modifyGeneratedMap(actIndex);
   // BigGameHunter.ModifyGeneratedMap: the act is generated again from a fresh Rng(seed,
   // "act_<n>_map") with this map's unknown / rest counts, 2.5x its elites, elites free of the rules.
   if (hasModifier("BigGameHunter")) {
@@ -797,9 +829,15 @@ void Run::generateMap() {
     }
     counts.elites = (int)std::round((float)elites * 2.5f);
     counts.elitesIgnoreRules = true;
-    rngs[stream] = std::make_unique<Rng>(seed, stream);
-    nodes = generateStandardActMap(*rngs[stream], actIndex, counts, !secondBossId.empty());
+    if (spoilsActMap) {  // new SpoilsActMap(runState, override): its own fresh "spoils_map" Rng
+      Rng spoils(seed, "spoils_map");
+      nodes = generateSpoilsActMap(spoils, actIndex, counts.elites, &counts);
+    } else {
+      rngs[stream] = std::make_unique<Rng>(seed, stream);
+      nodes = generateStandardActMap(*rngs[stream], actIndex, counts, !secondBossId.empty());
+    }
   }
+  runLateMapHooks();  // Hook.ModifyGeneratedMapLate (inside ModifyGeneratedMap) + AfterMapGenerated
   // NMapScreen layout: each point jittered by up to ±21 / ±25 units (map_jitter_<act>
   // stream) and tilted by NextGaussianFloat(0, 8) degrees (Rng.Chaotic in C#: cosmetic only).
   std::string jitter = "map_jitter_" + std::to_string(actIndex);
@@ -834,8 +872,10 @@ std::vector<int> Run::pathNodes() const {
     for (int i = 0; i < (int)nodes.size(); ++i) if (nodes[i].row == 0) out.push_back(i);
   } else {
     out = nodes[currentNode].next;
-    // Flight (Hook.ShouldAllowFreeTravel, MapTravel): every point of the next row.
-    if (hasModifier("Flight") && nodes[currentNode].type != RoomType::Boss) {
+    // Flight / WingedBoots (Hook.ShouldAllowFreeTravel, MapTravel): every point of the next row.
+    bool freeTravel = hasModifier("Flight");
+    for (Model* m : const_cast<Run*>(this)->listeners()) freeTravel = freeTravel || m->shouldAllowFreeTravel();
+    if (freeTravel && nodes[currentNode].type != RoomType::Boss) {
       std::vector<int> row;
       for (int i = 0; i < (int)nodes.size(); ++i)
         if (nodes[i].row == nodes[currentNode].row + 1 && nodes[i].type != RoomType::Ancient) row.push_back(i);
@@ -997,7 +1037,9 @@ Task<> Run::main() {
     }
     auto reach = reachableNodes();
     if (std::find(reach.begin(), reach.end(), choice) == reach.end()) continue;
+    previousNode = currentNode;  // RunState.VisitedMapCoords (E2: WingedBoots)
     currentNode = choice;
+    currentRoomCount = 1;
     nodes[choice].visited = true;
     ++floor;
     RoomType type = nodes[choice].type;
@@ -1017,6 +1059,7 @@ Task<> Run::main() {
       type = rollUnknownRoom();
       for (auto& rel : relics) co_await rel->afterUnknownRoomEntered();  // Planisphere
     }
+    co_await beforeRoomEntered(type);  // RunManager.EnterRoomInternal (E2: Dowsing)
     if (type == RoomType::Unknown) {
       std::unique_ptr<Event> e;
       if (const char* id = getenv("STS_EVENT"); forcedEvent && id) e = db::event(id);
@@ -1109,6 +1152,7 @@ Task<> Run::main() {
       for (auto& rel : relics) generate = generate && rel->shouldGenerateTreasure();
       if (generate) {
         co_await gainGold(rng("Rewards").nextInt(42, 53));
+        co_await handleSpoilsMap();  // OneOffSynchronizer.DoTreasureRoomRewards (E2)
         // Debug: STS_TREASURE_RELICS=N offers a choose-one of N chest relics (the multiplayer
         // shared-relic layout; single player always gets one).
         int n = 1;
@@ -1141,6 +1185,7 @@ Task<> Run::restSite() {
     if (hasRelic("MeatCleaver")) restOptions.push_back(4);   // CookRestSiteOption
     if (hasRelic("PumpkinCandle")) restOptions.push_back(5); // KindleRestSiteOption
     if (hasRelic("PaelsGrowth")) restOptions.push_back(6);   // CloneRestSiteOption
+    for (Model* m : listeners()) m->tryModifyRestSiteOptions(restOptions);  // E2: ByrdonisEgg's Hatch (7)
     screen = Screen::Rest;
     int opt = co_await restChoice.next();
     if (opt < 0) break;
@@ -1189,6 +1234,11 @@ Task<> Run::restSite() {
       for (auto& card : deck) if (card->enchantment && card->enchantment->id == "Clone") cloned.push_back(card.get());
       for (Card* card : cloned) addCardToDeck(card->clone());
       co_await wait(0.4);
+      done = true;
+    } else if (opt == 7) {  // HatchRestSiteOption (E2): obtain Byrdpip
+      auto pip = db::relic("Byrdpip");
+      if (!pip) continue;
+      co_await obtainRelic(std::move(pip));
       done = true;
     } else if (opt == 3) {  // DigRestSiteOption: a relic from the front of the bag
       co_await offerRelic(pullRelicFromFront(relicBag, rollRelicRarity(rng("Rewards"))), false);

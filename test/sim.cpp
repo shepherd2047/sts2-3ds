@@ -24,7 +24,8 @@ int main(int argc, char** argv) {
   int runs = argc > 1 ? atoi(argv[1]) : 50;
   bool verbose = argc > 2;
   int wins = 0, floorsTotal = 0;
-  int startSeed = getenv("SIM_SEED") ? atoi(getenv("SIM_SEED")) : 1;
+  // SIM_FIRST=k: seeds k..N (tools/soak.sh resumes after a crash with it).
+  int startSeed = getenv("SIM_SEED") ? atoi(getenv("SIM_SEED")) : getenv("SIM_FIRST") ? atoi(getenv("SIM_FIRST")) : 1;
   int endSeed = getenv("SIM_SEED") ? startSeed : runs;
   // SIM_HISTORY_ROOT=<scratch dir>: turn saves on under that root so each finished run is written
   // to its profile 1 run history (M2); never point it at a real save directory.
@@ -351,7 +352,8 @@ int main(int argc, char** argv) {
       if (cur->combat) {
         if (verbose)
           for (auto& e : cur->combat->events) {
-            static const char* names[] = {"Damage", "Blocked", "Block", "Heal", "PowerUp", "PowerDown", "Death", "Exhaust", "Shuffle", "Banner", "Anim"};
+            static const char* names[] = {"Damage", "Blocked", "Block", "Heal", "PowerUp", "PowerDown", "Death", "Exhaust", "Shuffle", "Banner", "Anim",
+                                           "Hit", "CardPlayed", "BlockBroken"};  // = CombatEvent::Kind
             printf("    [%s] %s %d %s | hp=%d blk=%d\n", names[e.kind], e.who ? e.who->name.c_str() : "-", e.amount, e.text.c_str(),
                    e.who ? e.who->hp : 0, e.who ? e.who->block : 0);
           }

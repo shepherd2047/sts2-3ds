@@ -5,8 +5,8 @@
 // Ancient options only offer registered relics (like Neow). Not ported yet, so never
 // offered: ElectricShrymp, PaelsClaw, PaelsGrowth, NutritiousSoup, Glitter,
 // BeautifulBracelet, TriBoomerang (enchantments); SeaGlass, PrismaticGem (other
-// characters); Driftwood (reward reroll), PaelsWing (sacrifice a card reward), PaelsEye
-// (extra turn), PaelsLegion (pets), GoldenCompass (golden path map), FurCoat (map marks),
+// characters); Driftwood (reward reroll), PaelsWing (sacrifice a card reward),
+// PaelsLegion (pets), GoldenCompass (golden path map), FurCoat (map marks),
 // ToyBox (wax relics), WhisperingEarring (turn-1 autoplay). Eternal curses can be removed.
 #include <algorithm>
 
@@ -136,12 +136,16 @@ struct Maul : IroncladT<Maul> {
     addVar("Damage", 5);
     addVar("Increase", 2);
   }
+  Dec extraDamageFromMaulPlays = 0;
+  void afterDowngraded() override { upgradeVar("Damage", extraDamageFromMaulPlays); }
   Task<> onPlay(CardPlay& p) override {
     co_await attack(p.target, val("Damage"), 2);
     Dec inc = val("Increase");
     for (Card* c : combat->allCards())
-      if (c->id == "Maul")
+      if (c->id == "Maul") {
         if (auto* d = c->var("Damage")) d->base += inc;
+        static_cast<Maul*>(c)->extraDamageFromMaulPlays += inc;  // BuffFromMaulPlay
+      }
   }
   void onUpgrade() override { upgradeVar("Damage", 1); upgradeVar("Increase", 1); }
 };

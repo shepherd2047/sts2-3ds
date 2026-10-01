@@ -218,9 +218,10 @@ struct IceCream : Relic {
   bool shouldResetEnergy() override { return !combat || combat->turnNumber == 1; }
 };
 
-// ---- JuzuBracelet (Common): "?" rooms are never fights (Run::rollUnknownRoom). ----
+// ---- JuzuBracelet (Common): "?" rooms are never fights (ModifyUnknownMapPointRoomTypes). ----
 struct JuzuBracelet : Relic {
   RELIC_HEADER(JuzuBracelet, "JUZU_BRACELET", Common) }
+  int modifyUnknownMapPointRoomTypes(int types) override { return types & ~roomBit(RoomType::Monster); }
 };
 
 // ---- LastingCandy (Uncommon): every other combat's card reward offers an extra Power. ----
@@ -305,7 +306,7 @@ struct Orrery : Relic {
 // ---- PetrifiedToad (Uncommon): a Potion-Shaped Rock at the start of each combat. ----
 struct PetrifiedToad : Relic {
   RELIC_HEADER(PetrifiedToad, "PETRIFIED_TOAD", Uncommon) }
-  Task<> beforeCombatStart() override {
+  Task<> beforeCombatStartLate() override {
     if (run->procurePotion(db::potion("PotionShapedRock"))) doFlash();
     return {};
   }

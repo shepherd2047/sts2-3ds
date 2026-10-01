@@ -179,7 +179,7 @@ struct MeatOnTheBone : Relic {
     int cap = (Dec(p->maxHp) * (threshold / Dec(100))).toInt();
     return p->hp <= cap;
   }
-  Task<> afterCombatVictory() override {
+  Task<> afterCombatVictoryEarly() override {
     if (!owner()->dead() && willHeal()) {
       doFlash();
       co_await cmd::heal(owner(), val("Heal"));
