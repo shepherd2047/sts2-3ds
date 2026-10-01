@@ -285,26 +285,73 @@ struct Stack : IroncladT<Stack> {
 
 // ---------------------------------------------------------------- quest cards
 
-// Dowsing.cs. PORT NOTE: locked. It is a Quest card (CardType.Quest) whose BeforeRoomEntered counts
-// entered "?" map points in the deck (5, then CompleteQuest + transform into Abundance); the engine
-// has no Quest card type and no run-level hook for deck cards. Registered as an unplayable token
-// (like LanternKey) with its "Rooms" var, so it can be added to a deck and shown.
+// Dowsing.cs (Quest, DowsingRod): counts the "?" map points entered while it is in the deck; at 5 it
+// completes its quest and transforms into Abundance. RoomsEntered is the "Rooms" var (5 - RoomsEntered),
+// which the card save keeps.
 struct Dowsing : IroncladT<Dowsing> {
-  CARD_HEADER(Dowsing, "DOWSING", -1, Status, Token, None)
+  CARD_HEADER(Dowsing, "DOWSING", -1, Quest, Quest, None)
     keywords = kwUnplayable;
     maxUpgradeLevel = 0;
     addVar("Rooms", 5);
   }
+  Task<> beforeRoomEntered(RoomType) override {
+    if (!inDeck() || run->currentRoomCount > 1) co_return;
+    if (run->currentNode < 0 || run->nodes[run->currentNode].type != RoomType::Unknown) co_return;  // MapPointType.Unknown
+    int roomsEntered = 5 - val("Rooms").toInt() + 1;  // RoomsEntered++
+    var("Rooms")->base = Dec(5 - roomsEntered);
+    if (roomsEntered >= 5) run->transformCard(this, db::card("Abundance"));  // CompleteQuest + TransformTo<Abundance>
+  }
 };
 
-// SpoilsMap.cs. PORT NOTE: locked. Needs the act-map rewrite hooks (ModifyGeneratedMap[Late] ->
-// SpoilsActMap, AfterMapGenerated -> MapPoint.AddQuest), the Quest card type and OnQuestComplete
-// from the map screen; none exist. Only the unplayable card with its Gold var is registered.
+// SpoilsMap.cs (Quest, TheLegendsWereTrue): act 2 (SpoilsActIndex, set by AfterCreated) becomes a
+// SpoilsActMap whose treasure point carries the quest; opening that chest gives 600 gold and removes
+// the card (Run::handleSpoilsMap -> OnQuestComplete). SpoilsCoord is not saved, as in the C#: the
+// late map hook finds it again on a loaded map.
 struct SpoilsMap : IroncladT<SpoilsMap> {
-  CARD_HEADER(SpoilsMap, "SPOILS_MAP", -1, Status, Token, Self)
+  CARD_HEADER(SpoilsMap, "SPOILS_MAP", -1, Quest, Quest, Self)
     keywords = kwUnplayable;
     maxUpgradeLevel = 0;
     addVar("Gold", 600);
+  }
+  int spoilsActIndex = 1;  // [SavedProperty] SpoilsActIndex: AfterCreated always sets 1
+  int spoilsCol = -1, spoilsRow = -1;  // SpoilsCoord (our map indexing)
+  int spoilsNode() const {
+    if (!run) return -1;
+    for (int i = 0; i < (int)run->nodes.size(); ++i)
+      if (run->nodes[i].col == spoilsCol && run->nodes[i].row == spoilsRow && run->nodes[i].type != RoomType::Ancient) return i;
+    return -1;
+  }
+  void modifyGeneratedMap(int actIndex) override {
+    if (actIndex != spoilsActIndex || !inDeck()) return;
+    Rng rng(run->seed, "spoils_map");  // new SpoilsActMap(runState): Rng(seed, "spoils_map")
+    run->nodes = generateSpoilsActMap(rng, actIndex, run->hasAscension(kSwarmingElites) ? 8 : 5, nullptr);
+    run->spoilsActMap = true;
+  }
+  void modifyGeneratedMapLate(int actIndex) override {
+    if (actIndex != spoilsActIndex || !inDeck()) return;
+    // GetAllMapPoints().FirstOrDefault(Treasure): column by column, then by row.
+    const MapNode* best = nullptr;
+    for (auto& n : run->nodes)
+      if (n.type == RoomType::Treasure && (!best || n.col < best->col || (n.col == best->col && n.row < best->row))) best = &n;
+    if (best) { spoilsCol = best->col; spoilsRow = best->row; }
+  }
+  void afterMapGenerated(int actIndex) override {
+    if (!inDeck() || actIndex != spoilsActIndex) return;
+    if (int n = spoilsNode(); n >= 0) run->nodes[n].quests.push_back(id);  // MapPoint.AddQuest
+  }
+  void beforeCardRemoved(Card* card) override {
+    if (card != this || !run || spoilsActIndex != run->actIndex || spoilsCol < 0) return;
+    if (int n = spoilsNode(); n >= 0) {  // MapPoint.RemoveQuest
+      auto& q = run->nodes[n].quests;
+      if (auto it = std::find(q.begin(), q.end(), id); it != q.end()) q.erase(it);
+    }
+  }
+  Task<int> onQuestComplete() override {
+    int gold = val("Gold").toInt();
+    Run* r = run;
+    co_await r->gainGold(gold);
+    r->removeCardFromDeck(this);  // CompleteQuest + CardPileCmd.RemoveFromDeck (frees this card)
+    co_return gold;
   }
 };
 

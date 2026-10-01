@@ -122,11 +122,14 @@ struct TheLegendsWereTrue : Event {
   bool isAllowed(Run& r) override { return r.actIndex == 0 && !r.deck.empty() && r.player->hp >= 10; }
   void calculateVars() override { addVar("Damage", 8); }
   std::vector<EventOption> initialOptions() override {
-    // PORT NOTE: NAB_THE_MAP gives SpoilsMap, a Quest card whose act-2 map rewrite (SpoilsActMap:
-    // ModifyGeneratedMap / AfterMapGenerated / quest point on the map / 600 gold) needs map hooks
-    // and a Quest card type that do not exist; the option is locked.
-    return {EventOption{page("INITIAL") + ".options.NAB_THE_MAP", nullptr},
+    return {option("INITIAL", "NAB_THE_MAP", [this] { return nabTheMap(); }),
             option("INITIAL", "SLOWLY_FIND_AN_EXIT", [this] { return slowlyFindAnExit(); })};
+  }
+  // NAB_THE_MAP: the SpoilsMap quest card (E2: act 2 becomes a SpoilsActMap, quests.cpp).
+  Task<> nabTheMap() {
+    run->addCardToDeck(db::card("SpoilsMap"));
+    co_await wait(0.5);  // Cmd.CustomScaledWait(0.5, 1.2)
+    setFinished("NAB_THE_MAP");
   }
   Task<> slowlyFindAnExit() {
     co_await run->loseHp(val("Damage").toInt());  // Unblockable | Unpowered

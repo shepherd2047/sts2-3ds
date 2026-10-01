@@ -11,6 +11,7 @@ static uint32_t rarityOutline(Rarity r) {
     case Rarity::Rare: return 0x6B4B00FF;
     case Rarity::Curse: return 0x550B9EFF;
     case Rarity::Status: return 0x4F522FFF;
+    case Rarity::Quest: return 0x7E3E15FF;  // cardTitleOutlineQuest
     default: return 0x4D4B40FF;  // Basic, Common, Token, Ancient
   }
 }
@@ -22,6 +23,7 @@ static const char* bannerRarity(Rarity r) {
     case Rarity::Rare: return "rare";
     case Rarity::Curse: return "curse";
     case Rarity::Status: return "status";
+    case Rarity::Quest: return "quest";  // card_banner_quest_mat (falls back to the common banner)
     default: return "common";
   }
 }
@@ -40,6 +42,8 @@ static std::string framePool(const Card* c) {
 
 void App::drawCard(Card* c, float x, float y, float s, bool dim, bool desc, bool selected, bool unseen) {
   const char* kind = c->type == CardType::Attack ? "attack" : c->type == CardType::Power ? "power" : "skill";
+  // CardModel.FramePath: a Quest card has its own frame (card_frame_quest), the skill portrait border.
+  const bool quest = c->type == CardType::Quest;
   bool ancient = c->rarity == Rarity::Ancient;
   uint32_t tint = dim ? 0x000000FF : 0xFFFFFFFF;
   float blend = dim ? 0.45f : 0.f;
@@ -51,6 +55,10 @@ void App::drawCard(Card* c, float x, float y, float s, bool dim, bool desc, bool
   // (VisualCardPool.FrameMaterial), the portrait border and title banner that of its rarity
   // (CardModel.BannerMaterial). build_assets bakes each combination.
   Sprite frame = R().sprite(ancient ? "card/frame_ancient" : std::string("card/frame_") + kind + "_" + framePool(c));
+  if (quest) {
+    Sprite q = R().sprite("card/frame_quest");
+    if (q) frame = q;
+  }
   if (!frame) frame = R().sprite(std::string("card/frame_") + kind);
   spr(frame, x, y, 120 * s, 169 * s, tint, blend);
   if (!ancient) {

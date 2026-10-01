@@ -261,6 +261,7 @@ bool Run::load(const std::string& data) {
       nodes.push_back(second);
     }
   }
+  runLateMapHooks();  // E2: SavedActMap -> ModifyGeneratedMapLate + AfterMapGenerated (quest markers)
   ancientPending = false;
   died = false;
   screen = Screen::Map;
