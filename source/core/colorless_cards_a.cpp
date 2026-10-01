@@ -84,7 +84,7 @@ struct EntropyPower : Power {
   POWER_HEADER(EntropyPower, "ENTROPY_POWER")
   // CardFactory.CreateRandomCardForTransform(original, isInCombat: true, CombatCardSelection): the
   // original's pool (its character's, else the colorless one), Common..Rare, not the same card, generable
-  // in combat, then rng.NextItem. PORT NOTE: cards of no pool (Status / Curse) are left alone (the C# has
+  // in combat, then rng.NextItem. PORT NOTE (n/a: equivalent): cards of no pool (Status / Curse) are left alone (the C# has
   // no valid options and throws).
   static std::unique_ptr<Card> randomFor(Combat& c, Card* original) {
     std::vector<std::string> pool;

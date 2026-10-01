@@ -31,7 +31,7 @@ Task<> applyById(const char* powerId, Creature* target, Dec amount, Creature* ap
 // ================================================================ powers
 
 // StockPower.cs: when the Axebot dies, a new one takes its place with one less stock.
-// PORT NOTE: no respawn animation / delayed reveal.
+// PORT NOTE (n/a: visual): no respawn animation / delayed reveal.
 struct StockPower : Power {
   POWER_HEADER(StockPower, "STOCK_POWER")
   Task<> afterDeath(Creature* target) override;

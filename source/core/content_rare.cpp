@@ -191,10 +191,8 @@ struct Mangle : IroncladT<Mangle> {
   void onUpgrade() override { upgradeVar("Damage", 6); upgradeVar("StrengthLoss", 5); }
 };
 
-// PORT NOTE: C# is MultiplayerConstraint.MultiplayerOnly; this build is
-// single-player only, so that restriction has nothing to gate against and is
-// dropped. AfterCardEnteredCombat reduces cost by the CardExhausted entries so far
-// (not for a clone, which already carries the reduction).
+// MultiplayerConstraint.MultiplayerOnly is dropped (single-player build). AfterCardEnteredCombat
+// reduces cost by the CardExhausted entries so far (not for a clone, which already carries it).
 struct Midnight : IroncladT<Midnight> {
   CARD_HEADER(Midnight, "MIDNIGHT", 12, Attack, Rare, AnyEnemy)
     addVar("Damage", 60);
@@ -295,7 +293,7 @@ struct Stoke : IroncladT<Stoke> {
   }
 };
 
-// PORT NOTE: DamageDecrease (0.5) is only consumed by the multiplayer
+// PORT NOTE (n/a: single-player): DamageDecrease (0.5) is only consumed by the multiplayer
 // teammate-sharing side of TankPower (see powers_ironclad.h), which this
 // single-player build doesn't model; the self damage-taken increase (x1.5) is
 // implemented.

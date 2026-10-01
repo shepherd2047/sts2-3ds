@@ -23,7 +23,7 @@ template <class M> std::unique_ptr<Monster> mk() { return std::make_unique<M>();
 
 // PhantasmalGardener: the first time each turn a card's attack deals unblocked damage to the
 // owner, it gains Amount Block (unpowered), once the whole attack has finished (AfterAttack).
-// PORT NOTE: the BlockStart/BlockEnd animations and sfx are dropped.
+// PORT NOTE (n/a: visual): the BlockStart/BlockEnd animations and sfx are dropped.
 struct SkittishPower : Power {
   POWER_HEADER(SkittishPower, "SKITTISH_POWER")
   bool hasGainedBlockThisTurn = false;
@@ -93,7 +93,7 @@ struct PhantasmalGardener : Monster {
   int maxHp() const override { return asc(kToughEnemies, 32, 31); }
   Task<> afterAddedToRoom() override { co_await applyToSelf<SkittishPower>(asc(kToughEnemies, 7, 6)); }
   void buildMoves() override {
-    // PORT NOTE: CurrentScale / EnlargeTriggers only drive the sprite size; dropped.
+    // PORT NOTE (n/a: visual): CurrentScale / EnlargeTriggers only drive the sprite size; dropped.
     auto* bite = machine.add<MoveState>("BITE_MOVE");
     bite->perform = [this](Targets) { return attack(asc(kDeadlyEnemies, 5, 5)); };
     bite->intents = {attackIntent(asc(kDeadlyEnemies, 5, 5))};

@@ -31,7 +31,7 @@ Task<> applyById(const char* powerId, Creature* target, Dec amount, Creature* ap
 }
 
 // CreatureCmd.Escape: the creature leaves the room alive (no death hooks).
-// PORT NOTE: the UI has no escape animation; the death animation is played instead.
+// PORT NOTE (n/a: visual): the UI has no escape animation; the death animation is played instead.
 Task<> escapeCreature(Creature* c) {
   c->combat->push({VisualEvent::Death, c, 0});
   c->hp = 0;
@@ -104,9 +104,9 @@ struct HeistPower : Power {
 
 // GremlinMerc: when it dies a Sneaky Gremlin and a Fat Gremlin (carrying the stolen gold)
 // take its place, so the fight goes on.
-// PORT NOTE: GremlinMercNormal.CalculateGoldProportion (half the gold if Fat Gremlin escapes,
-// none if gold was stolen) is not implemented: this build has no per-encounter gold
-// proportion. The slots ("merc"/"sneaky"/"fat") are dropped too.
+// PORT NOTE: missing engine feature a per-combat gold proportion consumed by Run::combatRewards
+// (EncounterModel.CalculateGoldProportion with CombatState.EscapedCreatures: half the gold if Fat
+// Gremlin escapes, none if gold was stolen); GremlinMercNormal's is not implemented. The slots ("merc"/"sneaky"/"fat") are dropped too.
 struct SurprisePower : Power {
   POWER_HEADER(SurprisePower, "SURPRISE_POWER")
   StackType stackType() const override { return StackType::Single; }
@@ -385,7 +385,7 @@ struct GasBomb : Monster {
   int maxHp() const override { return minHp(); }
   Task<> afterAddedToRoom() override { co_await applyById("MinionPower", creature, 1, creature); }
   void buildMoves() override {
-    // PORT NOTE: DeathBlowIntent has no counterpart; shown as a plain attack intent.
+    // PORT NOTE (n/a: visual): DeathBlowIntent has no counterpart; shown as a plain attack intent.
     auto* explode = machine.add<MoveState>("EXPLODE_MOVE");
     explode->perform = [this](Targets) { return explodeMove(); };
     explode->intents = {attackIntent(asc(kDeadlyEnemies, 9, 8))};

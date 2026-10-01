@@ -266,7 +266,7 @@ struct OneTwoPunchPower : Power {
 
 // PlatingPower: the C# version scales its per-turn decrement by the player
 // count in multiplayer (GetScaledAmountForMultiplayer / the "Decrement" var);
-// PORT NOTE: single player, so that scaling factor is always 1.
+// PORT NOTE (n/a: single-player): single player, so that scaling factor is always 1.
 struct PlatingPower : Power {
   POWER_HEADER(PlatingPower, "PLATING_POWER")
   int decrementAmount = 1;

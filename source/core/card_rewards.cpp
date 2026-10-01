@@ -216,7 +216,9 @@ Task<bool> claimCardReward(Run& r, Run::RewardItem& item) {
       Relic* owner = owners[(size_t)(pick - n)];
       if (!owner) {  // CardReward.Reroll: CanReroll off, populate again (DoNothing: the screen stays)
         item.canReroll = false;
-        r.rewardCards = r.createForReward(item.cardOptions, item.cardCount);
+        // Empty reroll pools (Kaleidoscope's fixed rewards) make the C# throw; the old cards stay.
+        auto fresh = r.createForReward(item.cardOptions, item.cardCount);
+        if (!fresh.empty()) r.rewardCards = std::move(fresh);
         if (item.afterGenerated) item.afterGenerated(r.rewardCards);
         continue;
       }

@@ -5,6 +5,10 @@
 
 namespace sts {
 
+namespace {
+constexpr int kMaxHandCards = 10;  // CardPile.MaxCardsInHand
+}
+
 struct AshenStrike : IroncladT<AshenStrike> {
   CARD_HEADER(AshenStrike, "ASHEN_STRIKE", 1, Attack, Uncommon, AnyEnemy)
     tags = tagStrike;
@@ -28,7 +32,7 @@ struct BattleTrance : IroncladT<BattleTrance> {
   void onUpgrade() override { upgradeVar("Cards", 1); }
 };
 
-// PORT NOTE: C# targets TargetType.AnyAlly and is MultiplayerOnly; this build
+// PORT NOTE (n/a: single-player): C# targets TargetType.AnyAlly and is MultiplayerOnly; this build
 // is single-player, so it targets and buffs the caster instead.
 struct Blaze : IroncladT<Blaze> {
   CARD_HEADER(Blaze, "BLAZE", 2, Skill, Uncommon, Self)
@@ -101,7 +105,7 @@ struct Cruelty : IroncladT<Cruelty> {
   void onUpgrade() override { upgradeVar("CrueltyPower", 25); }
 };
 
-// PORT NOTE: C# targets TargetType.AnyAlly and is MultiplayerOnly; this build
+// PORT NOTE (n/a: single-player): C# targets TargetType.AnyAlly and is MultiplayerOnly; this build
 // is single-player, so it targets and blocks the caster instead.
 struct DemonicShield : IroncladT<DemonicShield> {
   CARD_HEADER(DemonicShield, "DEMONIC_SHIELD", 0, Skill, Uncommon, Self)
@@ -136,7 +140,7 @@ struct DrumOfBattle : IroncladT<DrumOfBattle> {
     addVar("Energy", 2);
   }
   Task<> onPlay(CardPlay&) override { co_await drawCards(val("Cards")); }
-  // PORT NOTE: C# repeats this GeneratePlayCount() times for multiplayer
+  // PORT NOTE (n/a: single-player): C# repeats this GeneratePlayCount() times for multiplayer
   // card-duplication effects; single player always plays once.
   Task<> afterCardExhausted(Card* card, bool) override {
     if (card != this) co_return;
@@ -279,7 +283,7 @@ struct Juggling : IroncladT<Juggling> {
   void onUpgrade() override { keywords |= kwInnate; }
 };
 
-// PORT NOTE: C# also clones this card into every (multiplayer) teammate's
+// PORT NOTE (n/a: single-player): C# also clones this card into every (multiplayer) teammate's
 // discard pile; this build is single-player, so that step is a no-op and is
 // omitted.
 struct Outrage : IroncladT<Outrage> {
@@ -294,14 +298,13 @@ struct Pillage : IroncladT<Pillage> {
   CARD_HEADER(Pillage, "PILLAGE", 1, Attack, Uncommon, AnyEnemy)
     addVar("Damage", 6);
   }
-  // PORT NOTE: CardPile.MaxCardsInHand (10) isn't exposed via game.h; hardcode it.
   Task<> onPlay(CardPlay& p) override {
     co_await attack(p.target, val("Damage"));
     Card* drawn = nullptr;
     do {
       auto drawnVec = co_await cmd::drawCards(*combat, 1);
       drawn = drawnVec.empty() ? nullptr : drawnVec.back();
-    } while (drawn && drawn->type == CardType::Attack && (int)combat->hand.size() < 10);
+    } while (drawn && drawn->type == CardType::Attack && (int)combat->hand.size() < kMaxHandCards);
   }
   void onUpgrade() override { upgradeVar("Damage", 3); }
 };

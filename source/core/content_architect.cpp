@@ -3,7 +3,7 @@
 // TheArchitectEventEncounter.cs, .Monsters/Architect.cs). RunManager.EnterNextAct enters this
 // event after the last act's boss (Run::main); its only option, PROCEED, calls
 // RunManager.WinRun (Run::winRun), which ends the run as a victory.
-// PORT NOTE: the C# event uses the combat layout (EventLayoutType.Combat): the encounter's
+// PORT NOTE (n/a: visual): the C# event uses the combat layout (EventLayoutType.Combat): the encounter's
 // Architect stands in a combat room with the player, the speech bubbles play over them, and the
 // start/end "attacks" (ArchitectAttackers: the character's attack VFX hitting for the run's score
 // split by DivideWildly, the Architect's lightning back) are pure animation. Here the event uses
@@ -107,7 +107,7 @@ struct TheArchitect : Event {
     return {proceed};
   }
 
-  // WinRun: (the attack animations, see the PORT NOTE above) RunManager.WinRun.
+  // WinRun: (the attack animations, see the note above) RunManager.WinRun.
   Task<> winRun() {
     run->winRun();
     finished = true;

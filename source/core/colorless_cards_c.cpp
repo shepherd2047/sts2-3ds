@@ -229,7 +229,7 @@ struct Shockwave : IroncladT<Shockwave> {
 
 // Splash.cs: 1 cost, Skill, Self, Rare. Choose 1 of 3 distinct Attacks from the other characters' pools
 // (skippable, upgraded when this is); it is free this turn and goes to the hand.
-// PORT NOTE: every playable character's pool counts as unlocked; the multiplayer-only cards are left out
+// PORT NOTE (n/a: owner): every playable character's pool counts as unlocked; the multiplayer-only cards are left out
 // (db::characterCards).
 struct Splash : IroncladT<Splash> {
   CARD_HEADER(Splash, "SPLASH", 1, Skill, Rare, Self)

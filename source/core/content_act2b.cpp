@@ -25,7 +25,7 @@ Intent kindIntent(Intent::Kind k, int count = 0) { Intent i; i.kind = k; i.count
 template <class M> std::unique_ptr<Monster> mk() { return std::make_unique<M>(); }
 
 // CreatureCmd.Escape: the creature leaves the room alive (no death hooks).
-// PORT NOTE: the UI has no escape animation; the death animation is played instead.
+// PORT NOTE (n/a: visual): the UI has no escape animation; the death animation is played instead.
 Task<> escapeCreature(Creature* c) {
   c->combat->push({VisualEvent::Death, c, 0});
   c->hp = 0;
@@ -204,7 +204,7 @@ struct ToughEgg : Monster {
   int minHp() const override { return asc(kToughEnemies, 15, 14); }
   int maxHp() const override { return asc(kToughEnemies, 19, 18); }
   Task<> afterAddedToRoom() override {
-    // PORT NOTE: the C# only ever creates unhatched eggs here (IsHatched is for save/restore).
+    // PORT NOTE (n/a: equivalent): the C# only ever creates unhatched eggs here (IsHatched is for save/restore).
     co_await applyToSelf<HatchPower>(combat->currentSide != Side::Enemy ? 1 : 2);
   }
   void buildMoves() override {

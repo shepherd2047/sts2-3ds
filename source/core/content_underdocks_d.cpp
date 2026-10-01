@@ -4,7 +4,7 @@
 // namespace; the encounters are registered as RoomType::Boss (the Underdocks act itself is
 // package A11f). Music parameters, sfx loops, Spine track animations (build-up, eyes) and the
 // sleeping vfx are dropped.
-// PORT NOTE: the monster-specific animator triggers (Sleep/sleep_loop, Beckon, IntangibleStart,
+// PORT NOTE (n/a: visual): the monster-specific animator triggers (Sleep/sleep_loop, Beckon, IntangibleStart,
 // Erupt, die_loop) have no counterpart in the generic UI trigger table: moves play the default
 // cast/attack animations and waking uses the "Unstun" trigger (wake_up).
 #include <algorithm>
@@ -105,7 +105,7 @@ struct WaterfallGiant : Monster {
     aboutToBlow->perform = [this](Targets) { return aboutToBlowMove(); };
     aboutToBlow->intents = {kindIntent(Intent::Stun)};
     aboutToBlow->mustPerformOnce = true;
-    // PORT NOTE: DeathBlowIntent (the skull intent) is shown as a plain attack intent.
+    // PORT NOTE (n/a: visual): DeathBlowIntent (the skull intent) is shown as a plain attack intent.
     explode = machine.add<MoveState>("EXPLODE_MOVE");
     explode->perform = [this](Targets) { return explodeMove(); };
     explode->intents = {attackIntent(steamEruptionDamage)};
