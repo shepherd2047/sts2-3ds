@@ -29,9 +29,9 @@ bool Affliction::canAfflict(const Card& c) const {
 // CardModel.DowngradeInternal (via CardCmd.Downgrade): back to a fresh card's base numbers, keeping
 // the enchantment, affliction, local cost modifiers and counters; AfterDowngraded lets a card
 // restore state it tracks outside the vars. A combat that is ending does not downgrade.
-// PORT NOTE (n/a: owner): CardCmd.Downgrade's DowngradedCards history entry is not kept (the port's history format has no such list).
 void Card::downgrade() {
   if (combat && combat->ending) return;
+  if (!combat && run && inDeck()) history::noteDowngraded(*run, id);  // a deck card: DowngradedCards
   auto fresh = db::card(id);
   vars = fresh->vars;
   cost = fresh->cost;

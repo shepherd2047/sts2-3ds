@@ -10,6 +10,7 @@
 #include <algorithm>
 
 #include "game.h"
+#include "history.h"
 #include "progress.h"
 
 namespace sts {
@@ -192,6 +193,9 @@ int rewardsSetIndex(Run::RewardKind k) {  // Reward.RewardsSetIndex
   return 5;
 }
 
+// PlayerMapPointHistoryEntry.CardChoices.Add(new CardChoiceHistoryEntry(card, wasPicked)).
+void noteCard(Run& r, const Card& c, bool picked) { history::noteCardChoice(r, c.id, c.upgradeLevel, picked); }
+
 // CardReward.OnSelect: the card screen with its CardRewardAlternatives until a card is taken, an
 // alternative ends the selection, or the reward is skipped. True = the reward is complete.
 Task<bool> claimCardReward(Run& r, Run::RewardItem& item) {
@@ -207,6 +211,7 @@ Task<bool> claimCardReward(Run& r, Run::RewardItem& item) {
     const int n = (int)r.rewardCards.size(), alts = (int)r.rewardAlternatives.size();
     int pick = co_await r.rewardChoice.next();
     if (pick >= 0 && pick < n) {
+      noteCard(r, *r.rewardCards[(size_t)pick], true);  // CardReward.OnSelect: the chosen card (picked) ...
       r.addCardToDeck(std::move(r.rewardCards[(size_t)pick]));
       r.rewardCards.erase(r.rewardCards.begin() + pick);
       complete = true;  // Hook.ShouldAllowSelectingMoreCardRewards: no model allows more
@@ -218,7 +223,10 @@ Task<bool> claimCardReward(Run& r, Run::RewardItem& item) {
         item.canReroll = false;
         // Empty reroll pools (Kaleidoscope's fixed rewards) make the C# throw; the old cards stay.
         auto fresh = r.createForReward(item.cardOptions, item.cardCount);
-        if (!fresh.empty()) r.rewardCards = std::move(fresh);
+        if (!fresh.empty()) {
+          for (auto& c : r.rewardCards) if (c) noteCard(r, *c, false);  // CardReward.Reroll: the old cards, not picked
+          r.rewardCards = std::move(fresh);
+        }
         if (item.afterGenerated) item.afterGenerated(r.rewardCards);
         continue;
       }
@@ -228,7 +236,11 @@ Task<bool> claimCardReward(Run& r, Run::RewardItem& item) {
     }
     if (item.canSkip) break;  // Skip: EndSelectionAndDoNotCompleteReward, the row stays
   }
-  if (!complete) item.cards = std::move(r.rewardCards);
+  if (complete) {  // ... then every card still on offer (not picked)
+    for (auto& c : r.rewardCards) if (c) noteCard(r, *c, false);
+  } else {
+    item.cards = std::move(r.rewardCards);
+  }
   r.rewardCards.clear();
   r.rewardAlternatives.clear();
   co_return complete;
@@ -282,6 +294,12 @@ Task<> Run::offerRewards(std::vector<RewardItem> items, bool terminal) {
         break;
     }
     if (claimed) rewardItems.erase(rewardItems.begin() + pick);
+  }
+  // Reward.OnSkipped for every row left when the screen is left (Proceed): the offered cards / relic / special card.
+  for (auto& item : rewardItems) {
+    if (item.kind == RewardKind::Card) { for (auto& c : item.cards) if (c) noteCard(*this, *c, false); }
+    else if (item.kind == RewardKind::SpecialCard) { if (item.card) noteCard(*this, *item.card, false); }
+    else if (item.kind == RewardKind::Relic) { if (item.relic) history::noteRelicChoice(*this, item.relic->id, false); }
   }
   rewardItems.clear();
   rewardCards.clear();

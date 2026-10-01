@@ -8,13 +8,19 @@
 // mapgen.cpp. This file has the Run helpers and the relics that hand out quests or use the map
 // hooks: DowsingRod, WingedBoots, ScrollBoxes (Neow).
 //
-// PORT NOTE (n/a: owner): PlayerCmd.CompleteQuest only adds to MapPointHistoryEntry.CompletedQuests, which the port's history format does not keep.
 #include <algorithm>
 
 #include "card_factory.h"
 #include "game.h"
 
 namespace sts {
+
+// PlayerCmd.CompleteQuest: the quest card goes to the map point's CompletedQuests.
+namespace cmd {
+void completeQuest(Run& run, Card* questCard) {
+  if (questCard) history::noteQuestCompleted(run, questCard->id);
+}
+}  // namespace cmd
 
 bool Card::inDeck() const {
   if (!run) return false;

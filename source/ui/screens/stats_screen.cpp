@@ -621,6 +621,33 @@ void App::drawRunDetail(bool top) {
         R().text(px + 16, y + 2, fill(L("run_history.MAP_POINT_HISTORY.chose"), "Choice", R().hasLoc(k) ? L(k) : c), ts(F12, col::white));
         y += 17;
       }
+      // NMapPointHistoryHoverTip: the relics taken, the downgraded cards, the completed quests, then the
+      // offers that were skipped (unpicked cards and relics).
+      auto names = [&](const char* table, const std::vector<std::string>& ids) {
+        std::string out;
+        for (auto& id : ids) {
+          std::string k = std::string(table) + "." + upperSnake(id) + ".title";
+          out += (out.empty() ? "" : ", ") + (R().hasLoc(k) ? L(k) : id);
+        }
+        return out;
+      };
+      auto line = [&](const std::string& label, const std::string& list) {
+        if (list.empty()) return;
+        TextStyle st = ts(F12, col::white, LEFT, pw - 32);
+        float h = 0;
+        std::string txt = "[gold]" + label + "[/gold] " + list;
+        R().measure(txt, st, &h);
+        R().text(px + 16, y + 2, txt, st);
+        y += std::max(h, 14.f) + 4;
+      };
+      std::vector<std::string> got, skipC, skipR;
+      for (auto& c : p.relicChoices) (c.picked ? got : skipR).push_back(c.id);
+      for (auto& c : p.cardChoices) if (!c.picked) skipC.push_back(c.id);
+      line(tr("遗物：", "Relics:"), names("relics", got));
+      line(tr("降级：", "Downgraded:"), names("cards", p.downgradedCards));
+      line(tr("任务完成：", "Quests:"), names("cards", p.completedQuests));
+      line(tr("跳过的牌：", "Skipped cards:"), names("cards", skipC));
+      line(tr("跳过的遗物：", "Skipped relics:"), names("relics", skipR));
       // The last point of a lost run: the quote.
       if (sel == (int)s.floors.size() - 1) {
         uint32_t qc;

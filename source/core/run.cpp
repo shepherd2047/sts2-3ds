@@ -187,6 +187,7 @@ Task<> Run::obtainRelic(std::unique_ptr<Relic> rel) {
   rel->run = this;
   rel->combat = combat && combat->inProgress ? combat.get() : nullptr;
   progress::markRelicSeen(rel->id);
+  history::noteRelicChoice(*this, rel->id, true);  // RelicCmd.Obtain: RelicChoices (picked)
   Relic* raw = rel.get();
   for (auto& [k, v] : relicBag) v.erase(std::remove(v.begin(), v.end(), raw->id), v.end());
   for (auto& [k, v] : sharedRelicBag) v.erase(std::remove(v.begin(), v.end(), raw->id), v.end());
@@ -210,7 +211,11 @@ Task<> Run::chooseRelic(std::vector<std::unique_ptr<Relic>> rs, bool fromChest) 
   relicOfferFromChest = fromChest;
   screen = Screen::RelicOffer;
   int take = co_await relicChoice.next();
-  if (take >= 1 && take <= (int)relicOffers.size()) co_await obtainRelic(std::move(relicOffers[take - 1]));
+  const bool taken = take >= 1 && take <= (int)relicOffers.size();
+  // RelicReward.OnSkipped: an offered relic that is not taken is recorded as such (a treasure chest is no RelicReward).
+  if (!fromChest && !taken)
+    for (auto& rel : relicOffers) history::noteRelicChoice(*this, rel->id, false);
+  if (taken) co_await obtainRelic(std::move(relicOffers[take - 1]));
   relicOffers.clear();
 }
 
@@ -441,9 +446,15 @@ Task<> Run::combatRewards(RoomType type) {
   Rng& rr = rng("Rewards");
   // EncounterModel.Min/MaxGoldReward: 10-20 / 35-45 / 100, times 0.75 (truncated) with Poverty.
   auto poor = [&](int v) { return hasAscension(kPoverty) ? (int)(v * 0.75) : v; };
+  // RewardsSet.GenerateRewardsFor: a monster room's GoldReward(Min, Max) is scaled by the combat's gold
+  // proportion (CombatRoom.GoldProportion = Encounter.CalculateGoldProportion at the end of the fight,
+  // rounded half to even); a proportion of 0 gives no gold row (and rolls nothing).
+  const float goldShare = type == RoomType::Monster && combat ? combat->goldProportion() : 1.f;
+  auto share = [&](int v) { return goldShare == 1.f ? v : (int)std::nearbyint((float)v * goldShare); };
   int baseGold = type == RoomType::Boss ? poor(100)
                 : type == RoomType::Elite ? rr.nextInt(poor(35), poor(45) + 1)
-                : rewardGold >= 0 ? rr.nextInt(poor(rewardGold), poor(rewardGold) + 1) : rr.nextInt(poor(10), poor(20) + 1);
+                : goldShare <= 0.f ? 0
+                : rewardGold >= 0 ? rr.nextInt(share(poor(rewardGold)), share(poor(rewardGold)) + 1) : rr.nextInt(share(poor(10)), share(poor(20)) + 1);
   rewardGold = -1;
   bool finalBoss = type == RoomType::Boss && actIndex + 1 >= kActs;
   // The fight is freed and the screen leaves it in the same step (nothing may wait in
@@ -455,7 +466,7 @@ Task<> Run::combatRewards(RoomType type) {
   screen = Screen::Reward;
 
   rewardItems.clear();
-  { RewardItem g; g.kind = RewardKind::Gold; g.gold = baseGold; rewardItems.push_back(std::move(g)); }
+  if (goldShare > 0.f || type != RoomType::Monster) { RewardItem g; g.kind = RewardKind::Gold; g.gold = baseGold; rewardItems.push_back(std::move(g)); }
 
   if (royaltiesGold > 0) { RewardItem g; g.kind = RewardKind::Gold; g.gold = royaltiesGold; rewardItems.push_back(std::move(g)); }  // RoyaltiesPower
 
