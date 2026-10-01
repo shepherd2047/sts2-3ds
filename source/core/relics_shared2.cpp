@@ -7,8 +7,8 @@
 // character relic is now registered; the Ancient-ish ones (SeaGlass, PrismaticGem, PaelsGrowth,
 // LeadPaperweight, Kaleidoscope, WhisperingEarring) are in relics_ancient2.cpp (A6). Still skipped
 // (systems that are not built): Byrdpip, PaelsLegion (pets), DowsingRod (quest cards), Driftwood (reward
-// reroll), FurCoat (map marks), GoldenCompass (golden path), MassiveScroll (multiplayer only), PaelsEye
-// (extra turn), PaelsWing (sacrificing card rewards), ScrollBoxes (bundle screen), ToyBox (wax relics),
+// reroll), FurCoat (map marks), GoldenCompass (golden path), MassiveScroll (multiplayer only),
+// PaelsWing (sacrificing card rewards), ScrollBoxes (bundle screen), ToyBox (wax relics),
 // WingedBoots (free travel).
 #include "colorless.h"
 #include "game.h"

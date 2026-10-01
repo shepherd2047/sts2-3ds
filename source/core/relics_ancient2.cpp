@@ -1,11 +1,11 @@
 // Package A6: the remaining Ancient relics (Neow, Orobas, Pael) whose systems now exist:
 // SeaGlass, PrismaticGem, PaelsGrowth (+ the CLONE rest site option, Run::restSite option 6),
-// LeadPaperweight, Kaleidoscope, WhisperingEarring. Translated from MegaCrit.Sts2.Core.Models.Relics.
+// LeadPaperweight, Kaleidoscope, WhisperingEarring; PaelsEye (E7, extra turns). Translated from
+// MegaCrit.Sts2.Core.Models.Relics.
 //
 // Still locked (unregistered, so no Ancient offers them):
 //  * Driftwood (CardReward.CanReroll), PaelsWing (CardRewardAlternative "SACRIFICE"): the card reward
 //    screen has no reroll / alternative buttons.
-//  * PaelsEye: ShouldTakeExtraTurn / AfterTakingExtraTurn (extra turn system).
 //  * PaelsLegion, Byrdpip: pets.  GoldenCompass: golden path map.  FurCoat: map marks.
 //    ToyBox: wax relics.  WingedBoots: free map travel.
 //  * DowsingRod: the Dowsing quest card (Quest cards do not exist).  ScrollBoxes: bundle screen.
@@ -129,13 +129,12 @@ struct Kaleidoscope : Relic {
 
 // WhisperingEarring.cs: +1 energy; on turn 1 the first playable hand card is played over and over
 // (up to 13). Card selections during it take the first options (VakuuCardSelector, Combat::autoSelectFirst).
-// PORT NOTE: hooked at afterAutoPrePlayPhaseEntered (not the Late variant); cards are played with
-// Combat::playCard(autoPlay = false) because that is what spends the energy (SpendResources), so
-// they are not flagged as auto-plays.
+// AfterAutoPrePlayPhaseEnteredLate. PORT NOTE: cards are played with Combat::playCard(autoPlay =
+// false) because that is what spends the energy (SpendResources), so they are not flagged as auto-plays.
 struct WhisperingEarring : Relic {
   RELIC_HEADER(WhisperingEarring, "WHISPERING_EARRING", Ancient) addVar("Energy", 1); }
   Dec modifyMaxEnergy(Dec amount) override { return amount + val("Energy"); }
-  Task<> afterAutoPrePlayPhaseEntered() override {
+  Task<> afterAutoPrePlayPhaseEnteredLate() override {
     if (!combat || combat->turnNumber > 1) co_return;
     Combat& c = *combat;
     doFlash();
@@ -161,7 +160,45 @@ struct WhisperingEarring : Relic {
   }
 };
 
+// PaelsEye.cs: once per combat, ending a turn without having played a card (auto-plays aside)
+// exhausts the hand (BeforeSideTurnEndEarly) and takes another turn (ShouldTakeExtraTurn).
+// WasOwnerPartOfLastPlayerTurn is always true in single player. RelicStatus (the glow) is UI only.
+struct PaelsEye : Relic {
+  RELIC_HEADER(PaelsEye, "PAELS_EYE", Ancient) }
+  bool usedThisCombat = false;
+  int playedRound = -1;  // round of the last CardPlaysFinished entry that was not an auto-play
+  bool anyCardsPlayedThisTurn() const {
+    if (combat->turnNumber == 1 && run->hasRelic("WhisperingEarring")) return true;
+    return playedRound == combat->roundNumber;
+  }
+  Task<> beforeCombatStart() override {
+    usedThisCombat = false;
+    playedRound = -1;
+    return {};
+  }
+  Task<> afterCardPlayed(const CardPlay& p) override {
+    if (combat && !p.autoPlay) playedRound = combat->roundNumber;
+    return {};
+  }
+  bool shouldTakeExtraTurn() override { return combat && !usedThisCombat && !anyCardsPlayedThisTurn(); }
+  Task<> beforeSideTurnEndEarly(Side, const std::vector<Creature*>& participants) override {
+    if (!combat || !contains(participants, owner()) || usedThisCombat || anyCardsPlayedThisTurn()) co_return;
+    std::vector<Card*> hand = combat->hand;
+    for (Card* c : hand) co_await cmd::exhaustCard(*combat, c);
+  }
+  Task<> afterTakingExtraTurn() override {
+    doFlash();
+    usedThisCombat = true;
+    return {};
+  }
+  Task<> afterCombatEnd() override {
+    usedThisCombat = false;
+    return {};
+  }
+};
+
 void registerRelicsAncient2() {
+  reg<PaelsEye>();
   reg<SeaGlass>();
   reg<PrismaticGem>();
   reg<PaelsGrowth>();
