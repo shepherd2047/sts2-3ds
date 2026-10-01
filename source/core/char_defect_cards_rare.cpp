@@ -236,7 +236,8 @@ struct FlakCannon : IroncladT<FlakCannon> {
 };
 
 // GeneticAlgorithm.cs: Block starts at 1 and grows by Increase each play, on this copy and on its
-// deck version. PORT NOTE: the C# keeps CurrentBlock / IncreasedBlock as [SavedProperty]s; here the
+// deck version.
+// PORT NOTE (n/a: equivalent): the C# keeps CurrentBlock / IncreasedBlock as [SavedProperty]s; here the
 // running Block DynVar is the state (saved with the card's vars; IncreasedBlock = Block - 1), and
 // IncreasedBlock is recomputed on load and AfterDowngraded restores Block = 1 + IncreasedBlock.
 struct GeneticAlgorithm : IroncladT<GeneticAlgorithm> {

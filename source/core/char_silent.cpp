@@ -63,8 +63,8 @@ struct PoisonPotion : Potion {
   Task<> onUse(Creature* t) override { co_await applyPower<PoisonPower>(t, val("PoisonPower"), run->player.get(), nullptr); }
 };
 
-// GhostInAJar.cs: apply Intangible 1 to the player. PORT NOTE: TargetType::Self for the C#'s
-// AnyPlayer/Self (single player only), as in potions.cpp.
+// GhostInAJar.cs: apply Intangible 1 to the player.
+// PORT NOTE (n/a: single-player): TargetType::Self for the C#'s AnyPlayer (no other players to target).
 struct GhostInAJar : Potion {
   POTION_HEADER(GhostInAJar, "GHOST_IN_A_JAR", Rare, CombatOnly, Self) addVar("IntangiblePower", 1); }
   Task<> onUse(Creature* t) override {

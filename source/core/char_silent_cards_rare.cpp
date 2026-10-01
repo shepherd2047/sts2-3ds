@@ -168,11 +168,11 @@ struct ToolsOfTheTradePower : Power {
 };
 
 // TrackingPower.cs: the owner's powered attack cards deal +amount% to Weak enemies.
-// PORT NOTE: the C# also counts the owner's pets as dealers; a pet's attacks are not card damage here.
 struct TrackingPower : Power {
   POWER_HEADER(TrackingPower, "TRACKING_POWER")
   Dec modifyDamageMultiplicative(Creature* target, Dec, int props, Creature* dealer, Card* card) override {
-    if (!isPoweredAttack(props) || !card || dealer != owner) return 1;
+    if (!isPoweredAttack(props) || !card || !dealer) return 1;
+    if (dealer != owner && dealer->petOwner != owner) return 1;  // Owner.Pets.Contains(dealer)
     if (!target || !target->get<WeakPower>()) return 1;
     return Dec(100 + amount) / Dec(100);
   }
@@ -447,7 +447,7 @@ struct StormOfSteel : IroncladT<StormOfSteel> {
 };
 
 // TheHunt.cs: Exhaust; on a fatal hit an extra 3-card reward is added and TheHuntPower marks it.
-// PORT NOTE: the "current room is a combat room" check is always true here (event fights also give rewards); the reward is queued through
+// PORT NOTE (n/a: equivalent): the "current room is a combat room" check is always true here (event fights are CombatRooms too); the reward is queued through
 // Run::bonusCardRewards and rolled by combatRewards for the room type.
 struct TheHunt : IroncladT<TheHunt> {
   bool canBeGeneratedInCombat() const override { return false; }

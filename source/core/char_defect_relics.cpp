@@ -37,8 +37,8 @@ struct DataDisk : Relic {
 // EmotionChip.cs: if you lost HP last turn, trigger every queued orb's passive (countAffectedByHooks)
 // at the start of this turn.
 // "Lost HP last turn" = a DamageReceived entry on the owner, not fully blocked, that
-// HappenedLastPlayerTurn. PORT NOTE: drops the cosmetic RelicStatus glow/Cmd.Wait(0.25f) pacing
-// between orbs (no gameplay effect).
+// HappenedLastPlayerTurn.
+// PORT NOTE (n/a: visual): the C#'s RelicStatus glow and Cmd.Wait(0.25f) pacing between orbs are cosmetic.
 struct EmotionChip : Relic {
   RELIC_HEADER(EmotionChip, "EMOTION_CHIP", Rare) }
   bool lostHpInPreviousTurn() {

@@ -733,6 +733,12 @@ int main() {
     f.toHand(s2);
     f.play(s2, e);
     CHECK(e->hp == 500 - 6 - 9);
+    // A pet of the owner counts as a dealer (Owner.Pets.Contains(dealer)); a stranger does not.
+    Creature* pet = f.enemy();
+    Dec stranger = f.c->modifyDamage(e, pet, Dec(6), kMove, s2);  // (the pet is the Weak enemy itself)
+    pet->petOwner = f.c->player;
+    CHECK(f.c->modifyDamage(e, pet, Dec(6), kMove, s2) > stranger);
+    pet->petOwner = nullptr;
   }
   {  // X1.4 WellLaidPlans: the hand survives the end of turn
     Fight f("Silent");
