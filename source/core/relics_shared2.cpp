@@ -44,7 +44,7 @@ struct Toolbox : Relic {
 // DoubledPowers is only read through HasDoubledTemporaryPowerSource (the InternallyAppliedPower of each
 // doubled ITemporaryPower), so those ids are kept instead of the power objects (a fresh power object can be
 // destroyed after stacking).
-// PORT NOTE: IsVisible is not checked (only AmbergrisPower is hidden, not ported); RelicStatus.Active is
+// PORT NOTE (n/a: equivalent): IsVisible is not checked (only AmbergrisPower is hidden and no card applies it); RelicStatus.Active is
 // display only.
 struct UnsettlingLamp : Relic {
   RELIC_HEADER(UnsettlingLamp, "UNSETTLING_LAMP", Rare) }

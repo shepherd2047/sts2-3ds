@@ -3,15 +3,11 @@
 // starter relics (Touch of Orobas upgrades). Translated from MegaCrit.Sts2.Core.Models.Relics /
 // .Potions.
 //
-// Still skipped (need systems owned elsewhere or not yet built): LeadPaperweight is in
-// relics_shared2.cpp (A5); PaelsGrowth (CloneRestSiteOption); the enchanting event relics (BeautifulBracelet,
-// TriBoomerang, ElectricShrymp, PaelsClaw, NutritiousSoup, Glitter, SilkenTress, SilverCrucible)
-// are in relics_enchant.cpp (A3c); Byrdpip (pets +
-// ByrdonisEgg hatching); WingedBoots and DowsingRod are in quests.cpp (E2);
-// PaelsLegion (pets); GoldenCompass (golden path); FurCoat (map marks); ToyBox (wax relics);
-// WhisperingEarring (turn-1 autoplay); ScrollBoxes (quests.cpp, E2); SeaGlass / PrismaticGem
-// (other characters' card pools as reward sources); Kaleidoscope (needs the unlock state);
-// MassiveScroll (multiplayer only).
+// Elsewhere: LeadPaperweight in relics_shared2.cpp (A5); PaelsGrowth, SeaGlass, PrismaticGem,
+// Kaleidoscope, WhisperingEarring, Driftwood, PaelsWing in relics_ancient2.cpp; the enchanting event
+// relics in relics_enchant.cpp (A3c); WingedBoots, DowsingRod, ScrollBoxes in quests.cpp (E2).
+// Still unregistered: Byrdpip, PaelsLegion (pets, ByrdonisEgg hatching); GoldenCompass (golden path);
+// FurCoat (map marks); ToyBox (wax relics); MassiveScroll (multiplayer only).
 #include "cards.h"
 #include "char_defect.h"
 #include "char_necrobinder.h"
@@ -25,7 +21,7 @@ template <class R> void reg() { db::registerRelic(R::kId, [] { return std::uniqu
 // ---------------------------------------------------------------- potion
 
 // AmbergrisPower.cs: while Amount > 0 the owner takes another turn instead of the enemies'
-// (Hook.ShouldTakeExtraTurn); each extra turn taken uses one. PORT NOTE: IsVisibleInternal is
+// (Hook.ShouldTakeExtraTurn); each extra turn taken uses one. PORT NOTE (n/a: visual): IsVisibleInternal is
 // false in the C#; here it is applied silently but still listed with the owner's powers.
 struct AmbergrisPower : Power {
   POWER_HEADER(AmbergrisPower, "AMBERGRIS_POWER")

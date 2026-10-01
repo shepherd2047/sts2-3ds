@@ -113,10 +113,6 @@ struct CloakClasp : Relic {
   }
 };
 
-// ---- Girya: SKIPPED. Needs a rest-site "Lift" option (rest site only supports heal/smith).
-
-// ---- IceCream: SKIPPED. Needs a should-reset-energy hook (energy always resets each turn here).
-
 // ---- IntimidatingHelmet: before playing a card costing >=2 energy, gain 4 block. ----
 struct IntimidatingHelmet : Relic {
   RELIC_HEADER(IntimidatingHelmet, "INTIMIDATING_HELMET", Rare)
@@ -157,8 +153,6 @@ struct Kunai : Relic {
   Task<> afterCombatEnd() override { attacksPlayedThisTurn = 0; co_return; }
 };
 
-// ---- LizardTail: SKIPPED. Needs a death-prevention hook (ShouldDieLate / AfterPreventingDeath).
-
 // ---- Mango: on pickup, gain 14 max hp. ----
 struct Mango : Relic {
   RELIC_HEADER(Mango, "MANGO", Rare)
@@ -186,8 +180,6 @@ struct MeatOnTheBone : Relic {
     }
   }
 };
-
-// ---- MoltenEgg: SKIPPED. Needs card-reward/merchant-reward and deck-add upgrade hooks.
 
 // ---- MummifiedHand: after playing a power card, a random hand card costing >0 becomes free this turn. ----
 struct MummifiedHand : Relic {
@@ -239,8 +231,6 @@ struct Pocketwatch : Relic {
   Task<> afterCombatEnd() override { cardsPlayedThisTurn = 0; cardsPlayedLastTurn = 0; co_return; }
 };
 
-// ---- PrayerWheel: SKIPPED. Needs card-reward modification (add an extra reward).
-
 // ---- RainbowRing: play an attack, skill and power in the same turn -> gain 1 str, 1 dex. ----
 struct RainbowRing : Relic {
   RELIC_HEADER(RainbowRing, "RAINBOW_RING", Rare)
@@ -278,8 +268,6 @@ struct RazorTooth : Relic {
     co_return;
   }
 };
-
-// ---- Shovel: SKIPPED. Needs a rest-site "Dig" option (rest site only supports heal/smith).
 
 // ---- Shuriken: every 3rd attack played, gain 1 strength. ----
 struct Shuriken : Relic {
@@ -359,8 +347,6 @@ struct MembershipCard : Relic {
   Dec modifyMerchantPrice(Dec price) override { return price * (val("Discount") / Dec(100)); }
 };
 
-// ---- ToxicEgg: SKIPPED. Needs card-reward/merchant-reward and deck-add upgrade hooks.
-
 // ---- TungstenRod: reduce hp loss "after Osty" (trample) by 1. ----
 struct TungstenRod : Relic {
   RELIC_HEADER(TungstenRod, "TUNGSTEN_ROD", Rare)
@@ -375,7 +361,7 @@ struct TungstenRod : Relic {
 };
 
 // ---- UnceasingTop: whenever your hand is empty (after playing a card), draw 1. ----
-// PORT NOTE: the C# version only triggers during the main play phase (not while cards
+// PORT NOTE (needs Hook.AfterHandEmptied + PlayerCombatState.Phase): the C# version only triggers during the main play phase (not while cards
 // are auto-drawing/discarding); approximated here as "hand empties from a card play".
 struct UnceasingTop : Relic {
   RELIC_HEADER(UnceasingTop, "UNCEASING_TOP", Rare) }
@@ -402,7 +388,7 @@ struct GamblingChip : Relic {
 
 // ---- VexingPuzzlebox: on turn 1, add a random card of the character's pool to hand, free this turn. ----
 // GetDistinctForCombat(Owner.Character.CardPool, 1, CombatCardGeneration).First().
-// PORT NOTE: picks from the whole character pool rather than the player's unlocked pool
+// PORT NOTE (n/a: owner): picks from the whole character pool rather than the player's unlocked pool
 // (no unlock system in this build).
 struct VexingPuzzlebox : Relic {
   RELIC_HEADER(VexingPuzzlebox, "VEXING_PUZZLEBOX", Rare) }
@@ -415,10 +401,6 @@ struct VexingPuzzlebox : Relic {
     co_await cmd::addGeneratedCard(*combat, std::move(card), Pile::Hand);
   }
 };
-
-// ---- WhiteBeastStatue: SKIPPED. Needs the potion system (not implemented).
-
-// ---- WhiteStar: SKIPPED. Needs card-reward modification (add an extra reward).
 
 // ---- CharonsAshes (Ironclad): whenever a card is exhausted, deal 3 unpowered damage to all enemies.
 struct CharonsAshes : Relic {
