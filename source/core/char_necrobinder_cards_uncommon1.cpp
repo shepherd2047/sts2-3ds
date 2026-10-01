@@ -63,9 +63,9 @@ struct DanseMacabrePower : Power {
 // DebilitatePower.cs: Debuff, Counter. Doubles the owner's Vulnerable bonus and Weak penalty for
 // powered attacks (ModifyVulnerableMultiplier / ModifyWeakMultiplier), ticks down at the end of
 // the owner's side turn.
-// PORT NOTE: the two multiplier hooks are not virtual on Model here (Vulnerable/Weak hard-code
-// Cruelty / PaperPhrog / PaperKrane), so VulnerablePower and WeakPower in powers.h look for this
-// power by id ("DebilitatePower") in the same style and apply the C# formulas last.
+// PORT NOTE (n/a: equivalent): the two multiplier hooks are not virtual on Model here
+// (Vulnerable/Weak hard-code Cruelty / PaperPhrog / PaperKrane); VulnerablePower and WeakPower in
+// powers.h look this power up by id and apply the C# formulas last.
 struct DebilitatePower : Power {
   POWER_HEADER(DebilitatePower, "DEBILITATE_POWER")
   PowerType type() const override { return PowerType::Debuff; }
@@ -183,14 +183,13 @@ struct CaptureSpirit : IroncladT<CaptureSpirit> {
 
 // Cleanse.cs: summon Osty for 3 (+2 upgraded) HP, then exhaust a card of your choice from the draw
 // pile.
-// PORT NOTE: the prompt key is True Grit's (both use the C# ExhaustSelectionPrompt).
 struct Cleanse : IroncladT<Cleanse> {
   CARD_HEADER(Cleanse, "CLEANSE", 1, Skill, Uncommon, Self)
     addVar("Summon", 3);
   }
   Task<> onPlay(CardPlay&) override {
     co_await summonOsty(*combat, val("Summon").toInt());
-    auto picked = co_await cmd::selectCards(*combat, "TRUE_GRIT", combat->draw, 1, 1);
+    auto picked = co_await cmd::selectCards(*combat, "card_selection.TO_EXHAUST", combat->draw, 1, 1);
     if (!picked.empty()) co_await cmd::exhaustCard(*combat, picked[0]);
   }
   void onUpgrade() override { upgradeVar("Summon", 2); }

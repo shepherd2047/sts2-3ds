@@ -38,8 +38,8 @@ struct DefendNecrobinder : IroncladT<DefendNecrobinder> {
 };
 
 // Bodyguard.cs: summon Osty with 5 (+2 upgraded) HP, or raise his max HP by that amount if he's
-// already alive (summonOsty handles both cases). PORT NOTE: TriggerAnim's "summonTrigger" anim
-// (Necrobinder.GetSummonAnimIfApplicable) is UI, not ported.
+// already alive (summonOsty handles both cases). PORT NOTE (n/a: visual): TriggerAnim's "summonTrigger" anim
+// (Necrobinder.GetSummonAnimIfApplicable) is not ported.
 struct Bodyguard : IroncladT<Bodyguard> {
   CARD_HEADER(Bodyguard, "BODYGUARD", 1, Skill, Basic, Self)
     addVar("Summon", 5);

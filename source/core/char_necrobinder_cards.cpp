@@ -13,8 +13,7 @@ namespace sts {
 namespace {
 
 // Afterlife.cs: Exhaust, summon Osty for 6 (+3 upgraded) HP (or raise his max HP by that much).
-// PORT NOTE: TriggerAnim (Necrobinder.GetSummonAnimIfApplicable) is UI, not ported (as Bodyguard
-// already notes).
+// PORT NOTE (n/a: visual): TriggerAnim (Necrobinder.GetSummonAnimIfApplicable) is not ported.
 struct Afterlife : IroncladT<Afterlife> {
   CARD_HEADER(Afterlife, "AFTERLIFE", 1, Skill, Common, Self)
     keywords = kwExhaust;
@@ -73,7 +72,7 @@ struct Defy : IroncladT<Defy> {
 // DrainPower.cs: deal 10 (+2 upgraded) damage, then upgrade 2 (+1 upgraded) random upgradable
 // cards in the discard pile (TakeRandom(Cards, CombatCardSelection) -- shuffle + take-first-N, the
 // idiom already used for other TakeRandom ports in this codebase, e.g. ancients_later.cpp).
-// PORT NOTE: CardCmd.Preview (highlighting the upgraded cards) is UI, not ported.
+// PORT NOTE (n/a: visual): CardCmd.Preview (highlighting the upgraded cards) is not ported.
 struct DrainPower : IroncladT<DrainPower> {
   CARD_HEADER(DrainPower, "DRAIN_POWER", 1, Attack, Common, AnyEnemy)
     addVar("Damage", 10);

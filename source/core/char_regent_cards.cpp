@@ -108,7 +108,7 @@ struct CloakOfStars : IroncladT<CloakOfStars> {
 };
 
 // CollisionCourse.cs: 0 cost, Attack, AnyEnemy. Damage 10, then a Debris joins the hand.
-// PORT NOTE: drops Cmd.Wait(0.5f) (pure animation pacing).
+// PORT NOTE (n/a: visual): drops Cmd.Wait(0.5f) (pure animation pacing).
 struct CollisionCourse : IroncladT<CollisionCourse> {
   CARD_HEADER(CollisionCourse, "COLLISION_COURSE", 0, Attack, Common, AnyEnemy)
     addVar("Damage", 10);
@@ -121,9 +121,8 @@ struct CollisionCourse : IroncladT<CollisionCourse> {
 };
 
 // CosmicIndifference.cs: 1 cost, Skill, Self. Block 6, select 1 card from the discard pile and
-// put it on top of the draw pile. PORT NOTE: drops the C#'s Pile==Draw||Discard re-check on the
-// selected card (a guard against it moving mid-selection in multiplayer); this engine's
-// selection is synchronous, so the card is still exactly where it was chosen from.
+// put it on top of the draw pile. PORT NOTE (n/a: single-player): drops the C#'s Pile==Draw||Discard re-check on the
+// selected card (a guard against it moving mid-selection in multiplayer).
 struct CosmicIndifference : IroncladT<CosmicIndifference> {
   CARD_HEADER(CosmicIndifference, "COSMIC_INDIFFERENCE", 1, Skill, Common, Self)
     addVar("Block", 6);
@@ -156,7 +155,7 @@ struct CrescentSpear : IroncladT<CrescentSpear> {
 };
 
 // CrushUnder.cs: 1 cost, Attack, AllEnemies. Damage 8, then CrushUnderPower 1 (temporary
-// Strength loss) on the (pre-attack) hittable enemies. PORT NOTE: drops the spike-splash vfx.
+// Strength loss) on the (pre-attack) hittable enemies. PORT NOTE (n/a: visual): drops the spike-splash vfx.
 struct CrushUnder : IroncladT<CrushUnder> {
   CARD_HEADER(CrushUnder, "CRUSH_UNDER", 1, Attack, Common, AllEnemies)
     addVar("Damage", 8);
@@ -221,9 +220,8 @@ struct Glow : IroncladT<Glow> {
 };
 
 // GuidingStar.cs: 1 cost, 1 star, Attack, AnyEnemy. Damage 12, then draw 2 extra cards next
-// turn (DrawCardsNextTurnPower). PORT NOTE: drops the magic-missile vfx/sfx and
-// WithNoAttackerAnim (this engine has no Regent Spine yet); the damage still counts as a normal
-// powered attack.
+// turn (DrawCardsNextTurnPower). PORT NOTE (n/a: visual): drops the magic-missile vfx/sfx and
+// WithNoAttackerAnim; the damage still counts as a normal powered attack.
 struct GuidingStar : IroncladT<GuidingStar> {
   CARD_HEADER(GuidingStar, "GUIDING_STAR", 1, Attack, Common, AnyEnemy)
     starCost = 1;
