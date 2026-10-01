@@ -159,7 +159,7 @@ struct CrabRagePower : Power {
 
 // Kaiser Crab: the player is flanked. The claws hit for 1.5x while the player is
 // facing away from them; targeting a claw turns the player towards it.
-// PORT NOTE: the body flip and the "kaiser_crab_direction" music parameter are dropped.
+// PORT NOTE (n/a: visual): the body flip and the "kaiser_crab_direction" music parameter are dropped.
 struct SurroundedPower : Power {
   POWER_HEADER(SurroundedPower, "SURROUNDED_POWER")
   PowerType type() const override { return PowerType::Debuff; }
@@ -545,7 +545,7 @@ struct KnowledgeDemon : Monster {
 
 // ================================================================ Kaiser Crab
 
-// PORT NOTE: the fight's arm animations live in a shared background scene in the C#
+// PORT NOTE (n/a: visual): the fight's arm animations live in a shared background scene in the C#
 // (NKaiserCrabBossBackground); here the claws are two plain creatures.
 struct Crusher : Monster {
   MONSTER_HEADER(Crusher, "CRUSHER")
