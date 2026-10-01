@@ -297,15 +297,13 @@ struct KinglyKick : IroncladT<KinglyKick> {
 
 // KinglyPunch.cs: 1 cost, Attack, AnyEnemy. Damage 8; gains Increase (4) damage each time it is
 // drawn.
-// PORT NOTE: AfterDowngraded (adding ExtraDamage back after a downgrade) isn't modeled, this
-// engine has no downgrade mechanic (see SovereignBlade in char_regent.cpp). extraDamage is still
-// tracked like the C#'s ExtraDamage.
 struct KinglyPunch : IroncladT<KinglyPunch> {
   CARD_HEADER(KinglyPunch, "KINGLY_PUNCH", 1, Attack, Uncommon, AnyEnemy)
     addVar("Damage", 8);
     addVar("Increase", 4);
   }
   Dec extraDamage = 0;
+  void afterDowngraded() override { upgradeVar("Damage", extraDamage); }
   Task<> onPlay(CardPlay& p) override { co_await attack(p.target, val("Damage")); }
   Task<> afterCardDrawn(Card* c, bool) override {
     if (c != this) co_return;

@@ -132,17 +132,6 @@ struct HexPower : Power {
   }
 };
 
-// Card downgrade for DampenPower (CardCmd.Downgrade): back to a fresh card's numbers.
-// PORT NOTE: keyword / target changes from the upgrade are restored from a fresh copy too.
-void downgradeCard(Card* c) {
-  auto fresh = db::card(c->id);
-  c->vars = fresh->vars;
-  c->cost = fresh->cost;
-  c->keywords = fresh->keywords;
-  c->target = fresh->target;
-  c->upgradeLevel = 0;
-}
-
 // DampenPower.cs: upgraded cards are downgraded until the casters die.
 struct DampenPower : Power {
   POWER_HEADER(DampenPower, "DAMPEN_POWER")
@@ -154,7 +143,7 @@ struct DampenPower : Power {
     for (Card* c : owner->combat->allCards()) {
       if (!c->upgraded()) continue;
       downgraded.push_back({c, c->upgradeLevel});
-      downgradeCard(c);
+      cmd::downgradeCard(c);
     }
     flash = 1.f;
     co_return;

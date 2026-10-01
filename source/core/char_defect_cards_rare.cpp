@@ -237,15 +237,19 @@ struct FlakCannon : IroncladT<FlakCannon> {
 // GeneticAlgorithm.cs: Block starts at 1 and grows by Increase each play, on this copy and on its
 // deck version. PORT NOTE: the C# keeps CurrentBlock / IncreasedBlock as [SavedProperty]s; here the
 // running Block DynVar is the state (saved with the card's vars; IncreasedBlock = Block - 1), and
-// the AfterDowngraded refresh is not needed (no downgrade in this engine).
+// IncreasedBlock is recomputed on load and AfterDowngraded restores Block = 1 + IncreasedBlock.
 struct GeneticAlgorithm : IroncladT<GeneticAlgorithm> {
   CARD_HEADER(GeneticAlgorithm, "GENETIC_ALGORITHM", 1, Skill, Rare, Self)
     keywords = kwExhaust;
     addVar("Block", 1);
     addVar("Increase", 3);
   }
+  int increasedBlock = 0;
+  void afterLoad() override { increasedBlock = (val("Block") - Dec(1)).toInt(); }
+  void afterDowngraded() override { if (auto* v = var("Block")) v->base = Dec(1 + increasedBlock); }
   static void buffFromPlay(Card* c, int extra) {
     if (auto* v = c->var("Block")) v->base = v->base + Dec(extra);
+    static_cast<GeneticAlgorithm*>(c)->increasedBlock += extra;
   }
   Task<> onPlay(CardPlay&) override {
     co_await block(val("Block"));

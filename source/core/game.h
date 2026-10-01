@@ -516,6 +516,7 @@ struct Card : Model {
   virtual ~Card() = default;
   virtual Task<> onPlay(CardPlay&) { return {}; }
   virtual void onUpgrade() {}
+  virtual void afterDowngraded() {}  // CardModel.AfterDowngraded: restore state kept outside the vars
   virtual bool canBeGeneratedInCombat() const { return true; }  // CardModel.CanBeGeneratedInCombat (colorless pool helpers)
   // After a save is read back (vars, cost, keywords restored): rebuild state kept outside the vars.
   virtual void afterLoad() {}
@@ -549,6 +550,7 @@ struct Card : Model {
   bool upgraded() const { return upgradeLevel > 0; }
   bool upgradable() const { return upgradeLevel < maxUpgradeLevel; }
   void upgrade() { if (upgradable()) { ++upgradeLevel; onUpgrade(); } }
+  void downgrade();  // CardModel.DowngradeInternal (afflictions.cpp)
   // CardModel.Keywords: the card's own keywords plus those its affliction's power adds (Hexed).
   bool has(int kw) const { return (keywords & kw) != 0 || (affliction && (affliction->addedKeywords() & kw) != 0); }
   bool afflictedWith(const char* afflictionId) const { return affliction && affliction->id == afflictionId; }
@@ -1010,6 +1012,7 @@ Task<Card*> addGeneratedCard(Combat& c, std::unique_ptr<Card> card, Pile to, boo
 Task<> autoPlay(Combat& c, Card* card, Creature* target = nullptr);  // CardCmd.AutoPlay
 Task<Card*> transform(Combat& c, Card* card, std::unique_ptr<Card> into);  // CardCmd.Transform
 void upgradeCard(Card* card);  // CardCmd.Upgrade
+void downgradeCard(Card* card);  // CardCmd.Downgrade
 Task<> addStatusCards(Combat& c, std::string cardId, Pile to, int count, bool byPlayer = false);  // byPlayer: creator == Owner
 Task<std::vector<Card*>> selectCards(Combat& c, std::string prompt, std::vector<Card*> options, int minCount, int maxCount);
 Task<> autoPlayFromDrawPile(Combat& c, int count, bool forceExhaust);

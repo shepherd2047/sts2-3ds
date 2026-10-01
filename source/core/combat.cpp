@@ -837,6 +837,7 @@ Task<Card*> transform(Combat& c, Card* card, std::unique_ptr<Card> into) {
 }
 
 void upgradeCard(Card* card) { card->upgrade(); }
+void downgradeCard(Card* card) { if (card) card->downgrade(); }
 
 Task<> addStatusCards(Combat& c, std::string cardId, Pile to, int count, bool byPlayer) {
   // CardPileCmd.AddGeneratedCardsToCombat: add them all, then Hook.AfterCardGeneratedForCombat for

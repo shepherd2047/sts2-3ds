@@ -330,13 +330,12 @@ struct TearAsunder : IroncladT<TearAsunder> {
   void onUpgrade() override { upgradeVar("Damage", 2); }
 };
 
-// PORT NOTE: AfterDowngraded (restoring the permanently-added ExtraDamage
-// when a relic/effect downgrades a card) isn't modeled — this engine has no
-// downgrade mechanic — so ExtraDamage isn't tracked separately.
 struct Thrash : IroncladT<Thrash> {
   CARD_HEADER(Thrash, "THRASH", 1, Attack, Rare, AnyEnemy)
     addVar("Damage", 4);
   }
+  Dec extraDamage = 0;  // ExtraDamage: what AfterDowngraded adds back
+  void afterDowngraded() override { upgradeVar("Damage", extraDamage); }
   Task<> onPlay(CardPlay& p) override {
     co_await attack(p.target, val("Damage"), 2);
     std::vector<Card*> attacks;
@@ -349,6 +348,7 @@ struct Thrash : IroncladT<Thrash> {
       else if (card->var("OstyDamage")) damage = card->val("OstyDamage");
       damage = combat->modifyDamage(nullptr, me(), damage, kMove, card);
       upgradeVar("Damage", damage);
+      extraDamage += damage;
       co_await cmd::exhaustCard(*combat, card);
     }
   }
