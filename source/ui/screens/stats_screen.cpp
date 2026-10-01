@@ -15,8 +15,8 @@
 //
 // Playtime, fastest win, kills, discovered events and the best streak come from progress.sav
 // (M-stats); the high score and run count come from the stored run history (the last 50 runs).
-// PORT NOTE: the achievements / unlock entries are left out, and "discovered" counts have no
-// denominator (everything is unlocked).
+// PORT NOTE (n/a: owner): the unlock entries are left out and "discovered" counts have no denominator
+// (everything is unlocked); achievements are the M5 page.
 #include <cstring>
 
 #include "../../core/achievements.h"

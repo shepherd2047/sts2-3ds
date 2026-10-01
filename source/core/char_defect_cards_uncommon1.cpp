@@ -10,10 +10,10 @@ namespace {
 
 // FeralPower (Models.Powers): the first N attacks each turn that cost 0 energy return to the
 // top of the hand instead of being discarded.
-// PORT NOTE: (1) this engine's modifyCardPlayResultLocation hook has no ResourceInfo, so "energy
-// spent == 0" is derived as autoPlay || (X-cost ? xValue == 0 : energyCost(card) == 0); (2) there
-// is no card position in a Pile result, so the card goes to the end of the hand (Pile::Hand)
-// rather than CardPilePosition.Top; (3) DisplayAmount (remaining count) is not modeled.
+// PORT NOTE: engine feature missing: modifyCardPlayResultLocation returns only a Pile, with no
+// CardPilePosition, so the card goes to the end of the hand rather than CardPilePosition.Top. (The hook also
+// has no ResourceInfo, so "energy spent == 0" is derived as autoPlay || (X-cost ? xValue == 0 :
+// energyCost(card) == 0), which gives the same result; DisplayAmount is UI only.)
 // AfterApplied seeds the counter from the Attack CardPlaysStarted this turn that spent no energy.
 struct FeralPower : Power {
   POWER_HEADER(FeralPower, "FERAL_POWER")
@@ -224,8 +224,7 @@ struct FightThrough : IroncladT<FightThrough> {
 
 // Ftl.cs: 0-cost attack; draws while fewer than PlayMax cards were played this turn.
 // Counts the CardPlaysFinished this turn (the FTL in progress is not finished yet).
-// PORT NOTE: ShouldGlowGoldInternal (card glow while a draw is still possible) has no Card hook
-// in this engine and is dropped (UI).
+// PORT NOTE (n/a: visual): ShouldGlowGoldInternal (card glow while a draw is still possible) is UI only.
 struct Ftl : IroncladT<Ftl> {
   CARD_HEADER(Ftl, "FTL", 0, Attack, Uncommon, AnyEnemy)
     addVar("Damage", 5);

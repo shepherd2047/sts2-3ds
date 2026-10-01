@@ -22,7 +22,8 @@ namespace ui {
 // count) can go there early with 确认. Keys: D-pad moves the focus through the grid and down into the
 // bar, A picks / presses, X shows the focused card's detail, B leaves the review / cancels (when
 // allowed) / drops the focus. The rules (DeckChoice, Run::upgradeChoice) are unchanged.
-// PORT NOTE: the enchant prompt shows the card large, not enchanted (DeckChoice carries no id).
+// PORT NOTE: the enchant prompt shows the card large, not enchanted; needs DeckChoice (core/game.h) to carry the
+// enchantment id + amount (set by Run::selectForEnchantment) so the preview can show the card with it applied.
 namespace {
 constexpr float kGS = 0.46f, kGW = 120 * kGS, kGH = 169 * kGS, kGRow = kGH + 8;  // F5 grid mini
 constexpr int kGPerRow = 5;
@@ -30,7 +31,7 @@ constexpr float kGY0 = 0, kGY1 = 194;                              // grid area 
 constexpr float kGCellGap = (kBot - kGPerRow * kGW) / (kGPerRow + 1);
 constexpr float kTapSlop = 5;
 constexpr int kSelCancel = 1301, kSelDetail = 1302, kSelConfirm = 1303, kSelBack = 1304;
-constexpr int kOneSkip = 1311, kOneDetail = 1312, kOnePick = 1313, kOneCard0 = 1320;
+constexpr int kOneSkip = 1311, kOneDetail = 1312, kOnePick = 1313, kOneAlt0 = 1314, kOneCard0 = 1320;
 
 // The frame's input as App::update saw it, for the action-bar widgets drawn later in the frame
 // (a second gfx::input() in the same frame would not report the key presses again).
@@ -476,6 +477,7 @@ int App::chooseOneUpdate(const ChooseOneSpec& s, const gfx::Input& in) {
     if (id == kOneSkip && s.canSkip) return take(-1);
     if (id == kOnePick && o.sel >= 0) return take(o.sel);
     if (id == kOneDetail && o.sel >= 0) inspectCard(s.cards, o.sel);
+    if (id >= kOneAlt0 && id < kOneAlt0 + (int)s.alts.size()) return take(n + (id - kOneAlt0));  // E8: an alternative
     if (id >= kOneCard0 && id < kOneCard0 + n) {
       return take(id - kOneCard0);  // one tap takes the card
     }
@@ -538,6 +540,14 @@ void App::chooseOneDraw(const ChooseOneSpec& s, bool top) {
   if (widgets::button(kOneDetail, dx, style::kActionY, 60, style::kButtonH, tr("详情", "Details"), widgets::Kind::Secondary,
                       o.sel >= 0 && o.sel < n))
     o.pending = kOneDetail;
+  if (!s.alts.empty()) {  // E8: CardRewardAlternatives (REROLL, SACRIFICE) between 详情 and 选择
+    const float ax = dx + 60 + style::kGap, aw = kBot - style::kMargin - 90 - style::kGap - ax;
+    const int na = (int)s.alts.size();
+    const float bw = (aw - (na - 1) * style::kGap) / na;
+    for (int i = 0; i < na; ++i)
+      if (widgets::button(kOneAlt0 + i, ax + i * (bw + style::kGap), style::kActionY, bw, style::kButtonH, s.alts[i]))
+        o.pending = kOneAlt0 + i;
+  }
   if (widgets::button(kOnePick, kBot - style::kMargin - 90, style::kActionY, 90, style::kButtonH, tr("选择", "Select"),
                       widgets::Kind::Primary, o.sel >= 0 && o.sel < n))
     o.pending = kOnePick;
@@ -584,7 +594,7 @@ App::ChooseOneSpec App::combatChooseOneSpec() const {
 // Keys: D-pad moves the focus through the strip / grid / bar, A or X on a card opens its detail
 // (C# HolderPressed -> ShowCardDetail), B / Y close. Touch: the first tap focuses a card, a tap on
 // the focused card opens its detail. Rules are untouched: the view only reads the deck / piles.
-// PORT NOTE: 拼音顺序 compares titles by code point (the C# uses the zh-CN culture's collation), as M8.
+// PORT NOTE: 拼音顺序 compares titles by code point; needs a pinyin collation table (the C# uses the zh-CN culture's collation), as M8.
 namespace {
 constexpr int kVTab0 = 1401, kVSort0 = 1411, kVBack = 1421, kVUpgrades = 1422, kVDetail = 1423, kVRelics = 1424;
 constexpr float kVStripY = 2, kVStripH = 32;

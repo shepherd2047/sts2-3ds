@@ -20,45 +20,13 @@ using Targets = const std::vector<Creature*>&;
 Intent attackIntent(int dmg, int hits = 1) { Intent i; i.kind = Intent::Attack; i.damage = dmg; i.hits = hits; return i; }
 Intent kindIntent(Intent::Kind k) { Intent i; i.kind = k; return i; }
 
-// CardFactory.CreateForReward(owner, 1, options) with a card filter (ForNonCombatWithDefaultOdds):
-// roll the rarity like a monster-room card reward, then pick a random card of the character's pool of that
-// rarity passing the filter; if there is none, any reward-rarity card passing it.
-std::unique_ptr<Card> rewardCardWhere(Run& r, std::function<bool(const Card&)> filter) {
-  Rarity want = r.rollRarity(RoomType::Monster);
-  auto pool = db::characterCards(r.characterId, [&](const Card& c) { return c.rarity == want && filter(c); });
-  if (pool.empty())
-    pool = db::characterCards(r.characterId, [&](const Card& c) {
-      return (c.rarity == Rarity::Common || c.rarity == Rarity::Uncommon || c.rarity == Rarity::Rare) && filter(c);
-    });
-  if (pool.empty()) return nullptr;
-  return db::card(r.rng("Rewards").nextItem(pool));
+// CardFactory.CreateForReward(owner, 1, ForNonCombatWithDefaultOdds(character pool, filter) + flags).
+std::unique_ptr<Card> rewardCardWhere(Run& r, std::function<bool(const Card&)> filter, uint32_t flags = 0) {
+  auto o = CardCreationOptions::forNonCombat({r.characterId}, false, std::move(filter));
+  auto cards = r.createForReward(o.with(flags), 1);
+  return cards.empty() ? nullptr : std::move(cards[0]);
 }
 
-// RewardsCmd.OfferCustom: the rewards as one claimable list (as in events_shared2.cpp: a skipped
-// Card row stays until the player leaves).
-Task<> offerRewards(Run& r, std::vector<Run::RewardItem> items) {
-  r.rewardItems = std::move(items);
-  r.screen = Screen::Reward;
-  for (;;) {
-    int pick = co_await r.rewardListChoice.next();
-    if (pick < 0 || pick >= (int)r.rewardItems.size()) break;
-    Run::RewardItem& item = r.rewardItems[pick];
-    if (item.kind != Run::RewardKind::Card) break;  // only card rows are offered here
-    r.rewardCards = std::move(item.cards);
-    int cardPick = co_await r.rewardChoice.next();
-    bool claimed = false;
-    if (cardPick >= 0 && cardPick < (int)r.rewardCards.size()) {
-      r.addCardToDeck(std::move(r.rewardCards[cardPick]));
-      claimed = true;
-    } else {
-      item.cards = std::move(r.rewardCards);
-    }
-    r.rewardCards.clear();
-    if (claimed) r.rewardItems.erase(r.rewardItems.begin() + pick);
-  }
-  r.rewardItems.clear();
-  r.rewardCards.clear();
-}
 }  // namespace
 
 // ---------------------------------------------------------------- cards given by events
@@ -319,37 +287,19 @@ struct ColorfulPhilosophers : Event {
     return list;
   }
   // CardReward(CardCreationOptions([pool], Other, Uniform, rarity == r, NoRarityModification |
-  // NoCardPoolModifications), Cards): CardFactory.CreateForReward, three distinct cards each followed
-  // by RollForUpgrade(0), all on the Rewards rng; the three rewards are populated in order.
-  // PORT NOTE: the Uniform odds also drop Basic / Ancient cards; filtering on one rarity already does.
-  std::vector<std::unique_ptr<Card>> cards(const std::string& ch, Rarity rarity) {
-    std::vector<std::unique_ptr<Card>> out;
-    std::vector<std::string> taken;
-    auto pool = db::characterCards(ch, [&](const Card& c) { return c.rarity == rarity; });
-    for (int i = 0; i < val("Cards").toInt(); ++i) {
-      std::vector<std::string> items;
-      for (auto& id : pool) if (std::find(taken.begin(), taken.end(), id) == taken.end()) items.push_back(id);
-      if (items.empty()) break;
-      std::string id = run->rng("Rewards").nextItem(items);
-      taken.push_back(id);
-      auto c = db::card(id);
-      run->rollCardUpgrade(*c, 0);
-      out.push_back(std::move(c));
-    }
-    // Hook.TryModifyCardRewardOptions (the flags do not include NoModifyHooks), as an event room.
-    for (bool late : {false, true})
-      for (auto& rel : run->relics) rel->modifyCardReward(out, RoomType::Unknown, late);
-    return out;
-  }
+  // NoCardPoolModifications), Cards): the three rewards are populated in order.
   Task<> offer(std::string ch) {
     std::vector<Run::RewardItem> rows;
     for (Rarity rarity : {Rarity::Common, Rarity::Uncommon, Rarity::Rare}) {
-      Run::RewardItem row;
-      row.kind = Run::RewardKind::Card;
-      row.cards = cards(ch, rarity);
+      CardCreationOptions o;
+      o.pools = {ch};
+      o.odds = RarityOdds::Uniform;
+      o.filter = [rarity](const Card& c) { return c.rarity == rarity; };
+      o.with(ccNoRarityModification | ccNoCardPoolModifications);
+      Run::RewardItem row = run->makeCardReward(o, val("Cards").toInt());
       if (!row.cards.empty()) rows.push_back(std::move(row));
     }
-    co_await offerRewards(*run, std::move(rows));
+    co_await run->offerRewards(std::move(rows));
     setFinished("DONE");
   }
 };
@@ -433,7 +383,7 @@ struct InfestedAutomaton : Event {
     co_return;
   }
   Task<> touchCore() {
-    if (auto c = rewardCardWhere(*run, [](const Card& c) { return c.canonicalCost == 0 && !c.costsX; })) run->addCardToDeck(std::move(c));
+    if (auto c = rewardCardWhere(*run, [](const Card& c) { return c.canonicalCost == 0 && !c.costsX; }, ccNoCardPoolModifications)) run->addCardToDeck(std::move(c));
     setFinished("TOUCH_CORE");
     co_return;
   }
@@ -505,9 +455,13 @@ struct TheLanternKey : Event {
     co_return;
   }
   Task<> fight() {
+    // EnterCombatWithoutExitingEvent(extraRewards: SpecialCardReward(LanternKey)).
+    Run::RewardItem key;
+    key.kind = Run::RewardKind::SpecialCard;
+    key.card = db::card("LanternKey");
+    run->roomExtraRewards.push_back(std::move(key));
     bool won = co_await run->eventFight("MysteriousKnightEventEncounter");
     if (!won) co_return;
-    run->addCardToDeck(db::card("LanternKey"));  // SpecialCardReward
     finished = true;
     options.clear();
   }

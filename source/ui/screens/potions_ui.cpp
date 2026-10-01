@@ -117,7 +117,7 @@ void App::drawPotions(bool top) {
   }
   bool canUse = potionSel_ >= 0 && r.canUsePotion(potionSel_);
   button(10, 196, 96, 36, tr("返回", "Back"), ID_BACK);
-  button(112, 196, 96, 36, tr("丢弃", "Discard"), ID_DISCARD, p != nullptr);
+  button(112, 196, 96, 36, tr("丢弃", "Discard"), ID_DISCARD, p != nullptr && r.canUseOrRemovePotions);
   button(214, 196, 96, 36, tr("使用", "Use"), ID_USE, canUse, true);
 }
 
@@ -171,10 +171,10 @@ void App::updatePotions(const gfx::Input& in) {
   if (in.down & gfx::BTN_DOWN) potionSel_ = std::min(n - 1, potionSel_ + 1);
   if (in.down & gfx::BTN_UP) potionSel_ = std::max(0, potionSel_ - 1);
   if (in.down & gfx::BTN_A) use();
-  if ((in.down & gfx::BTN_X) && potionSel_ >= 0) r.discardPotion(potionSel_);
+  if ((in.down & gfx::BTN_X) && potionSel_ >= 0 && r.canUseOrRemovePotions) r.discardPotion(potionSel_);
   if (id >= ID_POTION0 && id < ID_POTION0 + n) potionSel_ = id - ID_POTION0;
   if (id == ID_USE) use();
-  if (id == ID_DISCARD && potionSel_ >= 0) r.discardPotion(potionSel_);
+  if (id == ID_DISCARD && potionSel_ >= 0 && r.canUseOrRemovePotions) r.discardPotion(potionSel_);
 }
 
 // PotionReward: the potion on top; take or skip below. With a full belt the belt is
@@ -234,7 +234,10 @@ void App::updatePotionOffer(const gfx::Input& in) {
   Run& r = *run_;
   if (!r.potionOfferChoice.waiting()) return;
   int id = in.touchDown ? hitAt(in.tx, in.ty) : ID_NONE;
-  if (id >= ID_POTION0 && id < ID_POTION0 + (int)r.potions.size()) { r.discardPotion(id - ID_POTION0); return; }
+  if (id >= ID_POTION0 && id < ID_POTION0 + (int)r.potions.size()) {
+    if (r.canUseOrRemovePotions) r.discardPotion(id - ID_POTION0);  // Player.CanUseOrRemovePotions
+    return;
+  }
   if ((in.down & gfx::BTN_A) && r.hasOpenPotionSlot()) { r.potionOfferChoice.fire(1); return; }
   if (in.down & gfx::BTN_B) r.potionOfferChoice.fire(0);
 }

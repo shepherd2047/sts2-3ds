@@ -6,9 +6,8 @@
 // Pool diff (SharedRelicPool + the five character pools + Event pool vs RELIC_HEADER): every shared and
 // character relic is now registered; the Ancient-ish ones (SeaGlass, PrismaticGem, PaelsGrowth,
 // LeadPaperweight, Kaleidoscope, WhisperingEarring) are in relics_ancient2.cpp (A6). Still skipped
-// (systems that are not built): Byrdpip, PaelsLegion (pets), Driftwood (reward
-// reroll), FurCoat (map marks), GoldenCompass (golden path), MassiveScroll (multiplayer only),
-// PaelsWing (sacrificing card rewards), ToyBox (wax relics). DowsingRod, ScrollBoxes and
+// (systems that are not built): Byrdpip, PaelsLegion (pets), FurCoat (map marks), GoldenCompass
+// (golden path), MassiveScroll (multiplayer only), ToyBox (wax relics). DowsingRod, ScrollBoxes and
 // WingedBoots are in quests.cpp (E2).
 #include "colorless.h"
 #include "game.h"
@@ -20,12 +19,14 @@ namespace {
 template <class R> void reg() { db::registerRelic(R::kId, [] { return std::unique_ptr<Relic>(new R()); }); }
 
 // DingyRug.cs (Shop): every card reward also draws from the colorless pool (CardPools.Union(ColorlessCardPool),
-// unless NoCardPoolModifications). PORT NOTE: applied through Relic::addsColorlessToCardRewards in
-// Run::cardReward; the C# flags IsCardReward / NoCardPoolModifications are implied (event card rewards that
-// pass NoCardPoolModifications are not distinguished).
+// unless NoCardPoolModifications), through Hook.ModifyCardRewardCreationOptions (Run::createForReward).
 struct DingyRug : Relic {
   RELIC_HEADER(DingyRug, "DINGY_RUG", Shop) }
-  bool addsColorlessToCardRewards() const override { return true; }
+  void modifyCardRewardCreationOptions(CardCreationOptions& o) override {
+    if (o.has(ccNoCardPoolModifications) || !o.has(ccIsCardReward)) return;
+    if (std::find(o.pools.begin(), o.pools.end(), CardCreationOptions::kColorless) == o.pools.end())
+      o.pools.push_back(CardCreationOptions::kColorless);  // CardPools.Union(ColorlessCardPool)
+  }
 };
 
 // Toolbox.cs (Shop): on turn 1, before the draw, choose 1 of 3 distinct colorless cards for the hand.

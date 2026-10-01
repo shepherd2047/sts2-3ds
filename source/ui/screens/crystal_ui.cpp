@@ -96,7 +96,7 @@ void App::drawCrystalSphere(bool top) {
   // ---- bottom: the sphere and its grid
   if (bg) gfx::image(bg, 0, 256, kBot, kH, 0, 0, kBot, kH);
   for (auto& it : g.items) {  // items show through the cleared cells
-    if (!it.placed) continue;  // PORT NOTE: an item that did not fit is not drawn (C#: at cell (0, 0))
+    if (!it.placed) continue;  // PORT NOTE (n/a: visual): an item that did not fit is not drawn (C#: at cell (0, 0))
     Sprite s = R().sprite(itemSprite(it));
     for (int i = 0; i < it.w; ++i)
       for (int j = 0; j < it.h; ++j)

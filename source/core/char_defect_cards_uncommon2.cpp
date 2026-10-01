@@ -143,7 +143,7 @@ struct RocketPunch : IroncladT<RocketPunch> {
     co_await attack(p.target, val("Damage"));
     co_await drawCards(val("Cards"));
   }
-  // PORT NOTE: AfterCardGeneratedForCombat is modeled by afterCardEnteredCombat (see SmokestackPower).
+  // PORT NOTE (n/a: equivalent): AfterCardGeneratedForCombat is modeled by afterCardEnteredCombat (see SmokestackPower).
   Task<> afterCardEnteredCombat(Card* card) override {
     if (!card->createdByPlayer || card->type != CardType::Status) co_return;
     addUntilPlayed(-1);

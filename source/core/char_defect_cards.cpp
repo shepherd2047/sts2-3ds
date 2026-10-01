@@ -25,8 +25,7 @@ struct HotfixPower : TemporaryFocusPower {
 
 // LightningRodPower (Models.Powers): a Counter stack; each of the owner's own energy resets
 // (i.e. the start of their next turn) channels a Lightning orb and ticks the counter down.
-// PORT NOTE: drops the C#'s `player == Owner.Player` multiplayer check (single player: always
-// true) -- see this engine's single afterEnergyReset() hook (no Player parameter).
+// PORT NOTE (n/a: single-player): the C#'s `player == Owner.Player` check is always true with one player.
 struct LightningRodPower : Power {
   POWER_HEADER(LightningRodPower, "LIGHTNING_ROD_POWER")
   Task<> afterEnergyReset() override {

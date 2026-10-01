@@ -35,17 +35,16 @@ struct DefendDefect : IroncladT<DefendDefect> {
   void onUpgrade() override { upgradeVar("Block", 3); }
 };
 
-// Zap.cs: channel a Lightning orb. PORT NOTE: drops the C#'s TriggerAnim("Cast", ...) call, a
-// pure animation cue with no gameplay effect (no anim system in this port).
+// Zap.cs: channel a Lightning orb.
+// PORT NOTE (n/a: visual): the C#'s TriggerAnim("Cast", ...) call is an animation cue only.
 struct Zap : IroncladT<Zap> {
   CARD_HEADER(Zap, "ZAP", 1, Skill, Basic, Self) }
   Task<> onPlay(CardPlay&) override { co_await cmd::channelOrb(*combat, std::make_unique<LightningOrb>()); }
   void onUpgrade() override { cost -= 1; }
 };
 
-// Dualcast.cs: evoke the front orb twice without dequeuing it. PORT NOTE: drops the C#'s
-// TriggerAnim + CustomScaledWait (animation-only); the `Orbs.Count > 0` guard is kept for
-// fidelity even though evokeNextOrb is already a no-op on an empty queue.
+// Dualcast.cs: evoke the front orb twice without dequeuing it.
+// PORT NOTE (n/a: visual): the C#'s TriggerAnim + CustomScaledWait are animation/pacing only.
 struct Dualcast : IroncladT<Dualcast> {
   CARD_HEADER(Dualcast, "DUALCAST", 1, Skill, Basic, Self) }
   Task<> onPlay(CardPlay&) override {

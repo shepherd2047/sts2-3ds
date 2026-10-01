@@ -11,8 +11,7 @@ namespace sts {
 // ================================================================ Focus
 
 // FocusPower (Models.Powers): modifies every orb value the player's own orbs produce.
-// PORT NOTE: the C# also checks `Owner.Player != orb.Owner`; this port is single-player, so the
-// Defect is always both the orb's and the power's owner and the check always passes.
+// PORT NOTE (n/a: single-player): the C# also checks `Owner.Player != orb.Owner`; with one player the check always passes.
 struct FocusPower : Power {
   POWER_HEADER(FocusPower, "FOCUS_POWER")
   bool allowNegative() const override { return true; }
@@ -66,8 +65,7 @@ struct LightningOrb : Orb {
 };
 
 // FrostOrb: passive/evoke gain block for the player.
-// PORT NOTE: the C# also gives every *other* player the same block under HibernatePower
-// (multiplayer); single player has none, so that branch is dropped.
+// PORT NOTE (n/a: single-player): the C# also gives every other player the same block under HibernatePower; there are none here.
 struct FrostOrb : Orb {
   ORB_HEADER(FrostOrb, "FROST_ORB")
   Dec passiveVal() override { return owner->combat->modifyOrbValue(this, Dec(2)); }

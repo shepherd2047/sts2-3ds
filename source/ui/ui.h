@@ -248,6 +248,9 @@ class App {
     std::vector<sts::Card*> cards;
     bool canSkip = true;
     std::string title, sub;  // top screen while nothing is focused (title defaults to CHOOSE_CARD_HEADER)
+    // CardRewardAlternatives besides Skip (E8: REROLL, SACRIFICE), as button labels; picking
+    // alternative i returns cards.size() + i.
+    std::vector<std::string> alts;
     int group = 1;  // E2 bundle screen (ScrollBoxes): cards come in groups of this size; a pick is a group index
   };
 
