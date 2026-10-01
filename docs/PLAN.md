@@ -463,14 +463,14 @@ group is one engine package; file:line lists are in the H5 merge commit report.
 | id | Package | Unlocks |
 |---|---|---|
 | E1 | `CardFactory.FilterForCombat` for every in-combat card generator (no Basic / Ancient / Event / CanBeGeneratedInCombat=false; InfernalBlade could make a Strike) | correctness bug; done 2026-09-30: `card_factory.h/.cpp`, every in-combat generator goes through it |
-| E2 | Quest card type + "?"-room / act-map hooks + deck cards as run-level listeners (AfterCombatEnd ...) | Dowsing, SpoilsMap, LanternKey, ByrdonisEgg, DowsingRod, WingedBoots, ScrollBoxes, Guilty; in progress (subagent, 2026-09-30) |
-| E3 | CombatHistory log (draws, plays, damage, powers, attacks) | ~15 Ironclad / Necrobinder / Defect cards and relics; in progress (subagent, 2026-09-30) |
-| E4 | Target-aware `calcMultiplier` for hand previews | 5 cards; in progress (subagent, 2026-09-30) |
-| E5 | Card downgrade (AfterDowngraded) | 6 cards / relics; in progress (subagent, 2026-09-30) |
-| E6 | Instanced powers + ITemporaryPower marker | ~15 powers, events, relics; in progress (subagent, 2026-09-30) |
-| E7 | Missing hooks: damage cap, BeforeDamageReceived, AttackCommand before/after, AfterModifyingCardPlayResultLocation, ShouldAllowHitting, Early/Late variants, AfterBlockBroken order, RelicCmd OnRemoved, HasUponPickupEffect, extra turn (Ambergris) | ~25 notes; in progress (subagent, 2026-09-30) |
+| E2 | Quest card type + "?"-room / act-map hooks + deck cards as run-level listeners (AfterCombatEnd ...) | Dowsing, SpoilsMap, LanternKey, ByrdonisEgg, DowsingRod, WingedBoots, ScrollBoxes, Guilty; done 2026-09-30 (subagent, merged by lead) |
+| E3 | CombatHistory log (draws, plays, damage, powers, attacks) | ~15 Ironclad / Necrobinder / Defect cards and relics; done 2026-09-30 (subagent, merged by lead) |
+| E4 | Target-aware `calcMultiplier` for hand previews | 5 cards; done 2026-09-30 (subagent, merged by lead) |
+| E5 | Card downgrade (AfterDowngraded) | 6 cards / relics; done 2026-09-30 (subagent, merged by lead) |
+| E6 | Instanced powers + ITemporaryPower marker | ~15 powers, events, relics; done 2026-09-30 (subagent, merged by lead) |
+| E7 | Missing hooks: damage cap, BeforeDamageReceived, AttackCommand before/after, AfterModifyingCardPlayResultLocation, ShouldAllowHitting, Early/Late variants, AfterBlockBroken order, RelicCmd OnRemoved, HasUponPickupEffect, extra turn (Ambergris) | ~25 notes; done 2026-09-30 (subagent, merged by lead) |
 | E8 | Card-reward creation options, transformCard running the added-to-deck hook, Player.CanUseOrRemovePotions, custom reward screens / special rewards | ~15 notes; in progress (subagent, 2026-09-30) |
-| E9 | Card-text formatter: `{CardType:choose}`, `{TargetType:choose}`, recursive string vars, Calculated* display | 4 notes + in-combat numbers; in progress (subagent, 2026-09-30) |
+| E9 | Card-text formatter: `{CardType:choose}`, `{TargetType:choose}`, recursive string vars, Calculated* display | 4 notes + in-combat numbers; done 2026-09-30 (subagent, merged by lead) |
 
 UI/VFX-only, single-player-only, owner-decision and reviewed RNG notes stay as they are (n/a for H6).
 

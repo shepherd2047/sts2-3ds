@@ -781,6 +781,15 @@ int main() {
     f.play(ne, f.enemy(0));
     CHECK(f.enemy(0)->powerAmount<DoomPower>() == 25 + 10 + 5 * 2);
   }
+  {  // E4: target-aware hand preview (Calculate(null) = base, Calculate(target) with the hovered enemy)
+    Fight f("Necrobinder");
+    f.apply<DoomPower>(f.enemy(0), 25);
+    Card* ne = f.c->addCard(db::card("NoEscape"));
+    Card* tu = f.c->addCard(db::card("TimesUp"));
+    CHECK(ne->calculatedBlock().toInt() == 10 && tu->calculatedDamage().toInt() == 0);
+    ne->previewTarget = tu->previewTarget = f.enemy(0);
+    CHECK(ne->calculatedBlock().toInt() == 20 && tu->calculatedDamage().toInt() == 25);
+  }
   {  // Lethality: +50% on the first Attack of the turn only. Veilpiercer: Ethereal cards cost 0.
     Fight f("Necrobinder");
     Card* l = f.c->addCard(db::card("Lethality"));

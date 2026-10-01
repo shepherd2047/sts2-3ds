@@ -13,8 +13,7 @@ namespace sts {
 
 // EnchantmentModel.CanEnchant
 bool Enchantment::canEnchant(const Card& c) const {
-  // PORT NOTE: the C# also refuses Quest cards; the engine has no Quest card type yet (A2).
-  if (c.type == CardType::Status || c.type == CardType::Curse) return false;
+  if (c.type == CardType::Status || c.type == CardType::Curse || c.type == CardType::Quest) return false;
   if (!canEnchantCardType(c.type)) return false;
   // Deck cards (not part of a combat) that cannot be played can't be enchanted.
   if (!c.combat && c.has(kwUnplayable)) return false;

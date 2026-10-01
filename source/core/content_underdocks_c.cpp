@@ -21,23 +21,19 @@ template <class M> std::unique_ptr<Monster> mk() { return std::make_unique<M>();
 
 // ================================================================ powers
 
-// PhantasmalGardener: the first time each turn a player card deals unblocked damage to the
-// owner, it gains Amount Block (unpowered).
-// The C# reads AttackCommand.Results in AfterAttack; here the hit is noted as it lands and
-// the Block is granted when the whole attack has finished (same timing).
+// PhantasmalGardener: the first time each turn a card's attack deals unblocked damage to the
+// owner, it gains Amount Block (unpowered), once the whole attack has finished (AfterAttack).
 // PORT NOTE: the BlockStart/BlockEnd animations and sfx are dropped.
 struct SkittishPower : Power {
   POWER_HEADER(SkittishPower, "SKITTISH_POWER")
   bool hasGainedBlockThisTurn = false;
-  bool hitPending = false;
-  Task<> afterDamageReceived(Creature* target, const DamageResult& r, int props, Creature*, Card* card) override {
-    if (target == owner && card && (props & kMove) && r.unblocked != 0) hitPending = true;
-    co_return;
-  }
-  Task<> afterAttack(Creature*) override {
-    bool hit = hitPending;
-    hitPending = false;
-    if (!hit || hasGainedBlockThisTurn || owner->dead()) co_return;
+  Task<> afterAttack(const cmd::Attack& a) override {
+    if (hasGainedBlockThisTurn || !(a.props & kMove) || !a.source) co_return;
+    const DamageResult* first = nullptr;
+    for (auto& hit : a.results)
+      for (auto& r : hit)
+        if (!first && r.receiver == owner) first = &r;
+    if (!first || first->unblocked == 0) co_return;
     hasGainedBlockThisTurn = true;
     co_await cmd::gainBlock(owner, Dec(amount), kUnpowered, nullptr);
   }
@@ -54,7 +50,7 @@ struct SkittishPower : Power {
 struct HardenedShellPower : Power {
   POWER_HEADER(HardenedShellPower, "HARDENED_SHELL_POWER")
   int damageReceivedThisTurn = 0;
-  Dec modifyHpLostBeforeOsty(Creature* target, Dec a, int, Creature*, Card*) override {
+  Dec modifyHpLostBeforeOstyLate(Creature* target, Dec a, int, Creature*, Card*) override {
     if (target != owner || a == Dec(0)) return a;
     Dec cap = Dec(amount - damageReceivedThisTurn);
     if (cap < a) flash = 1.f;

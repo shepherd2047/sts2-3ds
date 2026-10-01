@@ -44,8 +44,8 @@ DEFAULT_NAME = {v: v[:-3] for v in ('BlockVar', 'CardsVar', 'DamageVar', 'Energy
 NO_VALUE = ('CalculatedDamageVar', 'CalculatedBlockVar', 'CalculatedVar', 'IfUpgradedVar')
 # Port ids that differ from the C# class name (a C++ struct of the same name exists).
 ALIAS = {'LostWispRelic': 'LostWisp'}
-# The port has no CardRarity.Event / Quest: event cards use Token or Ancient, quest cards Token.
-RARITY_EQUIV = {'Event': ('Token', 'Ancient'), 'Quest': ('Token',)}
+# The port has no CardRarity.Event: event cards use Token or Ancient.
+RARITY_EQUIV = {'Event': ('Token', 'Ancient')}
 # Single player: every player-targeting kind is Self; TargetedNoCreature is None.
 TARGET_EQUIV = {'AnyPlayer': 'Self', 'AnyAlly': 'Self', 'AllAllies': 'Self', 'TargetedNoCreature': 'None'}
 

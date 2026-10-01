@@ -73,15 +73,13 @@ struct Unleash : IroncladT<Unleash> {
 
 // BoundPhylactery.cs (Starter relic): summon Osty with 1 HP before combat starts; every turn
 // after the first, summon him again for 1 (raising his max HP by 1, or resummoning him at 1 HP
-// if he died) via AfterEnergyResetLate. PORT NOTE: AfterEnergyResetLate vs. AfterEnergyReset only
-// matters for ordering against other Osty-existence checks (e.g. Friendship), not ported yet;
-// this engine's single afterEnergyReset() hook is used instead.
+// if he died) via AfterEnergyResetLate.
 struct BoundPhylactery : Relic {
   RELIC_HEADER(BoundPhylactery, "BOUND_PHYLACTERY", Starter)
     addVar("Summon", 1);
   }
   Task<> beforeCombatStart() override { co_await summonOsty(*combat, val("Summon").toInt()); }
-  Task<> afterEnergyReset() override {
+  Task<> afterEnergyResetLate() override {
     if (!combat || combat->turnNumber == 1) co_return;
     co_await summonOsty(*combat, val("Summon").toInt());
   }
@@ -113,6 +111,7 @@ Task<Creature*> summonOsty(Combat& c, int amount) {
     if (isReviving)
       for (Model* m : c.listeners()) co_await m->afterOstyRevived(c.osty);
   }
+  c.history.summoned(c, amount);  // History.Summoned
   co_return c.osty;
 }
 

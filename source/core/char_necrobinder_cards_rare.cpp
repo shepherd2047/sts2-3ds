@@ -70,14 +70,14 @@ struct NeurosurgePower : Power {
   }
 };
 
-// OblivionPower.cs: Debuff, Counter (InstancedPerApplier; this engine stacks by id, and the only
-// applier is the player). Every card the applier plays while it is on the enemy gives that enemy
-// Doom equal to the power's amount when the card was played (the Oblivion that applied it does not
+// OblivionPower.cs: Debuff, Counter, InstancedPerApplier. Every card the applier plays while it is on
+// the enemy gives that enemy Doom equal to the power's amount when the card was played (the Oblivion that applied it does not
 // trigger itself: its beforeCardPlayed ran before the power existed). Removed at the end of the
 // player's turn.
 struct OblivionPower : Power {
   POWER_HEADER(OblivionPower, "OBLIVION_POWER")
   PowerType type() const override { return PowerType::Debuff; }
+  PowerInstanceType instanceType() const override { return PowerInstanceType::InstancedPerApplier; }
   std::vector<std::pair<Card*, int>> amountsForPlayedCards;
   Task<> beforeCardPlayed(const CardPlay& p) override {
     if (!applier || applier != owner->combat->player || ownerOf(p.card) != applier) co_return;
@@ -155,10 +155,10 @@ struct SweepingGaze : IroncladT<SweepingGaze> {
 // BansheesCry.cs: 9 cost, deal 33 to all enemies. Costs 2 (Energy var) less for the rest of the
 // combat each time an Ethereal card is played (also counting those already played when this card
 // enters combat). Upgrade: -2 cost.
-// PORT NOTE: the C# counts CombatHistory.CardPlaysFinished entries with WasEthereal; this reads
-// Combat::etherealPlaysFinished (the one engine counter added for this card). The `IsClone` guard
-// (a clone already carries the reduction) is approximated by "has any this-combat cost modifier".
-// afterCardEnteredCombat only fires for cards generated mid-combat here, where it matters.
+// The earlier plays are the CardPlaysFinished entries with WasEthereal.
+// PORT NOTE: the `IsClone` guard (a clone already carries the reduction) is approximated by "has
+// any this-combat cost modifier" (no CloneOf link on Card). afterCardEnteredCombat only fires for
+// cards generated mid-combat here, where it matters.
 struct BansheesCry : IroncladT<BansheesCry> {
   CARD_HEADER(BansheesCry, "BANSHEES_CRY", 9, Attack, Rare, AllEnemies)
     addVar("Damage", 33);
@@ -168,7 +168,8 @@ struct BansheesCry : IroncladT<BansheesCry> {
   void onUpgrade() override { cost -= 2; }
   Task<> afterCardEnteredCombat(Card* card) override {
     if (card != this || !combat || !costMods.empty()) co_return;
-    addThisCombat(-combat->etherealPlaysFinished * val("Energy").toInt());
+    int n = combat->history.count([](const CombatHistoryEntry& e) { return e.kind == CombatHistoryEntry::CardPlayFinished && e.flag; });
+    addThisCombat(-n * val("Energy").toInt());
   }
   Task<> afterCardPlayed(const CardPlay& p) override {
     if (!p.card->has(kwEthereal)) co_return;
@@ -262,24 +263,22 @@ struct Hang : IroncladT<Hang> {
 
 // Misery.cs: 0 cost, deal 7 (+2 upgraded, +Retain), then copy every debuff the target had before
 // the hit onto every other hittable enemy (stacking onto ones they already have).
-// PORT NOTE: ITemporaryPower is not modelled, so the temporary-Strength-down powers (Enfeebling
-// Touch, Piercing Wail, Mangle) are listed here with the power they apply internally, and their
-// amount is merged into that entry like the C#'s `debuffAmounts[internal] += temp.Amount`.
+// A temporary power's amount is merged into its InternallyAppliedPower's entry (`debuffAmounts[internal] +=
+// temp.Amount`). PORT NOTE: the copies are fresh powers from the registry, not ClonePreservingMutability
+// clones, so per-instance state beyond amount/applier is not copied (no debuff in this build has any that
+// matters on another enemy).
 struct Misery : IroncladT<Misery> {
   CARD_HEADER(Misery, "MISERY", 0, Attack, Rare, AnyEnemy)
     addVar("Damage", 7);
   }
-  struct Debuff { std::string id; int amount; Creature* applier; };
-  static const char* internalPowerOf(const std::string& id) {
-    if (id == "EnfeeblingTouchPower" || id == "PiercingWailPower" || id == "ManglePower") return "StrengthPower";
-    return nullptr;
-  }
+  struct Debuff { std::string id; int amount; Creature* applier; const char* inner; };
   Task<> onPlay(CardPlay& p) override {
     std::vector<Debuff> debuffs;
     for (auto& pw : p.target->powers)
-      if (pw->typeForAmount(Dec(pw->amount)) == PowerType::Debuff) debuffs.push_back({pw->id, pw->amount, pw->applier});
+      if (pw->typeForAmount(Dec(pw->amount)) == PowerType::Debuff)
+        debuffs.push_back({pw->id, pw->amount, pw->applier, pw->internallyAppliedPower()});
     for (size_t i = 0; i < debuffs.size(); ++i) {
-      const char* inner = internalPowerOf(debuffs[i].id);
+      const char* inner = debuffs[i].inner;
       if (!inner) continue;
       int add = debuffs[i].amount;
       for (auto& d : debuffs)
@@ -291,9 +290,11 @@ struct Misery : IroncladT<Misery> {
       if (enemy == p.target) continue;
       for (auto& d : debuffs) {
         if (d.amount == 0) continue;
-        if (Power* existing = enemy->power(d.id)) {
+        auto pw = db::power(d.id);
+        if (!pw) continue;
+        if (Power* existing = enemy->stackingInstance(*pw, d.applier)) {
           co_await cmd::modifyPowerAmount(existing, Dec(d.amount), d.applier, this);
-        } else if (auto pw = db::power(d.id)) {
+        } else {
           co_await cmd::applyPower(std::move(pw), enemy, Dec(d.amount), d.applier, this);
         }
       }
@@ -481,27 +482,32 @@ struct TheScythe : IroncladT<TheScythe> {
     addVar("Damage", 13);
     addVar("Increase", 5);
   }
+  // IncreasedDamage: CurrentDamage = 13 + IncreasedDamage (UpdateDamage, also after a downgrade).
+  Dec increasedDamage = 0;
+  void afterLoad() override { increasedDamage = val("Damage") - Dec(13); }
+  void afterDowngraded() override { if (auto* v = var("Damage")) v->base = Dec(13) + increasedDamage; }
   Task<> onPlay(CardPlay& p) override {
     co_await attack(p.target, val("Damage"));
     Dec inc = val("Increase");
-    upgradeVar("Damage", inc);
-    if (deckVersion.p && deckVersion.p != this) deckVersion.p->upgradeVar("Damage", inc);
+    buffFromPlay(this, inc);
+    if (deckVersion.p && deckVersion.p != this && deckVersion.p->id == "TheScythe") buffFromPlay(deckVersion.p, inc);
+  }
+  static void buffFromPlay(Card* c, Dec inc) {
+    c->upgradeVar("Damage", inc);
+    static_cast<TheScythe*>(c)->increasedDamage += inc;
   }
   void onUpgrade() override { upgradeVar("Increase", 2); }
 };
 
 // TimesUp.cs: 2 cost, deal 1 per Doom on the target. Upgrade: Retain.
-// PORT NOTE: CalculatedDamageVar's multiplier reads the target's Doom, but calcMultiplier only
-// receives the card, so the hand preview shows the base (0) and onPlay computes the damage itself.
 struct TimesUp : IroncladT<TimesUp> {
   CARD_HEADER(TimesUp, "TIMES_UP", 2, Attack, Rare, AnyEnemy)
     addVar("CalculationBase", 0);
     addVar("ExtraDamage", 1);
     addVar("CalculatedDamage", 0);
+    calcMultiplierT = [](Card*, Creature* t) { return t ? t->powerAmount<DoomPower>() : 0; };
   }
-  Task<> onPlay(CardPlay& p) override {
-    co_await attack(p.target, val("CalculationBase") + val("ExtraDamage") * Dec(p.target->powerAmount<DoomPower>()));
-  }
+  Task<> onPlay(CardPlay& p) override { co_await attackCalculated(p.target); }
   void onUpgrade() override { addKeyword(kwRetain); }
 };
 

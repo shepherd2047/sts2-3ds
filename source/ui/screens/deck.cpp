@@ -470,7 +470,7 @@ int App::chooseOneUpdate(const ChooseOneSpec& s, const gfx::Input& in) {
   OneSel& o = OS();
   const int n = (int)s.cards.size();
   if (o.sel >= n) o.sel = -1;
-  auto take = [&](int i) { OS() = OneSel{}; return i; };
+  auto take = [&](int i) { OS() = OneSel{}; return i >= 0 && s.group > 1 ? i / s.group : i; };
   if (int id = o.pending) {
     o.pending = 0;
     if (id == kOneSkip && s.canSkip) return take(-1);
@@ -522,9 +522,14 @@ void App::chooseOneDraw(const ChooseOneSpec& s, bool top) {
   if (o.zone == 0) widgets::setFocus(-1);
   const float sc = oneScale(n), w = 120 * sc, h = 169 * sc;
   for (int i = 0; i < n; ++i) {
-    float x = oneX(i, n), y = kOneY - (i == o.sel ? 4.f : 0.f);
+    const bool sel = s.group > 1 ? o.sel >= 0 && i / s.group == o.sel / s.group : i == o.sel;  // a bundle lights up whole
+    float x = oneX(i, n), y = kOneY - (sel ? 4.f : 0.f);
     if (widgets::hit(kOneCard0 + i, x, kOneY - 4, w, h + 4)) o.pending = kOneCard0 + i;
-    drawCard(s.cards[i], x, y, sc, false, true, i == o.sel);
+    if (s.group > 1 && i % s.group == 0 && i + s.group <= n) {  // the bundle's box
+      float x1 = oneX(i + s.group - 1, n) + w;
+      gfx::rect(x - 3, kOneY - 7, x1 - x + 6, h + 10, sel ? 0xFFE07060u : 0x00000050u);
+    }
+    if (s.cards[i]) drawCard(s.cards[i], x, y, sc, false, true, sel);
   }
   gfx::rect(0, kGY1, kBot, kH - kGY1, style::kScrim);
   if (s.canSkip && widgets::button(kOneSkip, style::kMargin, style::kActionY, 84, style::kButtonH,

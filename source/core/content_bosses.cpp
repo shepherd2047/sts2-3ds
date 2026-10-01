@@ -78,8 +78,11 @@ struct IllusionPower : Power {
   POWER_HEADER(IllusionPower, "ILLUSION_POWER")
   StackType stackType() const override { return StackType::Single; }
   std::string followUpStateId;
-  bool shouldPowerBeRemovedOnDeath(Power* p) override { return p->type() == PowerType::Debuff; }
+  // Debuffs go, except temporary ones (so the Strength they took away comes back with them).
+  bool shouldPowerBeRemovedOnDeath(Power* p) override { return p->type() == PowerType::Debuff && !p->isTemporary(); }
   bool shouldCreatureBeRemovedFromCombatAfterDeath(Creature* c) override { return c != owner; }
+  // ShouldAllowHitting: no powers while reviving (IsReviving: from its death until the revive heal).
+  bool shouldAllowHitting(Creature* c) override { return c != owner || owner->alive(); }
   Task<> afterApplied(Creature*, Card*) override {
     if (!owner->get<MinionPower>()) co_await applyPower<MinionPower>(owner, 1, nullptr, nullptr, true);
   }
@@ -161,8 +164,12 @@ struct CeremonialBeast : Monster {
 Task<> PlowPower::afterDamageReceived(Creature* target, const DamageResult& r, int, Creature*, Card*) {
   if (target != owner || r.unblocked <= 0 || target->hp > amount) co_return;
   flash = 1.f;
-  // PORT NOTE: TemporaryStrengthPower instances would be removed here too; monsters never
-  // carry them in this build.
+  // Every TemporaryStrengthPower instance (ITemporaryPower applying Strength), then Strength.
+  std::vector<Power*> temps;
+  for (auto& p : owner->powers)
+    if (const char* in = p->internallyAppliedPower())
+      if (std::string(in) == StrengthPower::kId) temps.push_back(p.get());
+  for (Power* t : temps) co_await cmd::removePower(t);
   if (Power* s = owner->get<StrengthPower>()) co_await cmd::removePower(s);
   // No RTTI on the 3DS build: identify the Beast by its model id.
   if (owner->monster && owner->monster->id == "CeremonialBeast") {

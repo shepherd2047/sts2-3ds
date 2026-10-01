@@ -131,15 +131,13 @@ struct DreamCatcher : Relic {
   }
 };
 
-// HandDrill.cs: breaking an enemy's block applies 2 Vulnerable.
-// PORT NOTE: Hook.AfterBlockBroken fires before the HP loss; here it runs from afterDamageGiven
-// (after it), and not on a target the hit killed.
+// HandDrill.cs: breaking an enemy's block applies 2 Vulnerable (Hook.AfterBlockBroken).
 struct HandDrill : Relic {
   RELIC_HEADER(HandDrill, "HAND_DRILL", Event)
     addVar("VulnerablePower", 2);
   }
-  Task<> afterDamageGiven(Creature* dealer, const DamageResult& r, int, Creature* target, Card*) override {
-    if (!r.blockBroken || !target || target->isPlayer || target->dead()) co_return;
+  Task<> afterBlockBroken(Creature* target, Creature* dealer) override {
+    if (!target || target->isPlayer) co_return;
     if (!dealer || (dealer != owner() && dealer->petOwner != owner())) co_return;
     doFlash();
     co_await applyPower<VulnerablePower>(target, val("VulnerablePower"), owner(), nullptr);
@@ -167,15 +165,14 @@ struct MawBank : Relic {
   }
 };
 
-// TheBoot.cs: the owner's powered attacks that deal 1-4 unblocked damage to an enemy deal 5.
-// PORT NOTE: the C# modifier runs in the Late after-Osty phase (after e.g. Intangible); here there
-// is a single after-Osty phase in listener order.
+// TheBoot.cs: the owner's powered attacks that deal 1-4 unblocked damage to an enemy deal 5
+// (in the Late after-Osty phase, so after e.g. Intangible).
 struct TheBoot : Relic {
   RELIC_HEADER(TheBoot, "THE_BOOT", Event)
     addVar("DamageMinimum", 5);
     addVar("DamageThreshold", 4);
   }
-  Dec modifyHpLostAfterOsty(Creature* target, Dec amount, int props, Creature* dealer, Card*) override {
+  Dec modifyHpLostAfterOstyLate(Creature* target, Dec amount, int props, Creature* dealer, Card*) override {
     if (!dealer || (dealer != owner() && dealer->petOwner != owner())) return amount;
     if (target == owner() || !isPoweredAttack(props)) return amount;
     Dec min = val("DamageMinimum");

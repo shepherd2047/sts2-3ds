@@ -115,15 +115,16 @@ struct ReattachPower : Power {
     if (it != owner->monster->machine.states.end())
       owner->monster->setMoveImmediate(static_cast<MoveState*>(it->second.get()));
   }
-  // PORT NOTE: Hook.ShouldAllowHitting (no powers while reviving) has no counterpart here.
+  // ShouldAllowHitting: no powers while reviving (IsReviving: from its death until it reattaches).
+  bool shouldAllowHitting(Creature* c) override { return c != owner || owner->alive(); }
 };
 
 // The Insatiable's sandpit: the player has `amount` enemy turns to escape (each Frantic
 // Escape played adds one); at 0 the player is eaten.
 struct SandpitPower : Power {
   POWER_HEADER(SandpitPower, "SANDPIT_POWER")
-  Creature* target = nullptr;
-  Task<> afterSideTurnStart(Side side, const std::vector<Creature*>&) override {
+  PowerInstanceType instanceType() const override { return PowerInstanceType::Instanced; }  // one per player (target)
+  Task<> afterSideTurnStartLate(Side side, const std::vector<Creature*>&) override {
     if (side == Side::Enemy) co_await cmd::decrement(this);
   }
   Task<> afterRemoved(Creature* oldOwner) override {
@@ -196,7 +197,7 @@ struct SurroundedPower : Power {
 struct DisintegrationPower : Power {
   POWER_HEADER(DisintegrationPower, "DISINTEGRATION_POWER")
   PowerType type() const override { return PowerType::Debuff; }
-  Task<> afterSideTurnEnd(Side, const std::vector<Creature*>& participants) override {
+  Task<> afterSideTurnEndLate(Side, const std::vector<Creature*>& participants) override {
     if (contains(participants, owner)) co_await cmd::damage(owner, amount, kUnpowered, owner, nullptr);
   }
 };

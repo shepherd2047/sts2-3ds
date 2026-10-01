@@ -53,36 +53,34 @@ struct RavenousPower : Power {
   }
 };
 
-// FossilStalker: gains Amount Strength for every hit that deals unblocked damage.
-// The C# reads AttackCommand.Results in AfterAttack; here the hits are counted as they
-// land and the Strength is granted when the whole attack has finished (same timing).
+// FossilStalker: gains Amount Strength for every hit of its attack that deals unblocked damage
+// (AfterAttack over AttackCommand.Results; a hit on a pet drops its owner's overflow result).
 struct SuckPower : Power {
   POWER_HEADER(SuckPower, "SUCK_POWER")
-  int hitsLanded = 0;
-  Task<> afterDamageReceived(Creature* target, const DamageResult& r, int props, Creature* dealer, Card*) override {
-    if (dealer != owner || target->side == owner->side || !isPoweredAttack(props)) co_return;
-    if (r.unblocked > 0) ++hitsLanded;
-  }
-  Task<> afterAttack(Creature* attacker) override {
-    if (attacker != owner) co_return;
-    int n = hitsLanded;
-    hitsLanded = 0;
+  Task<> afterAttack(const cmd::Attack& a) override {
+    if (a.attacker != owner || a.targetSide() == owner->side || !isPoweredAttack(a.props)) co_return;
+    int n = 0;
+    for (std::vector<DamageResult> hit : a.results) {
+      std::vector<Creature*> petOwners;
+      for (auto& r : hit) if (r.receiver && r.receiver->petOwner) petOwners.push_back(r.receiver->petOwner);
+      hit.erase(std::remove_if(hit.begin(), hit.end(), [&](const DamageResult& r) { return contains(petOwners, r.receiver); }), hit.end());
+      if (std::any_of(hit.begin(), hit.end(), [](const DamageResult& r) { return r.unblocked > 0; })) ++n;
+    }
     if (n <= 0) co_return;
     flash = 1.f;
     co_await applyPower<StrengthPower>(owner, amount * n, owner, nullptr);
   }
 };
 
-// GremlinMerc: Amount gold is stolen from the player by each attack (Steal), tracked in
-// `stolen` (DynamicVars.Gold).
-// PORT NOTE: the C# power is instanced per player (Target); this build is single-player,
-// so one power holds the player's gold and the target is always the player.
+// GremlinMerc: Instanced, one per player (Target): Amount gold is stolen from that player by each
+// attack (Steal), tracked in `stolen` (DynamicVars.Gold).
 struct ThieveryPower : Power {
   POWER_HEADER(ThieveryPower, "THIEVERY_POWER")
+  PowerInstanceType instanceType() const override { return PowerInstanceType::Instanced; }
   int stolen = 0;
   Task<> steal() {
     Combat* c = owner->combat;
-    if (!c || !c->run || !c->player || c->player->dead() || c->run->gold <= 0) co_return;
+    if (!c || !c->run || !target || target->dead() || c->run->gold <= 0) co_return;
     int n = std::min(amount, c->run->gold);
     c->run->gold -= n;  // PlayerCmd.LoseGold(GoldLossType.Stolen)
     stolen += n;
@@ -93,6 +91,7 @@ struct ThieveryPower : Power {
 // The room's loot gets an extra GoldReward (wasGoldStolenBack) of it (CombatRoom.AddExtraReward).
 struct HeistPower : Power {
   POWER_HEADER(HeistPower, "HEIST_POWER")
+  PowerInstanceType instanceType() const override { return PowerInstanceType::Instanced; }
   Task<> afterDeath(Creature* c) override {
     if (c != owner || amount <= 0 || !owner->combat || !owner->combat->run) co_return;
     Run::RewardItem item;
@@ -261,7 +260,11 @@ struct GremlinMerc : Monster {
   int maxHp() const override { return asc(kToughEnemies, 53, 49); }
   Task<> afterAddedToRoom() override {
     co_await applyToSelf<SurprisePower>(1);
-    co_await applyToSelf<ThieveryPower>(20);
+    {  // one instance per player (CombatState.Players), Target = that player
+      auto th = std::make_unique<ThieveryPower>();
+      th->target = combat->player;
+      co_await cmd::applyPower(std::move(th), creature, 20, creature, nullptr);
+    }
   }
   void buildMoves() override {
     auto* gimme = machine.add<MoveState>("GIMME_MOVE");
@@ -279,7 +282,7 @@ struct GremlinMerc : Monster {
     machine.start(gimme);
   }
   Task<> steal() {
-    if (auto* p = creature->get<ThieveryPower>()) co_await p->steal();
+    for (auto* p : creature->instances<ThieveryPower>()) co_await p->steal();
   }
   Task<> gimmeMove() {
     co_await attack(asc(kToughEnemies, 8, 7), 2);
@@ -334,13 +337,17 @@ struct SneakyGremlin : Monster {
 Task<> SurprisePower::afterDeath(Creature* target) {
   if (target != owner || !owner->combat) co_return;
   Combat& c = *owner->combat;
-  int totalStolen = 0;
-  if (auto* th = owner->get<ThieveryPower>()) totalStolen = th->stolen;
+  std::vector<std::pair<int, Creature*>> heists;  // per ThieveryPower instance: its gold and Target
+  for (auto* th : owner->instances<ThieveryPower>()) heists.push_back({th->stolen, th->target});
   // PORT NOTE: the C# creates the Fat Gremlin first (its HP is rolled first) and adds it
   // after the Sneaky Gremlin; here it is created when added, so the HP rolls swap places.
   co_await cmd::addMonster(c, mk<SneakyGremlin>());
   Creature* fat = co_await cmd::addMonster(c, mk<FatGremlin>());
-  if (totalStolen > 0) co_await cmd::applyPower(std::make_unique<HeistPower>(), fat, totalStolen, owner, nullptr);
+  for (auto& h : heists) {
+    auto heist = std::make_unique<HeistPower>();
+    heist->target = h.second;
+    co_await cmd::applyPower(std::move(heist), fat, h.first, owner, nullptr);
+  }
 }
 
 // ================================================================ Haunted Ship

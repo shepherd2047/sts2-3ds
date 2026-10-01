@@ -251,6 +251,7 @@ class App {
     // CardRewardAlternatives besides Skip (E8: REROLL, SACRIFICE), as button labels; picking
     // alternative i returns cards.size() + i.
     std::vector<std::string> alts;
+    int group = 1;  // E2 bundle screen (ScrollBoxes): cards come in groups of this size; a pick is a group index
   };
 
  private:

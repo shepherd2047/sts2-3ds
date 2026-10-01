@@ -40,6 +40,7 @@ struct SneckoSkull : Relic {
 // turn (TemporaryDexterityPower ends at the owner's turn end, see HelicalDartPower below).
 struct HelicalDartPower : Power {
   POWER_HEADER(HelicalDartPower, "TEMPORARY_DEXTERITY_POWER")  // same display text family as the Speed Potion's
+  const char* internallyAppliedPower() const override { return "DexterityPower"; }  // ITemporaryPower
   PowerType type() const override { return PowerType::Buff; }
   // TemporaryDexterityPower.cs: BeforeApplied / AfterPowerAmountChanged / AfterSideTurnEnd apply
   // and unwind an equal amount of real DexterityPower (silent, so it doesn't double-flash).

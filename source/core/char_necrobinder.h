@@ -11,11 +11,11 @@ namespace sts {
 // instead (ModifyUnblockedDamageTarget); Osty stays in combat (dead) rather than leaving the
 // room when it dies, ready to be revived (ShouldCreatureBeRemovedFromCombatAfterDeath), and the
 // power itself survives Osty's death so it can re-arm on revival (ShouldPowerBeRemovedAfterOwnerDeath).
-// PORT NOTE: ShouldAllowHitting (a dead Osty can't receive powers) is not ported; no system in
-// this package applies a power to a dead Osty.
+// ShouldAllowHitting: like the C#, no dead creature (not only Osty) can receive powers while it exists.
 struct DieForYouPower : Power {
   POWER_HEADER(DieForYouPower, "DIE_FOR_YOU_POWER")
   StackType stackType() const override { return StackType::Single; }
+  bool shouldAllowHitting(Creature* creature) override { return creature->alive(); }
   bool removedAfterOwnerDeath() const override { return false; }
   bool shouldCreatureBeRemovedFromCombatAfterDeath(Creature* creature) override { return creature != owner; }
   Creature* modifyUnblockedDamageTarget(Creature* target, Dec, int props, Creature*) override {
@@ -27,7 +27,7 @@ struct DieForYouPower : Power {
 // OstyCmd.Summon: summon Osty with `amount` HP (the player is always the summoner and owner; no
 // multiplayer), or -- if Osty is already alive -- raise its max HP by `amount` instead. Returns
 // Osty's creature (only null if amount == 0 and Osty has never been summoned this combat).
-// PORT NOTE: Hook.ModifySummonAmount / Hook.AfterSummon and the CombatHistory entry are not
+// Records CombatHistory.Summoned. PORT NOTE: Hook.ModifySummonAmount / Hook.AfterSummon are not
 // ported; no relic or card in this package needs them yet.
 Task<Creature*> summonOsty(Combat& c, int amount);
 

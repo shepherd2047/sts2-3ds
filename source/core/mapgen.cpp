@@ -790,4 +790,194 @@ std::vector<MapNode> buildStandardActMap(Rng& mapRng, int actIndex, int numOfEli
 }
 }  // namespace
 
+// ---------------------------------------------------------------- SpoilsActMap (E2)
+// MegaCrit.Sts2.Core.Map.SpoilsActMap: the act map SpoilsMap asks for in act 2. Seven paths that all
+// pass through one centred treasure point (rows narrow towards it, then widen again), the
+// standard point type rules and MapPathPruning, no MapPostProcessing. Same output indexing as
+// generateStandardActMap (start point first, boss last).
+namespace {
+
+struct SpoilsBuilder : MapBuilder {
+  int treasureRow = 0;
+  SpoilsBuilder(Rng& r, int len) : MapBuilder(r, len), treasureRow(len - 7) {}
+
+  Node* point(int col, int row) {  // ActMap.GetPoint (null outside the grid)
+    if (col < 0 || col >= kMapWidth || row < 0 || row >= mapLength) return nullptr;
+    return grid[col][row];
+  }
+  Node* getOrCreate(int col, int row) {  // SpoilsActMap.GetOrCreatePoint
+    if (Node* n = point(col, row)) return n;
+    Node* n = makeNode(col, row);
+    if (col >= 0 && col < kMapWidth && row >= 0 && row < mapLength) grid[col][row] = n;
+    return n;
+  }
+  std::pair<int, int> allowedColumns(int row) const {  // GetAllowedColumnsForRow
+    int center = kMapWidth / 2;
+    int toTreasure = std::abs(row - treasureRow);
+    int toEnd = mapLength - 1 - row;
+    int widthByEnd = std::min(center, std::max(0, toEnd) + 1);
+    int half = std::min(center, std::min(toTreasure, widthByEnd));
+    return {std::max(0, center - half), std::min(6, center + half)};
+  }
+  bool invalidCrossover(Node* current, int targetCol) {  // HasInvalidCrossover
+    int diff = targetCol - current->col;
+    if (diff == 0) return false;
+    Node* n = point(targetCol, current->row);
+    if (!n) return false;
+    for (Node* child : n->children)
+      if (child->col - n->col == -diff) return true;
+    return false;
+  }
+  static std::vector<int> centeredPriority(int currentCol, int centerCol) {  // BuildCenteredPriorityList
+    std::vector<int> list;
+    int dir = (centerCol > currentCol) - (centerCol < currentCol);
+    if (dir != 0) list.push_back(dir);
+    list.push_back(0);
+    if (dir != 0) list.push_back(-dir);
+    if (std::find(list.begin(), list.end(), -1) == list.end()) list.push_back(-1);
+    if (std::find(list.begin(), list.end(), 1) == list.end()) list.push_back(1);
+    return list;
+  }
+  void nextCoord(Node* current, int& outCol, int& outRow) {  // GenerateNextCoord
+    int row = current->row + 1;
+    auto [minCol, maxCol] = allowedColumns(row);
+    int center = kMapWidth / 2;
+    std::vector<int> list = {-1, 0, 1};
+    int toTreasure = treasureRow - current->row;
+    if (toTreasure > 3) rng.shuffle(list);  // StableShuffle: the list is already sorted
+    else if (toTreasure > 0) list = centeredPriority(current->col, center);
+    else rng.shuffle(list);
+    outRow = row;
+    for (int d : list) {
+      int next = d == -1 ? std::max(0, current->col - 1) : d == 1 ? std::min(6, current->col + 1) : current->col;
+      if (next < minCol || next > maxCol || invalidCrossover(current, next)) continue;
+      Node* p = point(next, row);
+      bool parentsOk = !p || p->parents.contains(current) || p->parents.size() < 3;
+      bool childrenOk = current == startingPoint || current->children.size() < 3 || (p && current->children.contains(p));
+      if (parentsOk && childrenOk) { outCol = next; return; }  // (C# also asserts |step| <= 1)
+    }
+    int col = std::clamp(center, minCol, maxCol);
+    if (std::abs(col - current->col) > 1) {
+      int sign = (col > current->col) - (col < current->col);
+      col = std::clamp(current->col + sign, minCol, maxCol);
+    }
+    if (invalidCrossover(current, col)) col = std::clamp(current->col, minCol, maxCol);
+    outCol = col;  // C# throws when this still steps more than one column; it cannot with these bounds
+  }
+  void pathGenerateSpoils(Node* start) {
+    Node* cur = start;
+    while (cur->row < mapLength - 1) {
+      int col, row;
+      nextCoord(cur, col, row);
+      Node* next = getOrCreate(col, row);
+      cur->addChild(next);
+      cur = next;
+    }
+  }
+  void redirectToTreasure(Node* stray, Node* treasure) {
+    std::vector<Node*> pars(stray->parents.begin(), stray->parents.end());
+    for (Node* p : pars) { p->removeChild(stray); p->addChild(treasure); }
+    std::vector<Node*> kids(stray->children.begin(), stray->children.end());
+    for (Node* c : kids) { stray->removeChild(c); treasure->addChild(c); }
+    grid[stray->col][stray->row] = nullptr;
+  }
+  void generateHourglass() {  // GenerateHourglassMap
+    for (int i = 0; i < kMapWidth; i++) {
+      Node* p = getOrCreate(rng.nextInt(0, 7), 1);
+      if (i == 1)
+        while (startMapPoints.contains(p)) p = getOrCreate(rng.nextInt(0, 7), 1);
+      startMapPoints.insert(p);
+      pathGenerateSpoils(p);
+    }
+    Node* treasure = getOrCreate(kMapWidth / 2, treasureRow);
+    treasure->type = MPType::Treasure;
+    treasure->canBeModified = false;
+    std::vector<Node*> row;
+    forEachInRow(grid, treasureRow, [&](Node* n) { row.push_back(n); });
+    for (Node* n : row) if (n != treasure) redirectToTreasure(n, treasure);
+    forEachInRow(grid, mapLength - 1, [&](Node* x) { if (!x->children.contains(bossPoint)) x->addChild(bossPoint); });
+    forEachInRow(grid, 1, [&](Node* x) { if (!startingPoint->children.contains(x)) startingPoint->addChild(x); });
+  }
+  void assignSpoilsPointTypes() {  // SpoilsActMap.AssignPointTypes (no treasure row: the treasure is placed)
+    forEachInRow(grid, mapLength - 1, [&](Node* p) { p->type = MPType::RestSite; p->canBeModified = false; });
+    forEachInRow(grid, 1, [&](Node* p) { p->type = MPType::Monster; p->canBeModified = false; });
+    std::deque<MPType> toAssign;
+    for (int i = 0; i < numOfRests; i++) toAssign.push_back(MPType::RestSite);
+    for (int i = 0; i < kNumOfShops; i++) toAssign.push_back(MPType::Shop);
+    for (int i = 0; i < numOfElites; i++) toAssign.push_back(MPType::Elite);
+    for (int i = 0; i < numOfUnknowns; i++) toAssign.push_back(MPType::Unknown);
+    assignRemainingTypesToRandomPoints(toAssign);
+    for (Node* p : getAllMapPoints()) if (p->type == MPType::Unassigned) p->type = MPType::Monster;
+    bossPoint->type = MPType::Boss;
+    startingPoint->type = MPType::Ancient;
+  }
+};
+
+}  // namespace
+
+std::vector<MapNode> generateSpoilsActMap(Rng& mapRng, int actIndex, int numOfElites, const MapTypeCounts* counts) {
+  static const int kRooms[] = {15, 14, 13};
+  actIndex = std::clamp(actIndex, 0, 2);
+  SpoilsBuilder b(mapRng, kRooms[actIndex] + 1);
+  // Constructor order: GetMapPointTypes(_rng) (or the override), then the points.
+  if (counts) {
+    b.numOfRests = counts->rests;
+    b.numOfUnknowns = counts->unknowns;
+    b.elitesIgnoreRules = counts->elitesIgnoreRules;
+  } else {
+    if (actIndex == 0) b.numOfRests = nextGaussianInt(mapRng, 7, 1, 6, 7);
+    else if (actIndex == 1) b.numOfRests = nextGaussianInt(mapRng, 6, 1, 6, 7);
+    else b.numOfRests = mapRng.nextInt(5, 7);
+    b.numOfUnknowns = nextGaussianInt(mapRng, 12, 1, 10, 14) - (actIndex > 0 ? 1 : 0);
+  }
+  b.numOfElites = numOfElites;
+  b.bossPoint = b.makeNode(kMapWidth / 2, b.mapLength);
+  b.startingPoint = b.makeNode(kMapWidth / 2, 0);
+  b.generateHourglass();
+  b.assignSpoilsPointTypes();
+  b.pruneAndRepair();
+
+  // Output as in buildStandardActMap: rooms (rows 1.. -> 0..), the boss, then the start point first.
+  std::vector<MapNode> nodes;
+  std::vector<std::vector<int>> indexOf(kMapWidth, std::vector<int>(b.mapLength, -1));
+  for (int row = 1; row < b.mapLength; row++)
+    for (int col = 0; col < kMapWidth; col++) {
+      Node* n = b.grid[col][row];
+      if (!n) continue;
+      indexOf[col][row] = (int)nodes.size();
+      MapNode mn;
+      mn.col = col;
+      mn.row = row - 1;
+      mn.type = toRoomType(n->type);
+      nodes.push_back(mn);
+    }
+  int bossIndex = (int)nodes.size();
+  MapNode bossNode;
+  bossNode.col = kMapWidth / 2;
+  bossNode.row = b.mapLength - 1;
+  bossNode.type = RoomType::Boss;
+  nodes.push_back(bossNode);
+  int outIdx = 0;
+  for (int row = 1; row < b.mapLength; row++)
+    for (int col = 0; col < kMapWidth; col++) {
+      Node* n = b.grid[col][row];
+      if (!n) continue;
+      for (Node* child : n->children) {
+        if (child == b.bossPoint) nodes[outIdx].next.push_back(bossIndex);
+        else if (int ci = indexOf[child->col][child->row]; ci >= 0) nodes[outIdx].next.push_back(ci);
+      }
+      outIdx++;
+    }
+  MapNode start;
+  start.col = kMapWidth / 2;
+  start.row = -1;
+  start.type = RoomType::Ancient;
+  for (auto& n : nodes)
+    for (int& c : n.next) ++c;
+  for (int i = 0; i < (int)nodes.size(); ++i)
+    if (nodes[i].row == 0) start.next.push_back(i + 1);
+  nodes.insert(nodes.begin(), start);
+  return nodes;
+}
+
 }  // namespace sts

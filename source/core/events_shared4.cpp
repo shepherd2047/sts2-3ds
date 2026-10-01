@@ -51,7 +51,7 @@ struct FakeBloodVial : Relic {
   RELIC_HEADER(FakeBloodVial, "FAKE_BLOOD_VIAL", Event)
     addVar("Heal", 1);
   }
-  Task<> afterPlayerTurnStart() override {  // AfterPlayerTurnStartLate
+  Task<> afterPlayerTurnStartLate() override {
     if (!combat || combat->turnNumber > 1) co_return;
     co_await cmd::heal(owner(), val("Heal"));
   }

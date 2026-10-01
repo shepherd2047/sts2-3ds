@@ -20,10 +20,26 @@ template <class E> void reg() { db::registerEvent(E::kId, [] { return std::uniqu
 // RunState.CurrentActIndex.
 int actIndex(Run& r) { return r.actIndex; }
 
-// RelicModel.IsTradable. PORT NOTE: approximated by rarity (no HasUponPickupEffect flag).
+// RelicModel.HasUponPickupEffect (the relics that override it to true) and SpawnsPets.
+bool hasUponPickupEffect(const std::string& id) {
+  static const char* const kIds[] = {
+      "PaelsTooth", "Cauldron", "YummyCookie", "NeowsTalisman", "Whetstone", "GnarledHammer", "DollysMirror",
+      "RoyalStamp", "Kaleidoscope", "BloodSoakedRose", "PreciseScissors", "GoldenPearl", "NeowsSacrifice",
+      "PhialHolster", "SereTalon", "LoomingFruit", "Strawberry", "CallingBell", "Byrdpip", "NewLeaf",
+      "FakeLeesWaffle", "PunchDagger", "PandorasBox", "SandCastle", "AlchemicalCoffer", "Astrolabe",
+      "LostCoffer", "NeowsTorment", "ToyBox", "Kifuda", "FragrantMushroom", "HeftyTablet", "BigMushroom",
+      "Mango", "ElectricShrymp", "PrecariousShears", "PotionBelt", "JewelryBox", "SeaGlass", "GoldenCompass",
+      "NutritiousOyster", "FakeMango", "EmptyCage", "Orrery", "DistinguishedCape", "DowsingRod", "WarPaint",
+      "OldCoin", "Pear", "LeesWaffle"};
+  for (const char* k : kIds) if (id == k) return true;
+  return false;
+}
+bool spawnsPets(const std::string& id) { return id == "Byrdpip" || id == "PhylacteryUnbound" || id == "BoundPhylactery"; }
+
+// RelicModel.IsTradable (no relic melts in this port).
 bool isTradable(const Relic& r) {
-  return !r.usedUp && (r.rarity == RelicRarity::Common || r.rarity == RelicRarity::Uncommon ||
-                       r.rarity == RelicRarity::Rare || r.rarity == RelicRarity::Shop);
+  if (r.usedUp || hasUponPickupEffect(r.id) || spawnsPets(r.id)) return false;
+  return !(r.rarity == RelicRarity::Starter || r.rarity == RelicRarity::Event || r.rarity == RelicRarity::Ancient);
 }
 std::vector<Relic*> tradableRelics(Run& r) {
   std::vector<Relic*> out;
@@ -36,7 +52,8 @@ std::unique_ptr<Relic> pullRelic(Run& r) {
   return r.pullRelicFromFront(r.relicBag, r.rollRelicRarity(r.rng("Rewards")));
 }
 
-// RelicCmd.Remove. PORT NOTE: no OnRemoved effects (max HP relics etc. keep their bonus).
+// RelicCmd.Remove. RelicModel.AfterRemoved has no overrides in the C# (max HP relics etc. keep their
+// bonus there too), so there is nothing to call after taking it off.
 void removeRelic(Run& r, Relic* rel) {
   r.relics.erase(std::remove_if(r.relics.begin(), r.relics.end(),
                                 [&](const std::unique_ptr<Relic>& x) { return x.get() == rel; }),

@@ -11,14 +11,20 @@ template <class E> void reg() { db::registerEvent(E::kId, [] { return std::uniqu
 }  // namespace
 
 // ---------------------------------------------------------------- cards given by events
-// PORT NOTE: CardType.Quest / CardRarity.Event have no counterparts here; the quest card
-// uses Status, event cards Token.
+// PORT NOTE: CardRarity.Event has no counterpart here; event cards use Token.
 
-// ByrdonisEgg.cs: unplayable quest card. PORT NOTE: no HatchRestSiteOption (rest-site hatch).
+// ByrdonisEgg.cs: unplayable quest card; rest sites offer Hatch (HatchRestSiteOption, Run::restSite
+// option 7: obtain Byrdpip). PORT NOTE: Byrdpip (a pet relic) is not ported yet, so the option is only
+// offered once a "Byrdpip" relic is registered.
 struct ByrdonisEgg : IroncladT<ByrdonisEgg> {
-  CARD_HEADER(ByrdonisEgg, "BYRDONIS_EGG", -1, Status, Token, None)
+  CARD_HEADER(ByrdonisEgg, "BYRDONIS_EGG", -1, Quest, Quest, None)
     keywords = kwUnplayable;
     maxUpgradeLevel = 0;
+  }
+  bool tryModifyRestSiteOptions(std::vector<int>& options) override {
+    if (!inDeck() || !db::relicRegistered("Byrdpip")) return false;
+    if (std::find(options.begin(), options.end(), 7) == options.end()) options.push_back(7);  // one Hatch per player
+    return true;
   }
 };
 
@@ -38,13 +44,19 @@ struct PoorSleep : IroncladT<PoorSleep> {
   }
 };
 
-// Guilty.cs. PORT NOTE: deck cards get no AfterCombatEnd hook, so it never expires
-// after 5 combats.
+// Guilty.cs: leaves the deck after 5 combats. CombatsSeen is the "Combats" var (5 - CombatsSeen),
+// which the card save keeps.
 struct Guilty : IroncladT<Guilty> {
   CARD_HEADER(Guilty, "GUILTY", -1, Curse, Curse, None)
     keywords = kwUnplayable;
     maxUpgradeLevel = 0;
     addVar("Combats", 5);
+  }
+  Task<> afterCombatEnd() override {
+    if (!inDeck()) co_return;
+    int seen = 5 - val("Combats").toInt() + 1;  // CombatsSeen++
+    var("Combats")->base = Dec(5 - seen);
+    if (seen >= 5) run->removeCardFromDeck(this);  // CardPileCmd.RemoveFromDeck (frees this card)
   }
 };
 
@@ -58,10 +70,11 @@ struct Peck : IroncladT<Peck> {
   void onUpgrade() override { upgradeVar("Repeat", 1); }
 };
 
-// ToricToughnessPower.cs: after block is cleared, gain the stored block and count down.
-// PORT NOTE: not an instanced power; playing the card twice stacks turns on one power.
+// ToricToughnessPower.cs: after block is cleared, gain the stored block and count down. Instanced:
+// each play keeps its own block and turns.
 struct ToricToughnessPower : Power {
   POWER_HEADER(ToricToughnessPower, "TORIC_TOUGHNESS_POWER")
+  PowerInstanceType instanceType() const override { return PowerInstanceType::Instanced; }
   int block = 0;
   Task<> afterBlockCleared(Creature* c) override {
     if (c != owner) co_return;
@@ -81,8 +94,8 @@ struct ToricToughness : IroncladT<ToricToughness> {
     int before = me()->block;
     co_await block(val("Block"));
     int gained = me()->block - before;
-    co_await applyPower<ToricToughnessPower>(me(), val("Turns"), me(), this);
-    if (auto* pw = static_cast<ToricToughnessPower*>(me()->power("ToricToughnessPower"))) pw->block = gained;
+    auto* pw = co_await applyPowerGet<ToricToughnessPower>(me(), val("Turns"), me(), this);
+    if (pw) pw->block = gained;
   }
   void onUpgrade() override { upgradeVar("Block", 2); }
 };
