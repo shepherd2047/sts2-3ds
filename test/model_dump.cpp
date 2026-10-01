@@ -10,7 +10,7 @@
 using namespace sts;
 
 static const char* kTypes[] = {"Attack", "Skill", "Power", "Status", "Curse", "Quest"};
-static const char* kRarities[] = {"Basic", "Common", "Uncommon", "Rare", "Ancient", "Token", "Status", "Curse", "Quest"};
+static const char* kRarities[] = {"Basic", "Common", "Uncommon", "Rare", "Ancient", "Event", "Token", "Status", "Curse", "Quest"};
 static const char* kTargets[] = {"None", "Self", "AnyEnemy", "AllEnemies", "RandomEnemy"};
 static const char* kRelicRarities[] = {"None", "Starter", "Common", "Uncommon", "Rare", "Shop", "Event", "Ancient"};
 static const char* kPotionRarities[] = {"None", "Common", "Uncommon", "Rare", "Event", "Token"};
