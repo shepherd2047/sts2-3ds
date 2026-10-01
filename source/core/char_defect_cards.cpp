@@ -122,19 +122,22 @@ struct ChargeBattery : IroncladT<ChargeBattery> {
 };
 
 // Claw.cs: attack, then every Claw currently in the fight (including this one) has its Damage
-// var permanently raised by the Increase var's base amount. PORT NOTE: AfterDowngraded
-// (restoring the extra damage when a relic/effect downgrades a card) isn't modeled -- this
-// engine has no downgrade mechanic, matching the same note on Thrash (content_rare.cpp).
+// var permanently raised by the Increase var's base amount (AfterDowngraded adds it back).
 struct Claw : IroncladT<Claw> {
   CARD_HEADER(Claw, "CLAW", 0, Attack, Common, AnyEnemy)
     addVar("Damage", 3);
     addVar("Increase", 2);
   }
+  Dec extraDamageFromClawPlays = 0;
+  void afterDowngraded() override { upgradeVar("Damage", extraDamageFromClawPlays); }
   Task<> onPlay(CardPlay& p) override {
     co_await attack(p.target, val("Damage"));
     Dec inc = val("Increase");
     for (Card* c : combat->allCards())
-      if (c->id == "Claw") { if (auto* v = c->var("Damage")) v->base += inc; }
+      if (c->id == "Claw") {
+        if (auto* v = c->var("Damage")) v->base += inc;
+        static_cast<Claw*>(c)->extraDamageFromClawPlays += inc;  // BuffFromClawPlay
+      }
   }
   void onUpgrade() override { upgradeVar("Damage", 1); upgradeVar("Increase", 1); }
 };

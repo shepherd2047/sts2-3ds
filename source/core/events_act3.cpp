@@ -424,12 +424,8 @@ struct Reflections : Event {
     return {option("INITIAL", "TOUCH_A_MIRROR", [this] { return touchAMirror(); }),
             option("INITIAL", "SHATTER", [this] { return shatter(); })};
   }
-  // CardCmd.Downgrade: rebuild the card at one upgrade level lower.
-  Card* downgrade(Card* c) {
-    auto n = db::card(c->id);
-    for (int i = 1; i < c->upgradeLevel; ++i) n->upgrade();
-    return run->transformCard(c, std::move(n));
-  }
+  // CardCmd.Downgrade: back to the base card (all upgrade levels), in place.
+  void downgrade(Card* c) { cmd::downgradeCard(c); }
   Task<> touchAMirror() {
     std::vector<Card*> upgraded;
     for (auto& c : run->deck) if (c->upgraded()) upgraded.push_back(c.get());

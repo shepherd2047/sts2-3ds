@@ -329,9 +329,12 @@ struct Rampage : IroncladT<Rampage> {
     addVar("Damage", 10);
     addVar("Increase", 5);
   }
+  Dec extraDamageFromPlays = 0;
+  void afterDowngraded() override { upgradeVar("Damage", extraDamageFromPlays); }
   Task<> onPlay(CardPlay& p) override {
     co_await attack(p.target, val("Damage"));
     upgradeVar("Damage", val("Increase"));
+    extraDamageFromPlays += val("Increase");
   }
   void onUpgrade() override { upgradeVar("Increase", 5); }
 };

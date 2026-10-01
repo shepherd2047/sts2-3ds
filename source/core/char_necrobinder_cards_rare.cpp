@@ -481,11 +481,19 @@ struct TheScythe : IroncladT<TheScythe> {
     addVar("Damage", 13);
     addVar("Increase", 5);
   }
+  // IncreasedDamage: CurrentDamage = 13 + IncreasedDamage (UpdateDamage, also after a downgrade).
+  Dec increasedDamage = 0;
+  void afterLoad() override { increasedDamage = val("Damage") - Dec(13); }
+  void afterDowngraded() override { if (auto* v = var("Damage")) v->base = Dec(13) + increasedDamage; }
   Task<> onPlay(CardPlay& p) override {
     co_await attack(p.target, val("Damage"));
     Dec inc = val("Increase");
-    upgradeVar("Damage", inc);
-    if (deckVersion.p && deckVersion.p != this) deckVersion.p->upgradeVar("Damage", inc);
+    buffFromPlay(this, inc);
+    if (deckVersion.p && deckVersion.p != this && deckVersion.p->id == "TheScythe") buffFromPlay(deckVersion.p, inc);
+  }
+  static void buffFromPlay(Card* c, Dec inc) {
+    c->upgradeVar("Damage", inc);
+    static_cast<TheScythe*>(c)->increasedDamage += inc;
   }
   void onUpgrade() override { upgradeVar("Increase", 2); }
 };

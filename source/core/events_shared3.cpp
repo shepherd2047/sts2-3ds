@@ -39,16 +39,6 @@ std::unique_ptr<Relic> rewardRelic(Run& r) {
   return r.pullRelicFromFront(r.relicBag, r.rollRelicRarity(r.rng("Rewards")));
 }
 
-// CardCmd.Downgrade: back to a fresh card's numbers.
-// PORT NOTE: keyword / target changes from the upgrade are restored from a fresh copy too.
-void downgradeDeckCard(Card* c) {
-  auto fresh = db::card(c->id);
-  c->vars = fresh->vars;
-  c->cost = fresh->cost;
-  c->keywords = fresh->keywords;
-  c->target = fresh->target;
-  c->upgradeLevel = 0;
-}
 }  // namespace
 
 // ================================================================ relics
@@ -283,7 +273,7 @@ struct WelcomeToWongos : Event {
     std::vector<Card*> upgraded;
     for (auto& c : run->deck) if (c->upgraded()) upgraded.push_back(c.get());
     Card* c = rng().nextItem(upgraded);
-    if (c) downgradeDeckCard(c);
+    if (c) cmd::downgradeCard(c);
     setFinished("LEAVE");
     co_return;
   }
