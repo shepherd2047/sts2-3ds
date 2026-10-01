@@ -12,6 +12,7 @@ static uint32_t rarityOutline(Rarity r) {
     case Rarity::Curse: return 0x550B9EFF;
     case Rarity::Status: return 0x4F522FFF;
     case Rarity::Quest: return 0x7E3E15FF;  // cardTitleOutlineQuest
+    case Rarity::Event: return 0x1B6131FF;  // cardTitleOutlineSpecial
     default: return 0x4D4B40FF;  // Basic, Common, Token, Ancient
   }
 }
@@ -23,6 +24,7 @@ static const char* bannerRarity(Rarity r) {
     case Rarity::Rare: return "rare";
     case Rarity::Curse: return "curse";
     case Rarity::Status: return "status";
+    case Rarity::Event: return "event";  // card_banner_event_mat
     case Rarity::Quest: return "quest";  // card_banner_quest_mat (falls back to the common banner)
     default: return "common";
   }

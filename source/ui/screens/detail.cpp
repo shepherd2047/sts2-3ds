@@ -113,7 +113,7 @@ std::string cardTypeName(CardType t) {
   return "";
 }
 std::string cardRarityName(Rarity r) {
-  const char* names[] = {tr("基础", "Basic"), tr("普通", "Common"), tr("罕见", "Uncommon"), tr("稀有", "Rare"), tr("先古", "Ancient"), tr("衍生", "Token"), tr("状态", "Status"), tr("诅咒", "Curse")};
+  const char* names[] = {tr("基础", "Basic"), tr("普通", "Common"), tr("罕见", "Uncommon"), tr("稀有", "Rare"), tr("先古", "Ancient"), tr("事件", "Event"), tr("衍生", "Token"), tr("状态", "Status"), tr("诅咒", "Curse")};
   if (r == Rarity::Quest) return L("gameplay_ui.CARD_RARITY.QUEST");
   return names[(int)r];
 }

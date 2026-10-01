@@ -243,6 +243,8 @@ class App {
     std::string prompt;            // loc key or text; "{Amount}" becomes `count`
     int count = 1, minCount = -1;  // minCount -1: exactly count (DeckChoice)
     bool canCancel = false, upgrade = false;
+    std::string enchantId;  // DeckChoice::enchantId: the previews show the card with this enchantment applied
+    int enchantAmount = 0;
   };
   struct ChooseOneSpec {
     std::vector<sts::Card*> cards;

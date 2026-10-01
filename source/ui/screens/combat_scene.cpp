@@ -31,19 +31,25 @@ void barPiece(const char* name, float x, float y, float w, float h, uint32_t tin
 // NHealthBar: background, the lagging middleground, the red (blue with block) foreground with the
 // poison chunk at its right end and the doom chunk from the left, the block outline and badge, and
 // the HP label with the C# outline colours (green / purple when poison / doom is lethal).
+// HpDisplay (Hardened Shell at its cap, an about-to-blow Waterfall Giant): the bar takes the lilac
+// invincible colour with no poison / doom chunks; InfiniteWithoutNumbers swaps the label for the
+// infinity sign, InfiniteWithNumbers keeps the numbers with the lilac outline.
 void drawHpBar(Creature* c, float x, float by, float bw) {
   const int maxHp = std::max(1, c->maxHp), hp = std::clamp(c->hp, 0, maxHp);
   const float x0 = x - bw / 2;
   auto W = [&](float v) { return bw * std::clamp(v, 0.f, (float)maxHp) / maxHp; };
   barPiece("ui/hp_bg", x0 - 1, by - 1, bw + 2, kBarH + 2, 0x101010FF, 0.6f);
   if (c->displayHp > hp) barPiece("ui/hp_fill", x0, by, W(c->displayHp), kBarH, kHpMiddle, 1.f);
+  const bool infinite = c->hpInfinite();
   int poison = 0, doom = 0;
-  if (auto* p = c->get<PoisonPower>()) poison = std::max(0, p->calculateTotalDamageNextTurn());
-  if (auto* d = c->get<DoomPower>()) doom = std::max(0, d->amount);
+  if (!infinite) {
+    if (auto* p = c->get<PoisonPower>()) poison = std::max(0, p->calculateTotalDamageNextTurn());
+    if (auto* d = c->get<DoomPower>()) doom = std::max(0, d->amount);
+  }
   const bool poisonLethal = poison > 0 && poison >= hp;
   const bool doomLethal = !poisonLethal && doom > 0 && doom >= hp - poison;
   if (hp > 0) {
-    const uint32_t fg = c->block > 0 ? kHpBlock : kHpRed;
+    const uint32_t fg = infinite ? 0xC5BBEDFF : c->block > 0 ? kHpBlock : kHpRed;  // _invincibleForegroundColor
     const int solid = std::max(0, hp - poison);
     if (poisonLethal) {
       barPiece("ui/hp_fill", x0, by, W(hp), kBarH, kHpPoison, 1.f);
@@ -62,13 +68,19 @@ void drawHpBar(Creature* c, float x, float by, float bw) {
     gfx::rect(x0 + bw, by - 1, 1, kBarH + 2, bc);
   }
   uint32_t tc = col::white, oc = kHpOutline;
-  if (poisonLethal) { tc = 0x76FF40FF; oc = 0x074700FF; }
+  if (c->hpDisplay == HpDisplay::InfiniteWithNumbers) oc = 0x4C4370FF;  // _invincibleOutlineColor
+  else if (poisonLethal) { tc = 0x76FF40FF; oc = 0x074700FF; }
   else if (doomLethal) { tc = 0xFB8DFFFF; oc = 0x2D1263FF; }
   else if (c->block > 0) oc = kBlockOutline;
   TextStyle ht = ts(F12, tc, CENTER, 0, 0.85f);
   ht.shadow = false;
   ht.outline = oc;
-  R().text(x, by + kBarH / 2 - R().lineHeight(F12) * 0.85f / 2, num(hp) + "/" + num(c->maxHp), ht);
+  if (c->hpDisplay == HpDisplay::InfiniteWithoutNumbers) {  // _infinityTex replaces the label
+    const float ih = kBarH + 4, iw = ih * 50 / 28;
+    spr(R().sprite("ui/infinity_hp"), x - iw / 2, by + kBarH / 2 - ih / 2, iw, ih);
+  } else {
+    R().text(x, by + kBarH / 2 - R().lineHeight(F12) * 0.85f / 2, num(hp) + "/" + num(c->maxHp), ht);
+  }
   if (c->block > 0) {  // C# BlockContainer: the shield at the bar's left end with the amount
     const float bs = 20, bx = x0 - bs / 2 - 3, byy = by + kBarH / 2 - bs / 2;
     spr(R().sprite("ui/block"), bx, byy, bs, bs);

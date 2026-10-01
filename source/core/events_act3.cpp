@@ -5,6 +5,7 @@
 #include <ctime>
 #include <map>
 
+#include "abandon_hook.h"
 #include "cards.h"
 #include "powers.h"
 
@@ -528,9 +529,13 @@ struct Trial : Event {
                        option("REJECT", "DOUBLE_DOWN", [this] { return doubleDown(); })});
     co_return;
   }
-  // PORT NOTE: the C# opens NAbandonRunConfirmPopup (confirm, then abandon the run to the title); the port has no
-  // in-run confirm popup / abandon route reachable from an event (Run::abandon is pause-menu driven), so the player just dies.
-  Task<> doubleDown() { co_await run->loseHp(owner()->hp); }
+  // C# DoubleDown: opens NAbandonRunConfirmPopup (confirm, then abandon the run to the title); the event
+  // stays as it is. The UI answers through abandon_hook.h; without one (the headless sim) the player dies.
+  Task<> doubleDown() {
+    if (askAbandonRun) askAbandonRun();
+    else co_await run->loseHp(owner()->hp);
+    co_return;
+  }
 
   void setTrialFinished(const std::string& resultPage) {
     setStr("TrialResult", page(resultPage) + ".description");

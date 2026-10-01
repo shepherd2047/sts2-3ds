@@ -1,4 +1,5 @@
 // Split from ui.cpp (F3).
+#include "../core/abandon_hook.h"
 #include "../core/events_crystal.h"
 #include "../core/modifiers.h"
 #include "../core/profiles.h"
@@ -57,6 +58,13 @@ bool App::init() {
     settings::state().language = (l[0] == 'e' || l[0] == 'E') ? Language::En : Language::ZhCN;
   if (!R().load(loading, settings::state().language == Language::En ? 1 : 0)) return false;
   run_ = std::make_unique<Run>();
+  // Trial's DOUBLE_DOWN (C# NAbandonRunConfirmPopup): the pause menu's 放弃 confirm, opened by an event.
+  askAbandonRun = [this] {
+    confirm::ask(L("main_menu_ui.ABANDON_RUN_CONFIRMATION.header"), L("main_menu_ui.ABANDON_RUN_CONFIRMATION.body"), [this] {
+      run_->abandon();
+      returnTitle();
+    });
+  };
   autoplay_ = getenv("STS_AUTOPLAY") != nullptr;
   // Y5: the SD card missing, locked or full at startup: one notice, then the game runs without
   // reading or writing any save (savesEnabled() is false from here on). STS_FAKE_SAVE_ERROR=sd.
