@@ -321,6 +321,11 @@ std::string expandSmart(const std::string& src, const std::vector<DynVar>& vars,
       } else if (find(name)) out += num(raw(name).toInt());
       else if (strVars && strVars->count(name)) {
         // A string var may itself hold loc text with {...} (recursive string vars); bounded nesting.
+        if (strVars->at(name).rfind("@relic:", 0) == 0) {  // StringVar(ModelDb.Relic<X>().DynamicDescription.GetFormattedText())
+          auto r = db::relic(strVars->at(name).substr(7));
+          out += r ? expandSmart(L("relics." + r->locKey + ".description"), r->vars, false) : std::string("?");
+          continue;
+        }
         std::string sv = strOf(name);
         if (sv.find('{') == std::string::npos || nest >= 4) out += sv;
         else { ++nest; out += expand(sv); --nest; }
