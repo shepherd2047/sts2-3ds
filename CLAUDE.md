@@ -22,8 +22,13 @@ The RGDSplus reference repo is cloned next to this one as `../rgds-ref`
 
 - Usage quota is shared by all the owner's sessions and subagents. Bulk,
   mechanical translation is cheapest in a Sonnet session or a Sonnet subagent
-  with a tight brief — but say how many subagents and why, and get a yes,
-  before starting any. Keep design, debugging and review in the main session.
+  with a tight brief. The owner wants maximum throughput: run as many parallel
+  lanes as the build capacity allows (see *Parallel agents*) without asking
+  first, and say how many and why. Keep design, debugging, review and merging
+  in the main session.
+- Measure before scheduling around a cost. If a build, test or tool run takes
+  minutes, find out why (flags, -j, swapping, what gets rebuilt) before adding
+  queues or more agents.
 - Install every dev tool globally (apps in /Applications or Program Files,
   CLIs via Homebrew / winget / dkp-pacman / `dotnet tool install -g`), never
   in a session scratchpad, temp dir or the project. Work copies that must
@@ -88,13 +93,54 @@ assets); devkitPro and Azahar are manual installs it links to.
 ## Build & test
 
 ```bash
-make -f Makefile.sdl            # build/sts2-preview + build/sim
+make -f Makefile.sdl -j4        # build/sts2-preview + build/sim (release: -O2 -g)
+make -f Makefile.sdl DEV=1 -j4 build/dev/sim   # fast iteration build (-O1) in build/dev/
 ./build/sim 200                 # headless fights; SIM_ALLCARDS=1 plays every card
 make                            # sts2-3ds.3dsx (devkitPro env); packs romfs_3ds/
 python tools/compress_romfs.py  # romfs/ -> romfs_3ds/ (GPU texture formats), after build_assets
 make link                       # build + send to the 3DS over Wi-Fi (IP=... if needed)
 make cia                        # also sts2-3ds.cia (title id 000400000FA57200, tools/sts2-3ds.rsf)
 ```
+
+### Build discipline (both machines)
+
+- `Makefile.sdl` never forces `-j`; pass it yourself (`-j4`). It used to add `-j<ncpu>`, which with
+  several builds at once swapped the 8 GB Mac to a crawl (load 300+, rebuilds of many minutes) and
+  froze a session. Never add it back.
+- Iterate with `make -f Makefile.sdl DEV=1 -j4 build/dev/sim build/dev/<x>_test` (`-O1`, no debug
+  info, own objects in `build/dev/`), run `./build/dev/...`. Before merging, run the release
+  `make -f Makefile.sdl -j4 check` once (`-O2 -g` in `build/`); the 3DS build is separate.
+- Build only the targets you need; `check` once at the end, not per edit.
+- Adding a virtual hook to `Model` (game.h) recompiles every card/power/relic file (~70 of 94):
+  batch all header edits before building, then iterate on .cpp files only.
+- Builds go through ccache (Mac: Homebrew `ccache`; config in `~/Library/Preferences/ccache/ccache.conf`,
+  `base_dir` = the main repo, `hash_dir = false`, so all worktrees share one cache).
+- Long CPU runs (sim soaks, sanitizer passes, `tools/soak.sh`) only when no builds are running, at
+  most 2 sim processes, `nice`d.
+
+### Parallel agents (Mac, lead session)
+
+- Every agent build/test goes through `/Users/m/dev/sts2-build-lock.sh <timeout-s> <command>`:
+  a `make` gets 1-4 tokens from a pool of 6 (= at most 6 compilers machine-wide), starts as soon as
+  it has one, and builds of more than 8 files may only use 4 tokens so small builds never queue;
+  it strips any forced `-j`, adds ccache, and logs waits to `/Users/m/dev/.sts2-build-wait.log`.
+  Other commands run immediately at `nice 15`. Source: `tools/build_lock.sh`; the installed copy at
+  `/Users/m/dev/sts2-build-lock.sh` is replaced with `cp` + `mv` (atomic: running instances keep the
+  old file). Run it with `run_in_background` and wait for the
+  notification; no sleep-polling. Check the wait log: the target is under 1 minute.
+- Agents work in `isolation: worktree`, seed the build with
+  `cp -c -R -p "<main repo>/build" build && find build -type f -exec touch {} +` (APFS clone, no
+  disk cost), commit on their branch, never push, never edit PLAN.md / CLAUDE.md, and end with a
+  report: what changed, PORT NOTEs removed/left, shared core files touched, save-version change, tests.
+- Packages that edit the same core files (game.h, combat.cpp, run.cpp) can run in parallel, but the
+  lead merges them one by one: preview with `git merge-tree --write-tree --name-only main <branch>`,
+  merge small conflicts itself (Makefile.sdl test lists: keep the union of TEST_SRC, rules and
+  `check` lines), and hand bigger ones back to the agent to rebase onto main. Batch merges that
+  each change game.h and run one release `check` + `SIM_ALLCARDS=1 ./build/sim 200` +
+  `./build/sim 60` vs `SIM_SAVELOAD=3 ./build/sim 60` for the batch before pushing.
+- UI changes: the agent leaves headless screenshots; the lead shows them to the owner and merges
+  only after the owner's OK.
+- After a merge, remove the agent's worktree (`git worktree remove`); keep the branch.
 
 `make cia` needs `bannertool` + `makerom` on PATH (Mac: `~/.local/bin`; makerom/ctrtool from
 3DSGuy/Project_CTR releases, bannertool built from diasurgical/bannertool). Banner art/sound come

@@ -1,11 +1,25 @@
 # Desktop preview build (macOS/Linux/Windows MSYS2 with SDL2).
-# Auto-parallelize across all available cores if -j is not passed
-MAKEFLAGS += -j$(shell sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 4)
+# Parallelism comes from the caller: `make -f Makefile.sdl -j4 ...` (on the Mac use the build scheduler,
+# /Users/m/dev/sts2-build-lock.sh, which picks -j from a shared token pool). Never force -j here: on an
+# 8 GB machine several builds x ncpu compilers swap the system to a crawl.
+#
+# DEV=1: fast iteration build for sims and tests (-O1, no debug info) in $(B)/dev/ with its own objects,
+# so it never mixes with the release objects. Default (release): -O2 -g in $(B)/, as the docs assume.
+# Run `make check` without DEV before merging.
 
 CXX ?= clang++
+DEV ?= 0
+ifeq ($(DEV),1)
+OPT ?= -O1
+DBG ?=
+B := build/dev
+else
 OPT ?= -O2
+DBG ?= -g
+B := build
+endif
 
-BASE_CXXFLAGS := -std=c++20 $(OPT) -g -Wall -Wno-missing-field-initializers -Wno-unused-parameter -MMD -MP
+BASE_CXXFLAGS := -std=c++20 $(OPT) $(DBG) -Wall -Wno-missing-field-initializers -Wno-unused-parameter -MMD -MP
 
 SDL_CFLAGS := $(shell sdl2-config --cflags 2>/dev/null)
 SDL_LDFLAGS := $(shell sdl2-config --libs 2>/dev/null)
@@ -21,7 +35,7 @@ EXTRA_PREVIEW_SRC := source/spine/spine.cpp source/gfx/gfx_common.cpp source/pla
 SIM_SRC := test/sim.cpp
 TEST_SRC := test/enchant_test.cpp test/afflict_test.cpp test/quests_test.cpp test/badges_test.cpp test/character_test.cpp test/silent_test.cpp test/necrobinder_test.cpp test/regent_test.cpp test/colorless_test.cpp test/defect_test.cpp test/ascension_dump.cpp test/ascension_test.cpp test/progress_test.cpp test/settings_test.cpp test/profile_test.cpp test/history_test.cpp test/modifiers_test.cpp test/daily_test.cpp test/achievements_test.cpp test/tutorials_test.cpp test/save_errors_test.cpp test/safe_file_test.cpp test/model_dump.cpp test/instanced_test.cpp test/combat_history_test.cpp
 
-OBJ_DIR := build/obj
+OBJ_DIR := $(B)/obj
 
 CORE_OBJS := $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(CORE_SRC))
 PREVIEW_EXTRA_OBJS := $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(EXTRA_PREVIEW_SRC))
@@ -31,7 +45,7 @@ TEST_EXTRA_OBJS := $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(TEST_SRC))
 ALL_OBJS := $(CORE_OBJS) $(PREVIEW_EXTRA_OBJS) $(SIM_EXTRA_OBJS) $(TEST_EXTRA_OBJS)
 DEPS := $(ALL_OBJS:.o=.d)
 
-all: build/sts2-preview build/sim
+all: $(B)/sts2-preview $(B)/sim
 
 # Core objects (shared between preview and sim, compiled ONCE)
 $(OBJ_DIR)/source/core/%.o: source/core/%.cpp
@@ -48,151 +62,151 @@ $(OBJ_DIR)/test/%.o: test/%.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(BASE_CXXFLAGS) -c $< -o $@
 
-build/sts2-preview: $(CORE_OBJS) $(PREVIEW_EXTRA_OBJS)
-	@mkdir -p build
+$(B)/sts2-preview: $(CORE_OBJS) $(PREVIEW_EXTRA_OBJS)
+	@mkdir -p $(B)
 	$(CXX) $(BASE_CXXFLAGS) $^ -o $@ $(SDL_LDFLAGS)
 
-build/sim: $(CORE_OBJS) $(SIM_EXTRA_OBJS)
-	@mkdir -p build
+$(B)/sim: $(CORE_OBJS) $(SIM_EXTRA_OBJS)
+	@mkdir -p $(B)
 	$(CXX) $(BASE_CXXFLAGS) $^ -o $@
 
 # Engine unit checks (enchantments, characters): not part of `all`.
-build/enchant_test: $(CORE_OBJS) $(OBJ_DIR)/test/enchant_test.o
-	@mkdir -p build
+$(B)/enchant_test: $(CORE_OBJS) $(OBJ_DIR)/test/enchant_test.o
+	@mkdir -p $(B)
 	$(CXX) $(BASE_CXXFLAGS) $^ -o $@
 
-build/afflict_test: $(CORE_OBJS) $(OBJ_DIR)/test/afflict_test.o
-	@mkdir -p build
+$(B)/afflict_test: $(CORE_OBJS) $(OBJ_DIR)/test/afflict_test.o
+	@mkdir -p $(B)
 	$(CXX) $(BASE_CXXFLAGS) $^ -o $@
 
-build/quests_test: $(CORE_OBJS) $(OBJ_DIR)/test/quests_test.o
-	@mkdir -p build
+$(B)/quests_test: $(CORE_OBJS) $(OBJ_DIR)/test/quests_test.o
+	@mkdir -p $(B)
 	$(CXX) $(BASE_CXXFLAGS) $^ -o $@
 
 # E6: instanced powers and the ITemporaryPower marker.
-build/instanced_test: $(CORE_OBJS) $(OBJ_DIR)/test/instanced_test.o
-	@mkdir -p build
+$(B)/instanced_test: $(CORE_OBJS) $(OBJ_DIR)/test/instanced_test.o
+	@mkdir -p $(B)
 	$(CXX) $(BASE_CXXFLAGS) $^ -o $@
 
-build/combat_history_test: $(CORE_OBJS) $(OBJ_DIR)/test/combat_history_test.o
-	@mkdir -p build
+$(B)/combat_history_test: $(CORE_OBJS) $(OBJ_DIR)/test/combat_history_test.o
+	@mkdir -p $(B)
 	$(CXX) $(BASE_CXXFLAGS) $^ -o $@
 
-build/character_test: $(CORE_OBJS) $(OBJ_DIR)/test/character_test.o
-	@mkdir -p build
+$(B)/character_test: $(CORE_OBJS) $(OBJ_DIR)/test/character_test.o
+	@mkdir -p $(B)
 	$(CXX) $(BASE_CXXFLAGS) $^ -o $@
 
-build/silent_test: $(CORE_OBJS) $(OBJ_DIR)/test/silent_test.o
-	@mkdir -p build
+$(B)/silent_test: $(CORE_OBJS) $(OBJ_DIR)/test/silent_test.o
+	@mkdir -p $(B)
 	$(CXX) $(BASE_CXXFLAGS) $^ -o $@
 
-build/necrobinder_test: $(CORE_OBJS) $(OBJ_DIR)/test/necrobinder_test.o
-	@mkdir -p build
+$(B)/necrobinder_test: $(CORE_OBJS) $(OBJ_DIR)/test/necrobinder_test.o
+	@mkdir -p $(B)
 	$(CXX) $(BASE_CXXFLAGS) $^ -o $@
 
-build/regent_test: $(CORE_OBJS) $(OBJ_DIR)/test/regent_test.o
-	@mkdir -p build
+$(B)/regent_test: $(CORE_OBJS) $(OBJ_DIR)/test/regent_test.o
+	@mkdir -p $(B)
 	$(CXX) $(BASE_CXXFLAGS) $^ -o $@
 
-build/colorless_test: $(CORE_OBJS) $(OBJ_DIR)/test/colorless_test.o
-	@mkdir -p build
+$(B)/colorless_test: $(CORE_OBJS) $(OBJ_DIR)/test/colorless_test.o
+	@mkdir -p $(B)
 	$(CXX) $(BASE_CXXFLAGS) $^ -o $@
 
-build/defect_test: $(CORE_OBJS) $(OBJ_DIR)/test/defect_test.o
-	@mkdir -p build
+$(B)/defect_test: $(CORE_OBJS) $(OBJ_DIR)/test/defect_test.o
+	@mkdir -p $(B)
 	$(CXX) $(BASE_CXXFLAGS) $^ -o $@
 
-build/ascension_test: $(CORE_OBJS) $(OBJ_DIR)/test/ascension_test.o
-	@mkdir -p build
+$(B)/ascension_test: $(CORE_OBJS) $(OBJ_DIR)/test/ascension_test.o
+	@mkdir -p $(B)
 	$(CXX) $(BASE_CXXFLAGS) $^ -o $@
 
-build/progress_test: $(CORE_OBJS) $(OBJ_DIR)/test/progress_test.o
-	@mkdir -p build
+$(B)/progress_test: $(CORE_OBJS) $(OBJ_DIR)/test/progress_test.o
+	@mkdir -p $(B)
 	$(CXX) $(BASE_CXXFLAGS) $^ -o $@
 
-build/settings_test: $(CORE_OBJS) $(OBJ_DIR)/test/settings_test.o
-	@mkdir -p build
+$(B)/settings_test: $(CORE_OBJS) $(OBJ_DIR)/test/settings_test.o
+	@mkdir -p $(B)
 	$(CXX) $(BASE_CXXFLAGS) $^ -o $@
 
-build/profile_test: $(CORE_OBJS) $(OBJ_DIR)/test/profile_test.o
-	@mkdir -p build
+$(B)/profile_test: $(CORE_OBJS) $(OBJ_DIR)/test/profile_test.o
+	@mkdir -p $(B)
 	$(CXX) $(BASE_CXXFLAGS) $^ -o $@
 
-build/history_test: $(CORE_OBJS) $(OBJ_DIR)/test/history_test.o
-	@mkdir -p build
+$(B)/history_test: $(CORE_OBJS) $(OBJ_DIR)/test/history_test.o
+	@mkdir -p $(B)
 	$(CXX) $(BASE_CXXFLAGS) $^ -o $@
 
-build/badges_test: $(CORE_OBJS) $(OBJ_DIR)/test/badges_test.o
-	@mkdir -p build
+$(B)/badges_test: $(CORE_OBJS) $(OBJ_DIR)/test/badges_test.o
+	@mkdir -p $(B)
 	$(CXX) $(BASE_CXXFLAGS) $^ -o $@
 
-build/daily_test: $(CORE_OBJS) $(OBJ_DIR)/test/daily_test.o
-	@mkdir -p build
+$(B)/daily_test: $(CORE_OBJS) $(OBJ_DIR)/test/daily_test.o
+	@mkdir -p $(B)
 	$(CXX) $(BASE_CXXFLAGS) $^ -o $@
 
-build/achievements_test: $(CORE_OBJS) $(OBJ_DIR)/test/achievements_test.o
-	@mkdir -p build
+$(B)/achievements_test: $(CORE_OBJS) $(OBJ_DIR)/test/achievements_test.o
+	@mkdir -p $(B)
 	$(CXX) $(BASE_CXXFLAGS) $^ -o $@
 
 # M13: the tutorials queue / seen flags (source/ui/tutorials.cpp is gfx-free).
-build/tutorials_test: $(CORE_OBJS) $(OBJ_DIR)/test/tutorials_test.o $(OBJ_DIR)/source/ui/tutorials.o
-	@mkdir -p build
+$(B)/tutorials_test: $(CORE_OBJS) $(OBJ_DIR)/test/tutorials_test.o $(OBJ_DIR)/source/ui/tutorials.o
+	@mkdir -p $(B)
 	$(CXX) $(BASE_CXXFLAGS) $^ -o $@
 
 # S22: corrupt saves load as "error + safe default".
-build/save_errors_test: $(CORE_OBJS) $(OBJ_DIR)/test/save_errors_test.o
-	@mkdir -p build
+$(B)/save_errors_test: $(CORE_OBJS) $(OBJ_DIR)/test/save_errors_test.o
+	@mkdir -p $(B)
 	$(CXX) $(BASE_CXXFLAGS) $^ -o $@
 
 # Y5: atomic save writes and recovery after an interrupted write.
-build/safe_file_test: $(CORE_OBJS) $(OBJ_DIR)/test/safe_file_test.o
-	@mkdir -p build
+$(B)/safe_file_test: $(CORE_OBJS) $(OBJ_DIR)/test/safe_file_test.o
+	@mkdir -p $(B)
 	$(CXX) $(BASE_CXXFLAGS) $^ -o $@
 
-build/modifiers_test:$(CORE_OBJS) $(OBJ_DIR)/test/modifiers_test.o
-	@mkdir -p build
+$(B)/modifiers_test:$(CORE_OBJS) $(OBJ_DIR)/test/modifiers_test.o
+	@mkdir -p $(B)
 	$(CXX) $(BASE_CXXFLAGS) $^ -o $@
 
 # Monster values per ascension level; compare with the C# through tools/ascension_check.py.
-build/ascension_dump: $(CORE_OBJS) $(OBJ_DIR)/test/ascension_dump.o
-	@mkdir -p build
+$(B)/ascension_dump: $(CORE_OBJS) $(OBJ_DIR)/test/ascension_dump.o
+	@mkdir -p $(B)
 	$(CXX) $(BASE_CXXFLAGS) $^ -o $@
 
 # Card / relic / potion numbers; compare with the C# through tools/balance_check.py (H5).
-build/model_dump: $(CORE_OBJS) $(OBJ_DIR)/test/model_dump.o
-	@mkdir -p build
+$(B)/model_dump: $(CORE_OBJS) $(OBJ_DIR)/test/model_dump.o
+	@mkdir -p $(B)
 	$(CXX) $(BASE_CXXFLAGS) $^ -o $@
 
-sim: build/sim
-	./build/sim 200
+sim: $(B)/sim
+	./$(B)/sim 200
 
-check: build/enchant_test build/afflict_test build/quests_test build/character_test build/silent_test build/necrobinder_test build/regent_test build/colorless_test build/defect_test build/ascension_test build/ascension_dump build/progress_test build/settings_test build/profile_test build/history_test build/badges_test build/modifiers_test build/daily_test build/achievements_test build/tutorials_test build/save_errors_test build/safe_file_test build/model_dump build/instanced_test build/combat_history_test
-	./build/enchant_test
-	./build/afflict_test
-	./build/quests_test
-	./build/instanced_test
-	./build/combat_history_test
-	./build/character_test
-	./build/silent_test
-	./build/necrobinder_test
-	./build/regent_test
-	./build/colorless_test
-	./build/defect_test
-	./build/ascension_test
-	./build/progress_test
-	./build/settings_test
-	./build/profile_test
-	./build/history_test
-	./build/badges_test
-	./build/modifiers_test
-	./build/daily_test
-	./build/achievements_test
-	./build/tutorials_test
-	./build/save_errors_test
-	./build/safe_file_test
-	for l in 0 8 9 10; do ./build/ascension_dump $$l > build/asc_dump_$$l.txt; done
+check: $(B)/enchant_test $(B)/afflict_test $(B)/quests_test $(B)/character_test $(B)/silent_test $(B)/necrobinder_test $(B)/regent_test $(B)/colorless_test $(B)/defect_test $(B)/ascension_test $(B)/ascension_dump $(B)/progress_test $(B)/settings_test $(B)/profile_test $(B)/history_test $(B)/badges_test $(B)/modifiers_test $(B)/daily_test $(B)/achievements_test $(B)/tutorials_test $(B)/save_errors_test $(B)/safe_file_test $(B)/model_dump $(B)/instanced_test $(B)/combat_history_test
+	./$(B)/enchant_test
+	./$(B)/afflict_test
+	./$(B)/quests_test
+	./$(B)/instanced_test
+	./$(B)/combat_history_test
+	./$(B)/character_test
+	./$(B)/silent_test
+	./$(B)/necrobinder_test
+	./$(B)/regent_test
+	./$(B)/colorless_test
+	./$(B)/defect_test
+	./$(B)/ascension_test
+	./$(B)/progress_test
+	./$(B)/settings_test
+	./$(B)/profile_test
+	./$(B)/history_test
+	./$(B)/badges_test
+	./$(B)/modifiers_test
+	./$(B)/daily_test
+	./$(B)/achievements_test
+	./$(B)/tutorials_test
+	./$(B)/save_errors_test
+	./$(B)/safe_file_test
+	for l in 0 8 9 10; do ./$(B)/ascension_dump $$l > build/asc_dump_$$l.txt; done
 	@PY=$$(command -v python3 || command -v python); if [ -n "$$PY" ] && [ -d ../sts2-decompiled ]; then $$PY tools/ascension_check.py; else echo "ascension_check skipped (needs python3 and ../sts2-decompiled)"; fi
-	./build/model_dump > build/model_dump.txt
+	./$(B)/model_dump > build/model_dump.txt
 	@PY=$$(command -v python3 || command -v python); if [ -n "$$PY" ] && [ -d ../sts2-decompiled ]; then $$PY tools/balance_check.py; else echo "balance_check skipped (needs python3 and ../sts2-decompiled)"; fi
 
 clean:
@@ -203,12 +217,12 @@ clean:
 -include $(DEPS)
 
 # E9: card-text formatter check (links the preview objects except main).
-build/cardtext_test: $(CORE_OBJS) $(filter-out $(OBJ_DIR)/source/main.o,$(PREVIEW_EXTRA_OBJS)) $(OBJ_DIR)/test/cardtext_test.o
-	@mkdir -p build
+$(B)/cardtext_test: $(CORE_OBJS) $(filter-out $(OBJ_DIR)/source/main.o,$(PREVIEW_EXTRA_OBJS)) $(OBJ_DIR)/test/cardtext_test.o
+	@mkdir -p $(B)
 	$(CXX) $(BASE_CXXFLAGS) $^ -o $@ $(SDL_LDFLAGS)
 
-run_cardtext_test: build/cardtext_test
-	./build/cardtext_test
+run_cardtext_test: $(B)/cardtext_test
+	./$(B)/cardtext_test
 
 check: run_cardtext_test
 .PHONY: run_cardtext_test
