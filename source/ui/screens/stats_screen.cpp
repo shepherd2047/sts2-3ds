@@ -13,10 +13,10 @@
 // Keys: D-pad focus, A open, B back, L/R page (run list) or switch tab (a run), X 历史记录 from
 // the stats page. Everything is tappable (tap a focused row again to open it).
 //
-// PORT NOTE: progress.sav keeps no playtime, kill count, event discovery or overall streak (see
-// progress.h), so playtime and fastest win are summed from the stored run history (the last 50
-// runs), the overall best streak is the best character streak, and the kill / event /
-// unlock entries are left out. "Discovered" counts have no denominator (everything is unlocked).
+// Playtime, fastest win, kills, discovered events and the best streak come from progress.sav
+// (M-stats); the high score and run count come from the stored run history (the last 50 runs).
+// PORT NOTE: the achievements / unlock entries are left out, and "discovered" counts have no
+// denominator (everything is unlocked).
 #include <cstring>
 
 #include "../../core/achievements.h"
@@ -254,18 +254,16 @@ std::string badgeText(const history::BadgeEntry& b, bool title) {
   return b.id;
 }
 
-// Per-character numbers the port reads from the stored history (see PORT NOTE above).
+// Per-character numbers the port reads from the stored history (see the note at the top).
 struct HistoryStats {
-  int runs = 0, playtime = 0, fastestWin = -1, bestScore = 0;
+  int runs = 0, bestScore = 0;
 };
 HistoryStats historyStats(const std::vector<history::RunRecord>& runs, const std::string& charId) {
   HistoryStats h;
   for (auto& r : runs) {
     if (!charId.empty() && r.character != charId) continue;
     ++h.runs;
-    h.playtime += r.runTime;
     h.bestScore = std::max(h.bestScore, r.score);
-    if (r.win && (h.fastestWin < 0 || r.runTime < h.fastestWin)) h.fastestWin = r.runTime;
   }
   return h;
 }
@@ -363,23 +361,22 @@ void App::drawStatsPage(bool top) {
     widgets::panel("ui/hover_tip", px, py, pw, ph);
     if (s.statSel == 0) {  // NGeneralStatsGrid
       R().text(kTop / 2, 7, L("main_menu_ui.STATISTICS.OVERALL.title"), ht);
-      int wins = 0, losses = 0, asc = 0, best = 0;
+      int wins = 0, losses = 0, asc = 0;
       for (auto& id : ids) {
         auto it = pr.characters.find(id);
         if (it == pr.characters.end()) continue;
         wins += it->second.wins;
         losses += it->second.losses;
         asc += it->second.maxAscension;
-        best = std::max(best, it->second.bestStreak);
       }
       HistoryStats h = historyStats(s.runs, "");
       auto counter = [&](const char* k) { auto it = pr.counters.find(k); return it == pr.counters.end() ? 0LL : (long long)it->second; };
-      const float cw = (pw - 24) / 2, x0 = px + 12, x1 = x0 + cw, y0 = py + 12, rh = 44;
-      statEntry(x0, y0, cw, "stats_clock", fill(ss("ENTRY_PLAYTIME.top"), "Playtime", duration(h.playtime)),
-                h.fastestWin >= 0 ? fill(ss("ENTRY_PLAYTIME.bottom"), "FastestWin", duration(h.fastestWin)) : "");
+      const float cw = (pw - 24) / 2, x0 = px + 12, x1 = x0 + cw, y0 = py + 8, rh = 38;
+      statEntry(x0, y0, cw, "stats_clock", fill(ss("ENTRY_PLAYTIME.top"), "Playtime", duration((int)pr.totalPlaytime)),
+                wins > 0 ? fill(ss("ENTRY_PLAYTIME.bottom"), "FastestWin", duration((int)pr.fastestVictory())) : "");
       statEntry(x1, y0, cw, "stats_swords", fill(ss("ENTRY_WIN_LOSS.top"), "Amount", num(asc) + "/" + num(10 * (int)ids.size())),
                 fill(fill(ss("ENTRY_WIN_LOSS.bottom"), "Wins", num(wins)), "Losses", num(losses)));
-      statEntry(x0, y0 + rh, cw, "stats_chain", fill(ss("ENTRY_STREAK.top"), "Amount", num(best)),
+      statEntry(x0, y0 + rh, cw, "stats_chain", fill(ss("ENTRY_STREAK.top"), "Amount", num(pr.bestWinStreak())),
                 tr("放弃 [blue]", "Abandoned [blue]") + std::to_string(counter("runsAbandoned")) + "[/blue]");
       statEntry(x1, y0 + rh, cw, "stats_trophy", tr("最高分数 [blue]", "High score [blue]") + num(h.bestScore) + "[/blue]",
                 tr("历史记录 [blue]", "Run history [blue]") + num((int)s.runs.size()) + "[/blue]");
@@ -387,10 +384,10 @@ void App::drawStatsPage(bool top) {
       statEntry(x1, y0 + 2 * rh, cw, "stats_chest", tr("遗物", "Relics"), fill(ss("ENTRY_RELIC.bottom"), "Amount", num((int)pr.seenRelics.size())));
       statEntry(x0, y0 + 3 * rh, cw, "stats_potions_seen", tr("药水", "Potions"),
                 fill(ss("ENTRY_POTION.bottom"), "Amount", num((int)pr.seenPotions.size())));
-      statEntry(x1, y0 + 3 * rh, cw, "stats_monsters", tr("怪物", "Monsters"),
-                fill(ss("ENTRY_MONSTER.bottom"), "Amount", num((int)pr.seenMonsters.size())));
-      R().text(kTop / 2, py + ph - 20, tr("游玩时间与最高分数来自最近 ", "Play time and high score come from the last ") + num(history::kMax) + tr(" 局的历史记录", " runs in the history"),
-               ts(F12, col::gray, CENTER));
+      statEntry(x1, y0 + 3 * rh, cw, "stats_monsters", fill(ss("ENTRY_MONSTER.top"), "Amount", num((int)pr.totalKills())),
+                fill(ss("ENTRY_MONSTER.bottom"), "Amount", num((int)pr.enemyStats.size())));
+      statEntry(x0, y0 + 4 * rh, cw, "stats_questionmark", fill(ss("ENTRY_EVENTS.top"), "Amount", "N/A"),
+                fill(ss("ENTRY_EVENTS.bottom"), "Amount", num((int)pr.discoveredEvents.size())));
       return;
     }
     // NCharacterStats
@@ -407,8 +404,8 @@ void App::drawStatsPage(bool top) {
     if (auto it = pr.characters.find(id); it != pr.characters.end()) cp = it->second;
     HistoryStats h = historyStats(s.runs, id);
     float y = py + 40;
-    statEntry(x, y, w, "stats_clock", fill(ss("ENTRY_CHAR_PLAYTIME.top"), "Playtime", duration(h.playtime)),
-              h.fastestWin >= 0 ? fill(ss("ENTRY_CHAR_PLAYTIME.bottom"), "FastestWin", duration(h.fastestWin)) : "");
+    statEntry(x, y, w, "stats_clock", fill(ss("ENTRY_CHAR_PLAYTIME.top"), "Playtime", duration((int)cp.playtime)),
+              cp.fastestWin >= 0 ? fill(ss("ENTRY_CHAR_PLAYTIME.bottom"), "FastestWin", duration((int)cp.fastestWin)) : "");
     statEntry(x, y + 42, w, "stats_swords", fill(ss("ENTRY_CHAR_WIN_LOSS.top"), "Amount", num(cp.maxAscension)),
               fill(fill(ss("ENTRY_CHAR_WIN_LOSS.bottom"), "Wins", num(cp.wins)), "Losses", num(cp.losses)));
     statEntry(x, y + 84, w, "stats_chain", fill(ss("ENTRY_CHAR_STREAK.top"), "Amount", num(cp.currentStreak)),

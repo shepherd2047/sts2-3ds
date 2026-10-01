@@ -27,6 +27,25 @@ namespace sts {
 
 CharacterProgress& Progress::character(const std::string& id) { return characters[id]; }
 
+int64_t Progress::totalKills() const {
+  int64_t n = 0;
+  for (auto& [id, e] : enemyStats) n += e.wins;
+  return n;
+}
+
+int64_t Progress::fastestVictory() const {
+  int64_t best = -1;
+  for (auto& [id, cp] : characters)
+    if (cp.fastestWin >= 0 && (best < 0 || cp.fastestWin < best)) best = cp.fastestWin;
+  return best;
+}
+
+int Progress::bestWinStreak() const {
+  int best = 0;
+  for (auto& [id, cp] : characters) best = std::max(best, cp.bestStreak);
+  return best;
+}
+
 namespace {
 
 // Same token-stream Archive as save.cpp (game.h). Reading and writing share this function.
@@ -97,6 +116,37 @@ void ioProgress(Archive& a, Progress& p) {
     }
     ioSet("DEFEATED", p.defeatedMonsters);
   }
+  if (version >= 4) {  // M-stats: totals, enemy stats, discovered events, per-character times
+    a.tag("STATS");
+    a.io(p.totalPlaytime);
+    a.io(p.architectDamage);
+    std::vector<std::string> ids;
+    std::vector<int> wins, losses;
+    if (!a.reading) for (auto& [id, e] : p.enemyStats) { ids.push_back(id); wins.push_back(e.wins); losses.push_back(e.losses); }
+    a.io(ids);
+    a.io(wins);
+    a.io(losses);
+    if (a.reading) {
+      p.enemyStats.clear();
+      for (size_t i = 0; i < ids.size() && i < wins.size() && i < losses.size(); ++i)
+        p.enemyStats[ids[i]] = EnemyProgress{std::max(0, wins[i]), std::max(0, losses[i])};
+    }
+    ioSet("EVENTS", p.discoveredEvents);
+    std::vector<std::string> cids;
+    std::vector<int64_t> play, fast;
+    if (!a.reading) for (auto& [id, cp] : p.characters) { cids.push_back(id); play.push_back(cp.playtime); fast.push_back(cp.fastestWin); }
+    a.io(cids);
+    a.io(play);
+    a.io(fast);
+    if (a.reading)
+      for (size_t i = 0; i < cids.size() && i < play.size() && i < fast.size(); ++i) {
+        CharacterProgress& cp = p.characters[cids[i]];
+        cp.playtime = std::max<int64_t>(0, play[i]);
+        cp.fastestWin = fast[i] < -1 ? -1 : fast[i];
+      }
+    p.totalPlaytime = std::max<int64_t>(0, p.totalPlaytime);
+    p.architectDamage = std::max<int64_t>(0, p.architectDamage);
+  }
   a.tag("END");
 }
 
@@ -147,6 +197,26 @@ void markPotionSeen(const std::string& id) { if (!id.empty()) state().seenPotion
 void markMonsterSeen(const std::string& id) { if (!id.empty()) state().seenMonsters.insert(id); }
 
 void incrementCounter(const std::string& name, int64_t amount) { state().counters[name] += amount; }
+
+void markEventSeen(const std::string& id) { if (!id.empty()) state().discoveredEvents.insert(id); }
+
+void recordRunTotals(const std::string& characterId, int64_t runSeconds, bool win, int score, bool standard) {
+  runSeconds = std::max<int64_t>(0, runSeconds);
+  CharacterProgress& cp = state().character(characterId);
+  state().totalPlaytime += runSeconds;
+  cp.playtime += runSeconds;
+  if (!win) return;
+  state().architectDamage += std::max(0, score);
+  if (standard && (cp.fastestWin < 0 || cp.fastestWin > runSeconds)) cp.fastestWin = runSeconds;
+}
+
+void recordCombatEnd(const Combat& c, bool won) {
+  for (auto& e : c.ownedEnemies) {
+    if (!e || !e->monster) continue;
+    EnemyProgress& s = state().enemyStats[e->monster->id];
+    if (won) ++s.wins; else ++s.losses;
+  }
+}
 
 void recordAncientRun(const std::string& ancientId, const std::string& characterId, bool win) {
   if (ancientId.empty()) return;

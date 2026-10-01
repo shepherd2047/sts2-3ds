@@ -21,8 +21,7 @@
 // Skipped (owner decision / not in the port): the score bar towards the next epoch unlock
 // (everything is unlocked), the discoveries list, VICTORY_UNLOCKED_ASCENSION, the daily
 // leaderboard and 查看本局 (the run history screen, S25, shows stored runs).
-// PORT NOTE: progress.sav keeps no ArchitectDamage; the victory text's "total damage dealt to the
-// Architect" is the sum of the won runs' scores in the stored history (the last 50 runs).
+// The victory text's "total damage dealt to the Architect" is progress.sav's ArchitectDamage.
 #include <cstring>
 
 #include "../../core/achievements.h"
@@ -30,6 +29,7 @@
 #include "../../core/history.h"
 #include "../../core/modifiers.h"
 #include "../../core/profiles.h"
+#include "../../core/progress.h"
 #include "../ui_common.h"
 
 namespace ui {
@@ -240,16 +240,7 @@ void build(const history::RunRecord& rec) {
   uint64_t pickSeed = rec.seed * 31 + (uint64_t)rec.floorReached;
   if (rec.win) {
     s.banner = L("game_over_screen.BANNER.falseWin");
-    long long personal = rec.score;
-    if (profiles::diskEnabled()) {
-      personal = 0;
-      bool stored = false;
-      for (auto& r : history::load(profiles::current())) {
-        if (r.win) personal += r.score;
-        stored = stored || (r.startTime == rec.startTime && r.seed == rec.seed && r.win);
-      }
-      if (!stored) personal += rec.score;
-    }
+    long long personal = progress::state().architectDamage;  // already includes this run (Run::recordRunEnd)
     s.quote = unescape(L("game_over_screen.VICTORY_DAMAGE_LOCAL"));
     s.quote = fill(fill(s.quote, "PlayerDamage", grouped(rec.score)), "PersonalDamage", grouped(personal));
   } else {

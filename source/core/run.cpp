@@ -37,6 +37,9 @@ void recordRunEnd(Run& r, progress::RunOutcome outcome) {
     }
   achievements::afterRunEnded(r, outcome == progress::RunOutcome::Win);  // M5: AchievementsHelper.AfterRunEnded
   history::onRunEnded(r, outcome == progress::RunOutcome::Win, outcome == progress::RunOutcome::Abandon);
+  // M-stats: TotalPlaytime / Playtime / ArchitectDamage / FastestWinTime, and DiscoveredEvents (each point's first Event room).
+  progress::recordRunTotals(r.characterId, (int64_t)r.runTime, outcome == progress::RunOutcome::Win, history::last() ? history::last()->score : 0, !r.customRun && r.dailyDate.empty());
+  for (auto& act : r.mapHistory) for (auto& point : act) for (auto& room : point.rooms) if (room.type == history::RoomKind::Event) { progress::markEventSeen(room.model); break; }
   // M12: the daily's local best (the C# uploads DailyRunUtility.UploadScore here).
   if (!r.dailyDate.empty())
     if (const history::RunRecord* rec = history::last()) daily::recordScore(r.dailyDate, rec->score);
@@ -957,6 +960,7 @@ Task<bool> Run::fight(const std::string& encounterId) {
   for (Model* m : c.listeners()) co_await m->afterRoomEntered(enc->room);
   co_await c.runCombat();
   bool won = c.won && player->alive();
+  if (won || !player->alive()) progress::recordCombatEnd(c, won);  // M-stats: EnemyStats wins / losses
   if (won) achievements::afterCombatWon(*this, c);  // M5: CombatManager's achievement checks after a win
   co_await wait(won ? 0.8 : 1.2);
   player->block = 0;

@@ -99,6 +99,53 @@ int main() {
     CHECK(!ignored.load("STS2PROGRESS 1 CHARACTERS 5"));
   }
 
+  {  // M-stats (version 4): totals, enemy stats, events, per-character times round-trip
+    progress::reset();
+    progress::recordRunTotals("Ironclad", 600, true, 1234, true);
+    progress::recordRunTotals("Ironclad", 400, true, 100, true);   // faster standard win
+    progress::recordRunTotals("Ironclad", 100, true, 50, false);   // custom/daily win: no fastest
+    progress::recordRunTotals("Silent", 90, false, 999, true);     // loss: no damage, no fastest
+    Progress& p = progress::state();
+    CHECK(p.totalPlaytime == 1190);
+    CHECK(p.architectDamage == 1384);
+    CHECK(p.characters.at("Ironclad").playtime == 1100);
+    CHECK(p.characters.at("Ironclad").fastestWin == 400);
+    CHECK(p.characters.at("Silent").fastestWin == -1);
+    CHECK(p.fastestVictory() == 400);
+    p.characters["Ironclad"].bestStreak = 4;
+    p.characters["Silent"].bestStreak = 6;
+    CHECK(p.bestWinStreak() == 6);
+    progress::markEventSeen("Wellspring");
+    progress::markEventSeen("");
+    p.enemyStats["Nibbit"] = EnemyProgress{3, 1};
+    p.enemyStats["Fogmog"] = EnemyProgress{2, 0};
+    CHECK(p.totalKills() == 5);
+    Progress back;
+    CHECK(back.load(p.save()));
+    CHECK(back.totalPlaytime == 1190);
+    CHECK(back.architectDamage == 1384);
+    CHECK(back.characters.at("Ironclad").playtime == 1100);
+    CHECK(back.characters.at("Ironclad").fastestWin == 400);
+    CHECK(back.characters.at("Silent").fastestWin == -1);
+    CHECK(back.discoveredEvents.size() == 1 && back.discoveredEvents.count("Wellspring") == 1);
+    CHECK(back.enemyStats.at("Nibbit").wins == 3 && back.enemyStats.at("Nibbit").losses == 1);
+    CHECK(back.totalKills() == 5);
+    progress::reset();
+  }
+
+  {  // a version 3 file (before M-stats) still loads, with the new fields empty
+    Progress old;
+    CHECK(old.load("STS2PROGRESS 3 CHARACTERS 1 Ironclad 2 1 1 3 4 CARDS 0 RELICS 0 POTIONS 0 MONSTERS 0 "
+                   "COUNTERS 0 0 DAILY 0 0 ACHIEVEMENTS 0 0 DEFEATED 0 END"));
+    CHECK(old.characters.at("Ironclad").wins == 2);
+    CHECK(old.characters.at("Ironclad").maxAscension == 4);
+    CHECK(old.characters.at("Ironclad").fastestWin == -1);
+    CHECK(old.characters.at("Ironclad").playtime == 0);
+    CHECK(old.totalPlaytime == 0 && old.architectDamage == 0);
+    CHECK(old.enemyStats.empty() && old.discoveredEvents.empty());
+    CHECK(old.fastestVictory() == -1);
+  }
+
   {  // negative fields from a hand-edited file are clamped on load, not rejected outright
     Progress p;
     p.character("Ironclad").wins = -5;
