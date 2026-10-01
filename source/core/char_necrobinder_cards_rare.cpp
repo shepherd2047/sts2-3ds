@@ -156,9 +156,7 @@ struct SweepingGaze : IroncladT<SweepingGaze> {
 // combat each time an Ethereal card is played (also counting those already played when this card
 // enters combat). Upgrade: -2 cost.
 // The earlier plays are the CardPlaysFinished entries with WasEthereal.
-// PORT NOTE (n/a: equivalent): the `IsClone` guard (a clone already carries the reduction) is
-// "has any this-combat cost modifier" (no CloneOf link on Card; Card::clone copies the modifiers, and an
-// original with none has seen no Ethereal play, so the history count would be 0 anyway).
+// IsClone: a clone (createClone) already carries the reduction.
 struct BansheesCry : IroncladT<BansheesCry> {
   CARD_HEADER(BansheesCry, "BANSHEES_CRY", 9, Attack, Rare, AllEnemies)
     addVar("Damage", 33);
@@ -167,7 +165,7 @@ struct BansheesCry : IroncladT<BansheesCry> {
   Task<> onPlay(CardPlay&) override { co_await attackAll(val("Damage")); }
   void onUpgrade() override { cost -= 2; }
   Task<> afterCardEnteredCombat(Card* card) override {
-    if (card != this || !combat || !costMods.empty()) co_return;
+    if (card != this || !combat || isClone()) co_return;
     int n = combat->history.count([](const CombatHistoryEntry& e) { return e.kind == CombatHistoryEntry::CardPlayFinished && e.flag; });
     addThisCombat(-n * val("Energy").toInt());
   }
@@ -537,7 +535,7 @@ struct Undeath : IroncladT<Undeath> {
   }
   Task<> onPlay(CardPlay&) override {
     co_await block(val("Block"));
-    co_await cmd::addGeneratedCard(*combat, clone(), Pile::Discard);
+    co_await cmd::addGeneratedCard(*combat, createClone(), Pile::Discard);
   }
   void onUpgrade() override { upgradeVar("Block", 2); }
 };

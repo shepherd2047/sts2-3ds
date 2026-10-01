@@ -67,8 +67,9 @@ struct HistoryCourse : Relic {
     thisTurn = nullptr;
     if (!combat || combat->turnNumber == 1 || !lastTurn) co_return;
     doFlash();
-    std::unique_ptr<Card> dupe = lastTurn->clone();  // CardModel.CreateDupe
+    std::unique_ptr<Card> dupe = lastTurn->createClone();  // CardModel.CreateDupe: CreateClone, IsDupe, no Exhaust
     dupe->isDupe = true;
+    dupe->removeKeyword(kwExhaust);
     Card* raw = combat->addCard(std::move(dupe));
     co_await cmd::autoPlay(*combat, raw, nullptr);
   }

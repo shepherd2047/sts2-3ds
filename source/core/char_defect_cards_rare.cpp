@@ -125,7 +125,7 @@ struct AdaptiveStrike : IroncladT<AdaptiveStrike> {
   }
   Task<> onPlay(CardPlay& p) override {
     co_await attack(p.target, val("Damage"));
-    auto copy = clone();
+    auto copy = createClone();
     copy->setThisCombat(0);
     co_await cmd::addGeneratedCard(*combat, std::move(copy), Pile::Discard);
   }

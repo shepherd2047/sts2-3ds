@@ -82,12 +82,12 @@ struct NightmarePower : Power {
   std::unique_ptr<Card> selectedCard;
   Task<> beforeHandDraw() override {
     if (selectedCard)
-      for (int i = 0; i < amount; ++i) co_await cmd::addGeneratedCard(*owner->combat, selectedCard->clone(), Pile::Hand);
+      for (int i = 0; i < amount; ++i) co_await cmd::addGeneratedCard(*owner->combat, selectedCard->createClone(), Pile::Hand);
     co_await cmd::removePower(this);
   }
   // SetSelectedCard: a clone of the chosen card, without its affliction.
   void setSelectedCard(Card* c) {
-    selectedCard = c->clone();
+    selectedCard = c->createClone();
     cmd::clearAffliction(selectedCard.get());
   }
 };
