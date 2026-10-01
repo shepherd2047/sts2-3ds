@@ -51,6 +51,10 @@ struct CorruptionPower : Power {
     if (ownerOf(card) != owner || card->type != CardType::Skill) return pile;
     return Pile::Exhaust;
   }
+  Task<> afterModifyingCardPlayResultLocation(Card*, Pile) override {
+    flash = 1.f;
+    co_return;
+  }
 };
 
 // CrimsonMantlePower and InfernoPower carry a "SelfDamage" counter, bumped by
@@ -143,7 +147,7 @@ struct HellraiserPower : Power {
   POWER_HEADER(HellraiserPower, "HELLRAISER_POWER")
   StackType stackType() const override { return StackType::Single; }
   int infiniteAutoPlaysThisTurn = 0;
-  Task<> afterCardDrawn(Card* card, bool) override {
+  Task<> afterCardDrawnEarly(Card* card, bool) override {
     if (ownerOf(card) != owner || !(card->tags & tagStrike)) co_return;
     if (infiniteAutoPlaysThisTurn >= 9) co_return;
     ++infiniteAutoPlaysThisTurn;

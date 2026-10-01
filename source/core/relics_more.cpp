@@ -305,7 +305,7 @@ struct Orrery : Relic {
 // ---- PetrifiedToad (Uncommon): a Potion-Shaped Rock at the start of each combat. ----
 struct PetrifiedToad : Relic {
   RELIC_HEADER(PetrifiedToad, "PETRIFIED_TOAD", Uncommon) }
-  Task<> beforeCombatStart() override {
+  Task<> beforeCombatStartLate() override {
     if (run->procurePotion(db::potion("PotionShapedRock"))) doFlash();
     return {};
   }

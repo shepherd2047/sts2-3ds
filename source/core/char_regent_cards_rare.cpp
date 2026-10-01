@@ -270,16 +270,15 @@ struct BigBang : IroncladT<BigBang> {
 };
 
 // Bombardment.cs: 3 cost, Attack, AnyEnemy, Exhaust. Damage 18. Whenever a turn starts with this
-// in the Exhaust pile, it is played for free (AfterAutoPrePlayPhaseEnteredEarly).
-// PORT NOTE: the C# uses the "Early" hook so another auto-pre-play effect (Mayhem) that also
-// exhausts it can't double-trigger; this engine has only afterAutoPrePlayPhaseEntered.
+// in the Exhaust pile, it is played for free (AfterAutoPrePlayPhaseEnteredEarly, so another
+// auto-pre-play effect (Mayhem) that also exhausts it can't double-trigger).
 struct Bombardment : IroncladT<Bombardment> {
   CARD_HEADER(Bombardment, "BOMBARDMENT", 3, Attack, Rare, AnyEnemy)
     keywords = kwExhaust;
     addVar("Damage", 18);
   }
   Task<> onPlay(CardPlay& p) override { co_await attack(p.target, val("Damage")); }
-  Task<> afterAutoPrePlayPhaseEntered() override {
+  Task<> afterAutoPrePlayPhaseEnteredEarly() override {
     if (combat->pileOf(this) == Pile::Exhaust) co_await cmd::autoPlay(*combat, this, nullptr);
   }
   void onUpgrade() override { upgradeVar("Damage", 6); }
