@@ -49,6 +49,16 @@ enum class StackType { Counter, Single };
 // the instance from the same applier (PowerCmd.FindExistingInstanceForStacking).
 enum class PowerInstanceType { None, Instanced, InstancedPerApplier };
 enum class Pile { None, Draw, Hand, Discard, Exhaust, Play };
+// CardPilePosition (Random is not used by any result location): Top = index 0 of the pile list
+// (the draw pile's top, the hand's left end), Bottom = appended.
+enum class PilePosition { Bottom, Top };
+// CardLocation (single player: no Player field): where a played card goes (Hook.ModifyCardPlayResultLocation).
+struct CardLocation {
+  Pile pile = Pile::Discard;
+  PilePosition position = PilePosition::Bottom;
+  bool operator==(const CardLocation& o) const { return pile == o.pile && position == o.position; }
+  bool operator!=(const CardLocation& o) const { return !(*this == o); }
+};
 enum class RoomType { Monster, Elite, Rest, Treasure, Unknown, Boss, Start, Shop, Ancient };
 inline int roomBit(RoomType t) { return 1 << (int)t; }  // a set of room types (modifyUnknownMapPointRoomTypes)
 enum class RelicRarity { None, Starter, Common, Uncommon, Rare, Shop, Event, Ancient };
@@ -143,7 +153,15 @@ struct Model {
   virtual bool shouldClearBlock(Creature*) { return true; }
   virtual Dec modifyMaxEnergy(Dec amount) { return amount; }
   virtual int modifyCardPlayCount(Card*, Creature*, int count) { return count; }
+  // Hook.ModifyCardPlayResultLocation. Override the CardLocation form to set a position too; the
+  // older Pile-only form is called by its default (a changed pile gets Top for the draw pile, as every
+  // C# model that sends a card there does, else Bottom).
   virtual Pile modifyCardPlayResultLocation(Card*, bool /*autoPlay*/, Pile pile) { return pile; }
+  virtual CardLocation modifyCardPlayResult(Card* card, bool autoPlay, CardLocation loc) {
+    Pile p = modifyCardPlayResultLocation(card, autoPlay, loc.pile);
+    if (p != loc.pile) loc = {p, p == Pile::Draw ? PilePosition::Top : PilePosition::Bottom};
+    return loc;
+  }
   virtual Task<> afterModifyingCardPlayResultLocation(Card*, Pile) { return {}; }  // only the models that changed it
   // TryModifyEnergyCostInCombat / ...Late: return the new cost (or `cost` unchanged).
   virtual int modifyEnergyCost(Card*, int cost) { return cost; }
@@ -219,6 +237,10 @@ struct Model {
   // Added for the Necrobinder (X4.0): DoomPower.DoomKill / OstyCmd.Summon.
   virtual Task<> afterDiedToDoom(const std::vector<Creature*>&) { return {}; }
   virtual Task<> afterOstyRevived(Creature*) { return {}; }
+  // Hook.ModifySummonAmount (OstyCmd.Summon, before anything happens; `source` is the summoning card /
+  // relic / potion, or null) and Hook.AfterSummon (after the summon, with the modified amount).
+  virtual Dec modifySummonAmount(Creature* /*summoner*/, Dec amount, Model* /*source*/) { return amount; }
+  virtual Task<> afterSummon(Creature* /*summoner*/, Dec /*amount*/) { return {}; }
 
   // Added for the Regent (X3.0): Stars, the second resource, and Forge / Sovereign Blade.
   virtual int modifyStarCost(Card*, int cost) { return cost; }  // Hook.ModifyStarCost (TryModifyStarCost)
@@ -635,9 +657,9 @@ struct Card : Model {
   bool shouldRetainThisTurn() const { return has(kwRetain) || singleTurnRetain; }
   bool isSlyThisTurn() const { return has(kwSly) || singleTurnSly; }
   int enchantedReplayCount() const { return enchantment ? enchantment->enchantPlayCount(baseReplayCount) : baseReplayCount; }
-  // CardModel.GainsBlock is an override on 80 cards; here: the card has a Block var.
-  // PORT NOTE: approximation, cards that gain block without a Block/CalculatedBlock var need an override.
-  virtual bool gainsBlock() const { return const_cast<Card*>(this)->var("Block") || const_cast<Card*>(this)->var("CalculatedBlock"); }
+  // CardModel.GainsBlock (false in the C# base): true for the 78 cards whose C# override is `=> true`
+  // (an id list in combat.cpp); a conditional one (SovereignBlade: Parry) overrides this.
+  virtual bool gainsBlock() const;
 
   DynVar* var(const char* n) { for (auto& v : vars) if (v.name == n) return &v; return nullptr; }
   Dec val(const char* n) { auto* v = var(n); return v ? v->base : Dec(0); }
@@ -1247,6 +1269,10 @@ struct DeckChoice {
   int minCount = -1;           // -1: exactly `count`; else between minCount and count
   bool canCancel = false;
   bool showUpgrade = false;    // preview the upgraded card (upgrade prompts)
+  // CardSelectCmd.FromDeckForEnchantment: the enchantment (and amount) the picked card will get,
+  // so the picker can preview the card enchanted; "" for every other prompt.
+  std::string enchantId;
+  int enchantAmount = 0;
   bool active = false;
   Signal<std::vector<Card*>> result;
 };
@@ -1288,13 +1314,24 @@ struct Run {
   static constexpr int kActs = 3;
   // RunState.Acts: the run's act per index (db::ActDef names), rolled in Run::start.
   std::vector<std::string> actIds = {"Overgrowth", "Hive", "Glory"};
-  int fightsThisAct = 0;           // monster rooms so far: the first weakCount use weak fights
-  std::vector<std::string> eliteQueue;
+  // RoomSet (ActModel._rooms) of each act, all made at the run start by generateRooms
+  // (RunManager.GenerateRooms + ActModel.GenerateRooms, Rng.UpFront). A room of a type takes
+  // list[visited % size]; `visited` counts the rooms entered (RoomSet.MarkVisited).
+  struct RoomSet {
+    std::vector<std::string> events;
+    int eventsVisited = 0;
+    std::vector<std::string> normal;  // NumberOfWeakEncounters weak fights, then regular ones
+    int normalVisited = 0;
+    std::vector<std::string> elites;  // 15
+    int elitesVisited = 0;
+    std::string boss, secondBoss, ancient;  // ancient: "" if none registered
+  };
+  RoomSet rooms[kActs];
+  void generateRooms();
   std::vector<MapNode> nodes;
   int currentNode = -1;
   std::unique_ptr<Combat> combat;
-  std::vector<std::string> normalQueue, weakQueue;
-  std::string bossId;
+  std::string bossId;  // the current act's RoomSet boss (and secondBossId below), set by enterAct
   // DoubleBoss (ascension 10, last act only): the act's second boss (ActModel.SecondBossEncounter),
   // fought at its own map node after the first boss (StandardActMap.SecondBossMapPoint).
   std::string secondBossId;
@@ -1346,8 +1383,7 @@ struct Run {
   std::vector<Card*> upgradeOptions;
   Signal<int> upgradeChoice;         // index or -1 back
   int lastHeal = 0;
-  // Events: the act's shuffled event queue, the running event and its UI answers.
-  std::vector<std::string> eventQueue;
+  // Events: the events seen this run (RunState.VisitedEventIds), the running event and its UI answers.
   std::vector<std::string> visitedEvents;
   std::unique_ptr<Event> currentEvent;
   Signal<int> eventChoice;         // option index; any value proceeds once finished
@@ -1359,14 +1395,16 @@ struct Run {
                                           bool canCancel = false, bool showUpgrade = false, int minCount = -1);
   Card* addCardToDeck(std::unique_ptr<Card> c);
   // Enchantments on deck cards (events, relics): CardSelectCmd.FromDeckForEnchantment lists the
-  // deck cards `id` can go on (and `filter`, if given); enchantCard is CardCmd.Enchant<T>.
-  // PORT NOTE: no enchant preview screen; the picker is the plain deck list.
+  // deck cards `id` can go on (and `filter`, if given); enchantCard is CardCmd.Enchant<T>. The
+  // picker gets DeckChoice::enchantId / enchantAmount (`amount`) to preview the enchanted card.
   Task<std::vector<Card*>> selectForEnchantment(const std::string& id, int count = 1,
-                                                std::function<bool(Card*)> filter = nullptr);
+                                                std::function<bool(Card*)> filter = nullptr, int amount = 1);
   bool canEnchantAny(const std::string& id, std::function<bool(Card*)> filter = nullptr);
   Enchantment* enchantCard(Card* c, const std::string& id, int amount);
   void removeCardFromDeck(Card* c);
-  Card* transformCard(Card* c, std::unique_ptr<Card> into);   // replaces it in the deck
+  // CardCmd.Transform on a deck card: the original leaves, the replacement goes through
+  // Hook.ModifyCardBeingAddedToDeck and joins the end of the deck, then AfterCardChangedPiles.
+  Card* transformCard(Card* c, std::unique_ptr<Card> into);
   std::unique_ptr<Card> randomTransformFor(Card* c, Rng& rng); // CardFactory transform target
   Task<> loseHp(int amount);   // outside combat; 0 HP ends the run
   Task<> gainMaxHp(int amount);
@@ -1396,7 +1434,6 @@ struct Run {
   // A room that is not ported yet (events, shops): Screen::Placeholder shows this text.
   std::string placeholderText;
   std::string ancientId;            // this act's Ancient event ("Neow" in act 1), empty if none
-  std::vector<std::string> sharedAncients[3];  // per act: the shared Ancients (Darv) it may roll
   bool ancientPending = false;      // the act starts with its Ancient (Run::main runs it first)
   Task<> enterAncient();
   Task<> chooseCardFor(std::vector<std::unique_ptr<Card>> options);  // CardSelectCmd.FromChooseACardScreen -> deck
@@ -1552,7 +1589,10 @@ struct ActDef {
   // one picked by Run::actMusic) and ActModel.AmbientSfx.
   std::vector<std::string> music;
   const char* ambience;
+  int baseRooms;  // ActModel.BaseNumberOfRooms (weak + regular fights in the RoomSet)
 };
+// EncounterModel.Tags (EncounterTag names; most encounters have none), for SharesTagsWith.
+const std::vector<std::string>& encounterTags(const std::string& encounterId);
 const std::vector<ActDef>& acts();          // every act, ModelDb.Acts order
 const ActDef* act(const std::string& name);  // by ActModel id; null if unknown
 // ActModel.GetRandomList (StartRunLobby.BeginRunLocally, Rng(seed, "act_selection")): one act

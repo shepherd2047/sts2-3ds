@@ -99,21 +99,24 @@ bool Run::hasRelic(const std::string& id) const {
 }
 
 // RunManager: the shared bag (shared pool) then the player's bag (shared + the character's
-// pools), both from the UpFront stream; each rarity deque is shuffled once.
-// PORT NOTE: C# shuffles the deques in dictionary insertion order; here in rarity order.
+// pools), both from the UpFront stream; each rarity deque is shuffled once, in the order the
+// rarities first appear in the pool (RelicGrabBag._deques is a Dictionary: insertion order).
 void Run::populateRelicBags() {
   relicBag.clear();
   sharedRelicBag.clear();
   Rng& r = rng("UpFront");
   auto fill = [&](std::map<RelicRarity, std::vector<std::string>>& bag, std::vector<std::string> ids) {
+    std::vector<RelicRarity> order;
     for (auto& id : ids) {
       auto rel = db::relic(id);
       if (!rel) continue;  // not ported yet
       RelicRarity k = rel->rarity;
-      if (k == RelicRarity::Common || k == RelicRarity::Uncommon || k == RelicRarity::Rare || k == RelicRarity::Shop)
+      if (k == RelicRarity::Common || k == RelicRarity::Uncommon || k == RelicRarity::Rare || k == RelicRarity::Shop) {
+        if (!bag.count(k)) order.push_back(k);
         bag[k].push_back(id);
+      }
     }
-    for (auto& [k, v] : bag) r.shuffle(v);
+    for (RelicRarity k : order) r.shuffle(bag[k]);
   };
   fill(sharedRelicBag, db::sharedRelicPool());
   std::vector<std::string> all = db::sharedRelicPool();
@@ -127,8 +130,8 @@ void Run::populateRelicBags() {
 
 // RelicModel.IsBeforeAct3TreasureChest: TotalFloor < 41 (38 in multiplayer, not supported here).
 // These relics override IsAllowed with it (and stop dropping from the Act 3 treasure chest on).
-// PORT NOTE: kept as an id list instead of per-class overrides so the older relic files stay untouched;
-// LastingCandy's extra "first run as Ironclad" exclusion (UnlockState.NumberOfRuns == 0) is not ported.
+// Kept as an id list instead of per-class overrides (same result).
+// PORT NOTE (n/a: owner): LastingCandy is not dropped for an Ironclad on the profile's first run (UnlockState.NumberOfRuns == 0).
 static bool relicAllowed(Relic& rel, Run& run) {
   static const char* const kLimited[] = {
       "AmethystAubergine", "BookOfFiveRings", "BowlerHat", "DragonFruit", "FrozenEgg", "Girya", "JuzuBracelet",
@@ -297,7 +300,8 @@ Card* Run::addCardToDeck(std::unique_ptr<Card> c) {
   Card* added = deck.back().get();
   for (auto& rel : relics) rel->afterCardAddedToDeck(added);
   // Hoarder.AfterCardChangedPiles: a new deck card brings two clones (which don't copy again).
-  // PORT NOTE: transformed cards (Run::transformCard) don't go through here, so they aren't copied.
+  // A transformed card is not copied (transformCard sets `hoarding`): CardCmd.Transform reports the
+  // deck as its old pile, and Hoarder only copies cards coming from no pile.
   if (!hoarding && hasModifier("Hoarder")) {
     hoarding = true;
     for (int i = 0; i < 2; ++i) addCardToDeck(added->clone());
@@ -311,19 +315,58 @@ void Run::removeCardFromDeck(Card* c) {
   deck.erase(std::remove_if(deck.begin(), deck.end(), [&](const std::unique_ptr<Card>& d) { return d.get() == c; }), deck.end());
 }
 
+// CardCmd.Transform (deck pile): RemoveFromCurrentPile, Hook.ModifyCardBeingAddedToDeck (the eggs),
+// AddInternal at the end of the deck, Hook.AfterCardChangedPiles(oldPile: Deck) -- Lucky Fysh,
+// Book of Five Rings, Bing Bong, Darkstone Periapt react, Hoarder does not.
 Card* Run::transformCard(Card* c, std::unique_ptr<Card> into) {
   if (!into || !c->isTransformable()) return c;  // CardCmd.Transform skips Eternal cards
-  for (auto& d : deck)
-    if (d.get() == c) { d = std::move(into); return d.get(); }
-  return addCardToDeck(std::move(into));
+  auto it = std::find_if(deck.begin(), deck.end(), [&](const std::unique_ptr<Card>& d) { return d.get() == c; });
+  if (it == deck.end()) return addCardToDeck(std::move(into));
+  std::unique_ptr<Card> original = std::move(*it);  // alive until the hooks ran (Dowsing transforms itself)
+  deck.erase(it);
+  bool wasHoarding = hoarding;
+  hoarding = true;
+  Card* added = addCardToDeck(std::move(into));
+  hoarding = wasHoarding;
+  return added;
 }
 
-// CardFactory transform: a random card of the character's pool (Common/Uncommon/Rare),
-// never the card itself. PORT NOTE: C# also weights by rarity odds; this picks uniformly.
+// CardFactory.CreateRandomCardForTransform(original, isInCombat: false, rng): one uniform NextItem over
+// GetDefaultTransformationOptions -- the original's own pool (the colorless pool for Quest cards and
+// Event / Ancient / Token rarities; the port has no Event rarity), Common/Uncommon/Rare only unless the
+// original is a Status or Curse, never the original's id; pool order.
 std::unique_ptr<Card> Run::randomTransformFor(Card* c, Rng& rr) {
-  auto pool = db::characterCards(characterId, [&](const Card& x) {
-    return x.id != c->id && (x.rarity == Rarity::Common || x.rarity == Rarity::Uncommon || x.rarity == Rarity::Rare);
-  });
+  static const char* const kCursePool[] = {"AscendersBane", "BadLuck", "Clumsy", "CurseOfTheBell", "Debt", "Decay",
+                                           "Doubt", "Enthralled", "Folly", "Greed", "Guilty", "Injury", "Normality",
+                                           "PoorSleep", "Regret", "Shame", "SporeMind", "Writhe"};
+  static const char* const kStatusPool[] = {"Beckon", "Burn", "Dazed", "Debris", "FranticEscape", "Infection",
+                                            "Wither", "Slimed", "Soot", "Toxic", "Void", "Wound"};
+  bool anyRarity = c->rarity == Rarity::Status || c->rarity == Rarity::Curse;
+  auto keep = [&](const Card& x) {
+    return x.id != c->id &&
+           (anyRarity || x.rarity == Rarity::Common || x.rarity == Rarity::Uncommon || x.rarity == Rarity::Rare);
+  };
+  std::vector<std::string> pool;
+  auto fromList = [&](const char* const* ids, size_t n) {
+    for (size_t i = 0; i < n; ++i)
+      if (auto x = db::card(ids[i]); x && keep(*x)) pool.push_back(ids[i]);
+  };
+  bool colorlessPool = c->type == CardType::Quest || c->rarity == Rarity::Ancient || c->rarity == Rarity::Token ||
+                       c->rarity == Rarity::Quest || db::isColorless(c->id);
+  if (colorlessPool) {
+    pool = db::colorlessCards(keep);
+  } else if (c->rarity == Rarity::Curse) {
+    fromList(kCursePool, sizeof kCursePool / sizeof *kCursePool);
+  } else if (c->rarity == Rarity::Status) {
+    fromList(kStatusPool, sizeof kStatusPool / sizeof *kStatusPool);
+  } else {
+    std::string owner = characterId;  // CardModel.Pool: the character pool that lists the card
+    for (auto& ch : db::allCharacters()) {
+      const auto& all = db::character(ch).cardPool;
+      if (std::find(all.begin(), all.end(), c->id) != all.end()) { owner = ch; break; }
+    }
+    pool = db::characterCards(owner, keep);
+  }
   if (pool.empty()) return nullptr;
   return db::card(rr.nextItem(pool));
 }
