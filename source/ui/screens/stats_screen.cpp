@@ -386,7 +386,7 @@ void App::drawStatsPage(bool top) {
                 fill(ss("ENTRY_POTION.bottom"), "Amount", num((int)pr.seenPotions.size())));
       statEntry(x1, y0 + 3 * rh, cw, "stats_monsters", fill(ss("ENTRY_MONSTER.top"), "Amount", num((int)pr.totalKills())),
                 fill(ss("ENTRY_MONSTER.bottom"), "Amount", num((int)pr.enemyStats.size())));
-      statEntry(x0, y0 + 4 * rh, cw, "stats_questionmark", fill(ss("ENTRY_EVENTS.top"), "Amount", "N/A"),
+      statEntry(x0, y0 + 4 * rh, cw, "stats_questionmark", fill(ss("ENTRY_EVENTS.top"), "Amount", num((int)counter("eventsEncountered"))),
                 fill(ss("ENTRY_EVENTS.bottom"), "Amount", num((int)pr.discoveredEvents.size())));
       return;
     }

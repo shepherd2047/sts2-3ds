@@ -198,7 +198,13 @@ void markMonsterSeen(const std::string& id) { if (!id.empty()) state().seenMonst
 
 void incrementCounter(const std::string& name, int64_t amount) { state().counters[name] += amount; }
 
-void markEventSeen(const std::string& id) { if (!id.empty()) state().discoveredEvents.insert(id); }
+// The C# shows "N/A" for the "events encountered" total (ENTRY_EVENTS.top); the port tallies the
+// event rooms of finished runs in counters["eventsEncountered"] (one call per event map point).
+void markEventSeen(const std::string& id) {
+  if (id.empty()) return;
+  state().discoveredEvents.insert(id);
+  incrementCounter("eventsEncountered");
+}
 
 void recordRunTotals(const std::string& characterId, int64_t runSeconds, bool win, int score, bool standard) {
   runSeconds = std::max<int64_t>(0, runSeconds);
