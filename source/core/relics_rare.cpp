@@ -360,13 +360,13 @@ struct TungstenRod : Relic {
   }
 };
 
-// ---- UnceasingTop: whenever your hand is empty (after playing a card), draw 1. ----
-// PORT NOTE (needs Hook.AfterHandEmptied + PlayerCombatState.Phase): the C# version only triggers during the main play phase (not while cards
-// are auto-drawing/discarding); approximated here as "hand empties from a card play".
+// ---- UnceasingTop: Hook.AfterHandEmptied during AutoPrePlay / Play / AutoPostPlay: draw 1. ----
 struct UnceasingTop : Relic {
   RELIC_HEADER(UnceasingTop, "UNCEASING_TOP", Rare) }
-  Task<> afterCardPlayed(const CardPlay&) override {
-    if (!combat || !combat->hand.empty()) co_return;
+  Task<> afterHandEmptied() override {
+    if (!combat) co_return;
+    auto ph = combat->phase;
+    if (ph != Combat::TurnPhase::AutoPrePlay && ph != Combat::TurnPhase::Play && ph != Combat::TurnPhase::AutoPostPlay) co_return;
     doFlash();
     co_await cmd::drawCards(*combat, 1);
   }
