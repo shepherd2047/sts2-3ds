@@ -89,7 +89,10 @@ struct BoundPhylactery : Relic {
 
 // ---------------------------------------------------------------- Osty
 
-Task<Creature*> summonOsty(Combat& c, int amount) {
+Task<Creature*> summonOsty(Combat& c, int amount, Model* source) {
+  Dec modified = Dec(amount);
+  for (Model* m : c.listeners()) modified = m->modifySummonAmount(modified, source);  // Hook.ModifySummonAmount
+  amount = modified.toInt();
   if (amount == 0) co_return c.osty;
   if (c.osty && c.osty->alive()) {
     co_await cmd::gainMaxHp(c.osty, amount);
@@ -112,6 +115,7 @@ Task<Creature*> summonOsty(Combat& c, int amount) {
       for (Model* m : c.listeners()) co_await m->afterOstyRevived(c.osty);
   }
   c.history.summoned(c, amount);  // History.Summoned
+  for (Model* m : c.listeners()) co_await m->afterSummon(Dec(amount));  // Hook.AfterSummon
   co_return c.osty;
 }
 

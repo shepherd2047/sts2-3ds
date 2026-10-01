@@ -14,9 +14,9 @@
 //
 // Inputs the run did not track before are counted as it goes, in the existing history style (see
 // MapPoint in history.h): goldSpent at the merchant, damageTaken, rest site choices, and the
-// CCCCOMBO flag (Run::cccCombo). PORT NOTE: run.sav is unchanged, so after a Continue the points
-// entered before the save have tracked == false and CCCCOMBO restarts at false; badges that need
-// that data (PERFECT, KACHING, RESTFUL, RESTLESS, CCCCOMBO) then only count what was tracked.
+// CCCCOMBO flag (Run::cccCombo); run.sav keeps them since v7. A run continued from an older save
+// has tracked == false on the points before it, and the badges that need that data (PERFECT,
+// KACHING, RESTFUL, RESTLESS, CCCCOMBO) only count what was tracked.
 //
 // Never touches an Rng.
 #pragma once

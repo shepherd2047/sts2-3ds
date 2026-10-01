@@ -149,7 +149,6 @@ struct WaterfallGiant : Monster {
     co_await attack(steamEruptionDamage);
     if (creature->alive()) co_await cmd::kill({creature});
   }
-  // PORT NOTE: HpDisplay.InfiniteWithoutNumbers has no counterpart; the bar shows the raw HP.
   void triggerAboutToBlowState() {
     isAboutToBlow = true;
     // The animator's "Dead" trigger is gated on !IsAboutToBlow: drop the Death visual that
@@ -159,6 +158,7 @@ struct WaterfallGiant : Monster {
       if (it->kind == VisualEvent::Death && it->who == creature) { ev.erase(std::next(it).base()); break; }
     creature->maxHp = 999999999;  // CreatureCmd.SetMaxAndCurrentHp
     creature->hp = 999999999;
+    creature->hpDisplay = HpDisplay::InfiniteWithoutNumbers;
     setMoveImmediate(aboutToBlow, true);
   }
 };

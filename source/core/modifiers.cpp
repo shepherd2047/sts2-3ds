@@ -86,7 +86,7 @@ struct SealedDeck : Modifier {
   bool clearsDeck() const override { return true; }
   bool hasNeowOption() const override { return true; }
   // ChooseCards: 30 cards (rarity odds change), pick 10 on a grid sorted by rarity then title.
-  // PORT NOTE: ties sort by card id (the C# compares the localised titles).
+  // PORT NOTE (n/a: visual): ties in the grid order sort by card id, not by the localised title.
   Task<> neowOption() override {
     auto cards = run->createForReward(regularOptions(run->characterId).with(ccForceRarityOddsChange | ccIsCardReward), 30);
     std::stable_sort(cards.begin(), cards.end(), [](const std::unique_ptr<Card>& a, const std::unique_ptr<Card>& b) {

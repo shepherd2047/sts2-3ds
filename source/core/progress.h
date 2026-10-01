@@ -8,7 +8,7 @@
 // parts of Saves.Managers/ProgressSaveManager.cs that update them after a run or a pickup.
 // Trimmed to what a single-player, all-unlocked build needs:
 //
-// PORT NOTE: dropped vs. the C#'s SerializableProgress:
+// PORT NOTE (n/a: owner): SerializableProgress fields for unlocks, multiplayer and unread stats are dropped:
 //  - UniqueId, EnableFtues/FtueCompleted (no FTUE package yet, tracked separately if it lands),
 //  - Epochs / TotalUnlocks / PendingCharacterUnlock / WongoPoints / CurrentScore
 //    (the score-bar meta-unlock system; n/a per the owner's decision that everything is unlocked

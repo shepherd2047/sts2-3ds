@@ -82,7 +82,8 @@ bool Run::canEnchantAny(const std::string& id, std::function<bool(Card*)> filter
   return false;
 }
 
-Task<std::vector<Card*>> Run::selectForEnchantment(const std::string& id, int count, std::function<bool(Card*)> filter) {
+Task<std::vector<Card*>> Run::selectForEnchantment(const std::string& id, int count, std::function<bool(Card*)> filter,
+                                                   int amount) {
   auto e = db::enchantment(id);
   std::vector<Card*> picked;
   if (!e) co_return picked;
@@ -91,9 +92,14 @@ Task<std::vector<Card*>> Run::selectForEnchantment(const std::string& id, int co
     if (e->canEnchant(*c) && (!filter || filter(c.get()))) options.push_back(c.get());
   if (options.empty()) co_return picked;
   if ((int)options.size() <= count) co_return options;  // nothing to choose (cards.Count <= MinSelect)
-  co_return co_await selectFromDeck("card_selection.TO_ENCHANT",
-                                    [options](Card* c) { return std::find(options.begin(), options.end(), c) != options.end(); },
-                                    count);
+  deckChoice.enchantId = id;  // the picker previews the card enchanted
+  deckChoice.enchantAmount = amount;
+  auto picked2 = co_await selectFromDeck("card_selection.TO_ENCHANT",
+                                         [options](Card* c) { return std::find(options.begin(), options.end(), c) != options.end(); },
+                                         count);
+  deckChoice.enchantId.clear();
+  deckChoice.enchantAmount = 0;
+  co_return picked2;
 }
 
 Enchantment* Run::enchantCard(Card* c, const std::string& id, int amount) {

@@ -12,7 +12,7 @@ namespace sts {
 
 namespace {
 
-constexpr int kSaveVersion = 9;  // 2: card enchantments, 3: character id, 4: ascension (older saves load as Ironclad / ascension 0), 5: act list (older: Overgrowth, Hive, Glory), 6: run history path + times (M2; older: empty path), 7: badge inputs per map point + CCCCOMBO (M7; older: untracked points), 8: modifiers, custom mode, seed text, "?" elite odds (M11; older: none), 9: daily date (M12; older: not daily)
+constexpr int kSaveVersion = 10;  // 10: every act's RoomSet (older: the current act's queues, later acts regenerated), 2: card enchantments, 3: character id, 4: ascension (older saves load as Ironclad / ascension 0), 5: act list (older: Overgrowth, Hive, Glory), 6: run history path + times (M2; older: empty path), 7: badge inputs per map point + CCCCOMBO (M7; older: untracked points), 8: modifiers, custom mode, seed text, "?" elite odds (M11; older: none), 9: daily date (M12; older: not daily)
 
 void ioCard(Archive& a, std::unique_ptr<Card>& c) {
   std::string id = c ? c->id : "";
@@ -121,15 +121,46 @@ void ioRun(Archive& a, Run& r) {
     return;
   }
   a.io(r.player->hp); a.io(r.player->maxHp);
-  a.io(r.gold); a.io(r.floor); a.io(r.actIndex); a.io(r.fightsThisAct);
-  a.io(r.eliteQueue); a.io(r.normalQueue); a.io(r.weakQueue); a.io(r.bossId);
+  a.io(r.gold); a.io(r.floor); a.io(r.actIndex);
+  // Before v10: the current act's shuffled queues (weak / regular fights cycled by a fight count,
+  // elites rotated, events erased when used). They become the current act's RoomSet; the later
+  // acts keep the RoomSets Run::start just generated.
+  int oldFights = 0;
+  std::vector<std::string> oldElites, oldNormal, oldWeak, oldEvents, oldShared[Run::kActs];
+  if (version < 10) { a.io(oldFights); a.io(oldElites); a.io(oldNormal); a.io(oldWeak); }
+  a.io(r.bossId);
   a.io(r.currentNode);
   a.io(r.rarityOffset); a.io(r.potionRewardOdds);
   a.io(r.unknownMonsterOdds); a.io(r.unknownTreasureOdds); a.io(r.unknownShopOdds);
-  a.io(r.eventQueue); a.io(r.visitedEvents);
+  if (version < 10) a.io(oldEvents);
+  a.io(r.visitedEvents);
   if (version >= 4) a.io(r.secondBossId);
   a.io(r.ancientId);
-  for (auto& s : r.sharedAncients) a.io(s);
+  if (version < 10) {
+    for (auto& s : oldShared) a.io(s);
+    if (a.reading && r.actIndex >= 0 && r.actIndex < Run::kActs) {
+      Run::RoomSet& rs = r.rooms[r.actIndex];
+      int weakCount = r.act().weakCount;
+      rs.normal.clear();
+      for (int i = 0; i < weakCount && !oldWeak.empty(); ++i) rs.normal.push_back(oldWeak[(size_t)i % oldWeak.size()]);
+      rs.normal.insert(rs.normal.end(), oldNormal.begin(), oldNormal.end());
+      rs.normalVisited = oldFights;
+      rs.elites = oldElites;
+      rs.elitesVisited = 0;
+      rs.events = oldEvents;
+      rs.eventsVisited = 0;
+      rs.boss = r.bossId;
+      rs.secondBoss = r.secondBossId;
+      rs.ancient = r.ancientId;
+    }
+  } else {
+    for (auto& rs : r.rooms) {
+      a.io(rs.events); a.io(rs.eventsVisited);
+      a.io(rs.normal); a.io(rs.normalVisited);
+      a.io(rs.elites); a.io(rs.elitesVisited);
+      a.io(rs.boss); a.io(rs.secondBoss); a.io(rs.ancient);
+    }
+  }
   a.io(r.shopRemovalsUsed);
   a.tag("MAP");
   int n = (int)r.nodes.size();

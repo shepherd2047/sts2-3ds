@@ -167,7 +167,6 @@ struct VigorPower : Power {
   int amountWhenStarted = 0;
   Task<> beforeAttack(cmd::Attack& a) override {
     if (a.attacker != owner || !isPoweredAttack(a.props) || pinned) return {};
-    if (!a.source && a.attacker && a.attacker->monster) return {};  // ModelSource is the monster
     pinned = true;
     liveCommand = &a;
     commandSource = a.source;

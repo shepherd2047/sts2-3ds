@@ -4,7 +4,8 @@
 // atomic write (gfx_sdl.cpp / gfx_3ds.cpp) without depending on gfx.h, so this stays a plain
 // core module the headless sim and tests can link without a platform backend.
 //
-// PORT NOTE: nothing here calls save()/load() automatically. The C#'s ProgressSaveManager reads
+// PORT NOTE (n/a: owner): progress.sav is written at run save points and run end, not after every change.
+// Nothing here calls save()/load() automatically. The C#'s ProgressSaveManager reads
 // progress.save from a per-profile directory at startup and rewrites it after every change
 // (SaveProgress()); on this port profiles.cpp (Y4) loads the current slot's file in
 // profiles::init/select, and the app writes it through profiles::saveProgress() at every run

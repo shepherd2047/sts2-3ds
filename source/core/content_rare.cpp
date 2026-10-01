@@ -194,15 +194,14 @@ struct Mangle : IroncladT<Mangle> {
 // PORT NOTE: C# is MultiplayerConstraint.MultiplayerOnly; this build is
 // single-player only, so that restriction has nothing to gate against and is
 // dropped. AfterCardEnteredCombat reduces cost by the CardExhausted entries so far
-// (IsClone, a clone already carrying the reduction, is approximated by "has a
-// this-combat cost modifier": the engine has no CloneOf link).
+// (not for a clone, which already carries the reduction).
 struct Midnight : IroncladT<Midnight> {
   CARD_HEADER(Midnight, "MIDNIGHT", 12, Attack, Rare, AnyEnemy)
     addVar("Damage", 60);
   }
   Task<> onPlay(CardPlay& p) override { co_await attack(p.target, val("Damage")); }
   Task<> afterCardEnteredCombat(Card* card) override {
-    if (card != this || !combat || !costMods.empty()) return {};
+    if (card != this || !combat || isClone()) return {};
     addThisCombat(-combat->history.count(CombatHistoryEntry::CardExhausted));
     return {};
   }

@@ -10,7 +10,8 @@
 // Files: <root>profile<N>/history/<slot>.run, slot 00..49 (a ring: run number `seq` goes to slot
 // seq % 50, overwriting the oldest), one small Archive token-stream file per run, written with
 // the same tmp-then-rename as progress.sav.
-// PORT NOTE: the C# (Saves.Managers/RunHistorySaveManager) writes profile<N>/saves/history/
+// PORT NOTE (n/a: owner): a ring of 50 small records instead of one JSON file per run; fields nothing reads are dropped.
+// The C# (Saves.Managers/RunHistorySaveManager) writes profile<N>/saves/history/
 // <StartTime>.run JSON files and never prunes them; the port keeps a fixed ring of 50 so the SD
 // card sees one small write per run, and needs no directory listing (3DS SD listing is slow).
 // Dropped vs. the C# RunHistory: platform_type, the daily game mode (M12), build_id,

@@ -12,7 +12,8 @@
 //    (every monster of the current act beaten at least once) and AfterBossDefeated;
 //  - RunManager when the run ends (`afterRunEnded`): AchievementsHelper.AfterRunEnded.
 //
-// PORT NOTE: the decompiled AchievementsHelper and AchievementsUtil.Unlock have empty bodies (the
+// PORT NOTE (n/a: owner): the shipped AchievementsHelper / AchievementsUtil.Unlock bodies are empty, so the conditions below follow the loc texts.
+// The decompiled AchievementsHelper and AchievementsUtil.Unlock have empty bodies (the
 // shipped build strips them), so the conditions of the helper's achievements come from their loc
 // descriptions: <Character>Win = win with that character, NoRelicWin = win holding only starter
 // relics, AllCardsUpgraded = win with every upgradable deck card upgraded, FloorTenThousand = 10000

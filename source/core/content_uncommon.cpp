@@ -378,16 +378,15 @@ struct Stampede : IroncladT<Stampede> {
   void onUpgrade() override { cost -= 1; }
 };
 
-// Entering combat mid-turn, the cost drops by the Attack CardPlaysFinished this turn.
-// PORT NOTE: IsClone (a clone already carries the reduction) is approximated by "has a cost
-// modifier" (no CloneOf link on Card).
+// Entering combat mid-turn, the cost drops by the Attack CardPlaysFinished this turn (not for a
+// clone, which already carries the reduction).
 struct Stomp : IroncladT<Stomp> {
   CARD_HEADER(Stomp, "STOMP", 3, Attack, Uncommon, AllEnemies)
     addVar("Damage", 12);
   }
   Task<> onPlay(CardPlay&) override { co_await attackAll(val("Damage")); }
   Task<> afterCardEnteredCombat(Card* card) override {
-    if (card != this || !combat || !costMods.empty()) return {};
+    if (card != this || !combat || isClone()) return {};
     addThisTurn(-combat->history.countThisTurn(*combat, CombatHistoryEntry::CardPlayFinished,
                                                [](const CombatHistoryEntry& e) { return e.card->type == CardType::Attack; }));
     return {};

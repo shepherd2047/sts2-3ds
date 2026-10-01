@@ -41,7 +41,7 @@ enum AscensionLevel : int {
 
 enum class Side { Player, Enemy };
 enum class CardType { Attack, Skill, Power, Status, Curse, Quest };  // Quest: E2 (quests.cpp)
-enum class Rarity { Basic, Common, Uncommon, Rare, Ancient, Token, Status, Curse, Quest };
+enum class Rarity { Basic, Common, Uncommon, Rare, Ancient, Event, Token, Status, Curse, Quest };  // CardRarity order (no None)
 enum class TargetType { None, Self, AnyEnemy, AllEnemies, RandomEnemy };
 enum class PowerType { Buff, Debuff };
 enum class StackType { Counter, Single };
@@ -237,10 +237,14 @@ struct Model {
   // Added for the Necrobinder (X4.0): DoomPower.DoomKill / OstyCmd.Summon.
   virtual Task<> afterDiedToDoom(const std::vector<Creature*>&) { return {}; }
   virtual Task<> afterOstyRevived(Creature*) { return {}; }
+  // Hook.AfterHandEmptied (CombatManager.CheckForEmptyHand: after a card play or potion use outside
+  // any other card / potion effect, and on entering AutoPrePlay; Combat::checkForEmptyHand).
+  virtual Task<> afterHandEmptied() { return {}; }
   // Hook.ModifySummonAmount (OstyCmd.Summon, before anything happens; `source` is the summoning card /
   // relic / potion, or null) and Hook.AfterSummon (after the summon, with the modified amount).
-  virtual Dec modifySummonAmount(Creature* /*summoner*/, Dec amount, Model* /*source*/) { return amount; }
-  virtual Task<> afterSummon(Creature* /*summoner*/, Dec /*amount*/) { return {}; }
+  // (Single player: the summoner is always the player.)
+  virtual Dec modifySummonAmount(Dec amount, Model* /*source*/) { return amount; }
+  virtual Task<> afterSummon(Dec /*amount*/) { return {}; }
 
   // Added for the Regent (X3.0): Stars, the second resource, and Forge / Sovereign Blade.
   virtual int modifyStarCost(Card*, int cost) { return cost; }  // Hook.ModifyStarCost (TryModifyStarCost)
@@ -567,6 +571,16 @@ struct Card : Model {
   int baseReplayCount = 0;  // BaseReplayCount (Soldier's Stew): extra plays
   int maxUpgradeLevel = 1;
   bool isDupe = false;
+  // CardModel.CloneOf: the card createClone() copied (combat clones only; clone() copies it as is,
+  // like MemberwiseClone). Non-owning: combat cards live in Combat::cardStore until the fight ends.
+  Card* cloneOf = nullptr;
+  bool isClone() const { return cloneOf != nullptr; }
+  // CardModel.CreateClone: clone() + CloneOf = this (ExhaustOnNextPlay is not a port field).
+  std::unique_ptr<Card> createClone() const {
+    auto c = clone();
+    c->cloneOf = const_cast<Card*>(this);
+    return c;
+  }
   bool costsX = false;   // HasEnergyCostX
   int xValue = 0;        // captured X when played (ResolveEnergyXValue)
   int starCost = -1;         // CanonicalStarCost (Regent's Stars resource); -1 = no star cost
@@ -806,9 +820,14 @@ struct Monster : Model {
 
 // ---------------------------------------------------------------- creatures
 
+// HpDisplay (Entities.Creatures): how the HP bar shows; IsInfinite = either Infinite* value.
+enum class HpDisplay { Normal, InfiniteWithNumbers, InfiniteWithoutNumbers };
+
 struct Creature {
   std::string name;  // display
   int hp = 0, maxHp = 0, block = 0;
+  HpDisplay hpDisplay = HpDisplay::Normal;  // Creature.HpDisplay (Hardened Shell, Waterfall Giant)
+  bool hpInfinite() const { return hpDisplay != HpDisplay::Normal; }  // HpDisplay.IsInfinite()
   Side side = Side::Enemy;
   std::vector<std::unique_ptr<Power>> powers;
   std::unique_ptr<Monster> monster;
@@ -1056,6 +1075,11 @@ struct Combat {
   bool extraTurn = false;  // CombatTurnState.PlayersTakingExtraTurn is not empty (single player)
   bool inProgress = false, ending = false, over = false, won = false;
   bool playerPhase = false;  // UI may submit actions
+  // PlayerCombatState.Phase (PlayerTurnPhase): None outside the player's turn, Start (turn start
+  // hooks, the hand draw), AutoPrePlay, Play, AutoPostPlay, End (the end-of-turn hooks and flush).
+  enum class TurnPhase { None, Start, AutoPrePlay, Play, AutoPostPlay, End } phase = TurnPhase::None;
+  int cardOrPotionEffectDepth = 0;  // CombatManager.BeginCardOrPotionEffect nesting
+  Task<> checkForEmptyHand();       // CombatManager.CheckForEmptyHand -> Hook.AfterHandEmptied
   bool autoSelectFirst = false;  // VakuuCardSelector: cmd::selectCards takes the first options (Whispering Earring)
   std::string encounterId;
   bool isBoss = false, isElite = false;
@@ -1093,7 +1117,10 @@ struct Combat {
   Task<> endPlayerTurnPhaseTwo();
   void switchSides();
   Task<bool> checkWinCondition();
-  Task<> playCard(Card* c, Creature* target, bool autoPlay = false, bool forceExhaust = false);
+  // `spendResources` with autoPlay: CardModel.SpendResources first, then CardCmd.AutoPlay(skipXCapture)
+  // (Whispering Earring): an auto-play (IsAutoPlay hooks) that paid its cost and keeps the X it paid.
+  Task<> playCard(Card* c, Creature* target, bool autoPlay = false, bool forceExhaust = false,
+                  bool spendResources = false);
 
   std::vector<Card*>& pile(Pile p);
   Pile pileOf(Card* c);

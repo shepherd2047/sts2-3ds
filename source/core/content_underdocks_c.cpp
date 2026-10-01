@@ -45,8 +45,8 @@ struct SkittishPower : Power {
 
 // SkulkingColony: at most Amount HP can be lost per turn; the rest of every hit is ignored.
 // The counter resets when any side's turn starts.
-// PORT NOTE: HpDisplay.InfiniteWithNumbers (the HP bar showing infinity once the cap is
-// reached) and the power's DisplayAmount (remaining cap) have no counterpart.
+// Once the cap is reached the owner's HpDisplay turns InfiniteWithNumbers until the next turn.
+// PORT NOTE: the power's DisplayAmount (remaining cap) has no counterpart.
 struct HardenedShellPower : Power {
   POWER_HEADER(HardenedShellPower, "HARDENED_SHELL_POWER")
   int damageReceivedThisTurn = 0;
@@ -59,10 +59,12 @@ struct HardenedShellPower : Power {
   Task<> afterDamageReceived(Creature* target, const DamageResult& r, int, Creature*, Card*) override {
     if (target != owner || r.fullyBlocked) co_return;
     damageReceivedThisTurn += r.unblocked;
+    if (damageReceivedThisTurn >= amount) owner->hpDisplay = HpDisplay::InfiniteWithNumbers;
     co_return;
   }
   Task<> beforeSideTurnStart(Side, const std::vector<Creature*>&) override {
     damageReceivedThisTurn = 0;
+    owner->hpDisplay = HpDisplay::Normal;
     co_return;
   }
 };
@@ -185,17 +187,8 @@ struct TerrorEel : Monster {
     terror->followUp = crash;
     machine.start(crash);
   }
-  // PORT NOTE: the C# VigorPower is consumed after any powered attack command of its owner
-  // (AfterAttack); the shared engine VigorPower only consumes it on card attacks, so the eel's
-  // Crash takes off the Vigor it started with itself.
-  Task<> crashMove() {
-    int vigor = 0;
-    if (auto* v = creature->get<VigorPower>()) vigor = v->amount;
-    co_await attack(asc(kDeadlyEnemies, 18, 16));
-    if (vigor > 0) {
-      if (auto* v = creature->get<VigorPower>()) co_await cmd::modifyPowerAmount(v, Dec(-vigor), nullptr, nullptr);
-    }
-  }
+  // The Vigor from Thrash is spent by this attack (VigorPower.AfterAttack).
+  Task<> crashMove() { co_await attack(asc(kDeadlyEnemies, 18, 16)); }
   Task<> thrashMove() {
     co_await attack(asc(kDeadlyEnemies, 4, 3), 3);
     co_await applyToSelf<VigorPower>(6);

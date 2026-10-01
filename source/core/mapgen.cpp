@@ -19,26 +19,18 @@
 // as our rows 0..14 and appends the boss (row 15, col 3), then the second boss if
 // any (row 16, col 3).
 //
-// PORT NOTE: MapPoint.Children / MapPoint.parents are C# HashSet<MapPoint>,
-// whose enumeration order is an implementation detail. We approximate it with
-// insertion-ordered vectors (NodeSet below), which is deterministic and the
-// closest reasonable stand-in, but the exact map shape for a given seed is
-// not guaranteed to match the original bit-for-bit -- only the same *rules*
-// and same *sequence/kind* of Rng calls (NextInt/NextGaussianInt/shuffle
-// counts) are guaranteed, which is what keeps this in sync with the rest of
-// the port's Rng stream usage.
+// MapPoint.Children / MapPoint.parents (and ActMap.startMapPoints) are C# HashSet<MapPoint>s; NodeSet
+// below reproduces .NET's enumeration order: entries in slot order, a removed entry's slot reused
+// by the next Add (LIFO free list), so the map shape follows the C# for the same Rng draws.
 //
-// PORT NOTE: MapPathPruning.EnsureRowsContainsPointType and
-// AssignPointTypesToRandomRows exist in the decompiled source but are never
-// called from anywhere in StandardActMap's pipeline (dead code) -- they are
-// intentionally not ported, since porting unreachable code cannot affect the
-// Rng stream and would just be waste.
+// PORT NOTE (n/a: equivalent): MapPathPruning.EnsureRowsContainsPointType / AssignPointTypesToRandomRows are dead code in the C# (never called), so not ported.
 
 #include <algorithm>
 #include <climits>
 #include <cmath>
 #include <deque>
 #include <functional>
+#include <iterator>
 #include <map>
 #include <memory>
 #include <stdexcept>
@@ -56,18 +48,49 @@ enum class MPType { Unassigned, Unknown, Shop, Treasure, RestSite, Monster, Elit
 
 struct Node;
 
-// Insertion-ordered stand-in for C#'s HashSet<MapPoint> (see PORT NOTE above).
+// HashSet<MapPoint> with .NET's enumeration order (System.Collections.Generic.HashSet: an entries
+// array enumerated by index; Remove frees the slot onto a free list, Add takes the most recently
+// freed slot first, else appends). MapPoint has no Equals/GetHashCode override: reference identity.
 struct NodeSet {
-  std::vector<Node*> items;
-  bool contains(Node* n) const { return std::find(items.begin(), items.end(), n) != items.end(); }
-  void insert(Node* n) { if (!contains(n)) items.push_back(n); }
-  void erase(Node* n) { items.erase(std::remove(items.begin(), items.end(), n), items.end()); }
-  size_t size() const { return items.size(); }
-  bool empty() const { return items.empty(); }
-  std::vector<Node*>::iterator begin() { return items.begin(); }
-  std::vector<Node*>::iterator end() { return items.end(); }
-  std::vector<Node*>::const_iterator begin() const { return items.begin(); }
-  std::vector<Node*>::const_iterator end() const { return items.end(); }
+  std::vector<Node*> slots;  // nullptr = a freed slot
+  std::vector<size_t> freeList;
+  size_t count = 0;
+  bool contains(Node* n) const { return n && std::find(slots.begin(), slots.end(), n) != slots.end(); }
+  void insert(Node* n) {
+    if (contains(n)) return;
+    if (!freeList.empty()) { slots[freeList.back()] = n; freeList.pop_back(); }
+    else slots.push_back(n);
+    ++count;
+  }
+  void erase(Node* n) {
+    auto it = std::find(slots.begin(), slots.end(), n);
+    if (!n || it == slots.end()) return;
+    *it = nullptr;
+    freeList.push_back((size_t)(it - slots.begin()));
+    --count;
+  }
+  size_t size() const { return count; }
+  bool empty() const { return count == 0; }
+  struct iterator {  // skips freed slots
+    Node* const* p;
+    Node* const* e;
+    void skip() { while (p != e && !*p) ++p; }
+    Node* operator*() const { return *p; }
+    iterator& operator++() { ++p; skip(); return *this; }
+    bool operator==(const iterator& o) const { return p == o.p; }
+    bool operator!=(const iterator& o) const { return p != o.p; }
+    using difference_type = std::ptrdiff_t;
+    using value_type = Node*;
+    using pointer = Node* const*;
+    using reference = Node*;
+    using iterator_category = std::forward_iterator_tag;
+  };
+  iterator begin() const {
+    iterator it{slots.data(), slots.data() + slots.size()};
+    it.skip();
+    return it;
+  }
+  iterator end() const { return {slots.data() + slots.size(), slots.data() + slots.size()}; }
 };
 
 struct Node {
