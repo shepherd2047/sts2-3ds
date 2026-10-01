@@ -99,6 +99,32 @@ int main() {
     CHECK(h.character == "unchanged");
   }
 
+  {  // run history lists (record version 5): choices, downgraded cards, completed quests
+    history::RunRecord r = sample(), g;
+    auto& p = r.path[0][1];
+    p.cardChoices = {{"Bash", 1, true}, {"Cleave", 0, false}};
+    p.relicChoices = {{"Anchor", 0, true}, {"Vajra", 0, false}};
+    p.downgradedCards = {"Neutralize"};
+    p.completedQuests = {"Dowsing", "SpoilsMap"};
+    CHECK(g.load(r.save()));
+    const auto& q = g.path[0][1];
+    CHECK(q.cardChoices == p.cardChoices && q.relicChoices == p.relicChoices);
+    CHECK(q.downgradedCards == p.downgradedCards && q.completedQuests == p.completedQuests);
+    CHECK(g.path[0][0].cardChoices.empty() && g.path[0][3].completedQuests.empty());
+    CHECK(g.save() == r.save());
+    // A version 4 record (no CHOICES block) still loads, with empty lists.
+    std::string v5 = history::RunRecord(sample()).save(), old = v5;
+    size_t a = old.find(" CHOICES "), b = old.find(" DECK ");
+    CHECK(a != std::string::npos && b != std::string::npos && a < b);
+    old.erase(a, b - a);
+    size_t sp = old.find(' '), sp2 = old.find(' ', sp + 1);
+    old.replace(sp + 1, sp2 - sp - 1, "4");
+    history::RunRecord o;
+    CHECK(o.load(old));
+    CHECK(o == sample() && o.path[0][1].cardChoices.empty() && o.path[0][1].relicChoices.empty());
+    CHECK(o.deck.size() == 2 && o.relics.size() == 2 && o.maxPotionSlots == 2);
+  }
+
   {  // ScoreUtility.CalculateScore
     history::Path p = {
         {{PointType::Ancient, {{RoomKind::Event, "Neow"}}, 0},
@@ -174,6 +200,33 @@ int main() {
     CHECK(loaded.startTime == run.startTime);
     CHECK(loaded.runTime == 61.25);
     CHECK(loaded.save() == saved);
+
+    {  // the history lists ride in run.sav (version 11); a version 10 save loads without them
+      Run lists;
+      CHECK(lists.load(saved));
+      history::noteRelicChoice(lists, "Vajra", true);
+      history::noteRelicChoice(lists, "Anchor", false);
+      history::noteCardChoice(lists, "Bash", 1, false);
+      history::noteDowngraded(lists, "Strike");
+      history::noteQuestCompleted(lists, "Dowsing");
+      std::string s2 = lists.save();
+      Run again;
+      CHECK(again.load(s2));
+      const auto& pt = again.mapHistory.back().back();
+      CHECK(pt.relicChoices.size() == 2 && pt.relicChoices[0].id == "Vajra" && pt.relicChoices[0].picked && !pt.relicChoices[1].picked);
+      CHECK(pt.cardChoices.size() == 1 && pt.cardChoices[0].id == "Bash" && pt.cardChoices[0].upgrades == 1);
+      CHECK(pt.downgradedCards == std::vector<std::string>{"Strike"} && pt.completedQuests == std::vector<std::string>{"Dowsing"});
+      CHECK(again.save() == s2);
+      std::string v10 = saved;
+      size_t a = v10.find(" CHOICES "), b = v10.find(" END");
+      CHECK(a != std::string::npos && b != std::string::npos && a < b);
+      v10.erase(a, b - a);
+      size_t sp = v10.find(' '), sp2 = v10.find(' ', sp + 1);
+      v10.replace(sp + 1, sp2 - sp - 1, "10");
+      Run old;
+      CHECK(old.load(v10));
+      CHECK(old.mapHistory == run.mapHistory && old.mapHistory.back().back().relicChoices.empty());
+    }
 
     loaded.abandon();
     loaded.abandon();  // a second call records nothing

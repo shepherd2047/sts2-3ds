@@ -33,6 +33,7 @@ Task<> applyById(const char* powerId, Creature* target, Dec amount, Creature* ap
 // CreatureCmd.Escape: the creature leaves the room alive (no death hooks).
 // PORT NOTE (n/a: visual): the UI has no escape animation; the death animation is played instead.
 Task<> escapeCreature(Creature* c) {
+  c->combat->escapedEnemyIds.push_back(c->monster->id);  // CombatState.CreatureEscaped
   c->combat->push({VisualEvent::Death, c, 0});
   c->hp = 0;
   c->removed = true;
@@ -104,9 +105,9 @@ struct HeistPower : Power {
 
 // GremlinMerc: when it dies a Sneaky Gremlin and a Fat Gremlin (carrying the stolen gold)
 // take its place, so the fight goes on.
-// PORT NOTE: missing engine feature a per-combat gold proportion consumed by Run::combatRewards
-// (EncounterModel.CalculateGoldProportion with CombatState.EscapedCreatures: half the gold if Fat
-// Gremlin escapes, none if gold was stolen); GremlinMercNormal's is not implemented. The slots ("merc"/"sneaky"/"fat") are dropped too.
+// GremlinMercNormal.CalculateGoldProportion (Combat::goldProportion, combat.cpp): half the gold if the
+// Fat Gremlin escaped, none if it carries stolen gold (Combat::goldWasStolen, set below).
+// PORT NOTE (n/a: visual): the encounter slots ("merc"/"sneaky"/"fat") only place the scene's nodes; dropped.
 struct SurprisePower : Power {
   POWER_HEADER(SurprisePower, "SURPRISE_POWER")
   StackType stackType() const override { return StackType::Single; }
@@ -338,16 +339,18 @@ Task<> SurprisePower::afterDeath(Creature* target) {
   if (target != owner || !owner->combat) co_return;
   Combat& c = *owner->combat;
   std::vector<std::pair<int, Creature*>> heists;  // per ThieveryPower instance: its gold and Target
-  for (auto* th : owner->instances<ThieveryPower>()) heists.push_back({th->stolen, th->target});
-  // PORT NOTE: the C# creates the Fat Gremlin first (its HP is rolled first) and adds it
-  // after the Sneaky Gremlin; here it is created when added, so the HP rolls swap places.
+  int totalStolen = 0;
+  for (auto* th : owner->instances<ThieveryPower>()) { heists.push_back({th->stolen, th->target}); totalStolen += th->stolen; }
+  // The C# creates the Fat Gremlin first (its HP is rolled first), adds the Sneaky Gremlin, then the Fat one.
+  Creature* fat = c.createEnemy(mk<FatGremlin>(), false);
   co_await cmd::addMonster(c, mk<SneakyGremlin>());
-  Creature* fat = co_await cmd::addMonster(c, mk<FatGremlin>());
   for (auto& h : heists) {
     auto heist = std::make_unique<HeistPower>();
     heist->target = h.second;
     co_await cmd::applyPower(std::move(heist), fat, h.first, owner, nullptr);
   }
+  co_await cmd::joinMonster(c, fat);
+  if (totalStolen > 0 && c.encounterId == "GremlinMercNormal") c.goldWasStolen = true;  // MarkGoldStolen
 }
 
 // ================================================================ Haunted Ship

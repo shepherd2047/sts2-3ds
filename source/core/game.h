@@ -1053,6 +1053,11 @@ struct Combat {
   int cardsDrawnThisCombat = 0;  // CombatHistory CardDrawnEntry count (Murder, X1.4)
   int discardsThisTurn() const { return history.countThisTurn(*this, CombatHistoryEntry::CardDiscarded); }
 
+  // EncounterModel.SpawnedEnemies (distinct monster ids, set by createEnemy), CombatState.EscapedCreatures
+  // (monster ids, pushed by each escapeCreature) and GremlinMercNormal.GoldWasStolen.
+  std::vector<std::string> spawnedEnemyIds, escapedEnemyIds;
+  bool goldWasStolen = false;
+  float goldProportion() const;  // EncounterModel.CalculateGoldProportion (combat.cpp); Run::combatRewards scales monster-room gold
   int extraRewardGold = 0;  // CombatRoom.AddExtraReward(GoldReward) (RoyaltiesPower); Run::combatRewards adds the row
   int energy = 0, maxEnergy = 3;
   int stars = 0;  // PlayerCombatState.Stars (Regent's second resource; char_regent.h/.cpp)
@@ -1128,7 +1133,9 @@ struct Combat {
   std::vector<Card*> allCards();
   Card* addCard(std::unique_ptr<Card> c);
   // CombatState.CreateCreature + monster SetUpForCombat: unique HP, move machine.
-  Creature* createEnemy(std::unique_ptr<Monster> m);
+  // CombatState.CreateCreature (HP rolled now) + AddCreature; join = false leaves it out of `enemies` until
+  // cmd::joinMonster (SurprisePower creates the Fat Gremlin first, adds it last).
+  Creature* createEnemy(std::unique_ptr<Monster> m, bool join = true);
   void push(VisualEvent e) { events.push_back(std::move(e)); }
   Rng& rng(const char* stream);
 };
@@ -1170,11 +1177,13 @@ Task<> autoPlay(Combat& c, Card* card, Creature* target = nullptr);  // CardCmd.
 Task<Card*> transform(Combat& c, Card* card, std::unique_ptr<Card> into);  // CardCmd.Transform
 void upgradeCard(Card* card);  // CardCmd.Upgrade
 void downgradeCard(Card* card);  // CardCmd.Downgrade
+void completeQuest(Run& run, Card* questCard);  // PlayerCmd.CompleteQuest (quests.cpp): the map point's CompletedQuests
 Task<> addStatusCards(Combat& c, std::string cardId, Pile to, int count, bool byPlayer = false);  // byPlayer: creator == Owner
 Task<std::vector<Card*>> selectCards(Combat& c, std::string prompt, std::vector<Card*> options, int minCount, int maxCount);
 Task<> autoPlayFromDrawPile(Combat& c, int count, bool forceExhaust);
 // CreatureCmd.Add: a monster joins mid-combat (summons, splits).
 Task<Creature*> addMonster(Combat& c, std::unique_ptr<Monster> m);
+Task<> joinMonster(Combat& c, Creature* created);  // CreatureCmd.Add(creature) for one made by createEnemy(m, false)
 
 // CardCmd.Enchant: null if the enchantment can't go on this card (the C# throws). Adding the
 // same stackable enchantment again adds to its amount. CardCmd.ClearEnchantment.

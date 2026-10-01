@@ -199,7 +199,7 @@ Card* Combat::addCard(std::unique_ptr<Card> c) {
   return cardStore.back().get();
 }
 
-Creature* Combat::createEnemy(std::unique_ptr<Monster> m) {
+Creature* Combat::createEnemy(std::unique_ptr<Monster> m, bool join) {
   auto cr = std::make_unique<Creature>();
   cr->side = Side::Enemy;
   cr->combat = this;
@@ -219,10 +219,23 @@ Creature* Combat::createEnemy(std::unique_ptr<Monster> m) {
   m->buildMoves();          // MonsterModel.SetUpForCombat
   m->spawnedThisTurn = true;
   cr->name = m->locKey;
+  if (std::find(spawnedEnemyIds.begin(), spawnedEnemyIds.end(), m->id) == spawnedEnemyIds.end()) spawnedEnemyIds.push_back(m->id);  // OnCreatureSpawned
   cr->monster = std::move(m);
-  enemies.push_back(cr.get());
+  Creature* raw = cr.get();
+  if (join) enemies.push_back(raw);
   ownedEnemies.push_back(std::move(cr));
-  return enemies.back();
+  return raw;
+}
+
+// EncounterModel.CalculateGoldProportion: the share of spawned enemy kinds that did not escape;
+// GremlinMercNormal: all of it unless a Fat Gremlin escaped, then half, or none if the Merc stole gold.
+float Combat::goldProportion() const {
+  if (encounterId == "GremlinMercNormal") {
+    bool fatEscaped = std::find(escapedEnemyIds.begin(), escapedEnemyIds.end(), "FatGremlin") != escapedEnemyIds.end();
+    return !fatEscaped ? 1.f : goldWasStolen ? 0.f : 0.5f;
+  }
+  if (spawnedEnemyIds.empty()) return 1.f;  // (the C# would divide by zero)
+  return 1.f - (float)escapedEnemyIds.size() / (float)spawnedEnemyIds.size();
 }
 
 std::vector<Creature*> Combat::aliveEnemies() {
@@ -943,13 +956,24 @@ Task<> autoPlayFromDrawPile(Combat& c, int count, bool forceExhaust) {
   }
 }
 
-Task<Creature*> addMonster(Combat& c, std::unique_ptr<Monster> m) {
-  Creature* cr = c.createEnemy(std::move(m));
-  // CombatManager.AfterCreatureAdded
+namespace {
+// CombatManager.AfterCreatureAdded
+Task<> afterMonsterJoined(Combat& c, Creature* cr) {
   co_await cr->monster->afterAddedToRoom();
   if (c.currentSide == Side::Player) cr->monster->rollMove(c.rng("MonsterAi"));
   for (Model* l : c.listeners()) co_await l->afterCreatureAddedToCombat(cr);
+}
+}  // namespace
+
+Task<Creature*> addMonster(Combat& c, std::unique_ptr<Monster> m) {
+  Creature* cr = c.createEnemy(std::move(m));
+  co_await afterMonsterJoined(c, cr);
   co_return cr;
+}
+
+Task<> joinMonster(Combat& c, Creature* cr) {
+  c.enemies.push_back(cr);
+  co_await afterMonsterJoined(c, cr);
 }
 
 Side Attack::targetSide() const {

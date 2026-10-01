@@ -247,6 +247,11 @@ Task<> Run::enterShop() {
     badges::noteGoldSpent(*this, spent);  // PlayerMapPointHistoryEntry.GoldSpent (M7, KACHING)
     for (Model* m : listeners()) co_await m->afterItemPurchased(spent);
   }
+  // MerchantRoom.Exit: the stock that was not bought goes to CardChoices / RelicChoices (not picked).
+  for (auto& it : shop) {
+    if (it.card) history::noteCardChoice(*this, it.card->id, it.card->upgradeLevel, false);
+    if (it.relic) history::noteRelicChoice(*this, it.relic->id, false);
+  }
   shop.clear();
 }
 

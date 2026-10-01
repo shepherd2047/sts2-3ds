@@ -201,12 +201,12 @@ struct WarHistorianRepy : Event {
   }
   void removeFirstLanternKey() {
     for (auto& c : run->deck)
-      if (c->id == "LanternKey") { run->removeCardFromDeck(c.get()); return; }
+      if (c->id == "LanternKey") { cmd::completeQuest(*run, c.get()); run->removeCardFromDeck(c.get()); return; }
   }
   void removeAllLanternKeys() {
     std::vector<Card*> keys;
     for (auto& c : run->deck) if (c->id == "LanternKey") keys.push_back(c.get());
-    for (Card* c : keys) run->removeCardFromDeck(c);
+    for (Card* c : keys) { cmd::completeQuest(*run, c); run->removeCardFromDeck(c); }
   }
 };
 

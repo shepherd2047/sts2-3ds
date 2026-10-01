@@ -33,6 +33,7 @@ std::vector<Card*> upgradableSample(Run& r, Rng& rng, int n) {
 // CreatureCmd.Escape: the creature leaves the room alive (no death hooks).
 // PORT NOTE (n/a: visual): the UI has no escape animation; the death animation is played instead.
 Task<> escapeCreature(Creature* c) {
+  c->combat->escapedEnemyIds.push_back(c->monster->id);  // CombatState.CreatureEscaped
   c->combat->push({VisualEvent::Death, c, 0});
   c->hp = 0;
   c->removed = true;

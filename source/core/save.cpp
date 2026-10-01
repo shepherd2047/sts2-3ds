@@ -12,7 +12,7 @@ namespace sts {
 
 namespace {
 
-constexpr int kSaveVersion = 10;  // 10: every act's RoomSet (older: the current act's queues, later acts regenerated), 2: card enchantments, 3: character id, 4: ascension (older saves load as Ironclad / ascension 0), 5: act list (older: Overgrowth, Hive, Glory), 6: run history path + times (M2; older: empty path), 7: badge inputs per map point + CCCCOMBO (M7; older: untracked points), 8: modifiers, custom mode, seed text, "?" elite odds (M11; older: none), 9: daily date (M12; older: not daily)
+constexpr int kSaveVersion = 11;  // 11: run history lists per map point (card / relic choices, downgraded cards, completed quests; older: none), 10: every act's RoomSet (older: the current act's queues, later acts regenerated), 2: card enchantments, 3: character id, 4: ascension (older saves load as Ironclad / ascension 0), 5: act list (older: Overgrowth, Hive, Glory), 6: run history path + times (M2; older: empty path), 7: badge inputs per map point + CCCCOMBO (M7; older: untracked points), 8: modifiers, custom mode, seed text, "?" elite odds (M11; older: none), 9: daily date (M12; older: not daily)
 
 void ioCard(Archive& a, std::unique_ptr<Card>& c) {
   std::string id = c ? c->id : "";
@@ -238,6 +238,10 @@ void ioRun(Archive& a, Run& r) {
   if (version >= 9) {  // M12: GameMode.Daily (RunManager.DailyTime): the daily's date ("" when not daily)
     a.tag("DAILY");
     a.io(r.dailyDate);
+  }
+  if (version >= 11) {  // history.h lists: card / relic choices, downgraded cards, completed quests
+    a.tag("CHOICES");
+    history::ioPathLists(a, r.mapHistory);
   }
   a.tag("END");
 }
