@@ -88,6 +88,8 @@ std::string App::describe(Card* c) {
       base = d.toInt();
       canonical = base;
       shown = cb ? std::max(0, cb->modifyBlock(cb->player, d, kMove, c).toInt()) : base;
+    } else if (cb && c->calcMultiplier && name.rfind("Calculated", 0) == 0) {
+      base = shown = canonical = c->calculatedBlock().toInt();  // CalculatedVar (CalculatedHits, ...)
     } else if (!v) {
       return "?";
     } else if (name == "Damage") {

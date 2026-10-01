@@ -677,6 +677,7 @@ Task<> Run::usePotion(int slot, Creature* target) {
   if (p->combat) p->combat->push({VisualEvent::Anim, player.get(), 0, "Cast"});
   co_await wait(0.2);
   co_await p->onUse(target);
+  if (p->combat && player->alive()) p->combat->history.potionUsed(*p->combat, p->id, target);  // History.PotionUsed
   for (Model* m : listeners()) co_await m->afterPotionUsed();  // Hook.AfterPotionUsed
   if (p->combat) co_await p->combat->checkWinCondition();
 }

@@ -193,16 +193,19 @@ struct Mangle : IroncladT<Mangle> {
 
 // PORT NOTE: C# is MultiplayerConstraint.MultiplayerOnly; this build is
 // single-player only, so that restriction has nothing to gate against and is
-// dropped. AfterCardEnteredCombat reduces cost by the number of cards already
-// exhausted this combat (from CombatManager.History); this engine keeps no
-// such history log, so that one-time reduction is approximated as 0 (the
-// running per-exhaust reduction below is tracked exactly, via the same hook
-// on every other card).
+// dropped. AfterCardEnteredCombat reduces cost by the CardExhausted entries so far
+// (IsClone, a clone already carrying the reduction, is approximated by "has a
+// this-combat cost modifier": the engine has no CloneOf link).
 struct Midnight : IroncladT<Midnight> {
   CARD_HEADER(Midnight, "MIDNIGHT", 12, Attack, Rare, AnyEnemy)
     addVar("Damage", 60);
   }
   Task<> onPlay(CardPlay& p) override { co_await attack(p.target, val("Damage")); }
+  Task<> afterCardEnteredCombat(Card* card) override {
+    if (card != this || !combat || !costMods.empty()) return {};
+    addThisCombat(-combat->history.count(CombatHistoryEntry::CardExhausted));
+    return {};
+  }
   Task<> afterCardExhausted(Card*, bool) override {
     addThisCombat(-1);
     return {};
@@ -306,27 +309,23 @@ struct Tank : IroncladT<Tank> {
   void onUpgrade() override { cost -= 1; }
 };
 
-// PORT NOTE: CalculatedHits' multiplier queries CombatManager.History for
-// DamageReceivedEntry count against the owner; this engine keeps no combat
-// history log, so an equivalent running counter is kept directly on the card
-// instance (which persists for the whole combat) via afterDamageReceived.
+// CalculatedHits = 1 + the owner's DamageReceived entries with unblocked damage this combat.
 struct TearAsunder : IroncladT<TearAsunder> {
-  int timesHit = 0;
   CARD_HEADER(TearAsunder, "TEAR_ASUNDER", 2, Attack, Rare, AnyEnemy)
     addVar("Damage", 5);
     addVar("Repeat", 1);
     addVar("CalculationBase", 0);
     addVar("CalculationExtra", 1);
-    addVar("CalculatedHits", 1);  // shown in the description during combat
+    addVar("CalculatedHits", 1);
+    calcMultiplier = [](Card* c) {
+      if (!c->combat) return 1;
+      Creature* me = c->combat->player;
+      return 1 + c->combat->history.count([me](const CombatHistoryEntry& e) {
+        return e.kind == CombatHistoryEntry::DamageReceived && e.actor == me && e.unblocked > 0;
+      });
+    };
   }
-  Task<> afterDamageReceived(Creature* target, const DamageResult& r, int, Creature*, Card*) override {
-    if (target == me() && r.unblocked > 0) {
-      ++timesHit;
-      if (auto* v = var("CalculatedHits")) v->base = v->canonical = 1 + timesHit;
-    }
-    return {};
-  }
-  Task<> onPlay(CardPlay& p) override { co_await attack(p.target, val("Damage"), 1 + timesHit); }
+  Task<> onPlay(CardPlay& p) override { co_await attack(p.target, val("Damage"), calculatedBlock().toInt()); }
   void onUpgrade() override { upgradeVar("Damage", 2); }
 };
 

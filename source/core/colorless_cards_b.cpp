@@ -32,17 +32,15 @@ struct NoBlockPower : Power {
 
 // NostalgiaPower.cs: the first Amount Attacks / Skills played each turn go on top of the draw pile instead
 // of the discard pile.
-// PORT NOTE: the C# counts CardPlaysStarted entries of the turn (including plays from before the power was
-// applied); this power counts the owner's Attack / Skill plays itself, from its application on. The
-// AfterModifyingCardPlayResultLocation flash is done in the modify hook.
+// Counts the Attack / Skill CardPlaysStarted entries of the turn (the card being resolved has none yet).
+// PORT NOTE: the AfterModifyingCardPlayResultLocation flash is done in the modify hook.
 struct NostalgiaPower : Power {
   POWER_HEADER(NostalgiaPower, "NOSTALGIA_POWER")
-  int countRound = -1, count = 0;
-  int playsThisTurn() const { return countRound == owner->combat->roundNumber ? count : 0; }
-  Task<> beforeCardPlayed(const CardPlay& p) override {
-    if (ownerOf(p.card) != owner || (p.card->type != CardType::Attack && p.card->type != CardType::Skill)) co_return;
-    if (countRound != owner->combat->roundNumber) { countRound = owner->combat->roundNumber; count = 0; }
-    ++count;
+  int playsThisTurn() const {
+    Combat* c = owner->combat;
+    return c->history.countThisTurn(*c, CombatHistoryEntry::CardPlayStarted, [](const CombatHistoryEntry& e) {
+      return e.card->type == CardType::Attack || e.card->type == CardType::Skill;
+    });
   }
   Pile modifyCardPlayResultLocation(Card* card, bool, Pile pile) override {
     if (ownerOf(card) != owner) return pile;

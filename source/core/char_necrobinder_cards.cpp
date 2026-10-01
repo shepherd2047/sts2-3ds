@@ -114,15 +114,17 @@ struct Fear : IroncladT<Fear> {
 // Flatten.cs: OstyAttack, deal 12 (+4 upgraded) Osty damage; costs 0 for the rest of the turn once
 // Osty has landed an attack this turn (AfterCardEnteredCombat covers the card being drawn/added
 // after that already happened; AfterAttack covers it happening while the card is already in hand).
-// PORT NOTE: the C# tracks "has Osty attacked this turn" via a CombatHistory query
-// (CreatureAttackedEntry); this engine has no such history, so a per-card flag reset on
-// afterPlayerTurnStart is used instead -- same observable behaviour for a single Flatten copy.
 struct Flatten : IroncladT<Flatten> {
   CARD_HEADER(Flatten, "FLATTEN", 2, Attack, Common, AnyEnemy)
     tags = tagOstyAttack;
     addVar("OstyDamage", 12);
   }
-  bool ostyAttackedThisTurn = false;
+  // A CreatureAttacked entry by Osty this turn.
+  bool hasOstyAttackedThisTurn() const {
+    return combat && combat->osty && combat->history.countThisTurn(*combat, CombatHistoryEntry::CreatureAttacked, [&](const CombatHistoryEntry& e) {
+      return e.actor == combat->osty;
+    }) > 0;
+  }
   Task<> onPlay(CardPlay& p) override {
     cmd::Attack a;
     a.damagePerHit = val("OstyDamage");
@@ -132,19 +134,12 @@ struct Flatten : IroncladT<Flatten> {
     co_await a.execute(*combat);
   }
   void onUpgrade() override { upgradeVar("OstyDamage", 4); }
-  Task<> afterPlayerTurnStart() override {
-    ostyAttackedThisTurn = false;
-    return {};
-  }
   Task<> afterCardEnteredCombat(Card* card) override {
-    if (card == this && ostyAttackedThisTurn) setThisTurn(0);
+    if (card == this && hasOstyAttackedThisTurn()) setThisTurn(0);
     return {};
   }
   Task<> afterAttack(Creature* attacker) override {
-    if (combat && attacker == combat->osty) {
-      ostyAttackedThisTurn = true;
-      setThisTurn(0);
-    }
+    if (combat && attacker && attacker == combat->osty) setThisTurn(0);
     return {};
   }
 };

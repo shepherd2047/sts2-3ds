@@ -211,9 +211,8 @@ struct Arsenal : IroncladT<Arsenal> {
 // BeatIntoShape.cs: 1 cost, Attack, AnyEnemy. Damage 5, then Forge CalculationBase 5 +
 // CalculationExtra 5 per powered attack damage the player dealt this turn to the target,
 // not counting the hit(s) this card just made.
-// PORT NOTE: the multiplier reads Combat::damageHistory (a one-vector hook for the C#'s
-// DamageReceivedEntry history). The multiplier needs the target; before the card is played
-// (card text preview) it has none and counts 0.
+// PORT NOTE: the multiplier needs the target (Card::calcMultiplier has none); before the card is
+// played (card text preview) it has none and counts 0.
 struct BeatIntoShape : IroncladT<BeatIntoShape> {
   CARD_HEADER(BeatIntoShape, "BEAT_INTO_SHAPE", 1, Attack, Rare, AnyEnemy)
     addVar("Damage", 5);
@@ -225,11 +224,9 @@ struct BeatIntoShape : IroncladT<BeatIntoShape> {
   Creature* lastTarget = nullptr;
   int hitsOn(Creature* target) const {
     if (!target || !combat) return 0;
-    int n = 0;
-    for (auto& e : combat->damageHistory)
-      if (e.receiver == target && e.dealer == combat->player && isPoweredAttack(e.props) &&
-          e.round == combat->roundNumber && e.side == combat->currentSide) ++n;
-    return n;
+    return combat->history.countThisTurn(*combat, CombatHistoryEntry::DamageReceived, [&](const CombatHistoryEntry& e) {
+      return e.actor == target && e.other == combat->player && isPoweredAttack(e.props);
+    });
   }
   Task<> onPlay(CardPlay& p) override {
     lastTarget = p.target;

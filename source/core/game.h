@@ -13,6 +13,7 @@
 #include <string>
 #include <vector>
 
+#include "combat_history.h"
 #include "dec.h"
 #include "history.h"
 #include "rng.h"
@@ -878,31 +879,18 @@ struct Combat {
   std::vector<std::unique_ptr<Power>> graveyard;  // removed powers, freed with the combat
   std::vector<std::unique_ptr<Enchantment>> enchantGraveyard;  // cleared enchantments (listener snapshots may still hold them)
   std::vector<std::unique_ptr<Affliction>> afflictGraveyard;   // cleared afflictions (same reason)
-  // CombatHistory.CardAfflicted entries (round + side), for ChainsOfBindingPower's per-turn count.
-  struct AfflictEntry { int round; Side side; Card* card; std::string afflictionId; };
-  std::vector<AfflictEntry> afflictHistory;
+  CombatHistory history;  // CombatManager.History (combat_history.h)
+  // CardAfflicted entries this turn (ChainsOfBindingPower's per-turn count).
   int afflictionsThisTurn(const char* afflictionId) const {
-    int n = 0;
-    for (auto& e : afflictHistory) if (e.round == roundNumber && e.side == currentSide && e.afflictionId == afflictionId) ++n;
-    return n;
+    return history.countThisTurn(*this, CombatHistoryEntry::CardAfflicted, [&](const CombatHistoryEntry& e) { return e.id == afflictionId; });
   }
   int skillPlaysStartedThisTurn = 0;  // CombatHistory.CardPlaysStarted of Skills this turn (SmoggyPower)
   bool debugAfflictDone = false;      // STS_AFFLICT / SIM_AFFLICT applied (combat.cpp)
   std::vector<Creature*> stayingDead;             // being killed but not leaving (illusions)
   std::vector<Card*> draw, hand, discard, exhaust, play;
-  // CombatHistory.CardDiscarded entries (round + side they happened in), for "discarded this turn".
-  struct DiscardEntry { int round; Side side; Card* card; };
-  std::vector<DiscardEntry> discardHistory;
   int cardsDrawnThisCombat = 0;  // CombatHistory CardDrawnEntry count (Murder, X1.4)
-  int discardsThisTurn() const {
-    int n = 0;
-    for (auto& e : discardHistory) if (e.round == roundNumber && e.side == currentSide) ++n;
-    return n;
-  }
+  int discardsThisTurn() const { return history.countThisTurn(*this, CombatHistoryEntry::CardDiscarded); }
 
-  // CombatHistory.DamageReceived entries (BeatIntoShape); one per DamageResult.
-  struct DamageEntry { int round; Side side; Creature* receiver; Creature* dealer; int props; };
-  std::vector<DamageEntry> damageHistory;
   int extraRewardGold = 0;  // CombatRoom.AddExtraReward(GoldReward) (RoyaltiesPower); Run::combatRewards adds the row
   int energy = 0, maxEnergy = 3;
   int stars = 0;  // PlayerCombatState.Stars (Regent's second resource; char_regent.h/.cpp)
@@ -913,7 +901,6 @@ struct Combat {
   int turnNumber = 1, roundNumber = 1;
   int cardsPlayedThisTurn = 0;  // CombatHistory.CardPlaysStarted this turn (player)
   int skillsFinishedThisTurn = 0;  // CardPlaysFinished of Skills this turn (LunarBlast, X3.3a)
-  int etherealPlaysFinished = 0;  // CardPlaysFinished with WasEthereal, whole combat (BansheesCry, X4.4)
   int attackPlaysFinishedThisTurn = 0;  // CombatHistory.CardPlaysFinished this turn: Attack plays (Finisher, X1.3a)
   int cardPlaysFinishedThisCombat = 0;  // CombatHistory.CardPlaysFinished, whole combat (GoldAxe, A1a)
   int cardPlaysFinishedThisTurn = 0;  // CardPlaysFinished of all types this turn, bumped before AfterCardPlayed (PaleBlueDot, X3.3b)

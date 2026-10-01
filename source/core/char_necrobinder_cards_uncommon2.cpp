@@ -35,17 +35,19 @@ struct HauntPower : Power {
 };
 
 // LethalityPower.cs: Buff, Counter. The first Attack played each turn deals Amount% more damage.
-// PORT NOTE: the C# counts CardPlaysStarted of Attacks this turn (minus the card in play) and skips
-// CurrentPlayIndex > 0. Combat::attackPlaysFinishedThisTurn (one per repeat) stands in for the
-// earlier plays, so a replayed first attack only gets the bonus on its first play, as in the C#.
+// Counts the Attack CardPlaysStarted this turn (the card in play counts itself) and skips a card
+// replayed past its first play (CurrentPlayIndex > 0, read from its current CardPlayStarted entry).
 struct LethalityPower : Power {
   POWER_HEADER(LethalityPower, "LETHALITY_POWER")
   Dec modifyDamageMultiplicative(Creature*, Dec, int props, Creature*, Card* src) override {
     if (!isPoweredAttack(props) || !src || ownerOf(src) != owner) return 1;
     Combat* c = owner->combat;
     bool inPlay = c->pileOf(src) == Pile::Play;
-    int limit = (inPlay && src->type != CardType::Attack) ? 1 : 0;
-    if (c->attackPlaysFinishedThisTurn > limit) return 1;
+    if (inPlay)
+      if (auto* p = c->history.currentPlay(*c, src); p && p->playIndex > 0) return 1;
+    int n = c->history.countThisTurn(*c, CombatHistoryEntry::CardPlayStarted,
+                                     [](const CombatHistoryEntry& e) { return e.card->type == CardType::Attack; });
+    if (n > (inPlay ? 1 : 0)) return 1;
     return Dec(1) + Dec(amount) / Dec(100);
   }
 };
@@ -226,25 +228,19 @@ struct Parse : IroncladT<Parse> {
 
 // PullFromBelow.cs: deal 5 (+2 upgraded) damage once per Ethereal card played this combat
 // (CalculationBase 0 + CalculationExtra 1 per CardPlayFinishedEntry with WasEthereal).
-// PORT NOTE: no card-play history entries with an Ethereal flag; each card counts the Ethereal plays it
-// has itself observed (afterCardPlayed), so a copy generated mid-combat misses the earlier ones.
 struct PullFromBelow : IroncladT<PullFromBelow> {
   CARD_HEADER(PullFromBelow, "PULL_FROM_BELOW", 1, Attack, Uncommon, AnyEnemy)
     addVar("Damage", 5);
     addVar("CalculationBase", 0);
     addVar("CalculationExtra", 1);
     addVar("CalculatedHits", 0);
-    calcMultiplier = [](Card* c) { return static_cast<PullFromBelow*>(c)->etherealPlays; };
+    calcMultiplier = [](Card* c) {
+      return c->combat ? c->combat->history.count([](const CombatHistoryEntry& e) {
+        return e.kind == CombatHistoryEntry::CardPlayFinished && e.flag;  // WasEthereal
+      }) : 0;
+    };
   }
-  int etherealPlays = 0;
-  Task<> afterCardPlayed(const CardPlay& p) override {
-    if (p.card->has(kwEthereal)) ++etherealPlays;
-    return {};
-  }
-  Task<> onPlay(CardPlay& p) override {
-    int hits = (val("CalculationBase") + val("CalculationExtra") * Dec(etherealPlays)).toInt();
-    co_await attack(p.target, val("Damage"), hits);
-  }
+  Task<> onPlay(CardPlay& p) override { co_await attack(p.target, val("Damage"), calculatedBlock().toInt()); }
   void onUpgrade() override { upgradeVar("Damage", 2); }
 };
 
@@ -264,8 +260,6 @@ struct Putrefy : IroncladT<Putrefy> {
 
 // Rattle.cs: OstyAttack. Osty hits 7 (+2 upgraded) damage 1 + (Osty attacks this turn) times
 // (CalculationBase 0 + CalculationExtra 1 per CreatureAttackedEntry by Osty this turn, plus 1).
-// PORT NOTE: no attack history; each card counts the Osty attacks it observed this turn
-// (Model::afterAttack), so a copy generated mid-turn misses the earlier ones.
 struct Rattle : IroncladT<Rattle> {
   CARD_HEADER(Rattle, "RATTLE", 1, Attack, Uncommon, AnyEnemy)
     tags = tagOstyAttack;
@@ -274,23 +268,17 @@ struct Rattle : IroncladT<Rattle> {
     addVar("CalculationExtra", 1);
     addVar("CalculatedHits", 0);
     calcMultiplier = [](Card* c) {
-      auto* r = static_cast<Rattle*>(c);
-      return 1 + (r->combat && r->attackTurn == r->combat->turnNumber ? r->attackCount : 0);
+      Combat* cb = c->combat;
+      if (!cb) return 1;
+      return 1 + cb->history.countThisTurn(*cb, CombatHistoryEntry::CreatureAttacked,
+                                           [cb](const CombatHistoryEntry& e) { return cb->osty && e.actor == cb->osty; });
     };
-  }
-  int attackTurn = -1, attackCount = 0;
-  Task<> afterAttack(Creature* attacker) override {
-    if (!combat || !combat->osty || attacker != combat->osty) return {};
-    if (attackTurn != combat->turnNumber) { attackTurn = combat->turnNumber; attackCount = 0; }
-    ++attackCount;
-    return {};
   }
   Task<> onPlay(CardPlay& p) override {
     if (ostyMissing(*combat)) co_return;
-    int seen = attackTurn == combat->turnNumber ? attackCount : 0;
     cmd::Attack a;
     a.damagePerHit = val("OstyDamage");
-    a.hits = (val("CalculationBase") + val("CalculationExtra") * Dec(1 + seen)).toInt();
+    a.hits = calculatedBlock().toInt();
     a.attacker = combat->osty;
     a.source = this;
     a.single = p.target;
