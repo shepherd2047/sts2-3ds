@@ -22,7 +22,8 @@ namespace ui {
 // count) can go there early with 确认. Keys: D-pad moves the focus through the grid and down into the
 // bar, A picks / presses, X shows the focused card's detail, B leaves the review / cancels (when
 // allowed) / drops the focus. The rules (DeckChoice, Run::upgradeChoice) are unchanged.
-// PORT NOTE: the enchant prompt shows the card large, not enchanted (DeckChoice carries no id).
+// PORT NOTE: the enchant prompt shows the card large, not enchanted; needs DeckChoice (core/game.h) to carry the
+// enchantment id + amount (set by Run::selectForEnchantment) so the preview can show the card with it applied.
 namespace {
 constexpr float kGS = 0.46f, kGW = 120 * kGS, kGH = 169 * kGS, kGRow = kGH + 8;  // F5 grid mini
 constexpr int kGPerRow = 5;
@@ -584,7 +585,7 @@ App::ChooseOneSpec App::combatChooseOneSpec() const {
 // Keys: D-pad moves the focus through the strip / grid / bar, A or X on a card opens its detail
 // (C# HolderPressed -> ShowCardDetail), B / Y close. Touch: the first tap focuses a card, a tap on
 // the focused card opens its detail. Rules are untouched: the view only reads the deck / piles.
-// PORT NOTE: 拼音顺序 compares titles by code point (the C# uses the zh-CN culture's collation), as M8.
+// PORT NOTE: 拼音顺序 compares titles by code point; needs a pinyin collation table (the C# uses the zh-CN culture's collation), as M8.
 namespace {
 constexpr int kVTab0 = 1401, kVSort0 = 1411, kVBack = 1421, kVUpgrades = 1422, kVDetail = 1423, kVRelics = 1424;
 constexpr float kVStripY = 2, kVStripH = 32;

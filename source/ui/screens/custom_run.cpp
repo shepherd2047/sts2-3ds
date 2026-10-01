@@ -8,8 +8,8 @@
 // (the 3DS software keyboard, gfx::textInput; an empty seed = a random one at embark), Y
 // randomize (NCustomRunRandomizeButton: a random character and ModifierModel.Pick2Good1Bad),
 // START embark, B back. STS_OPEN_CUSTOM=1 opens it from the title (automated previews).
-// PORT NOTE: the seed keeps only SeedHelper characters (after CanonicalizeSeed), since saves are
-// whitespace-separated tokens; the C#'s LineEdit takes any text.
+// PORT NOTE (n/a: equivalent): the seed keeps only SeedHelper characters (after CanonicalizeSeed), which is what the
+// run uses anyway; the C#'s LineEdit only displays other text.
 #include <cstring>
 
 #include "../../core/modifiers.h"

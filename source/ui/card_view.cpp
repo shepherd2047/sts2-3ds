@@ -102,7 +102,7 @@ void App::drawCard(Card* c, float x, float y, float s, bool dim, bool desc, bool
     R().text(x - 7 * s + os / 2, y - 7 * s + (os - R().lineHeight(F16) * ct.scale) / 2, unseen ? std::string("?") : c->costsX ? std::string("X") : num(shownCost), ct);
   }
 
-  // Affliction overlay (A4, NCard's cards/overlays/afflictions/<id> scene). PORT NOTE: the game's
+  // Affliction overlay (A4, NCard's cards/overlays/afflictions/<id> scene). PORT NOTE (n/a: visual): the game's
   // overlays are animated shader scenes; here a purple wash over the art and a tag with the
   // affliction's name (and its amount when it stacks) along the art's bottom edge.
   if (c->affliction && !unseen) {
