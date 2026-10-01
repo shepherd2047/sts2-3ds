@@ -10,14 +10,16 @@
 //
 // PORT NOTE: dropped vs. the C#'s SerializableProgress:
 //  - UniqueId, EnableFtues/FtueCompleted (no FTUE package yet, tracked separately if it lands),
-//  - Epochs / TotalUnlocks / PendingCharacterUnlock / WongoPoints / ArchitectDamage / CurrentScore
+//  - Epochs / TotalUnlocks / PendingCharacterUnlock / WongoPoints / CurrentScore
 //    (the score-bar meta-unlock system; n/a per the owner's decision that everything is unlocked
 //    from the start),
 //  - PreferredMultiplayerAscension / MaxMultiplayerAscension / TestSubjectKills (multiplayer; n/a),
-//  - per-character PreferredAscension / FastestWinTime / Playtime / Badges, and
-//    DiscoveredEvents / DiscoveredActs / EncounterStats / EnemyStats / AncientStats (fine-grained
-//    history nobody reads yet; M2's run history and M5's achievements can extend this file's
-//    version when they need them -- `counters` covers simple tallies in the meantime).
+//  - per-character PreferredAscension / Badges, and DiscoveredActs / EncounterStats / CardStats
+//    (fine-grained history nobody reads yet; `counters` covers simple tallies in the meantime).
+//  - EnemyStats keeps wins/losses per enemy, not per enemy and character (FightStats.Character).
+//  Kept since version 4 (M-stats): TotalPlaytime, ArchitectDamage, per-character Playtime and
+//  FastestWinTime, DiscoveredEvents, EnemyStats (monster kill counts). The overall win streak is
+//  derived like ProgressState.BestWinStreak (the best character streak), not stored.
 #pragma once
 #include <cstdint>
 #include <map>
@@ -26,6 +28,8 @@
 
 namespace sts {
 
+struct Combat;
+
 // Per-character record (CharacterStats in the C#).
 struct CharacterProgress {
   int wins = 0;
@@ -33,12 +37,23 @@ struct CharacterProgress {
   int currentStreak = 0;
   int bestStreak = 0;
   int maxAscension = 0;  // highest ascension level ever won at (0-10)
+  // M-stats: CharacterStats.Playtime (seconds, every run) and FastestWinTime (-1 = none).
+  int64_t playtime = 0;
+  int64_t fastestWin = -1;
+};
+
+// EnemyStats (TotalWins / TotalLosses): fights won / lost against one monster id.
+struct EnemyProgress {
+  int wins = 0;
+  int losses = 0;
 };
 
 struct Progress {
   // 2 (M12): the local daily run best scores (older files: none).
   // 3 (M5): unlocked achievements + unlock times, monsters defeated (older files: none).
-  static constexpr int kVersion = 3;
+  // 4 (M-stats): playtime, architect damage, enemy kill counts, discovered events, per-character
+  //   playtime / fastest win (older files: zeros / empty / -1).
+  static constexpr int kVersion = 4;
 
   std::map<std::string, CharacterProgress> characters;  // key: Character::id ("Ironclad", "Silent", ...)
   std::set<std::string> seenCards, seenRelics, seenPotions, seenMonsters;
@@ -58,6 +73,17 @@ struct Progress {
   // M5: every monster id ever beaten in a won fight (the C#'s EnemyStats with a win), for the
   // DefeatAll<Act>Enemies achievements.
   std::set<std::string> defeatedMonsters;
+
+  // M-stats (ProgressState): TotalPlaytime (seconds), ArchitectDamage (the summed scores of won
+  // runs, shown in the victory text), EnemyStats keyed by monster id, DiscoveredEvents.
+  int64_t totalPlaytime = 0;
+  int64_t architectDamage = 0;
+  std::map<std::string, EnemyProgress> enemyStats;
+  std::set<std::string> discoveredEvents;
+
+  int64_t totalKills() const;      // SaveManager.GetTotalKills: sum of EnemyStats.TotalWins
+  int64_t fastestVictory() const;  // ProgressState.FastestVictory (-1 when no character has a win)
+  int bestWinStreak() const;       // ProgressState.BestWinStreak
 
   CharacterProgress& character(const std::string& id);  // get-or-create
 
@@ -90,6 +116,14 @@ void incrementCounter(const std::string& name, int64_t amount = 1);
 void recordAncientRun(const std::string& ancientId, const std::string& characterId, bool win);
 int ancientVisits(const std::string& ancientId, const std::string& characterId);  // GetVisitsAs
 int ancientTotalVisits(const std::string& ancientId);                              // TotalVisits
+
+// ProgressSaveManager.UpdateWithRunData's totals: TotalPlaytime / Playtime += the run's time,
+// ArchitectDamage += the score of a won run, FastestWinTime on a standard win (not custom/daily).
+void recordRunTotals(const std::string& characterId, int64_t runSeconds, bool win, int score, bool standard);
+// ProgressState.MarkEventAsSeen.
+void markEventSeen(const std::string& id);
+// UpdateAfterCombatWon / IncrementEnemyFightLoss: every enemy of the fight gets a win or a loss.
+void recordCombatEnd(const Combat& c, bool won);
 
 enum class RunOutcome { Win, Loss, Abandon };
 // Called once when a run concludes: a won fight against the final boss, a lost fight/event/HP

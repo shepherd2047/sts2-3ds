@@ -314,7 +314,7 @@ int main() {
     progress::state().defeatedMonsters.insert("Nibbit");
     CHECK(achievements::unlockedCount() == 2);
     std::string saved = progress::state().save();
-    CHECK(saved.find("STS2PROGRESS 3 ") == 0);
+    CHECK(saved.find("STS2PROGRESS " + std::to_string(Progress::kVersion) + " ") == 0);
     Progress back;
     CHECK(back.load(saved));
     CHECK(back.achievements == progress::state().achievements);
