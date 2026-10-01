@@ -28,6 +28,7 @@ struct ArsenalPower : Power {
 // mirror of SetupStrikePower, same as ManglePower in powers_ironclad.h).
 struct DyingStarPower : Power {
   POWER_HEADER(DyingStarPower, "DYING_STAR_POWER")
+  const char* internallyAppliedPower() const override { return "StrengthPower"; }  // ITemporaryPower
   PowerType type() const override { return PowerType::Debuff; }
   Task<> beforeApplied(Creature* target, Dec amt, Creature* app, Card* src) override {
     co_await applyPower<StrengthPower>(target, -amt, app, src, true);
@@ -49,6 +50,7 @@ struct DyingStarPower : Power {
 // MonarchsGazeStrengthDownPower.cs: same temporary negative Strength, origin Monarch's Gaze.
 struct MonarchsGazeStrengthDownPower : Power {
   POWER_HEADER(MonarchsGazeStrengthDownPower, "MONARCHS_GAZE_STRENGTH_DOWN_POWER")
+  const char* internallyAppliedPower() const override { return "StrengthPower"; }  // ITemporaryPower
   PowerType type() const override { return PowerType::Debuff; }
   Task<> beforeApplied(Creature* target, Dec amt, Creature* app, Card* src) override {
     co_await applyPower<StrengthPower>(target, -amt, app, src, true);

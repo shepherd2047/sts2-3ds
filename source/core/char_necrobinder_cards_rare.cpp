@@ -70,14 +70,14 @@ struct NeurosurgePower : Power {
   }
 };
 
-// OblivionPower.cs: Debuff, Counter (InstancedPerApplier; this engine stacks by id, and the only
-// applier is the player). Every card the applier plays while it is on the enemy gives that enemy
-// Doom equal to the power's amount when the card was played (the Oblivion that applied it does not
+// OblivionPower.cs: Debuff, Counter, InstancedPerApplier. Every card the applier plays while it is on
+// the enemy gives that enemy Doom equal to the power's amount when the card was played (the Oblivion that applied it does not
 // trigger itself: its beforeCardPlayed ran before the power existed). Removed at the end of the
 // player's turn.
 struct OblivionPower : Power {
   POWER_HEADER(OblivionPower, "OBLIVION_POWER")
   PowerType type() const override { return PowerType::Debuff; }
+  PowerInstanceType instanceType() const override { return PowerInstanceType::InstancedPerApplier; }
   std::vector<std::pair<Card*, int>> amountsForPlayedCards;
   Task<> beforeCardPlayed(const CardPlay& p) override {
     if (!applier || applier != owner->combat->player || ownerOf(p.card) != applier) co_return;
@@ -262,24 +262,22 @@ struct Hang : IroncladT<Hang> {
 
 // Misery.cs: 0 cost, deal 7 (+2 upgraded, +Retain), then copy every debuff the target had before
 // the hit onto every other hittable enemy (stacking onto ones they already have).
-// PORT NOTE: ITemporaryPower is not modelled, so the temporary-Strength-down powers (Enfeebling
-// Touch, Piercing Wail, Mangle) are listed here with the power they apply internally, and their
-// amount is merged into that entry like the C#'s `debuffAmounts[internal] += temp.Amount`.
+// A temporary power's amount is merged into its InternallyAppliedPower's entry (`debuffAmounts[internal] +=
+// temp.Amount`). PORT NOTE: the copies are fresh powers from the registry, not ClonePreservingMutability
+// clones, so per-instance state beyond amount/applier is not copied (no debuff in this build has any that
+// matters on another enemy).
 struct Misery : IroncladT<Misery> {
   CARD_HEADER(Misery, "MISERY", 0, Attack, Rare, AnyEnemy)
     addVar("Damage", 7);
   }
-  struct Debuff { std::string id; int amount; Creature* applier; };
-  static const char* internalPowerOf(const std::string& id) {
-    if (id == "EnfeeblingTouchPower" || id == "PiercingWailPower" || id == "ManglePower") return "StrengthPower";
-    return nullptr;
-  }
+  struct Debuff { std::string id; int amount; Creature* applier; const char* inner; };
   Task<> onPlay(CardPlay& p) override {
     std::vector<Debuff> debuffs;
     for (auto& pw : p.target->powers)
-      if (pw->typeForAmount(Dec(pw->amount)) == PowerType::Debuff) debuffs.push_back({pw->id, pw->amount, pw->applier});
+      if (pw->typeForAmount(Dec(pw->amount)) == PowerType::Debuff)
+        debuffs.push_back({pw->id, pw->amount, pw->applier, pw->internallyAppliedPower()});
     for (size_t i = 0; i < debuffs.size(); ++i) {
-      const char* inner = internalPowerOf(debuffs[i].id);
+      const char* inner = debuffs[i].inner;
       if (!inner) continue;
       int add = debuffs[i].amount;
       for (auto& d : debuffs)
@@ -291,9 +289,11 @@ struct Misery : IroncladT<Misery> {
       if (enemy == p.target) continue;
       for (auto& d : debuffs) {
         if (d.amount == 0) continue;
-        if (Power* existing = enemy->power(d.id)) {
+        auto pw = db::power(d.id);
+        if (!pw) continue;
+        if (Power* existing = enemy->stackingInstance(*pw, d.applier)) {
           co_await cmd::modifyPowerAmount(existing, Dec(d.amount), d.applier, this);
-        } else if (auto pw = db::power(d.id)) {
+        } else {
           co_await cmd::applyPower(std::move(pw), enemy, Dec(d.amount), d.applier, this);
         }
       }

@@ -85,23 +85,13 @@ struct SicEmPower : Power {
   }
 };
 
-// The C# `power is ITemporaryPower`: TemporaryStrength/Dexterity/Focus powers and the ones built on them
-// that a player can put on an enemy.
-// PORT NOTE: this engine has no ITemporaryPower marker; TemporaryStrengthPower subclasses share the
-// "TEMPORARY_" loc keys, the rest are listed by id.
-bool isTemporaryPower(Power* p) {
-  if (p->locKey.rfind("TEMPORARY_", 0) == 0) return true;
-  return p->id == "ManglePower" || p->id == "EnfeeblingTouchPower" || p->id == "CrushUnderPower" ||
-         p->id == "PlowPower" || p->id == "DarkShacklesPower" || p->id == "MonarchsGazeStrengthDownPower";
-}
-
 // SleightOfFleshPower.cs: Buff, Counter. Whenever the owner applies a (non-temporary) debuff to an
 // enemy, deal Amount Unpowered damage to that enemy.
 struct SleightOfFleshPower : Power {
   POWER_HEADER(SleightOfFleshPower, "SLEIGHT_OF_FLESH_POWER")
   Task<> afterPowerAmountChanged(Power* p, Dec amt, Creature* app, Card*) override {
     if (amt == Dec(0) || p->typeForAmount(amt) != PowerType::Debuff || p->owner->side != Side::Enemy || app != owner ||
-        isTemporaryPower(p))
+        p->isTemporary())
       co_return;
     flash = 1.f;
     co_await cmd::damage(p->owner, Dec(amount), kUnpowered, owner, nullptr);

@@ -58,10 +58,11 @@ struct Peck : IroncladT<Peck> {
   void onUpgrade() override { upgradeVar("Repeat", 1); }
 };
 
-// ToricToughnessPower.cs: after block is cleared, gain the stored block and count down.
-// PORT NOTE: not an instanced power; playing the card twice stacks turns on one power.
+// ToricToughnessPower.cs: after block is cleared, gain the stored block and count down. Instanced:
+// each play keeps its own block and turns.
 struct ToricToughnessPower : Power {
   POWER_HEADER(ToricToughnessPower, "TORIC_TOUGHNESS_POWER")
+  PowerInstanceType instanceType() const override { return PowerInstanceType::Instanced; }
   int block = 0;
   Task<> afterBlockCleared(Creature* c) override {
     if (c != owner) co_return;
@@ -81,8 +82,8 @@ struct ToricToughness : IroncladT<ToricToughness> {
     int before = me()->block;
     co_await block(val("Block"));
     int gained = me()->block - before;
-    co_await applyPower<ToricToughnessPower>(me(), val("Turns"), me(), this);
-    if (auto* pw = static_cast<ToricToughnessPower*>(me()->power("ToricToughnessPower"))) pw->block = gained;
+    auto* pw = co_await applyPowerGet<ToricToughnessPower>(me(), val("Turns"), me(), this);
+    if (pw) pw->block = gained;
   }
   void onUpgrade() override { upgradeVar("Block", 2); }
 };

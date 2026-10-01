@@ -113,6 +113,7 @@ struct TrashToTreasurePower : Power {
 // end of the owner's turn).
 struct HyperbeamFocusDownPower : TemporaryFocusPower {
   POWER_HEADER(HyperbeamFocusDownPower, "HYPERBEAM_FOCUS_DOWN_POWER")
+  const char* internallyAppliedPower() const override { return "FocusPower"; }  // ITemporaryPower
   bool isPositive() const override { return false; }
 };
 

@@ -122,7 +122,7 @@ struct ReattachPower : Power {
 // Escape played adds one); at 0 the player is eaten.
 struct SandpitPower : Power {
   POWER_HEADER(SandpitPower, "SANDPIT_POWER")
-  Creature* target = nullptr;
+  PowerInstanceType instanceType() const override { return PowerInstanceType::Instanced; }  // one per player (target)
   Task<> afterSideTurnStart(Side side, const std::vector<Creature*>&) override {
     if (side == Side::Enemy) co_await cmd::decrement(this);
   }

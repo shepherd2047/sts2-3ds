@@ -163,14 +163,14 @@ struct ForgottenSoul : Relic {
 
 // ================================================================ powers (TinkerTime riders)
 
-// StranglePower.cs: whenever the applier plays a card, the owner loses HP.
-// PORT NOTE: not instanced per applier (single player, so identical).
+// StranglePower.cs: whenever the applier plays a card, the owner loses HP. InstancedPerApplier.
 struct StranglePower : Power {
   POWER_HEADER(StranglePower, "STRANGLE_POWER")
   PowerType type() const override { return PowerType::Debuff; }
+  PowerInstanceType instanceType() const override { return PowerInstanceType::InstancedPerApplier; }
   std::map<Card*, int> amountsForPlayedCards;
   Task<> beforeCardPlayed(const CardPlay& p) override {
-    if (ownerOf(p.card) == nullptr) co_return;
+    if (!applier || !applier->isPlayer || ownerOf(p.card) != applier) co_return;  // Applier.Player plays it
     amountsForPlayedCards[p.card] = amount;
   }
   Task<> afterCardPlayed(const CardPlay& p) override {

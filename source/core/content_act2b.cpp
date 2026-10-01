@@ -95,6 +95,7 @@ struct EscapeArtistPower : Power {
 struct SwipePower : Power {
   POWER_HEADER(SwipePower, "SWIPE_POWER")
   StackType stackType() const override { return StackType::Single; }
+  PowerInstanceType instanceType() const override { return PowerInstanceType::Instanced; }
   std::unique_ptr<Card> stolenCard;  // the deck version, taken out of the run's deck
   Task<> afterDeath(Creature* c) override {
     if (c != owner || !stolenCard || !owner->combat || !owner->combat->run) co_return;

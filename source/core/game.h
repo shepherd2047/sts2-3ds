@@ -43,6 +43,9 @@ enum class Rarity { Basic, Common, Uncommon, Rare, Ancient, Token, Status, Curse
 enum class TargetType { None, Self, AnyEnemy, AllEnemies, RandomEnemy };
 enum class PowerType { Buff, Debuff };
 enum class StackType { Counter, Single };
+// PowerInstanceType: Instanced powers add a new instance on every apply; InstancedPerApplier stacks onto
+// the instance from the same applier (PowerCmd.FindExistingInstanceForStacking).
+enum class PowerInstanceType { None, Instanced, InstancedPerApplier };
 enum class Pile { None, Draw, Hand, Discard, Exhaust, Play };
 enum class RoomType { Monster, Elite, Rest, Treasure, Unknown, Boss, Start, Shop, Ancient };
 enum class RelicRarity { None, Starter, Common, Uncommon, Rare, Shop, Event, Ancient };
@@ -283,6 +286,7 @@ struct Power : Model {
   std::string locKey;  // e.g. "STRENGTH_POWER"
   Creature* owner = nullptr;
   Creature* applier = nullptr;
+  Creature* target = nullptr;  // PowerModel.Target (per-player instanced powers: Thievery, Heist, ...)
   int amount = 0;
   int amountOnTurnStart = 0;
   bool skipNextDurationTick = false;
@@ -291,6 +295,12 @@ struct Power : Model {
   virtual PowerType type() const { return PowerType::Buff; }
   virtual StackType stackType() const { return StackType::Counter; }
   virtual bool allowNegative() const { return false; }
+  virtual PowerInstanceType instanceType() const { return PowerInstanceType::None; }
+  // ITemporaryPower.InternallyAppliedPower: the id of the power a temporary power applies under the
+  // hood (TemporaryStrength/Dexterity/FocusPower subclasses); null = not an ITemporaryPower.
+  virtual const char* internallyAppliedPower() const { return nullptr; }
+  bool isTemporary() const { return internallyAppliedPower() != nullptr; }  // `power is ITemporaryPower`
+  virtual int displayAmount() const { return amount; }  // PowerModel.DisplayAmount (UI)
   virtual bool ownerIsSecondaryEnemy() const { return false; }  // MinionPower
   virtual bool removedAfterOwnerDeath() const { return true; }  // ShouldPowerBeRemovedAfterOwnerDeath
   // ShouldOwnerDeathTriggerFatal: false when the owner can come back (Decimillipede segments),
@@ -745,7 +755,29 @@ struct Creature {
     for (auto& p : powers) if (p->id == id) return p.get();
     return nullptr;
   }
+  // GetPower / GetPower<T>: the first instance (instanced powers can have several, see powerInstances).
   template <class P> P* get() { return static_cast<P*>(power(P::kId)); }
+  // GetPowerInstances(id) / GetPowerInstances<T>: every instance with that id, in application order.
+  std::vector<Power*> powerInstances(const std::string& id) {
+    std::vector<Power*> v;
+    for (auto& p : powers) if (p->id == id) v.push_back(p.get());
+    return v;
+  }
+  template <class P> std::vector<P*> instances() {
+    std::vector<P*> v;
+    for (auto& p : powers) if (p->id == P::kId) v.push_back(static_cast<P*>(p.get()));
+    return v;
+  }
+  // PowerCmd.FindExistingInstanceForStacking: the instance an application of `p` from `applier` stacks onto.
+  Power* stackingInstance(const Power& p, Creature* applier) {
+    switch (p.instanceType()) {
+      case PowerInstanceType::Instanced: return nullptr;
+      case PowerInstanceType::InstancedPerApplier:
+        for (auto& q : powers) if (q->id == p.id && q->applier == applier) return q.get();
+        return nullptr;
+      default: return power(p.id);
+    }
+  }
   template <class P> int powerAmount() { auto* p = get<P>(); return p ? p->amount : 0; }
   // `Powers.All(p => p.ShouldOwnerDeathTriggerFatal())`, checked before the killing blow.
   bool deathIsFatal() const {
@@ -1523,6 +1555,20 @@ template <class P> Task<> applyPower(Creature* target, Dec amount, Creature* app
   // (after Hook.ModifyPowerAmountReceived either way).
   if (target->combat && target->combat->ending) co_return;
   co_await cmd::applyPower(std::make_unique<P>(), target, amount, applier, src, silent);
+}
+
+// PowerCmd.Apply<T> returning the power: the new instance, or the one it stacked onto (null when the
+// application was blocked, e.g. by Artifact, or the stack dropped to 0). Needed for instanced powers,
+// whose new instance is not `target->get<P>()`.
+template <class P> Task<P*> applyPowerGet(Creature* target, Dec amount, Creature* applier, Card* src, bool silent = false) {
+  if (target->combat && target->combat->ending) co_return nullptr;
+  auto fresh = std::make_unique<P>();
+  P* raw = fresh.get();
+  Power* stack = target->stackingInstance(*raw, applier);
+  co_await cmd::applyPower(std::move(fresh), target, amount, applier, src, silent);
+  Power* want = stack ? stack : raw;
+  for (auto& q : target->powers) if (q.get() == want) co_return static_cast<P*>(want);
+  co_return nullptr;
 }
 
 template <class P> Task<> Monster::applyToSelf(Dec amount) {

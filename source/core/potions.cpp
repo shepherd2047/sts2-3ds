@@ -44,6 +44,7 @@ struct DuplicationPower : Power {
 // TemporaryStrengthPower / TemporaryDexterityPower with the potion as OriginModel.
 template <class Stat, int Sign> struct TemporaryStatPower : Power {
   PowerType type() const override { return Sign > 0 ? PowerType::Buff : PowerType::Debuff; }
+  const char* internallyAppliedPower() const override { return Stat::kId; }  // ITemporaryPower
   Task<> beforeApplied(Creature* target, Dec amt, Creature* app, Card* src) override {
     co_await applyPower<Stat>(target, amt * Dec(Sign), app, src, true);
   }
