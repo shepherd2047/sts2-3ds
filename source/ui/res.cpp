@@ -1,6 +1,7 @@
 #include "res.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <sstream>
 
@@ -392,7 +393,10 @@ float Res::text(float x, float y, const std::string& s, const TextStyle& st) {
       if (it == f.glyphs.end()) { cx += f.px * 0.5f * st.scale; continue; }
       const Glyph& g = it->second;
       if (g.w > 0) {
-        float gx = cx + g.ox * st.scale, gy = cy + g.oy * st.scale;
+        // Snap each glyph to whole pixels: font pages are sampled with linear filtering, so a glyph
+        // at a fractional position smears over two pixels and its drop shadow smears with it, which
+        // reads as ghosted text on the 3DS (the SDL preview hid it). At scale 1 this is texel-exact.
+        float gx = std::floor(cx + g.ox * st.scale + 0.5f), gy = std::floor(cy + g.oy * st.scale + 0.5f);
         if (st.outline) {
           const float o = st.scale;
           const float offs[4][2] = {{-o, 0}, {o, 0}, {0, -o}, {0, o}};
