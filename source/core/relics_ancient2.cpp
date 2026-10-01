@@ -42,7 +42,7 @@ bool rewardRarity(const Card& c) { return c.rarity == Rarity::Common || c.rarity
 
 // SeaGlass.cs: pick any of 15 cards (5 Common, 5 Uncommon, 5 Rare, uniform odds, no rarity or pool
 // modification) from another character's pool. Orobas stores the chosen character as an index into
-// db::characterIds() in "CharacterIndex". PORT NOTE: the relic title / description do not show the
+// db::characterIds() in "CharacterIndex". PORT NOTE (n/a: visual): the relic title / description do not show the
 // character (StringVar "Character").
 struct SeaGlass : Relic {
   RELIC_HEADER(SeaGlass, "SEA_GLASS", Ancient) addVar("Cards", 15); addVar("CharacterIndex", -1); }
@@ -67,7 +67,7 @@ struct SeaGlass : Relic {
 
 // PrismaticGem.cs: +1 energy; card rewards draw from every character's pool
 // (ModifyCardRewardCreationOptions: UnlockState.CharacterCardPools.Union(CardPools), unless the pools
-// are all colorless). PORT NOTE: CharacterCardPools is every character in game order (all unlocked).
+// are all colorless). PORT NOTE (n/a: owner): CharacterCardPools is every character in game order (all unlocked).
 struct PrismaticGem : Relic {
   RELIC_HEADER(PrismaticGem, "PRISMATIC_GEM", Ancient) addVar("Energy", 1); }
   Dec modifyMaxEnergy(Dec amount) override { return amount + val("Energy"); }
@@ -106,40 +106,43 @@ struct LeadPaperweight : Relic {
 };
 
 // Kaleidoscope.cs: two card rewards, each offering one card (regular encounter odds) from three
-// random other characters' pools. PORT NOTE: Rng.Niche StableShuffle is Rng::shuffle; no reroll.
+// random other characters' pools; offered together (RewardsCmd.OfferCustom). Each is a fixed-card
+// CardReward whose Driftwood reroll options are ForNonCombatWithDefaultOdds(no pools).
 struct Kaleidoscope : Relic {
   RELIC_HEADER(Kaleidoscope, "KALEIDOSCOPE", Ancient) addVar("Cards", 2); }
   Task<> afterObtained() override {
+    std::vector<Run::RewardItem> rows;
     for (int i = 0; i < val("Cards").toInt(); ++i) {
       std::vector<std::string> others;
       for (auto& id : db::allCharacters())  // UnlockState.CharacterCardPools order
         if (id != run->characterId && db::characterPlayable(id)) others.push_back(id);
-      run->rng("Niche").shuffle(others);
+      run->rng("Niche").shuffle(others);  // StableShuffle(Rng.Niche)
       if (others.size() > 3) others.resize(3);
-      std::vector<std::unique_ptr<Card>> options;
+      Run::RewardItem row;
+      row.kind = Run::RewardKind::Card;
       for (auto& ch : others) {
-        auto pool = db::characterCards(ch, rewardRarity);
-        if (pool.empty()) continue;
-        // CardRarityOdds.RollWithBaseOdds, then the next rarity the pool has.
-        float rare = run->hasAscension(kScarcity) ? 0.0149f : 0.03f;
-        float roll = run->rng("Rewards").nextFloat();
-        Rarity want = roll < rare ? Rarity::Rare : roll < 0.37f + rare ? Rarity::Uncommon : Rarity::Common;
-        std::vector<std::string> items;
-        for (int guard = 0; guard < 3 && items.empty(); ++guard) {
-          for (auto& id : pool) if (db::card(id)->rarity == want) items.push_back(id);
-          if (items.empty()) want = want == Rarity::Common ? Rarity::Uncommon : want == Rarity::Uncommon ? Rarity::Rare : Rarity::Common;
-        }
-        if (items.empty()) continue;
-        options.push_back(db::card(run->rng("Rewards").nextItem(items)));
+        CardCreationOptions o;
+        o.pools = {ch};
+        o.with(ccNoCardPoolModifications);
+        for (auto& c : run->createForReward(o, 1)) row.cards.push_back(std::move(c));
       }
-      co_await run->chooseCardFor(std::move(options));
+      // CardReward(cardsToOffer, ...): Populate runs TryModifyCardRewardOptions once on the fixed cards.
+      CardCreationOptions fixedOpts;
+      fixedOpts.odds = RarityOdds::Uniform;
+      fixedOpts.with(ccNoCardPoolModifications | ccNoCardModelModifications | ccIsCardReward);
+      run->runCardRewardHooks(row.cards, fixedOpts);
+      row.cardOptions = CardCreationOptions::forNonCombat({}, false);
+      row.cardOptions.with(ccIsCardReward);
+      row.cardCount = (int)row.cards.size();
+      rows.push_back(std::move(row));
     }
+    co_await run->offerRewards(std::move(rows));
   }
 };
 
 // WhisperingEarring.cs: +1 energy; on turn 1 the first playable hand card is played over and over
 // (up to 13). Card selections during it take the first options (VakuuCardSelector, Combat::autoSelectFirst).
-// AfterAutoPrePlayPhaseEnteredLate. PORT NOTE: cards are played with Combat::playCard(autoPlay =
+// AfterAutoPrePlayPhaseEnteredLate. PORT NOTE (needs a Combat::playCard mode that spends resources first, then auto-plays with skipXCapture): cards are played with Combat::playCard(autoPlay =
 // false) because that is what spends the energy (SpendResources), so they are not flagged as auto-plays.
 struct WhisperingEarring : Relic {
   RELIC_HEADER(WhisperingEarring, "WHISPERING_EARRING", Ancient) addVar("Energy", 1); }

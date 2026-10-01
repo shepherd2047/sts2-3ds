@@ -3,14 +3,13 @@
 // WingCharm, MysticLighter (Shop); BeautifulBracelet, TriBoomerang, ElectricShrymp, NutritiousSoup,
 // PaelsClaw, Glitter, SilkenTress, SilverCrucible (Ancient / event pool).
 //
-// Still skipped: PaelsGrowth (its CLONE rest site
-// option, CloneRestSiteOption, is not ported; the Clone enchantment exists in enchantments_b.cpp).
+// (PaelsGrowth, with its CLONE rest site option, is in relics_ancient2.cpp.)
 //
 // Reward relics: Relic::modifyCardReward gets the CardCreationOptions (E8) and checks the same flags
 // as the C#. The offered cards are fresh copies, so they are enchanted / upgraded in place (the
 // same result as CloneCard + CardCreationResult.ModifyCard). AfterModifyingCardRewardOptions runs
 // at the end of the late pass.
-// PORT NOTE: "CardCmd.Preview" / NCardEnchantVfx and the enchant preview screen are UI (S13).
+// PORT NOTE (n/a: visual): "CardCmd.Preview" / NCardEnchantVfx and the enchant preview screen are UI (S13).
 #include "game.h"
 
 namespace sts {

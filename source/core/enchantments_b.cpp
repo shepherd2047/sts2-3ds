@@ -1,6 +1,6 @@
 // Enchantments 1/2 (A3b): Sown, Slither, Adroit, Clone, Corrupted, Goopy, Inky, SoulsPower.
 // (Models.Enchantments.) Spiral / Steady / Nimble live with their events; A3c reuses them.
-// PORT NOTE: Slither's TestEnergyCostOverride (test mode only) is not ported.
+// PORT NOTE (n/a: c#-test-only): Slither's TestEnergyCostOverride (test mode only) is not ported.
 #include "game.h"
 #include "powers.h"
 
