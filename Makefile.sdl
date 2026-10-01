@@ -43,7 +43,7 @@ SIM_EXTRA_OBJS := $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(SIM_SRC))
 TEST_EXTRA_OBJS := $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(TEST_SRC))
 
 ALL_OBJS := $(CORE_OBJS) $(PREVIEW_EXTRA_OBJS) $(SIM_EXTRA_OBJS) $(TEST_EXTRA_OBJS)
-DEPS := $(ALL_OBJS:.o=.d)
+DEPS := $(ALL_OBJS:.o=.d) $(foreach d,asan ubsan,$(patsubst %.cpp,build/$(d)/%.d,$(CORE_SRC) $(SIM_SRC)))
 
 all: $(B)/sts2-preview $(B)/sim
 
@@ -184,6 +184,25 @@ $(B)/model_dump: $(CORE_OBJS) $(OBJ_DIR)/test/model_dump.o
 sim: $(B)/sim
 	./$(B)/sim 200
 
+# H2: sanitizer builds of the headless sim (host only; tools/soak.sh runs them), own object dirs.
+# sim-ubsan is UBSan alone: ASan's runtime hangs at start-up on macOS 27 (both Apple clang 17 and
+# LLVM 21), so there the soak pairs it with libmalloc's scribble/guard checks and `leaks`.
+SAN_BASE := -fno-omit-frame-pointer -fno-sanitize-recover=undefined
+ASAN_OBJS := $(patsubst %.cpp,build/asan/%.o,$(CORE_SRC) $(SIM_SRC))
+UBSAN_OBJS := $(patsubst %.cpp,build/ubsan/%.o,$(CORE_SRC) $(SIM_SRC))
+build/asan/%.o: %.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(BASE_CXXFLAGS) -O1 -fsanitize=address,undefined $(SAN_BASE) -c $< -o $@
+build/ubsan/%.o: %.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(BASE_CXXFLAGS) -O1 -fsanitize=undefined $(SAN_BASE) -c $< -o $@
+build/sim-asan: $(ASAN_OBJS)
+	$(CXX) $(BASE_CXXFLAGS) -fsanitize=address,undefined $(SAN_BASE) $^ -o $@
+build/sim-ubsan: $(UBSAN_OBJS)
+	$(CXX) $(BASE_CXXFLAGS) -fsanitize=undefined $(SAN_BASE) $^ -o $@
+sim-asan: build/sim-asan
+sim-ubsan: build/sim-ubsan
+
 check: $(B)/enchant_test $(B)/afflict_test $(B)/hooks_test $(B)/quests_test $(B)/character_test $(B)/silent_test $(B)/necrobinder_test $(B)/regent_test $(B)/colorless_test $(B)/defect_test $(B)/ascension_test $(B)/ascension_dump $(B)/progress_test $(B)/settings_test $(B)/profile_test $(B)/history_test $(B)/badges_test $(B)/modifiers_test $(B)/daily_test $(B)/achievements_test $(B)/tutorials_test $(B)/save_errors_test $(B)/safe_file_test $(B)/model_dump $(B)/instanced_test $(B)/combat_history_test
 	./$(B)/enchant_test
 	./$(B)/afflict_test
@@ -217,7 +236,7 @@ check: $(B)/enchant_test $(B)/afflict_test $(B)/hooks_test $(B)/quests_test $(B)
 clean:
 	rm -rf build
 
-.PHONY: all sim check clean
+.PHONY: all sim sim-asan sim-ubsan check clean
 
 -include $(DEPS)
 

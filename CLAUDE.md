@@ -96,6 +96,7 @@ assets); devkitPro and Azahar are manual installs it links to.
 make -f Makefile.sdl -j4        # build/sts2-preview + build/sim (release: -O2 -g)
 make -f Makefile.sdl DEV=1 -j4 build/dev/sim   # fast iteration build (-O1) in build/dev/
 ./build/sim 200                 # headless fights; SIM_ALLCARDS=1 plays every card
+bash tools/soak.sh [N] [jobs]   # memory soak: sanitizer sim (make -f Makefile.sdl sim-asan / sim-ubsan) x all characters/mixes, one line per config
 make                            # sts2-3ds.3dsx (devkitPro env); packs romfs_3ds/
 python tools/compress_romfs.py  # romfs/ -> romfs_3ds/ (GPU texture formats), after build_assets
 make link                       # build + send to the 3DS over Wi-Fi (IP=... if needed)
@@ -141,6 +142,8 @@ make cia                        # also sts2-3ds.cia (title id 000400000FA57200, 
 - UI changes: the agent leaves headless screenshots; the lead shows them to the owner and merges
   only after the owner's OK.
 - After a merge, remove the agent's worktree (`git worktree remove`); keep the branch.
+
+Soak on macOS 27: ASan hangs at start-up, so it falls back to UBSan + libmalloc scribble, `leaks --atExit` and Guard Malloc (logs in build/soak/).
 
 `make cia` needs `bannertool` + `makerom` on PATH (Mac: `~/.local/bin`; makerom/ctrtool from
 3DSGuy/Project_CTR releases, bannertool built from diasurgical/bannertool). Banner art/sound come
