@@ -126,6 +126,9 @@ std::string App::describe(Card* c) {
       base = d.toInt();
       canonical = base;
       shown = cb ? std::max(0, cb->modifyDamage(nullptr, cb->player, d, kMove, c).toInt()) : base;
+    } else if (name == "CalculatedForge" || name == "CalculatedDoom") {
+      base = shown = c->calculatedBlock().toInt();  // CalculatedVar.Calculate(target): base + extra * multiplier
+      canonical = base;
     } else if (name == "CalculatedBlock") {
       Dec d = c->calculatedBlock();
       base = d.toInt();

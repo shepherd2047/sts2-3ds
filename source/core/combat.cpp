@@ -142,16 +142,16 @@ void Monster::stun(std::function<Task<>(const std::vector<Creature*>&)> stunMove
 
 // ---------------------------------------------------------------- cards
 
-Dec Card::calculatedDamage() {
+Dec Card::calculatedDamage(Creature* target) {
   // CalculatedDamageVar: CalculationBase + ExtraDamage * multiplier.
   Dec base = val("CalculationBase");
   Dec extra = val("ExtraDamage");
-  int mult = calcMultiplier ? calcMultiplier(this) : 0;
+  int mult = calcMult(target);
   return base + extra * Dec(mult);
 }
 
-Dec Card::calculatedBlock() {
-  int mult = calcMultiplier ? calcMultiplier(this) : 0;
+Dec Card::calculatedBlock(Creature* target) {
+  int mult = calcMult(target);
   return val("CalculationBase") + val("CalculationExtra") * Dec(mult);
 }
 
@@ -972,7 +972,7 @@ Task<> Attack::execute(Combat& c) {
     Creature* target = nullptr;
     if (random) target = c.rng("CombatTargets").nextItem(valid);
     else if (valid.size() == 1) target = valid[0];
-    Dec amount = calcFrom ? calcFrom->calculatedDamage() : damagePerHit;
+    Dec amount = calcFrom ? calcFrom->calculatedDamage(target) : damagePerHit;
     std::vector<Creature*> ts = target ? std::vector<Creature*>{target} : valid;
     results.push_back(co_await damage(ts, amount, props, attacker, source));
   }

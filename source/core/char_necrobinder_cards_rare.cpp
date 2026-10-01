@@ -500,17 +500,14 @@ struct TheScythe : IroncladT<TheScythe> {
 };
 
 // TimesUp.cs: 2 cost, deal 1 per Doom on the target. Upgrade: Retain.
-// PORT NOTE: CalculatedDamageVar's multiplier reads the target's Doom, but calcMultiplier only
-// receives the card, so the hand preview shows the base (0) and onPlay computes the damage itself.
 struct TimesUp : IroncladT<TimesUp> {
   CARD_HEADER(TimesUp, "TIMES_UP", 2, Attack, Rare, AnyEnemy)
     addVar("CalculationBase", 0);
     addVar("ExtraDamage", 1);
     addVar("CalculatedDamage", 0);
+    calcMultiplierT = [](Card*, Creature* t) { return t ? t->powerAmount<DoomPower>() : 0; };
   }
-  Task<> onPlay(CardPlay& p) override {
-    co_await attack(p.target, val("CalculationBase") + val("ExtraDamage") * Dec(p.target->powerAmount<DoomPower>()));
-  }
+  Task<> onPlay(CardPlay& p) override { co_await attackCalculated(p.target); }
   void onUpgrade() override { addKeyword(kwRetain); }
 };
 
