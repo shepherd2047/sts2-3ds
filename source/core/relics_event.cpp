@@ -8,7 +8,6 @@
 // TriBoomerang, ElectricShrymp, PaelsClaw, NutritiousSoup, Glitter, SilkenTress, SilverCrucible)
 // are in relics_enchant.cpp (A3c); Byrdpip (pets +
 // ByrdonisEgg hatching); WingedBoots and DowsingRod are in quests.cpp (E2);
-// Driftwood (card reward reroll); PaelsWing (sacrificing card rewards);
 // PaelsLegion (pets); GoldenCompass (golden path); FurCoat (map marks); ToyBox (wax relics);
 // WhisperingEarring (turn-1 autoplay); ScrollBoxes (quests.cpp, E2); SeaGlass / PrismaticGem
 // (other characters' card pools as reward sources); Kaleidoscope (needs the unlock state);
@@ -51,16 +50,20 @@ struct Ambergris : Potion {
 
 // ---------------------------------------------------------------- Neow / Ancient relics
 
-// LostCoffer.cs: a card reward (3 cards, regular encounter odds) and a potion reward.
-// PORT NOTE: RewardsCmd.OfferCustom (one combined screen) is replaced by the card and potion
-// screens in the same order; both are rolled first, as Populate does.
+// LostCoffer.cs: RewardsCmd.OfferCustom of a card reward (character pool, Source Other, regular
+// encounter odds) and a potion reward, populated in that order.
 struct LostCoffer : Relic {
   RELIC_HEADER(LostCoffer, "LOST_COFFER", Ancient) }
   Task<> afterObtained() override {
-    auto cards = run->cardReward(RoomType::Monster, 3);
-    auto potion = run->randomPotion(run->rng("Rewards"), false);
-    co_await run->chooseCardFor(std::move(cards));
-    co_await run->offerPotion(std::move(potion));
+    std::vector<Run::RewardItem> rows;
+    CardCreationOptions o;
+    o.pools = {run->characterId};
+    rows.push_back(run->makeCardReward(o, 3));
+    Run::RewardItem potion;
+    potion.kind = Run::RewardKind::Potion;
+    potion.potion = run->randomPotion(run->rng("Rewards"), false);
+    rows.push_back(std::move(potion));
+    co_await run->offerRewards(std::move(rows));
   }
 };
 

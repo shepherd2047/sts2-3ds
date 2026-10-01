@@ -5,11 +5,8 @@
 //
 // PORT NOTE: the fortune teller's lines (NCrystalSphereDialogue) use Rng.Chaotic in C#; here a
 // private stream seeded from the run seed, so they never touch the game's RNG.
-// PORT NOTE: RewardsSet's Hook.ModifyRewards / AfterModifyingRewards are not called for the
-// minigame's rewards (no relic adds rewards to an event reward set yet); card options do go through
-// the relics' modifyCardReward (CardFactory.CreateForReward's TryModifyCardRewardOptions), as an
-// event room (RoomType::Unknown). ModifyCardRewardCreationOptions (Dingy Rug, Prismatic Gem) is not
-// applied to the rarity-filtered pool.
+// The rewards go through Run::offerRewards (RewardsSet.Offer: Hook.ModifyRewards, i.e. Driftwood's
+// reroll) and the card rewards through Run::makeCardReward (CardFactory.CreateForReward with its hooks).
 // PORT NOTE: RewardsSet sorts with List.Sort (unstable); a stable sort keeps same-kind rewards in
 // reveal order.
 #include <algorithm>
@@ -29,47 +26,6 @@ using Game = CrystalSphereGame;
 using Item = CrystalSphereGame::Item;
 using ItemType = CrystalSphereGame::ItemType;
 constexpr int N = CrystalSphereGame::kSize;
-
-// RewardsCmd.OfferCustom: the rewards as one claimable list (same claim rules as
-// Run::combatRewards; a copy of events_shared2.cpp's helper).
-Task<> offerRewards(Run& r, std::vector<Run::RewardItem> items) {
-  r.rewardItems = std::move(items);
-  r.screen = Screen::Reward;
-  for (;;) {
-    int pick = co_await r.rewardListChoice.next();
-    if (pick < 0 || pick >= (int)r.rewardItems.size()) break;
-    Run::RewardItem& item = r.rewardItems[pick];
-    bool claimed = false;
-    switch (item.kind) {
-      case Run::RewardKind::Gold:
-        co_await r.gainGold(item.gold);
-        claimed = true;
-        break;
-      case Run::RewardKind::Potion:
-        if (r.hasOpenPotionSlot()) { r.procurePotion(std::move(item.potion)); claimed = true; }
-        break;
-      case Run::RewardKind::Relic:
-        co_await r.obtainRelic(std::move(item.relic));
-        claimed = true;
-        break;
-      case Run::RewardKind::Card: {
-        r.rewardCards = std::move(item.cards);
-        int cardPick = co_await r.rewardChoice.next();
-        if (cardPick >= 0 && cardPick < (int)r.rewardCards.size()) {
-          r.addCardToDeck(std::move(r.rewardCards[cardPick]));
-          claimed = true;
-        } else {
-          item.cards = std::move(r.rewardCards);
-        }
-        r.rewardCards.clear();
-        break;
-      }
-    }
-    if (claimed) r.rewardItems.erase(r.rewardItems.begin() + pick);
-  }
-  r.rewardItems.clear();
-  r.rewardCards.clear();
-}
 
 bool inGrid(int x, int y) { return x >= 0 && x < N && y >= 0 && y < N; }
 
@@ -309,7 +265,7 @@ struct CrystalSphere : Event {
           p.item.relic->run = run;
           break;
         case ItemType::CardReward:
-          p.item.cards = cardOptions(it.cardRarity);
+          p.item = cardReward(it.cardRarity);
           break;
         default: break;
       }
@@ -318,34 +274,18 @@ struct CrystalSphere : Event {
     std::vector<Run::RewardItem> rows;
     for (auto& p : rewards) rows.push_back(std::move(p.item));
     // RewardsSet.Offer: an empty set outside combat shows nothing.
-    if (!rows.empty()) co_await offerRewards(*run, std::move(rows));
+    if (!rows.empty()) co_await run->offerRewards(std::move(rows));
   }
 
   // CardReward(CardCreationOptions(character pool, Other, Uniform, rarity == r).WithRngOverride(rng), 3):
-  // CardFactory.CreateForReward -- three distinct cards picked with the event rng, each followed by
-  // RollForUpgrade(baseChance 0) on the same rng.
-  std::vector<std::unique_ptr<Card>> cardOptions(Rarity r) {
-    std::vector<std::unique_ptr<Card>> out;
-    std::vector<std::string> taken;
-    auto pool = db::characterCards(run->characterId, [&](const Card& c) { return c.rarity == r; });
-    for (int i = 0; i < 3; ++i) {
-      std::vector<std::string> items;
-      for (auto& cid : pool) if (std::find(taken.begin(), taken.end(), cid) == taken.end()) items.push_back(cid);
-      if (items.empty()) break;
-      std::string cid = rng().nextItem(items);
-      taken.push_back(cid);
-      auto c = db::card(cid);
-      float roll = rng().nextFloat();
-      if (c->upgradable()) {
-        double odds = 0;
-        if (c->rarity != Rarity::Rare) odds += run->actIndex * (run->hasAscension(kScarcity) ? 0.125 : 0.25);
-        if (roll <= odds) c->upgrade();
-      }
-      out.push_back(std::move(c));
-    }
-    for (bool late : {false, true})
-      for (auto& rel : run->relics) rel->modifyCardReward(out, RoomType::Unknown, late);
-    return out;
+  // CardFactory.CreateForReward with the event rng for the picks and the upgrade rolls.
+  Run::RewardItem cardReward(Rarity r) {
+    CardCreationOptions o;
+    o.pools = {run->characterId};
+    o.odds = RarityOdds::Uniform;
+    o.filter = [r](const Card& c) { return c.rarity == r; };
+    o.rng = &rng();
+    return run->makeCardReward(o, 3);
   }
 };
 

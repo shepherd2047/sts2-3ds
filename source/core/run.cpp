@@ -261,6 +261,7 @@ Task<> Run::runEvent(std::unique_ptr<Event> e) {
     co_await action();
     if (died) break;
   }
+  canUseOrRemovePotions = true;  // EnsureCleanup on leaving the room (OnEventFinished)
   currentEvent.reset();
 }
 
@@ -297,7 +298,6 @@ Card* Run::addCardToDeck(std::unique_ptr<Card> c) {
   Card* added = deck.back().get();
   for (auto& rel : relics) rel->afterCardAddedToDeck(added);
   // Hoarder.AfterCardChangedPiles: a new deck card brings two clones (which don't copy again).
-  // PORT NOTE: transformed cards (Run::transformCard) don't go through here, so they aren't copied.
   if (!hoarding && hasModifier("Hoarder")) {
     hoarding = true;
     for (int i = 0; i < 2; ++i) addCardToDeck(added->clone());
@@ -311,10 +311,12 @@ void Run::removeCardFromDeck(Card* c) {
   deck.erase(std::remove_if(deck.begin(), deck.end(), [&](const std::unique_ptr<Card>& d) { return d.get() == c; }), deck.end());
 }
 
+// CardCmd.Transform on a deck card: the original leaves the deck, the replacement joins it at the
+// end through the same Hook.ModifyCardBeingAddedToDeck / AfterCardChangedPiles as any new deck card
+// (the eggs, Bing Bong, Hoarder, Fresnel Lens).
 Card* Run::transformCard(Card* c, std::unique_ptr<Card> into) {
   if (!into || !c->isTransformable()) return c;  // CardCmd.Transform skips Eternal cards
-  for (auto& d : deck)
-    if (d.get() == c) { d = std::move(into); return d.get(); }
+  removeCardFromDeck(c);
   return addCardToDeck(std::move(into));
 }
 
@@ -420,15 +422,20 @@ Task<> Run::combatRewards(RoomType type) {
     rewardItems.push_back(std::move(item));
   }
 
-  auto makeCardItem = [&](RoomType odds) {
-    RewardItem item;
-    item.kind = RewardKind::Card;
-    item.cards = cardReward(odds, 3);
-    for (bool late : {false, true})
-      for (auto& rel : relics) rel->modifyCardReward(item.cards, odds, late);
-    rewardItems.push_back(std::move(item));
+  // CardReward(ForRoom(room), 3): the room's own one WithFlags(IsFromCombat), hook-added ones without.
+  auto makeCardItem = [&](RoomType odds, bool fromCombat = false) {
+    CardCreationOptions o = CardCreationOptions::forRoom(characterId, odds);
+    o.room = type;
+    if (fromCombat) o.with(ccIsFromCombat);
+    rewardItems.push_back(makeCardReward(o, 3));
   };
-  makeCardItem(type);  // CardReward.Populate -- before the relic reward, see comment above
+  makeCardItem(type, true);  // CardReward.Populate -- before the relic reward, see comment above
+  if (type == RoomType::Elite) {  // GenerateRewardsFor's RelicReward, before the room's ExtraRewards
+    RewardItem item;
+    item.kind = RewardKind::Relic;
+    item.relic = pullRelicFromFront(relicBag, rollRelicRarity(rr));
+    rewardItems.push_back(std::move(item));
+  }
   for (RewardKind k : extraRewards) {  // CombatRoom.ExtraRewards, populated after the room's own
     RewardItem item;
     item.kind = k;
@@ -438,12 +445,11 @@ Task<> Run::combatRewards(RoomType type) {
     rewardItems.push_back(std::move(item));
   }
   extraRewards.clear();
+  for (auto& item : roomExtraRewards) rewardItems.push_back(std::move(item));  // AddExtraReward (Swipe, Heist)
+  roomExtraRewards.clear();
+  for (; bonusCardRewards > 0; --bonusCardRewards) makeCardItem(type);  // CombatRoom.AddExtraReward (TheHunt)
 
   if (type == RoomType::Elite) {
-    RewardItem item;
-    item.kind = RewardKind::Relic;
-    item.relic = pullRelicFromFront(relicBag, rollRelicRarity(rr));
-    rewardItems.push_back(std::move(item));
     int bonus = 0;
     for (auto& rel : relics) bonus += rel->bonusRelicRewards(RoomType::Elite);  // Black Star (hook-added, after)
     for (int i = 0; i < bonus; ++i) {
@@ -478,7 +484,6 @@ Task<> Run::combatRewards(RoomType type) {
   }
   for (auto& rel : relics)
     for (RoomType odds : rel->extraCardRewards(type)) makeCardItem(odds);  // Prayer Wheel / White Star
-  for (; bonusCardRewards > 0; --bonusCardRewards) makeCardItem(type);  // CombatRoom.AddExtraReward (TheHunt)
   // Hook.ModifyRewards, TryModifyRewardsLate (M11): Vintage turns a monster room's card rewards into
   // relic rewards (populated after the rest, in place); Midas doubles every gold reward.
   for (auto& m : modifiers) {
@@ -494,47 +499,7 @@ Task<> Run::combatRewards(RoomType type) {
         if (item.kind == RewardKind::Gold) item.gold *= 2;
   }
 
-  std::stable_sort(rewardItems.begin(), rewardItems.end(), [](const RewardItem& a, const RewardItem& b) {
-    auto rank = [](RewardKind k) { return k == RewardKind::Gold ? 0 : k == RewardKind::Potion ? 1 : k == RewardKind::Relic ? 2 : 3; };
-    return rank(a.kind) < rank(b.kind);
-  });
-
-  // ---- offer: claim rows in any order; Proceed (-1 or an out-of-range index) forfeits the rest.
-  for (;;) {
-    int pick = co_await rewardListChoice.next();
-    if (pick < 0 || pick >= (int)rewardItems.size()) break;
-    RewardItem& item = rewardItems[pick];
-    bool claimed = false;
-    switch (item.kind) {
-      case RewardKind::Gold:
-        co_await gainGold(item.gold);
-        claimed = true;
-        break;
-      case RewardKind::Potion:
-        // PotionReward.OnSelect: fails (row stays) while the belt is full.
-        if (hasOpenPotionSlot()) { procurePotion(std::move(item.potion)); claimed = true; }
-        break;
-      case RewardKind::Relic:
-        co_await obtainRelic(std::move(item.relic));
-        claimed = true;
-        break;
-      case RewardKind::Card: {
-        rewardCards = std::move(item.cards);
-        int cardPick = co_await rewardChoice.next();
-        if (cardPick >= 0 && cardPick < (int)rewardCards.size()) {
-          addCardToDeck(std::move(rewardCards[cardPick]));
-          claimed = true;
-        } else {
-          item.cards = std::move(rewardCards);  // skipped: same options, the row stays
-        }
-        rewardCards.clear();
-        break;
-      }
-    }
-    if (claimed) rewardItems.erase(rewardItems.begin() + pick);
-  }
-  rewardItems.clear();
-  rewardCards.clear();
+  co_await offerRewards(std::move(rewardItems), true);  // sorted by RewardsSetIndex, Driftwood, the claim loop
 }
 
 // UnknownMapPointOdds.Roll (single player, no blacklist): Monster 10%, Treasure 2%,
@@ -919,52 +884,12 @@ void Run::rollCardUpgrade(Card& c, double baseChance) {
   if (num <= odds) c.upgrade();
 }
 
-// CardFactory.CreateForReward: roll a rarity per card, no duplicates.
+// The cards of a combat room's CardReward (ForRoom + IsCardReward, card_rewards.cpp) without the
+// TryModifyCardRewardOptions hooks (Run::makeCardReward runs them).
 std::vector<std::unique_ptr<Card>> Run::cardReward(RoomType room, int count) {
-  std::vector<std::unique_ptr<Card>> out;
-  std::vector<std::string> taken;
-  // Prismatic Gem (ModifyCardRewardCreationOptions): every character's pool joins the reward pool.
-  bool allPools = false;
-  for (auto& rel : relics) if (rel->allCharacterCardPools()) allPools = true;
-  // CharacterCards (M11, ModifyCardRewardCreationOptions): its character's pool joins (a Union).
-  std::vector<std::string> extraPools = modifierCardPools();
-  auto poolOf = [&](const std::function<bool(const Card&)>& f) {
-    if (!allPools && extraPools.empty()) return db::characterCards(characterId, f);
-    std::vector<std::string> u;
-    std::vector<std::string> chars = {characterId};
-    for (auto& ch : extraPools) chars.push_back(ch);
-    if (allPools) chars = db::allCharacters();  // UnlockState.CharacterCardPools order
-    for (auto& ch : chars)
-      for (auto& id : db::characterCards(ch, f))
-        if (std::find(u.begin(), u.end(), id) == u.end()) u.push_back(id);
-    return u;
-  };
-  // BigGameHunter: an elite fight's card reward is uniform odds over Rare cards (no rarity roll).
-  const bool bigGame = room == RoomType::Elite && hasModifier("BigGameHunter");
-  for (int i = 0; i < count; ++i) {
-    Rarity want = bigGame ? Rarity::Rare : rollRarity(room);
-    auto pool = poolOf([&](const Card& c) { return c.rarity == want; });
-    for (auto& rel : relics)  // Hook.ModifyCardRewardCreationOptions: CardPools.Union(ColorlessCardPool) (DingyRug)
-      if (rel->addsColorlessToCardRewards()) {
-        for (auto& id : db::colorlessCards([&](const Card& c) { return c.rarity == want; }))
-          if (std::find(pool.begin(), pool.end(), id) == pool.end()) pool.push_back(id);
-        break;
-      }
-    pool.erase(std::remove_if(pool.begin(), pool.end(), [&](const std::string& id) {
-      return std::find(taken.begin(), taken.end(), id) != taken.end();
-    }), pool.end());
-    if (pool.empty()) pool = poolOf([&](const Card& c) {
-      return (c.rarity == Rarity::Common || c.rarity == Rarity::Uncommon || c.rarity == Rarity::Rare) &&
-             std::find(taken.begin(), taken.end(), c.id) == taken.end();
-    });
-    if (pool.empty()) break;
-    std::string id = rng("Rewards").nextItem(pool);
-    taken.push_back(id);
-    progress::markCardSeen(id);  // seen once offered, whether or not it is picked
-    out.push_back(db::card(id));
-    rollCardUpgrade(*out.back(), 0);  // CardFactory.CreateForReward: RollForUpgrade(baseChance 0)
-  }
-  return out;
+  CardCreationOptions o = CardCreationOptions::forRoom(characterId, room);
+  o.room = room;
+  return createForReward(o.with(ccIsCardReward | ccNoModifyHooks), count);
 }
 
 Task<bool> Run::fight(const std::string& encounterId) {
@@ -1200,9 +1125,11 @@ Task<> Run::restSite() {
       lastHeal = player->hp - before;
       for (Model* m : listeners()) co_await m->afterRestSiteHeal();
       co_await wait(0.6);
-      // TinyMailbox.TryModifyRestSiteHealRewards: two potion rewards.
-      if (hasRelic("TinyMailbox"))
-        for (int i = 0; i < 2; ++i) co_await offerPotion(randomPotion(rng("Rewards"), false));
+      // Hook.ModifyRestSiteHealRewards (TinyMailbox, DreamCatcher), then RewardsCmd.OfferCustom.
+      restSiteHealRewards.clear();
+      for (auto& rel : relics) rel->modifyRestSiteHealRewards();
+      co_await offerRewards(std::move(restSiteHealRewards));
+      restSiteHealRewards.clear();
       done = true;
     } else if (opt == 1) {
       upgradeOptions.clear();

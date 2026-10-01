@@ -76,38 +76,10 @@ Task<> chooseGeneratedToHand(Combat& c, std::vector<std::unique_ptr<Card>> optio
     }
 }
 
-// CardFactory.CreateForReward with CardRarityOddsType.RegularEncounter, CardCreationSource.Other: the rarity
-// comes from CardRarityOdds.RollWithBaseOdds (no offset, no change to future odds), then the next allowed
-// rarity (Common -> Uncommon -> Rare -> Common) that the pool has.
-// PORT NOTE: Hook.ModifyCardRewardCreationOptions / TryModifyCardRewardOptions (relics that edit card
-// rewards) are not applied.
+// CardFactory.CreateForReward with ForNonCombatWithDefaultOdds(ColorlessCardPool) (Run::createForReward):
+// CardRarityOdds.RollWithBaseOdds, the next allowed rarity, no upgrade roll, then the card reward hooks.
 std::vector<std::unique_ptr<Card>> colorlessRewardCards(Run& r, int n) {
-  std::vector<std::unique_ptr<Card>> out;
-  std::vector<std::string> taken;
-  for (int i = 0; i < n; ++i) {
-    std::vector<std::string> options;
-    for (auto& id : db::colorlessCards([](const Card&) { return true; }))
-      if (std::find(taken.begin(), taken.end(), id) == taken.end()) options.push_back(id);
-    if (options.empty()) break;
-    auto rarityOf = [](const std::string& id) { return db::card(id)->rarity; };
-    float rare = r.hasAscension(kScarcity) ? 0.0149f : 0.03f;  // CardRarityOdds.RegularRareOdds
-    float uncommon = 0.37f;
-    float roll = r.rng("Rewards").nextFloat();
-    Rarity want = roll < rare ? Rarity::Rare : roll < uncommon + rare ? Rarity::Uncommon : Rarity::Common;
-    auto has = [&](Rarity q) {
-      for (auto& id : options) if (rarityOf(id) == q) return true;
-      return false;
-    };
-    for (int guard = 0; guard < 3 && !has(want); ++guard)  // GetNextAllowedRarity
-      want = want == Rarity::Common ? Rarity::Uncommon : want == Rarity::Uncommon ? Rarity::Rare : Rarity::Common;
-    std::vector<std::string> items;
-    for (auto& id : options) if (rarityOf(id) == want) items.push_back(id);
-    if (items.empty()) break;
-    std::string id = r.rng("Rewards").nextItem(items);
-    taken.push_back(id);
-    out.push_back(db::card(id));
-  }
-  return out;
+  return r.createForReward(CardCreationOptions::forNonCombat({CardCreationOptions::kColorless}, false), n);
 }
 
 void registerColorlessPool() {

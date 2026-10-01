@@ -15,47 +15,6 @@ template <class E> void reg() { db::registerEvent(E::kId, [] { return std::uniqu
 
 int actIndex(Run& r) { return r.actIndex; }
 
-// RewardsCmd.OfferCustom: the rewards as one claimable list (same claim rules as
-// Run::combatRewards: a Potion row stays while the belt is full, a skipped Card row stays).
-Task<> offerRewards(Run& r, std::vector<Run::RewardItem> items) {
-  r.rewardItems = std::move(items);
-  r.screen = Screen::Reward;
-  for (;;) {
-    int pick = co_await r.rewardListChoice.next();
-    if (pick < 0 || pick >= (int)r.rewardItems.size()) break;
-    Run::RewardItem& item = r.rewardItems[pick];
-    bool claimed = false;
-    switch (item.kind) {
-      case Run::RewardKind::Gold:
-        co_await r.gainGold(item.gold);
-        claimed = true;
-        break;
-      case Run::RewardKind::Potion:
-        if (r.hasOpenPotionSlot()) { r.procurePotion(std::move(item.potion)); claimed = true; }
-        break;
-      case Run::RewardKind::Relic:
-        co_await r.obtainRelic(std::move(item.relic));
-        claimed = true;
-        break;
-      case Run::RewardKind::Card: {
-        r.rewardCards = std::move(item.cards);
-        int cardPick = co_await r.rewardChoice.next();
-        if (cardPick >= 0 && cardPick < (int)r.rewardCards.size()) {
-          r.addCardToDeck(std::move(r.rewardCards[cardPick]));
-          claimed = true;
-        } else {
-          item.cards = std::move(r.rewardCards);
-        }
-        r.rewardCards.clear();
-        break;
-      }
-    }
-    if (claimed) r.rewardItems.erase(r.rewardItems.begin() + pick);
-  }
-  r.rewardItems.clear();
-  r.rewardCards.clear();
-}
-
 std::string upperSnake(PotionRarity r) {
   switch (r) {
     case PotionRarity::Common: return "COMMON";
@@ -132,9 +91,7 @@ struct MrStruggles : Relic {
   }
 };
 
-// BingBong.cs: every card added to the deck is added a second time (at the bottom of the deck).
-// PORT NOTE: Run::transformCard swaps cards in place without the added-to-deck hook, so a
-// transformed card is not duplicated (the C# does: the new card enters the deck).
+// BingBong.cs: every card added to the deck (transformed ones too) is added a second time (at the bottom).
 struct BingBong : Relic {
   RELIC_HEADER(BingBong, "BING_BONG", Event)
   }
@@ -228,7 +185,7 @@ struct PotionCourier : Event {
   Task<> grabPotions() {
     std::vector<Run::RewardItem> rows;
     for (int i = 0; i < val("FoulPotions").toInt(); ++i) rows.push_back(potionRow(db::potion("FoulPotion")));
-    co_await offerRewards(*run, std::move(rows));
+    co_await run->offerRewards(std::move(rows));
     setFinished("GRAB_POTIONS");
   }
   Task<> ransack() {
@@ -242,7 +199,7 @@ struct PotionCourier : Event {
     if (!pick.empty()) {
       std::vector<Run::RewardItem> rows;
       rows.push_back(potionRow(db::potion(pick)));
-      co_await offerRewards(*run, std::move(rows));
+      co_await run->offerRewards(std::move(rows));
     }
     setFinished("RANSACK");
   }
@@ -285,10 +242,11 @@ struct SelfHelpBook : Event {
 };
 
 // StoneOfAllTime.cs (act 2, needs a potion): drink a random potion for +10 max HP, or take
-// 6 damage to give a card Vigorous 8.
-// PORT NOTE: Player.CanUseOrRemovePotions is not modelled, so the belt stays usable in the event.
+// 6 damage to give a card Vigorous 8. The belt can't be used or emptied meanwhile (CanUseOrRemovePotions).
 struct StoneOfAllTime : Event {
   EVENT_HEADER(StoneOfAllTime, "STONE_OF_ALL_TIME")
+  Task<> onStart() override { run->canUseOrRemovePotions = false; co_return; }  // BeforeEventStarted
+  void onEventFinished() override { run->canUseOrRemovePotions = true; }
   Potion* drinkPotion = nullptr;
   bool isAllowed(Run& r) override {
     if (actIndex(r) != 1) return false;
@@ -333,11 +291,12 @@ struct StoneOfAllTime : Event {
 };
 
 // TheFutureOfPotions.cs (needs 2+ potions): trade one of the first 3 potions for a card reward
-// of 3 upgraded cards of the matching rarity and a random type.
-// PORT NOTE: Player.CanUseOrRemovePotions is not modelled; the card-reward relic hooks
-// (TryModifyCardRewardOptions) are not run for this custom reward.
+// of 3 upgraded cards of the matching rarity and a random type. The belt can't be used or emptied
+// meanwhile (CanUseOrRemovePotions).
 struct TheFutureOfPotions : Event {
   EVENT_HEADER(TheFutureOfPotions, "THE_FUTURE_OF_POTIONS")
+  Task<> onStart() override { run->canUseOrRemovePotions = false; co_return; }  // BeforeEventStarted
+  void onEventFinished() override { run->canUseOrRemovePotions = true; }
   std::vector<std::pair<Potion*, CardType>> types;  // PotionToCardType, belt order
   bool isAllowed(Run& r) override {
     int n = 0;
@@ -384,26 +343,18 @@ struct TheFutureOfPotions : Event {
     CardType type = typeOf(potion);
     for (size_t i = 0; i < run->potions.size(); ++i)
       if (run->potions[i].get() == potion) { run->discardPotion((int)i); break; }
-    // CardCreationOptions.ForNonCombatWithUniformOdds(character pool, rarity && type), 3 distinct
-    // cards (CardFactory.CreateForReward: Rewards rng, then RollForUpgrade), then all upgraded.
-    auto pool = db::characterCards(run->characterId, [&](const Card& c) { return c.rarity == target && c.type == type; });
-    Run::RewardItem row;
-    row.kind = Run::RewardKind::Card;
-    std::vector<std::string> taken;
-    for (int i = 0; i < 3; ++i) {
-      std::vector<std::string> items;
-      for (auto& id : pool) if (std::find(taken.begin(), taken.end(), id) == taken.end()) items.push_back(id);
-      if (items.empty()) break;
-      std::string id = run->rng("Rewards").nextItem(items);
-      taken.push_back(id);
-      auto c = db::card(id);
-      run->rollCardUpgrade(*c, 0);
-      row.cards.push_back(std::move(c));
-    }
-    for (auto& c : row.cards) if (c->upgradable()) c->upgrade();
+    // CardReward(ForNonCombatWithUniformOdds(character pool, rarity && type) | NoRarityModification |
+    // NoCardPoolModifications, 3); AfterGenerated (every populate, rerolls too) upgrades the cards.
+    auto o = CardCreationOptions::forNonCombat({run->characterId}, true, [target, type](const Card& c) {
+      return c.rarity == target && c.type == type;
+    });
+    o.with(ccNoRarityModification | ccNoCardPoolModifications);
     std::vector<Run::RewardItem> rows;
-    if (!row.cards.empty()) rows.push_back(std::move(row));
-    co_await offerRewards(*run, std::move(rows));
+    rows.push_back(run->makeCardReward(o, 3, [](std::vector<std::unique_ptr<Card>>& cards) {
+      for (auto& c : cards) if (c && c->upgradable()) c->upgrade();
+    }));
+    if (rows.back().cards.empty()) rows.clear();
+    co_await run->offerRewards(std::move(rows));
     setFinished("DONE");
   }
 };

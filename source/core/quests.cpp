@@ -110,24 +110,19 @@ struct WingedBoots : Relic {
 struct ScrollBoxes : Relic {
   RELIC_HEADER(ScrollBoxes, "SCROLL_BOXES", Ancient) }
 
-  // CardCreationOptions.ForNonCombatWithUniformOdds(Character.CardPool, rarity) after
-  // Hook.ModifyCardRewardCreationOptions (PrismaticGem, the CharacterCards modifier, DingyRug), as in
-  // Run::cardReward: GetPossibleCards in pool order.
+  // CardCreationOptions.ForNonCombatWithUniformOdds(Character.CardPool, rarity) | NoRarityModification
+  // after Hook.ModifyCardRewardCreationOptions, then GetPossibleCards in pool order. The options are
+  // not IsCardReward, so DingyRug / PrismaticGem / CharacterCards leave them alone (as in the C#).
   static std::vector<std::string> possible(Run& r, Rarity want) {
-    auto f = [want](const Card& c) { return c.rarity == want; };
-    bool allPools = false;
-    for (auto& rel : r.relics) allPools = allPools || rel->allCharacterCardPools();
-    std::vector<std::string> chars = {r.characterId};
-    for (auto& ch : r.modifierCardPools()) chars.push_back(ch);
-    if (allPools) chars = db::allCharacters();
+    auto o = CardCreationOptions::forNonCombat({r.characterId}, true, [want](const Card& c) { return c.rarity == want; });
+    o.with(ccNoRarityModification);
+    for (auto& rel : r.relics) rel->modifyCardRewardCreationOptions(o);
     std::vector<std::string> out;
-    auto add = [&](const std::vector<std::string>& ids) {
+    for (auto& pool : o.pools) {
+      auto ids = pool == CardCreationOptions::kColorless ? db::colorlessPool(o.filter) : db::characterPool(pool, o.filter);
       for (auto& id : ids)
         if (std::find(out.begin(), out.end(), id) == out.end()) out.push_back(id);
-    };
-    for (auto& ch : chars) add(db::characterPool(ch, f));
-    for (auto& rel : r.relics)
-      if (rel->addsColorlessToCardRewards()) { add(db::colorlessCards(f)); break; }
+    }
     return out;
   }
   static bool canGenerateBundles(Run& r) {

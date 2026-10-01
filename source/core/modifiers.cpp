@@ -30,65 +30,23 @@ std::string upperSnake(const std::string& id) {
 
 bool isCombatRoom(RoomType t) { return t == RoomType::Monster || t == RoomType::Elite || t == RoomType::Boss; }
 
-// ---- CardFactory.CreateForReward, for the CardCreationOptions the modifiers use --------------
-// Uniform: CardRarityOddsType.Uniform (every non-Basic, non-Ancient card of the pools);
-// BaseRegular: RegularEncounter rolled with CardRarityOdds.RollWithBaseOdds (the offset stays);
-// RollRegular: RegularEncounter with ForceRarityOddsChange (CardRarityOdds.Roll = Run::rollRarity).
-// Every modifier's options carry NoUpgradeRoll. `count` cards, distinct within the call (the
-// blacklist), from the Rewards stream. PORT NOTE: Hook.TryModifyCardRewardOptions (relics that
-// change card rewards) is not run for these: nothing the run can own at Neow uses it.
-enum class Odds { Uniform, BaseRegular, RollRegular };
-
-Rarity nextRarityWrapping(Rarity r) {  // CardRarity.GetNextHighestRarityWithWrapping (Common..Rare)
-  return r == Rarity::Common ? Rarity::Uncommon : r == Rarity::Uncommon ? Rarity::Rare : Rarity::Common;
+// ---- CardFactory.CreateForReward (Run::createForReward) with the modifiers' CardCreationOptions ---
+// The character's pool, or the colorless one; Source Other. Uniform: ForNonCombatWithUniformOdds |
+// NoRarityModification (AllStar also NoCardPoolModifications); Draft: RegularEncounter | NoUpgradeRoll
+// (a CardReward: IsCardReward); SealedDeck: RegularEncounter | NoUpgradeRoll | ForceRarityOddsChange |
+// IsCardReward.
+CardCreationOptions uniformOptions(const std::string& pool) {
+  auto o = CardCreationOptions::forNonCombat({pool}, true);
+  o.with(ccNoRarityModification);
+  if (pool == CardCreationOptions::kColorless) o.with(ccNoCardPoolModifications);
+  return o;
 }
 
-std::vector<std::unique_ptr<Card>> createCards(Run& r, const std::vector<std::string>& characters, bool colorless,
-                                               Odds odds, int count) {
-  std::vector<std::unique_ptr<Card>> out;
-  std::vector<std::string> taken;
-  auto poolOf = [&](const std::function<bool(const Card&)>& f) {
-    std::vector<std::string> u;
-    if (colorless) u = db::colorlessCards(f);
-    for (auto& ch : characters)  // CardPools.Union: the character's own pool first
-      for (auto& id : db::characterCards(ch, f))
-        if (std::find(u.begin(), u.end(), id) == u.end()) u.push_back(id);
-    return u;
-  };
-  auto fresh = [&](const Card& c) { return std::find(taken.begin(), taken.end(), c.id) == taken.end(); };
-  for (int i = 0; i < count; ++i) {
-    std::vector<std::string> items;
-    if (odds == Odds::Uniform) {
-      items = poolOf([&](const Card& c) { return c.rarity != Rarity::Basic && c.rarity != Rarity::Ancient && fresh(c); });
-    } else {
-      Rarity want;
-      if (odds == Odds::RollRegular) {
-        want = r.rollRarity(RoomType::Monster);
-      } else {  // RollWithBaseOdds(RegularEncounter)
-        float rare = r.hasAscension(kScarcity) ? 0.0149f : 0.03f, uncommon = 0.37f;
-        float f = r.rng("Rewards").nextFloat();
-        want = f < rare ? Rarity::Rare : f < uncommon + rare ? Rarity::Uncommon : Rarity::Common;
-      }
-      for (int k = 0; k < 3; ++k, want = nextRarityWrapping(want)) {  // GetNextAllowedRarity
-        items = poolOf([&](const Card& c) { return c.rarity == want && fresh(c); });
-        if (!items.empty()) break;
-      }
-    }
-    if (items.empty()) break;
-    std::string id = r.rng("Rewards").nextItem(items);
-    taken.push_back(id);
-    progress::markCardSeen(id);
-    out.push_back(db::card(id));
-  }
-  return out;
-}
-
-// Reward pools of a card reward (IsCardReward): the character's pool plus CharacterCards' pools.
-std::vector<std::string> rewardPools(Run& r) {
-  std::vector<std::string> v = {r.characterId};
-  for (auto& ch : r.modifierCardPools())
-    if (std::find(v.begin(), v.end(), ch) == v.end()) v.push_back(ch);
-  return v;
+CardCreationOptions regularOptions(const std::string& pool) {
+  CardCreationOptions o;
+  o.pools = {pool};
+  o.with(ccNoUpgradeRoll);
+  return o;
 }
 
 // The deck-replacing modifiers take Pandora's Box out of both grab bags.
@@ -119,7 +77,7 @@ struct Draft : Modifier {
   bool hasNeowOption() const override { return true; }
   // OfferRewards: ten unskippable card rewards of three (RegularEncounter, base odds).
   Task<> neowOption() override {
-    for (int i = 0; i < 10; ++i) co_await pickOneCard(*run, createCards(*run, rewardPools(*run), false, Odds::BaseRegular, 3));
+    for (int i = 0; i < 10; ++i) co_await pickOneCard(*run, run->makeCardReward(regularOptions(run->characterId), 3).cards);
     removeFromBags(*run, "PandorasBox");
   }
 };
@@ -130,7 +88,7 @@ struct SealedDeck : Modifier {
   // ChooseCards: 30 cards (rarity odds change), pick 10 on a grid sorted by rarity then title.
   // PORT NOTE: ties sort by card id (the C# compares the localised titles).
   Task<> neowOption() override {
-    auto cards = createCards(*run, rewardPools(*run), false, Odds::RollRegular, 30);
+    auto cards = run->createForReward(regularOptions(run->characterId).with(ccForceRarityOddsChange | ccIsCardReward), 30);
     std::stable_sort(cards.begin(), cards.end(), [](const std::unique_ptr<Card>& a, const std::unique_ptr<Card>& b) {
       return a->rarity != b->rarity ? (int)a->rarity < (int)b->rarity : a->id < b->id;
     });
@@ -158,7 +116,7 @@ struct Specialized : Modifier {
   bool hasNeowOption() const override { return true; }
   // ObtainCards: one uniform card of the character's pool, five copies of it.
   Task<> neowOption() override {
-    auto one = createCards(*run, {run->characterId}, false, Odds::Uniform, 1);
+    auto one = run->createForReward(uniformOptions(run->characterId), 1);
     if (one.empty()) co_return;
     for (int i = 0; i < 5; ++i) run->addCardToDeck(one[0]->clone());
     co_await wait(0.6);
@@ -171,7 +129,7 @@ struct Insanity : Modifier {
   // ObtainCards: thirty uniform cards of the character's pool (each its own CreateForReward).
   Task<> neowOption() override {
     for (int i = 0; i < 30; ++i)
-      for (auto& c : createCards(*run, {run->characterId}, false, Odds::Uniform, 1)) run->addCardToDeck(std::move(c));
+      for (auto& c : run->createForReward(uniformOptions(run->characterId), 1)) run->addCardToDeck(std::move(c));
     co_await wait(0.6);
     removeFromBags(*run, "PandorasBox");
   }
@@ -182,7 +140,7 @@ struct AllStar : Modifier {
   // ObtainCards: five uniform colorless cards.
   Task<> neowOption() override {
     for (int i = 0; i < 5; ++i)
-      for (auto& c : createCards(*run, {}, true, Odds::Uniform, 1)) run->addCardToDeck(std::move(c));
+      for (auto& c : run->createForReward(uniformOptions(CardCreationOptions::kColorless), 1)) run->addCardToDeck(std::move(c));
     co_await wait(0.6);
   }
 };
