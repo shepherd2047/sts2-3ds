@@ -58,20 +58,14 @@ struct Bludgeon : IroncladT<Bludgeon> {
   void onUpgrade() override { upgradeVar("Damage", 10); }
 };
 
-// PORT NOTE: CalculatedDamageVar's multiplier reads the attack's target
-// (target's Vulnerable stacks), but Card::calcMultiplier only receives the
-// card, not the target creature, so the damage is computed by hand instead
-// of via attackCalculated().
 struct Bully : IroncladT<Bully> {
   CARD_HEADER(Bully, "BULLY", 0, Attack, Uncommon, AnyEnemy)
     addVar("CalculationBase", 4);
     addVar("ExtraDamage", 2);
-    addVar("CalculatedDamage", 0);  // the multiplier needs the target (Vulnerable): 0 in the hand, as Calculate(null)
+    addVar("CalculatedDamage", 0);
+    calcMultiplierT = [](Card*, Creature* t) { return t ? t->powerAmount<VulnerablePower>() : 0; };
   }
-  Task<> onPlay(CardPlay& p) override {
-    Dec dmg = val("CalculationBase") + val("ExtraDamage") * Dec(p.target->powerAmount<VulnerablePower>());
-    co_await attack(p.target, dmg);
-  }
+  Task<> onPlay(CardPlay& p) override { co_await attackCalculated(p.target); }
   void onUpgrade() override { upgradeVar("ExtraDamage", 1); }
 };
 

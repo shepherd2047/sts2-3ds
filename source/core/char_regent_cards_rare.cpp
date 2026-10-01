@@ -212,17 +212,15 @@ struct Arsenal : IroncladT<Arsenal> {
 // CalculationExtra 5 per powered attack damage the player dealt this turn to the target,
 // not counting the hit(s) this card just made.
 // PORT NOTE: the multiplier reads Combat::damageHistory (a one-vector hook for the C#'s
-// DamageReceivedEntry history). The multiplier needs the target; before the card is played
-// (card text preview) it has none and counts 0.
+// DamageReceivedEntry history).
 struct BeatIntoShape : IroncladT<BeatIntoShape> {
   CARD_HEADER(BeatIntoShape, "BEAT_INTO_SHAPE", 1, Attack, Rare, AnyEnemy)
     addVar("Damage", 5);
     addVar("CalculationBase", 5);
     addVar("CalculationExtra", 5);
     addVar("CalculatedForge", 0);
-    calcMultiplier = [](Card* c) { return static_cast<BeatIntoShape*>(c)->hitsOn(static_cast<BeatIntoShape*>(c)->lastTarget); };
+    calcMultiplierT = [](Card* c, Creature* t) { return static_cast<BeatIntoShape*>(c)->hitsOn(t); };
   }
-  Creature* lastTarget = nullptr;
   int hitsOn(Creature* target) const {
     if (!target || !combat) return 0;
     int n = 0;
@@ -232,7 +230,6 @@ struct BeatIntoShape : IroncladT<BeatIntoShape> {
     return n;
   }
   Task<> onPlay(CardPlay& p) override {
-    lastTarget = p.target;
     cmd::Attack a;
     a.damagePerHit = val("Damage");
     a.attacker = me();
@@ -240,7 +237,7 @@ struct BeatIntoShape : IroncladT<BeatIntoShape> {
     a.single = p.target;
     co_await a.execute(*combat);
     // CalculatedVar.Calculate(target) - Results.Count * CalculationExtra
-    Dec amount = calculatedBlock() - Dec((int)a.results.size()) * val("CalculationExtra");
+    Dec amount = calculatedBlock(p.target) - Dec((int)a.results.size()) * val("CalculationExtra");
     co_await cmd::forge(*combat, amount, this);
   }
   void onUpgrade() override {

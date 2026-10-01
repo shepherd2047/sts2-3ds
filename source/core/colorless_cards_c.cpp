@@ -110,11 +110,8 @@ struct Rend : IroncladT<Rend> {
     addVar("CalculationBase", 10);
     addVar("ExtraDamage", 5);
     addVar("CalculatedDamage", 0);
-    calcMultiplier = [](Card* c) { return static_cast<Rend*>(c)->debuffsOn(static_cast<Rend*>(c)->lastTarget); };
+    calcMultiplierT = [](Card*, Creature* t) { return debuffsOn(t); };
   }
-  // PORT NOTE: Card::calcMultiplier has no target; onPlay sets lastTarget (the C# lambda gets the target,
-  // and counts 0 for the card-text preview with none).
-  Creature* lastTarget = nullptr;
   static int debuffsOn(Creature* target) {
     int n = 0;
     if (target)
@@ -123,9 +120,7 @@ struct Rend : IroncladT<Rend> {
     return n;
   }
   Task<> onPlay(CardPlay& p) override {
-    lastTarget = p.target;
     co_await attackCalculated(p.target);
-    lastTarget = nullptr;
   }
   void onUpgrade() override {
     upgradeVar("ExtraDamage", 3);

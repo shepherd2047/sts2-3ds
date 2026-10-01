@@ -187,20 +187,18 @@ struct Melancholy : IroncladT<Melancholy> {
 
 // NoEscape.cs: apply Doom to the target: CalculationBase 10 (+5 upgraded) + CalculationExtra 5 per
 // full DoomThreshold (10) Doom it already has.
-// PORT NOTE: the CalculatedDoom var is computed in onPlay; Card::calcMultiplier has no target, so
-// the card text cannot preview it.
 struct NoEscape : IroncladT<NoEscape> {
   CARD_HEADER(NoEscape, "NO_ESCAPE", 1, Skill, Uncommon, AnyEnemy)
     addVar("DoomThreshold", 10);
     addVar("CalculationBase", 10);
     addVar("CalculationExtra", 5);
-    addVar("CalculatedDoom", 0);  // the multiplier needs the target's Doom
+    addVar("CalculatedDoom", 0);
+    calcMultiplierT = [](Card* c, Creature* t) {  // Math.Floor of a non-negative ratio
+      return t ? t->powerAmount<DoomPower>() / c->val("DoomThreshold").toInt() : 0;
+    };
   }
   Task<> onPlay(CardPlay& p) override {
-    int doom = p.target->powerAmount<DoomPower>();
-    int mult = doom / val("DoomThreshold").toInt();  // Math.Floor of a non-negative ratio
-    Dec calc = val("CalculationBase") + val("CalculationExtra") * Dec(mult);
-    co_await applyPower<DoomPower>(p.target, calc, me(), this);
+    co_await applyPower<DoomPower>(p.target, calculatedBlock(p.target), me(), this);
   }
   void onUpgrade() override { upgradeVar("CalculationBase", 5); }
 };

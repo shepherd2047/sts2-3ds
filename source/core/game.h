@@ -512,6 +512,10 @@ struct Card : Model {
 
   // Hand-view calculation for CalculatedDamageVar (Body Slam, Perfected Strike).
   std::function<int(Card*)> calcMultiplier;
+  // Target-aware multiplier (CalculatedVar.WithMultiplier((card, target) => ...)); target may be null
+  // (no target hovered: the C# counts 0). Preferred over calcMultiplier when set.
+  std::function<int(Card*, Creature*)> calcMultiplierT;
+  Creature* previewTarget = nullptr;  // UI only: the creature a hand card is being aimed at (hand preview numbers)
 
   virtual ~Card() = default;
   virtual Task<> onPlay(CardPlay&) { return {}; }
@@ -581,8 +585,9 @@ struct Card : Model {
   void upgradeVar(const char* n, Dec by) { if (auto* v = var(n)) v->base += by; }
   void addVar(const char* n, Dec v) { vars.push_back({n, v, v}); }
 
-  Dec calculatedDamage();  // CalculatedDamageVar: CalculationBase + ExtraDamage * multiplier
-  Dec calculatedBlock();   // CalculatedBlockVar: CalculationBase + CalculationExtra * multiplier
+  Dec calculatedDamage(Creature* target = nullptr);  // CalculatedDamageVar: CalculationBase + ExtraDamage * multiplier
+  Dec calculatedBlock(Creature* target = nullptr);   // CalculatedBlockVar: CalculationBase + CalculationExtra * multiplier
+  int calcMult(Creature* target) { return calcMultiplierT ? calcMultiplierT(this, target ? target : previewTarget) : calcMultiplier ? calcMultiplier(this) : 0; }
 };
 
 template <class Derived> struct CardT : Card {
