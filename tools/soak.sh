@@ -2,18 +2,22 @@
 # H2 memory soak: the sanitizer sim over every character and the SIM_ALL* / SIM_MODIFIERS /
 # SIM_SAVELOAD mixes, configs in parallel. One summary line per config:
 #   <config>: runs R, crashes C, sanitizer S, stuck T, mismatch M, peakRSS <MB>
-# Usage: bash tools/soak.sh [N=1000] [jobs=4]   (logs in build/soak/; exit 1 if anything failed)
+# Usage: bash tools/soak.sh [N=1000] [jobs=4]   (logs in build/soak\$SOAK_TAG/; exit 1 if anything failed)
 # Sanitizer: build/sim-asan (ASan+UBSan) when its runtime starts; otherwise (macOS 27: ASan hangs
 # at start-up) build/sim-ubsan with libmalloc scribble/guard-edge checks. On macOS it then runs
 # `leaks --atExit` over SOAK_LEAKS (default 20) runs per character, since LeakSanitizer is not
-# available there. SOAK_SAN=asan|ubsan forces the mode.
+# available there. SOAK_SAN=asan|ubsan forces the mode; SOAK_SAN=none soaks the plain -O2 build/sim
+# (the big N=1000 run: also set SOAK_LEAKS=0 SOAK_GMALLOC=0 to skip the slow leaks/gmalloc phase).
+# Split a long soak with SOAK_ONLY=<regex on the config> so other builds can interleave.
+# Peak RSS per config is the max over the one process that runs all N seeds: flat across N = no leak.
 cd "$(dirname "$0")/.."
 N=${1:-1000}; JOBS=${2:-4}
-out=build/soak; rm -rf $out; mkdir -p $out
+out=build/soak${SOAK_TAG:-}; rm -rf $out; mkdir -p $out
 export UBSAN_OPTIONS=${UBSAN_OPTIONS:-print_stacktrace=1:halt_on_error=1}
 export ASAN_OPTIONS=${ASAN_OPTIONS:-halt_on_error=1}
 san=${SOAK_SAN:-auto}
-if [ $san = auto ]; then
+if [ $san = none ]; then :
+elif [ $san = auto ]; then
   san=ubsan
   if make -f Makefile.sdl build/sim-asan >$out/build_asan.log 2>&1; then
     ./build/sim-asan 0 >/dev/null 2>&1 & p=$!
@@ -21,8 +25,9 @@ if [ $san = auto ]; then
     if kill -0 $p 2>/dev/null; then kill -9 $p; else wait $p && san=asan; fi
   fi
 fi
-make -f Makefile.sdl build/sim-$san build/sim >$out/build.log 2>&1 || { echo "build failed ($out/build.log)"; exit 1; }
-BIN=./build/sim-$san
+if [ $san = none ]; then tgt=build/sim; else tgt="build/sim-$san build/sim"; fi
+make -f Makefile.sdl $tgt >$out/build.log 2>&1 || { echo "build failed ($out/build.log)"; exit 1; }
+BIN=./build/sim-$san; [ $san = none ] && BIN=./build/sim
 [ $san = ubsan ] && export MallocScribble=1 MallocPreScribble=1 MallocGuardEdges=1 MallocErrorAbort=1
 echo "soak: $N runs per config, $BIN"
 cfgs=()
@@ -41,6 +46,7 @@ run_one() {  # $1 index, $2 config. One process for all N seeds (RSS growth = le
     else echo "EXIT seed $((last + 1))" >>$log; s=$((last + 2)); fi
   done
 }
+if [ -n "$SOAK_ONLY" ]; then f=(); for c in "${cfgs[@]}"; do [[ "$c" =~ $SOAK_ONLY ]] && f+=("$c"); done; cfgs=("${f[@]}"); fi
 for i in "${!cfgs[@]}"; do
   while [ "$(jobs -rp | wc -l)" -ge "$JOBS" ]; do sleep 1; done
   run_one "$i" "${cfgs[$i]}" &
