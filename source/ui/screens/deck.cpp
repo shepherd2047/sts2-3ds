@@ -22,8 +22,8 @@ namespace ui {
 // count) can go there early with 确认. Keys: D-pad moves the focus through the grid and down into the
 // bar, A picks / presses, X shows the focused card's detail, B leaves the review / cancels (when
 // allowed) / drops the focus. The rules (DeckChoice, Run::upgradeChoice) are unchanged.
-// PORT NOTE: the enchant prompt shows the card large, not enchanted; needs DeckChoice (core/game.h) to carry the
-// enchantment id + amount (set by Run::selectForEnchantment) so the preview can show the card with it applied.
+// Enchant prompts (DeckChoice::enchantId / enchantAmount, set by Run::selectForEnchantment) preview the
+// card with the enchantment applied, as the C# NDeckEnchantSelectScreen's NEnchantPreview does.
 namespace {
 constexpr float kGS = 0.46f, kGW = 120 * kGS, kGH = 169 * kGS, kGRow = kGH + 8;  // F5 grid mini
 constexpr int kGPerRow = 5;
@@ -57,6 +57,7 @@ struct GridSel {
   int touchCard = -1;
   int pending = 0;  // action-bar widget pressed during the last draw
   std::map<Card*, std::unique_ptr<Card>> upgraded;  // upgrade previews, made on first need
+  std::string enchantId;
 };
 GridSel& GS() {
   static GridSel g;
@@ -67,11 +68,12 @@ void gridSync(const App::GridSelectSpec& s) {
   GridSel& g = GS();
   const void* key = s.cards && !s.cards->empty() ? (const void*)s.cards->data() : nullptr;
   size_t n = s.cards ? s.cards->size() : 0;
-  if (key == g.key && n == g.n && s.prompt == g.prompt) return;
+  if (key == g.key && n == g.n && s.prompt == g.prompt && s.enchantId == g.enchantId) return;
   g = GridSel{};
   g.key = key;
   g.n = n;
   g.prompt = s.prompt;
+  g.enchantId = s.enchantId;
 }
 
 Card* upgradedCopy(Card* c) {
@@ -81,6 +83,18 @@ Card* upgradedCopy(Card* c) {
     slot->upgrade();
   }
   return slot.get();
+}
+
+// The card as an enchant prompt previews it (a copy with the enchantment applied, made on first need).
+Card* previewCard(const App::GridSelectSpec& s, Card* c) {
+  if (s.upgrade && c->upgradable()) return upgradedCopy(c);
+  if (s.enchantId.empty()) return c;
+  auto& slot = GS().upgraded[c];
+  if (!slot) {
+    slot = c->clone();
+    if (!cmd::enchant(slot.get(), db::enchantment(s.enchantId), s.enchantAmount)) slot.reset();
+  }
+  return slot ? slot.get() : c;
 }
 
 int gridRows(int n) { return (n + kGPerRow - 1) / kGPerRow; }
@@ -281,7 +295,7 @@ void App::gridSelectDraw(const GridSelectSpec& s, bool top) {
       float w = 120 * sc, x0 = (kTop - (k * w + (k - 1) * 8)) / 2;
       for (int j = 0; j < k; ++j) {
         Card* c = (*s.cards)[g.picks[j]];
-        drawCard(s.upgrade && c->upgradable() ? upgradedCopy(c) : c, x0 + j * (w + 8), 62, sc, false, true);
+        drawCard(previewCard(s, c), x0 + j * (w + 8), 62, sc, false, true);
       }
       return;
     }
@@ -294,7 +308,7 @@ void App::gridSelectDraw(const GridSelectSpec& s, bool top) {
         else R().text(kTop / 2, 128, "→", ts(F16, col::gold, CENTER, 0, 1.6f));
         drawCard(upgradedCopy(c), kTop - 50 - 120, 62, 1.0f, false, true);
       } else {
-        drawCard(c, (kTop - 120.f) / 2, 62, 1.0f, false, true);
+        drawCard(previewCard(s, c), (kTop - 120.f) / 2, 62, 1.0f, false, true);
       }
       bool picked = std::find(g.picks.begin(), g.picks.end(), g.sel) != g.picks.end();
       if (multi) R().text(kTop - 10, kH - 18, picked ? counter + tr("  已选择这张", "  Picked") : counter, ts(F12, picked ? col::gold : col::white, RIGHT));
@@ -313,7 +327,7 @@ void App::gridSelectDraw(const GridSelectSpec& s, bool top) {
     float w = 120 * sc, x0 = (kBot - (k * w + (k - 1) * 6)) / 2;
     for (int j = 0; j < k; ++j) {
       Card* c = (*s.cards)[g.picks[j]];
-      drawCard(s.upgrade && c->upgradable() ? upgradedCopy(c) : c, x0 + j * (w + 6), 40, sc, false, true);
+      drawCard(previewCard(s, c), x0 + j * (w + 6), 40, sc, false, true);
     }
     gfx::rect(0, kGY1, kBot, kH - kGY1, style::kScrim);
     widgets::beginFrame(barInput(1));
@@ -373,6 +387,8 @@ App::GridSelectSpec deckSpec(const DeckChoice& d) {
   s.minCount = d.minCount;
   s.canCancel = d.canCancel;
   s.upgrade = d.showUpgrade || d.prompt == "card_selection.TO_UPGRADE";
+  s.enchantId = d.enchantId;
+  s.enchantAmount = d.enchantAmount;
   return s;
 }
 }  // namespace
