@@ -305,7 +305,12 @@ struct MadScience : IroncladT<MadScience> {
         co_await drawCards(val("WisdomCards"));
         break;
       case kChaos: {
-        const auto& pool = combat->run->character().cardPool;
+        // GetUnlockedCards + FilterForCombat: the raw cardPool also lists unported / multiplayer-only
+        // ids, for which db::card returns null.
+        auto pool = db::characterCards(combat->run->characterId, [](const Card& c) {
+          return c.canBeGeneratedInCombat() && c.rarity != Rarity::Basic && c.rarity != Rarity::Ancient;
+        });
+        if (pool.empty()) break;
         auto card = db::card(combat->run->rng("CombatCardGeneration").nextItem(pool));
         card->setThisTurn(0);
         co_await cmd::addGeneratedCard(*combat, std::move(card), Pile::Hand);
