@@ -30,26 +30,21 @@ struct Toxic : IroncladT<Toxic> {
   Task<> onTurnEndInHand() override { co_await cmd::damage(me(), val("Damage"), kUnpowered | kMove, nullptr, this); }
 };
 
-// PORT NOTE: Hook.ModifyDamageCap caps the damage before block; this build has no cap hook,
-// so the cap is applied to the HP lost after block (identical while the owner has no block,
-// which holds for Exoskeletons).
+// HardToKillPower.cs: damage to the owner is capped at Amount (Hook.ModifyDamageCap, before block).
 struct HardToKillPower : Power {
   POWER_HEADER(HardToKillPower, "HARD_TO_KILL_POWER")
-  Dec modifyHpLostAfterOsty(Creature* target, Dec amount, int, Creature*, Card*) override {
-    if (target != owner) return amount;
-    if (amount > Dec(this->amount)) { flash = 1.f; return Dec(this->amount); }
-    return amount;
+  Dec modifyDamageCap(Creature* target, int, Creature*, Card*) override {
+    return target == owner ? Dec(amount) : kNoDamageCap;
   }
 };
 
-// PORT NOTE: BeforeDamageReceived is not a hook here; the reflected damage is dealt in
-// afterDamageReceived instead (not at all when the hit kills the owner).
+// ThornsPower.cs: before a powered attack (or Omnislice) hits the owner, the attacker takes Amount.
 struct ThornsPower : Power {
   POWER_HEADER(ThornsPower, "THORNS_POWER")
-  Task<> afterDamageReceived(Creature* target, const DamageResult&, int props, Creature* dealer, Card*) override {
-    if (target != owner || !dealer || dealer->dead() || !isPoweredAttack(props)) co_return;
+  Task<> beforeDamageReceived(Creature* target, Dec, int props, Creature* dealer, Card* src) override {
+    if (target != owner || !dealer || !(isPoweredAttack(props) || (src && src->id == "Omnislice"))) co_return;
     flash = 1.f;
-    co_await cmd::damage(dealer, amount, kUnpowered, owner, nullptr);
+    co_await cmd::damage(dealer, amount, kUnpowered | kSkipHurtAnim, owner, nullptr);
   }
 };
 
@@ -66,7 +61,7 @@ struct BurrowedPower : Power {
   POWER_HEADER(BurrowedPower, "BURROWED_POWER")
   StackType stackType() const override { return StackType::Single; }
   bool shouldClearBlock(Creature* c) override { return c != owner; }
-  Task<> afterDamageReceived(Creature* target, const DamageResult& r, int, Creature*, Card*) override;
+  Task<> afterBlockBroken(Creature* target, Creature*) override;
   Task<> afterRemoved(Creature* oldOwner) override {
     oldOwner->block = 0;  // CreatureCmd.LoseBlock(999999999)
     co_return;
@@ -315,8 +310,8 @@ struct Tunneler : Monster {
   }
 };
 
-Task<> BurrowedPower::afterDamageReceived(Creature* target, const DamageResult& r, int, Creature*, Card*) {
-  if (target != owner || !r.blockBroken) co_return;
+Task<> BurrowedPower::afterBlockBroken(Creature* target, Creature*) {
+  if (target != owner) co_return;
   if (owner->monster && owner->monster->id == "Tunneler") {
     auto* t = static_cast<Tunneler*>(owner->monster.get());
     t->stun([t](Targets) { return t->stillDizzyMove(); }, "BITE_MOVE");

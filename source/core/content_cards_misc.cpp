@@ -89,20 +89,16 @@ struct HelloWorldPower : Power {
 };
 
 // ReboundPower.cs: the next Amount cards that would go to the discard pile go on top of the draw
-// pile instead; removed at the end of the turn.
-// PORT NOTE: this engine has no AfterModifyingCardPlayResultLocation hook, so the decrement runs in
-// afterCardPlayed of the card whose location was changed (the C# decrements just before its OnPlay).
+// pile instead (decremented as the location changes, before the card's OnPlay); removed at the end
+// of the turn.
 struct ReboundPower : Power {
   POWER_HEADER(ReboundPower, "REBOUND_POWER")
-  Card* pending = nullptr;
   Pile modifyCardPlayResultLocation(Card* card, bool, Pile pile) override {
     if (ownerOf(card) != owner || pile != Pile::Discard) return pile;
-    pending = card;
     return Pile::Draw;
   }
-  Task<> afterCardPlayed(const CardPlay& p) override {
-    if (!pending || p.card != pending) co_return;
-    pending = nullptr;
+  Task<> afterModifyingCardPlayResultLocation(Card* card, Pile) override {
+    if (ownerOf(card) != owner) co_return;
     flash = 1.f;
     co_await cmd::decrement(this);  // may remove the power: nothing may touch it afterwards
   }

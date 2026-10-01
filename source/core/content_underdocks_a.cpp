@@ -53,20 +53,19 @@ struct RavenousPower : Power {
   }
 };
 
-// FossilStalker: gains Amount Strength for every hit that deals unblocked damage.
-// The C# reads AttackCommand.Results in AfterAttack; here the hits are counted as they
-// land and the Strength is granted when the whole attack has finished (same timing).
+// FossilStalker: gains Amount Strength for every hit of its attack that deals unblocked damage
+// (AfterAttack over AttackCommand.Results; a hit on a pet drops its owner's overflow result).
 struct SuckPower : Power {
   POWER_HEADER(SuckPower, "SUCK_POWER")
-  int hitsLanded = 0;
-  Task<> afterDamageReceived(Creature* target, const DamageResult& r, int props, Creature* dealer, Card*) override {
-    if (dealer != owner || target->side == owner->side || !isPoweredAttack(props)) co_return;
-    if (r.unblocked > 0) ++hitsLanded;
-  }
-  Task<> afterAttack(Creature* attacker) override {
-    if (attacker != owner) co_return;
-    int n = hitsLanded;
-    hitsLanded = 0;
+  Task<> afterAttack(const cmd::Attack& a) override {
+    if (a.attacker != owner || a.targetSide() == owner->side || !isPoweredAttack(a.props)) co_return;
+    int n = 0;
+    for (std::vector<DamageResult> hit : a.results) {
+      std::vector<Creature*> petOwners;
+      for (auto& r : hit) if (r.receiver && r.receiver->petOwner) petOwners.push_back(r.receiver->petOwner);
+      hit.erase(std::remove_if(hit.begin(), hit.end(), [&](const DamageResult& r) { return contains(petOwners, r.receiver); }), hit.end());
+      if (std::any_of(hit.begin(), hit.end(), [](const DamageResult& r) { return r.unblocked > 0; })) ++n;
+    }
     if (n <= 0) co_return;
     flash = 1.f;
     co_await applyPower<StrengthPower>(owner, amount * n, owner, nullptr);

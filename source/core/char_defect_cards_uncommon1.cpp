@@ -12,11 +12,9 @@ namespace {
 // top of the hand instead of being discarded.
 // PORT NOTE: (1) this engine's modifyCardPlayResultLocation hook has no ResourceInfo, so "energy
 // spent == 0" is derived as autoPlay || (X-cost ? xValue == 0 : energyCost(card) == 0); (2) there
-// is no AfterModifyingCardPlayResultLocation hook and no card position in a Pile result, so the
-// counter is bumped inside the location hook (called once per play) and the card goes to the end
-// of the hand (Pile::Hand) rather than CardPilePosition.Top; (3) DisplayAmount (remaining count)
-// is not modeled. AfterApplied seeds the counter from the Attack CardPlaysStarted this turn that
-// spent no energy.
+// is no card position in a Pile result, so the card goes to the end of the hand (Pile::Hand)
+// rather than CardPilePosition.Top; (3) DisplayAmount (remaining count) is not modeled.
+// AfterApplied seeds the counter from the Attack CardPlaysStarted this turn that spent no energy.
 struct FeralPower : Power {
   POWER_HEADER(FeralPower, "FERAL_POWER")
   int zeroCostAttacksPlayed = 0;
@@ -34,9 +32,12 @@ struct FeralPower : Power {
     if (!zeroEnergy) return pile;
     if (card->isDupe) return pile;
     if (zeroCostAttacksPlayed >= amount) return pile;
+    return Pile::Hand;
+  }
+  Task<> afterModifyingCardPlayResultLocation(Card*, Pile) override {
     flash = 1.f;
     ++zeroCostAttacksPlayed;
-    return Pile::Hand;
+    co_return;
   }
   Task<> afterSideTurnStart(Side, const std::vector<Creature*>& participants) override {
     if (contains(participants, owner)) zeroCostAttacksPlayed = 0;

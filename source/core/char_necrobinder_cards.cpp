@@ -138,8 +138,8 @@ struct Flatten : IroncladT<Flatten> {
     if (card == this && hasOstyAttackedThisTurn()) setThisTurn(0);
     return {};
   }
-  Task<> afterAttack(Creature* attacker) override {
-    if (combat && attacker && attacker == combat->osty) setThisTurn(0);
+  Task<> afterAttack(const cmd::Attack& a) override {
+    if (combat && a.attacker && a.attacker == combat->osty) setThisTurn(0);
     return {};
   }
 };

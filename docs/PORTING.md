@@ -81,6 +81,12 @@ afterSideTurnEnd, afterDamageReceived, afterDeath, beforeCardPlayed,
 afterCardPlayed, afterPowerAmountChanged, afterCardExhausted, afterCardDrawn
 (AfterCardDrawnEarly too), afterBlockGained, afterCardEnteredCombat,
 afterEnergySpent. Power-only: beforeApplied, afterApplied, afterRemoved.
+Also (E7): modifyDamageCap (return `kNoDamageCap` for "no cap"), beforeDamageReceived,
+afterBlockBroken, beforeAttack / afterAttack (take the `cmd::Attack`; group plain damage calls with
+`cmd::beginAttackContext` / `endAttackContext` like the C#'s AttackContext),
+afterModifyingCardPlayResultLocation, shouldAllowHitting (`Combat::canReceivePowers`),
+shouldTakeExtraTurn / afterTakingExtraTurn (`Combat::extraTurn`), and the Early/Late variants
+(...Early / ...Late suffix on the C# name) for the hooks that have users.
 The `PlayerChoiceContext` / `ICombatState` parameters of C# hooks are dropped.
 `CombatSide` → `Side::Player` / `Side::Enemy`. `combat->currentSide`,
 `combat->roundNumber`, `combat->turnNumber` exist.
