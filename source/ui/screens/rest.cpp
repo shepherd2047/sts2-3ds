@@ -22,8 +22,8 @@ namespace ui {
 namespace {
 constexpr int kOptId = 200;  // widget id of option o: kOptId + o
 constexpr int kLeaveId = 290, kConfirmId = 291, kProceedId = 292;
-constexpr const char* kOptKeys[] = {"HEAL", "SMITH", "LIFT", "DIG", "COOK", "KINDLE", "CLONE"};
-constexpr const char* kOptIcons[] = {"heal", "smith", "lift", "dig", "cook", "kindle", "clone"};
+constexpr const char* kOptKeys[] = {"HEAL", "SMITH", "LIFT", "DIG", "COOK", "KINDLE", "CLONE", "HATCH"};
+constexpr const char* kOptIcons[] = {"heal", "smith", "lift", "dig", "cook", "kindle", "clone", "hatch"};
 // The strip right of the scene in bg_rest_*.t3t (build_assets.py REST_FLAME / REST_GLOW).
 constexpr float kFlameSrc[4] = {400, 0, 48, 72};
 constexpr float kGlowSrc[4] = {400, 80, 96, 96};

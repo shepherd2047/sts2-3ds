@@ -7,8 +7,7 @@
 //    screen has no reroll / alternative buttons.
 //  * PaelsEye: ShouldTakeExtraTurn / AfterTakingExtraTurn (extra turn system).
 //  * PaelsLegion, Byrdpip: pets.  GoldenCompass: golden path map.  FurCoat: map marks.
-//    ToyBox: wax relics.  WingedBoots: free map travel.
-//  * DowsingRod: the Dowsing quest card (Quest cards do not exist).  ScrollBoxes: bundle screen.
+//    ToyBox: wax relics.  (WingedBoots, DowsingRod, ScrollBoxes: quests.cpp, E2.)
 //    MassiveScroll: multiplayer only.
 #include "cards.h"
 #include "colorless.h"

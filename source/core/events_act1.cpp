@@ -11,14 +11,20 @@ template <class E> void reg() { db::registerEvent(E::kId, [] { return std::uniqu
 }  // namespace
 
 // ---------------------------------------------------------------- cards given by events
-// PORT NOTE: CardType.Quest / CardRarity.Event have no counterparts here; the quest card
-// uses Status, event cards Token.
+// PORT NOTE: CardRarity.Event has no counterpart here; event cards use Token.
 
-// ByrdonisEgg.cs: unplayable quest card. PORT NOTE: no HatchRestSiteOption (rest-site hatch).
+// ByrdonisEgg.cs: unplayable quest card; rest sites offer Hatch (HatchRestSiteOption, Run::restSite
+// option 7: obtain Byrdpip). PORT NOTE: Byrdpip (a pet relic) is not ported yet, so the option is only
+// offered once a "Byrdpip" relic is registered.
 struct ByrdonisEgg : IroncladT<ByrdonisEgg> {
-  CARD_HEADER(ByrdonisEgg, "BYRDONIS_EGG", -1, Status, Token, None)
+  CARD_HEADER(ByrdonisEgg, "BYRDONIS_EGG", -1, Quest, Quest, None)
     keywords = kwUnplayable;
     maxUpgradeLevel = 0;
+  }
+  bool tryModifyRestSiteOptions(std::vector<int>& options) override {
+    if (!inDeck() || !db::relicRegistered("Byrdpip")) return false;
+    if (std::find(options.begin(), options.end(), 7) == options.end()) options.push_back(7);  // one Hatch per player
+    return true;
   }
 };
 
@@ -38,13 +44,19 @@ struct PoorSleep : IroncladT<PoorSleep> {
   }
 };
 
-// Guilty.cs. PORT NOTE: deck cards get no AfterCombatEnd hook, so it never expires
-// after 5 combats.
+// Guilty.cs: leaves the deck after 5 combats. CombatsSeen is the "Combats" var (5 - CombatsSeen),
+// which the card save keeps.
 struct Guilty : IroncladT<Guilty> {
   CARD_HEADER(Guilty, "GUILTY", -1, Curse, Curse, None)
     keywords = kwUnplayable;
     maxUpgradeLevel = 0;
     addVar("Combats", 5);
+  }
+  Task<> afterCombatEnd() override {
+    if (!inDeck()) co_return;
+    int seen = 5 - val("Combats").toInt() + 1;  // CombatsSeen++
+    var("Combats")->base = Dec(5 - seen);
+    if (seen >= 5) run->removeCardFromDeck(this);  // CardPileCmd.RemoveFromDeck (frees this card)
   }
 };
 

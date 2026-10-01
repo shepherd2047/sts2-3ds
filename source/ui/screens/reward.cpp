@@ -21,7 +21,9 @@ namespace ui {
 static App::ChooseOneSpec rewardChooseSpec(const Run& r) {
   App::ChooseOneSpec s;
   for (auto& c : r.rewardCards) s.cards.push_back(c.get());
-  s.canSkip = true;
+  s.canSkip = r.rewardBundleSize <= 1;  // E2: the bundle screen (FromChooseABundleScreen) has no skip
+  s.group = std::max(1, r.rewardBundleSize);
+  if (s.group > 1) s.title = tr("选择一组卡牌", "Choose a Bundle");
   if (!r.rewardItems.empty()) {
     s.title = tr("战斗胜利！", "Victory!");
     s.sub = L("gameplay_ui.COMBAT_REWARD_ADD_CARD");

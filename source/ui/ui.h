@@ -248,6 +248,7 @@ class App {
     std::vector<sts::Card*> cards;
     bool canSkip = true;
     std::string title, sub;  // top screen while nothing is focused (title defaults to CHOOSE_CARD_HEADER)
+    int group = 1;  // E2 bundle screen (ScrollBoxes): cards come in groups of this size; a pick is a group index
   };
 
  private:

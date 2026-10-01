@@ -38,13 +38,14 @@ enum AscensionLevel : int {
 };
 
 enum class Side { Player, Enemy };
-enum class CardType { Attack, Skill, Power, Status, Curse };
-enum class Rarity { Basic, Common, Uncommon, Rare, Ancient, Token, Status, Curse };
+enum class CardType { Attack, Skill, Power, Status, Curse, Quest };  // Quest: E2 (quests.cpp)
+enum class Rarity { Basic, Common, Uncommon, Rare, Ancient, Token, Status, Curse, Quest };
 enum class TargetType { None, Self, AnyEnemy, AllEnemies, RandomEnemy };
 enum class PowerType { Buff, Debuff };
 enum class StackType { Counter, Single };
 enum class Pile { None, Draw, Hand, Discard, Exhaust, Play };
 enum class RoomType { Monster, Elite, Rest, Treasure, Unknown, Boss, Start, Shop, Ancient };
+inline int roomBit(RoomType t) { return 1 << (int)t; }  // a set of room types (modifyUnknownMapPointRoomTypes)
 enum class RelicRarity { None, Starter, Common, Uncommon, Rare, Shop, Event, Ancient };
 enum class PotionRarity { None, Common, Uncommon, Rare, Event, Token };
 enum class PotionUsage { CombatOnly, AnyTime, Automatic };
@@ -148,6 +149,18 @@ struct Model {
   // Added for relics (Hook.* of the same names).
   virtual Task<> afterCombatEnd() { return {}; }              // victory, before afterCombatVictory
   virtual Task<> afterRoomEntered(RoomType) { return {}; }
+  // E2 (quests.cpp): map / "?"-room / deck-card run hooks. Run::listeners() puts the deck cards
+  // first (RunState.IterateHookListeners), so a deck card hears every run-level hook, also during
+  // a combat, with combat == nullptr: card overrides of run hooks check Card::inDeck().
+  virtual Task<> beforeRoomEntered(RoomType) { return {}; }  // Hook.BeforeRoomEntered (resolved type; Unknown = event)
+  virtual int modifyUnknownMapPointRoomTypes(int types) { return types; }  // roomBit set; Unknown = Event
+  virtual std::string modifyNextEvent(const std::string& eventId) { return eventId; }  // Hook.ModifyNextEvent
+  virtual bool shouldAllowFreeTravel() { return false; }  // Hook.ShouldAllowFreeTravel (MapTravel)
+  virtual void modifyGeneratedMap(int /*actIndex*/) {}      // Hook.ModifyGeneratedMap: may replace Run::nodes
+  virtual void modifyGeneratedMapLate(int /*actIndex*/) {}  // also run on a loaded map (SavedActMap)
+  virtual void afterMapGenerated(int /*actIndex*/) {}       // Hook.AfterMapGenerated (quest markers)
+  virtual void beforeCardRemoved(Card*) {}                  // Hook.BeforeCardRemoved (CardPileCmd.RemoveFromDeck)
+  virtual bool tryModifyRestSiteOptions(std::vector<int>& /*options*/) { return false; }  // Run::restOptions ids
   virtual Task<> afterBlockCleared(Creature*) { return {}; }
   virtual Task<> afterEnergyReset() { return {}; }
   virtual Task<> beforeHandDraw() { return {}; }
@@ -509,6 +522,10 @@ struct Card : Model {
   EnchantSlot enchantment;  // CardModel.Enchantment (null = none)
   AfflictSlot affliction;   // CardModel.Affliction (null = none; combat cards only)
   DeckLink deckVersion;     // CardModel.DeckVersion (combat cards only)
+  // Owner.RunState for run-level hooks: set on the deck cards by Run::listeners() (a combat copy
+  // keeps its deck card's value). inDeck() = CardModel.Pile.Type == PileType.Deck (quests.cpp).
+  Run* run = nullptr;
+  bool inDeck() const;
 
   // Hand-view calculation for CalculatedDamageVar (Body Slam, Perfected Strike).
   std::function<int(Card*)> calcMultiplier;
@@ -523,6 +540,8 @@ struct Card : Model {
   // HasTurnEndInHandEffect / OnTurnEndInHand (Burn, Infection, ...)
   virtual bool hasTurnEndInHandEffect() const { return false; }
   virtual Task<> onTurnEndInHand() { return {}; }
+  // A quest card's reward when its map quest is completed (SpoilsMap.OnQuestComplete): the gold given.
+  virtual Task<int> onQuestComplete() { co_return 0; }
   virtual std::unique_ptr<Card> clone() const = 0;
 
   // CardEnergyCost setters.
@@ -1073,6 +1092,9 @@ struct MapNode {
   float x = 0, y = 0;     // layout in map space
   float jx = 0, jy = 0;   // NMapScreen jitter in native map units (±21, ±25)
   float angle = 0;        // icon tilt in degrees (NextGaussianFloat(0, 8))
+  // MapPoint.Quests: ids of the models that marked this point (SpoilsMap). Not saved: a loaded map
+  // gets them back from the ModifyGeneratedMapLate / AfterMapGenerated hooks, as in the C#.
+  std::vector<std::string> quests;
 };
 
 // StandardActMap (+ MapPathPruning, MapPostProcessing, Overgrowth.GetMapPointTypes):
@@ -1084,6 +1106,9 @@ std::vector<MapNode> generateStandardActMap(Rng& mapRng, int actIndex, int numOf
 // are given (so GetMapPointTypes draws nothing) and elites may ignore the placement rules.
 struct MapTypeCounts { int unknowns = 0, rests = 0, elites = 5; bool elitesIgnoreRules = false; };
 std::vector<MapNode> generateStandardActMap(Rng& mapRng, int actIndex, const MapTypeCounts& counts, bool hasSecondBoss);
+// E2: SpoilsActMap (SpoilsMap's act map, every path through one centred treasure), same indexing.
+// `counts` (BigGameHunter) replaces GetMapPointTypes; null = roll them.
+std::vector<MapNode> generateSpoilsActMap(Rng& mapRng, int actIndex, int numOfElites, const MapTypeCounts* counts);
 
 struct Encounter {
   std::string id;
@@ -1317,6 +1342,18 @@ struct Run {
   bool ancientPending = false;      // the act starts with its Ancient (Run::main runs it first)
   Task<> enterAncient();
   Task<> chooseCardFor(std::vector<std::unique_ptr<Card>> options);  // CardSelectCmd.FromChooseACardScreen -> deck
+  // E2 (quests.cpp): CardSelectCmd.FromChooseABundleScreen -> deck. The bundles go to rewardCards one
+  // after the other, rewardBundleSize cards each; rewardChoice answers with the bundle index.
+  Task<> chooseBundleFor(std::vector<std::vector<std::unique_ptr<Card>>> bundles);
+  int rewardBundleSize = 1;
+  // E2: the map point before the current one (RunState.VisitedMapCoords[^2], WingedBoots) and
+  // RunState.CurrentRoomCount (1 in a map point's room, 2 in an event's fight).
+  int previousNode = -1;
+  int currentRoomCount = 0;
+  bool spoilsActMap = false;     // the map being generated is a SpoilsActMap (BigGameHunter keeps it)
+  void runLateMapHooks();       // ModifyGeneratedMapLate + AfterMapGenerated on Run::nodes (new or loaded map)
+  Task<> beforeRoomEntered(RoomType type);  // Hook.BeforeRoomEntered
+  Task<int> handleSpoilsMap();   // OneOffSynchronizer.TryHandleSpoilsMap (treasure rooms)
   Signal<int> placeholderDone;
   // UnknownMapPointOdds: current odds of the non-event outcomes of a "?" room.
   float unknownMonsterOdds = 0.1f, unknownTreasureOdds = 0.02f, unknownShopOdds = 0.03f;
