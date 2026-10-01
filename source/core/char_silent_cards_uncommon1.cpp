@@ -127,18 +127,23 @@ struct EchoingSlash : IroncladT<EchoingSlash> {
     addVar("Damage", 10);
   }
   Task<> onPlay(CardPlay&) override {
+    // One AttackContext around plain damage calls (one Before/AfterAttack for all the repeats).
+    cmd::Attack ctx;
+    ctx.attacker = me();
+    ctx.source = this;
+    ctx.allOpponents = true;
+    co_await cmd::beginAttackContext(*combat, ctx);
+    combat->push({VisualEvent::Anim, me(), 1000 + std::min(999, val("Damage").toInt()), "Attack"});
     int attackCount = 1;
     while (attackCount > 0) {
       --attackCount;
-      cmd::Attack a;
-      a.damagePerHit = val("Damage");
-      a.attacker = me();
-      a.source = this;
-      a.allOpponents = true;
-      co_await a.execute(*combat);
-      for (auto& hit : a.results) for (auto& r : hit) if (r.killed) ++attackCount;
-      if (combat->over || combat->ending || combat->hittableEnemies().empty()) break;
+      auto targets = combat->hittableEnemies();
+      if (targets.empty()) break;
+      auto results = co_await cmd::damage(targets, val("Damage"), kMove, me(), this);
+      for (auto& r : results) if (r.killed) ++attackCount;
+      ctx.results.push_back(std::move(results));
     }
+    co_await cmd::endAttackContext(*combat, ctx);
   }
   void onUpgrade() override { upgradeVar("Damage", 3); }
 };

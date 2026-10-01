@@ -30,6 +30,7 @@ struct Combat;
 struct Run;
 struct Modifier;  // M11 run modifiers (modifiers.h)
 struct Affliction;  // A4 (afflictions.cpp)
+namespace cmd { struct Attack; }  // AttackCommand (Model::beforeAttack / afterAttack)
 
 // AscensionLevel (Entities.Ascension): a run at level N has every level <= N (Run::hasAscension).
 enum AscensionLevel : int {
@@ -53,6 +54,8 @@ enum class PotionUsage { CombatOnly, AnyTime, Automatic };
 enum : int { kUnblockable = 2, kUnpowered = 4, kMove = 8, kSkipHurtAnim = 16 };
 inline bool isPoweredAttack(int p) { return (p & kMove) && !(p & kUnpowered); }
 inline bool isPoweredBlock(int p) { return (p & kMove) && !(p & kUnpowered); }
+// Model::modifyDamageCap's "no cap" (decimal.MaxValue).
+inline constexpr Dec kNoDamageCap = Dec::fromRaw(INT64_MAX);
 
 enum Keyword : int { kwExhaust = 1, kwUnplayable = 2, kwEthereal = 4, kwInnate = 8, kwRetain = 16, kwSly = 32, kwEternal = 64 };
 enum CardTag : int { tagStrike = 1, tagDefend = 2, tagMinion = 4, tagOstyAttack = 8, tagShiv = 16, tagSovereignBlade = 32 };
@@ -88,19 +91,32 @@ struct Model {
   virtual Dec modifyBlockMultiplicative(Creature*, Dec, int, Card*) { return 1; }
   virtual Dec modifyHpLostBeforeOsty(Creature*, Dec amount, int, Creature*, Card*) { return amount; }
   virtual Dec modifyHpLostAfterOsty(Creature*, Dec amount, int, Creature*, Card*) { return amount; }
+  virtual Dec modifyHpLostBeforeOstyLate(Creature*, Dec amount, int, Creature*, Card*) { return amount; }  // HardenedShellPower
+  virtual Dec modifyHpLostAfterOstyLate(Creature*, Dec amount, int, Creature*, Card*) { return amount; }   // BufferPower, TheBoot
+  // Hook.ModifyDamageCap (Intangible, Hard to Kill): the lowest cap applies, after the multipliers.
+  virtual Dec modifyDamageCap(Creature* /*target*/, int /*props*/, Creature* /*dealer*/, Card*) { return kNoDamageCap; }
   // Hook.ModifyUnblockedDamageTarget: redirect unblocked damage to a different creature
   // (DieForYouPower redirects a powered hit meant for the player onto Osty).
   virtual Creature* modifyUnblockedDamageTarget(Creature* target, Dec /*unblocked*/, int /*props*/, Creature* /*dealer*/) { return target; }
   virtual Dec modifyHandDraw(Dec amount) { return amount; }
 
   virtual Task<> beforeCombatStart() { return {}; }
+  virtual Task<> beforeCombatStartLate() { return {}; }
+  virtual Task<> afterCombatVictoryEarly() { return {}; }
   virtual Task<> afterCombatVictory() { return {}; }
   virtual Task<> beforeSideTurnStart(Side, const std::vector<Creature*>&) { return {}; }
   virtual Task<> afterSideTurnStart(Side, const std::vector<Creature*>&) { return {}; }
+  virtual Task<> afterSideTurnStartLate(Side, const std::vector<Creature*>&) { return {}; }
   virtual Task<> afterPlayerTurnStart() { return {}; }
+  virtual Task<> afterPlayerTurnStartLate() { return {}; }
   virtual Task<> beforeSideTurnEnd(Side, const std::vector<Creature*>&) { return {}; }
   virtual Task<> afterSideTurnEnd(Side, const std::vector<Creature*>&) { return {}; }
+  virtual Task<> afterSideTurnEndLate(Side, const std::vector<Creature*>&) { return {}; }
+  // Hook.BeforeDamageReceived: after ModifyDamage, before block is taken (ThornsPower).
+  virtual Task<> beforeDamageReceived(Creature*, Dec /*amount*/, int, Creature* /*dealer*/, Card*) { return {}; }
   virtual Task<> afterDamageReceived(Creature*, const DamageResult&, int, Creature*, Card*) { return {}; }
+  // Hook.AfterBlockBroken: per damage result, before AfterCurrentHpChanged; still runs while combat is ending.
+  virtual Task<> afterBlockBroken(Creature* /*target*/, Creature* /*breaker*/) { return {}; }
   virtual Task<> afterDeath(Creature*) { return {}; }
   virtual Task<> beforeCardPlayed(const CardPlay&) { return {}; }
   virtual Task<> afterCardPlayed(const CardPlay&) { return {}; }
@@ -111,6 +127,7 @@ struct Model {
   virtual Task<> beforeSideTurnEndEarly(Side, const std::vector<Creature*>&) { return {}; }
   virtual Task<> afterAutoPostPlayPhaseEntered() { return {}; }  // player's turn is about to end
   virtual Task<> afterCardExhausted(Card*, bool /*causedByEthereal*/) { return {}; }
+  virtual Task<> afterCardDrawnEarly(Card*, bool /*fromHandDraw*/) { return {}; }
   virtual Task<> afterCardDrawn(Card*, bool /*fromHandDraw*/) { return {}; }
   virtual Task<> afterBlockGained(Creature*, Dec /*amount*/, int /*props*/, Card*) { return {}; }
   virtual Task<> afterCardEnteredCombat(Card*) { return {}; }
@@ -122,16 +139,21 @@ struct Model {
   virtual Dec modifyMaxEnergy(Dec amount) { return amount; }
   virtual int modifyCardPlayCount(Card*, Creature*, int count) { return count; }
   virtual Pile modifyCardPlayResultLocation(Card*, bool /*autoPlay*/, Pile pile) { return pile; }
+  virtual Task<> afterModifyingCardPlayResultLocation(Card*, Pile) { return {}; }  // only the models that changed it
   // TryModifyEnergyCostInCombat / ...Late: return the new cost (or `cost` unchanged).
   virtual int modifyEnergyCost(Card*, int cost) { return cost; }
   virtual int modifyEnergyCostLate(Card*, int cost) { return cost; }
   // Added for act 1 monsters.
   virtual bool shouldStopCombatFromEnding() { return false; }
+  // Hook.ShouldTakeExtraTurn / AfterTakingExtraTurn (AmbergrisPower, PaelsEye): another player turn instead of the enemies'.
+  virtual bool shouldTakeExtraTurn() { return false; }
+  virtual Task<> afterTakingExtraTurn() { return {}; }
   virtual Task<> afterCreatureAddedToCombat(Creature*) { return {}; }
   virtual bool shouldPlay(Card*) { return true; }  // Hook.ShouldPlay (RingingPower, ...)
   virtual bool shouldAfflict(Card*, Affliction*) { return true; }  // Hook.ShouldAfflict (A4)
   // Illusions stay in the room (dead) with their buffs and revive.
   virtual bool shouldCreatureBeRemovedFromCombatAfterDeath(Creature*) { return true; }
+  virtual bool shouldAllowHitting(Creature*) { return true; }  // Hook.ShouldAllowHitting (Creature.CanReceivePowers)
   virtual bool shouldPowerBeRemovedOnDeath(Power*) { return true; }
   // Hook.ModifyPowerAmountReceived (ArtifactPower): return true and set `out` to change
   // the amount a creature is about to receive; the modifier then gets the After... call.
@@ -150,6 +172,7 @@ struct Model {
   virtual Task<> afterRoomEntered(RoomType) { return {}; }
   virtual Task<> afterBlockCleared(Creature*) { return {}; }
   virtual Task<> afterEnergyReset() { return {}; }
+  virtual Task<> afterEnergyResetLate() { return {}; }
   virtual Task<> beforeHandDraw() { return {}; }
   virtual Task<> afterCurrentHpChanged(Creature*, Dec /*delta*/) { return {}; }
   virtual Dec modifyRestSiteHealAmount(Creature*, Dec amount) { return amount; }
@@ -170,7 +193,9 @@ struct Model {
   virtual bool shouldForcePotionReward(RoomType) { return false; }
   virtual bool shouldProcurePotion() { return true; }  // Sozu
   // Added for enchantments (Hook.AfterAutoPrePlayPhaseEntered / BeforeFlush / ModifyShuffleOrder).
+  virtual Task<> afterAutoPrePlayPhaseEnteredEarly() { return {}; }
   virtual Task<> afterAutoPrePlayPhaseEntered() { return {}; }  // player turn set up, before the play phase
+  virtual Task<> afterAutoPrePlayPhaseEnteredLate() { return {}; }
   virtual Task<> beforeFlush() { return {}; }                   // player turn ends, before the hand is discarded
   virtual void modifyShuffleOrder(std::vector<Card*>& /*cards*/, bool /*isInitialShuffle*/) {}  // index 0 = top
   virtual Task<> afterCardDiscarded(Card*) { return {}; }  // Hook.AfterCardDiscarded (CardCmd.Discard only, not the end-of-turn flush)
@@ -194,7 +219,9 @@ struct Model {
   virtual Task<> afterOrbEvoked(Orb*, const std::vector<Creature*>& /*targets*/) { return {}; }
 
   // Added for the Necrobinder's relics (X4.1; Hook.* of the same names).
-  virtual Task<> afterAttack(Creature* /*attacker*/) { return {}; }  // Hook.AfterAttack (AttackCommand.Execute, once per card)
+  // Hook.BeforeAttack / AfterAttack: once per AttackCommand.Execute (or AttackContext, cmd::beginAttackContext).
+  virtual Task<> beforeAttack(cmd::Attack&) { return {}; }
+  virtual Task<> afterAttack(const cmd::Attack&) { return {}; }
   // Added for the Necrobinder's uncommons (X4.3b): Hook.AfterDamageGiven (per damage result, before AfterDamageReceived)
   // and Hook.AfterCardPlayedLate (after every AfterCardPlayed of that play).
   virtual Task<> afterDamageGiven(Creature* /*dealer*/, const DamageResult&, int /*props*/, Creature* /*target*/, Card*) { return {}; }
@@ -923,6 +950,7 @@ struct Combat {
   int energySpentThisTurn = 0;  // EnergySpentEntry amounts this turn (HelixDrill, X2.4)
   int lightningOrbsChanneled = 0;  // OrbChanneledEntry of LightningOrbs this combat (Voltaic, X2.4)
   Side currentSide = Side::Player;
+  bool extraTurn = false;  // CombatTurnState.PlayersTakingExtraTurn is not empty (single player)
   bool inProgress = false, ending = false, over = false, won = false;
   bool playerPhase = false;  // UI may submit actions
   bool autoSelectFirst = false;  // VakuuCardSelector: cmd::selectCards takes the first options (Whispering Earring)
@@ -943,6 +971,7 @@ struct Combat {
   int maxEnergyNow();
   bool isValidTarget(Card* c, Creature* t);
   std::vector<Creature*> hittableEnemies();
+  bool canReceivePowers(Creature* c);  // Creature.CanReceivePowers (Hook.ShouldAllowHitting)
   std::vector<Creature*> aliveEnemies();
 
   // hooks (Hook.*)
@@ -1055,7 +1084,12 @@ struct Attack {
   int props = kMove;
   std::vector<std::vector<DamageResult>> results;
   Task<> execute(Combat& c);
+  Side targetSide() const;  // AttackCommand.TargetSide
 };
+// AttackContext: groups plain damage calls into one attack for Hook.BeforeAttack / AfterAttack.
+// Fill `a` (attacker, source, allOpponents), begin, push each hit into a.results, end.
+Task<> beginAttackContext(Combat& c, Attack& a);
+Task<> endAttackContext(Combat& c, Attack& a);
 }  // namespace cmd
 
 template <class P> Task<> applyPower(Creature* target, Dec amount, Creature* applier, Card* src, bool silent = false);

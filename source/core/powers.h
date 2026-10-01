@@ -154,27 +154,35 @@ struct SetupStrikePower : Power {
 // One class per power id: Creature::get<P>() finds powers by id and static_casts, so two classes
 // with the same id would be undefined behaviour. Define shared powers here, not per file.
 
-// VigorPower.cs: Amount extra damage on the owner's next powered, card-sourced attack; afterwards
-// only the amount it had when that attack started is taken off. PORT NOTE: the C# keys on the
-// AttackCommand (BeforeAttack/AfterAttack); here the attack is the card being played.
+// VigorPower.cs: Amount extra damage on the owner's next powered attack (an AttackCommand from a card,
+// or with no source); when that attack ends, only the amount it had when it started is taken off.
+// Like the C# (commandToModify is never cleared), once pinned only that card's damage gets the bonus.
 struct VigorPower : Power {
   POWER_HEADER(VigorPower, "VIGOR_POWER")
-  Card* consuming = nullptr;
+  bool pinned = false;                     // commandToModify != null
+  const cmd::Attack* liveCommand = nullptr;  // the pinned command while it runs (identity for AfterAttack)
+  Card* commandSource = nullptr;
+  Creature* commandAttacker = nullptr;
   int amountWhenStarted = 0;
-  Dec modifyDamageAdditive(Creature*, Dec, int props, Creature* dealer, Card* src) override {
-    if (owner != dealer || !isPoweredAttack(props)) return 0;
-    if (consuming && src && src != consuming) return 0;
-    return amount;
-  }
-  Task<> beforeCardPlayed(const CardPlay& p) override {
-    if (p.card->type != CardType::Attack || ownerOf(p.card) != owner || consuming) return {};
-    consuming = p.card;
+  Task<> beforeAttack(cmd::Attack& a) override {
+    if (a.attacker != owner || !isPoweredAttack(a.props) || pinned) return {};
+    if (!a.source && a.attacker && a.attacker->monster) return {};  // ModelSource is the monster
+    pinned = true;
+    liveCommand = &a;
+    commandSource = a.source;
+    commandAttacker = a.attacker;
     amountWhenStarted = amount;
     return {};
   }
-  Task<> afterCardPlayed(const CardPlay& p) override {
-    if (!consuming || p.card != consuming) co_return;
-    consuming = nullptr;
+  Dec modifyDamageAdditive(Creature*, Dec, int props, Creature* dealer, Card* src) override {
+    if (owner != dealer || !isPoweredAttack(props)) return 0;
+    if (pinned && src && src != commandSource) return 0;
+    if (pinned && commandAttacker != dealer) return 0;
+    return amount;
+  }
+  Task<> afterAttack(const cmd::Attack& a) override {
+    if (!liveCommand || &a != liveCommand) co_return;
+    liveCommand = nullptr;
     co_await cmd::modifyPowerAmount(this, Dec(-amountWhenStarted), nullptr, nullptr);
   }
 };

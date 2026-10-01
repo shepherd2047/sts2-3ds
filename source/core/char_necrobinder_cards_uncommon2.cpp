@@ -279,8 +279,8 @@ struct Rattle : IroncladT<Rattle> {
     };
   }
   int attackTurn = -1, attackCount = 0;
-  Task<> afterAttack(Creature* attacker) override {
-    if (!combat || !combat->osty || attacker != combat->osty) return {};
+  Task<> afterAttack(const cmd::Attack& a) override {
+    if (!combat || !combat->osty || a.attacker != combat->osty) return {};
     if (attackTurn != combat->turnNumber) { attackTurn = combat->turnNumber; attackCount = 0; }
     ++attackCount;
     return {};

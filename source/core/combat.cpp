@@ -264,7 +264,18 @@ Dec Combat::modifyDamage(Creature* target, Creature* dealer, Dec dmg, int props,
   auto ls = listeners();
   for (Model* m : ls) dmg += m->modifyDamageAdditive(target, dmg, props, dealer, src);
   for (Model* m : ls) dmg *= m->modifyDamageMultiplicative(target, dmg, props, dealer, src);
+  // ModifyDamageHookType.Cap: the lowest cap of all listeners.
+  Dec cap = kNoDamageCap;
+  for (Model* m : ls) cap = dmin(cap, m->modifyDamageCap(target, props, dealer, src));
+  if (dmg > cap) dmg = cap;
   return dmg;
+}
+
+// Creature.CanReceivePowers: in combat and no listener vetoes it (Hook.ShouldAllowHitting).
+bool Combat::canReceivePowers(Creature* cr) {
+  for (Model* m : listeners())
+    if (!m->shouldAllowHitting(cr)) return false;
+  return true;
 }
 
 Dec Combat::modifyBlock(Creature* target, Dec block, int props, Card* src) {
@@ -408,24 +419,30 @@ Task<std::vector<DamageResult>> damage(std::vector<Creature*> targets, Dec amoun
   for (Creature* originalTarget : targets) {
     if (originalTarget->dead()) continue;
     Dec modified = c.modifyDamage(originalTarget, dealer, amount, props, src);
+    for (Model* m : c.listeners()) co_await m->beforeDamageReceived(originalTarget, modified, props, dealer, src);
     Creature* blockOwner = originalTarget->petOwner ? originalTarget->petOwner : originalTarget;
     Dec blocked = (props & kUnblockable) ? Dec(0) : dmin(Dec(blockOwner->block), modified);
     blockOwner->block -= blocked.toInt();
     Dec unblocked = dmax(modified - blocked, 0);
     for (Model* m : c.listeners()) unblocked = m->modifyHpLostBeforeOsty(originalTarget, unblocked, props, dealer, src);
+    for (Model* m : c.listeners()) unblocked = m->modifyHpLostBeforeOstyLate(originalTarget, unblocked, props, dealer, src);
     Creature* redirected = originalTarget;
     for (Model* m : c.listeners()) redirected = m->modifyUnblockedDamageTarget(redirected, unblocked, props, dealer);
     for (Model* m : c.listeners()) unblocked = m->modifyHpLostAfterOsty(redirected, unblocked, props, dealer, src);
+    for (Model* m : c.listeners()) unblocked = m->modifyHpLostAfterOstyLate(redirected, unblocked, props, dealer, src);
 
     bool wasBlockBroken = originalTarget->block <= 0 && blocked > Dec(0);
     bool wasFullyBlocked = !(props & kUnblockable) && (blocked > Dec(0) || originalTarget->block > 0) && unblocked.toInt() == 0;
 
-    DamageResult r = loseHpInternal(redirected, unblocked, blocked.toInt(), wasBlockBroken, wasFullyBlocked);
+    // The block fields go on the original target's result only (a redirected hit's first result has none).
+    bool same = redirected == originalTarget;
+    DamageResult r = loseHpInternal(redirected, unblocked, same ? blocked.toInt() : 0, same && wasBlockBroken, same && wasFullyBlocked);
     pushVisual(r, redirected, modified);
     results.push_back(r);
     if (redirected != originalTarget) {
       Dec overflow = Dec(r.overkill);
       for (Model* m : c.listeners()) overflow = m->modifyHpLostAfterOsty(originalTarget, overflow, props, dealer, src);
+      for (Model* m : c.listeners()) overflow = m->modifyHpLostAfterOstyLate(originalTarget, overflow, props, dealer, src);
       DamageResult r2;
       if (overflow > Dec(0)) {
         r2 = loseHpInternal(originalTarget, overflow, blocked.toInt(), wasBlockBroken, wasFullyBlocked);
@@ -441,13 +458,20 @@ Task<std::vector<DamageResult>> damage(std::vector<Creature*> targets, Dec amoun
     }
   }
 
-  for (auto& r : results)
-    if (r.unblocked > 0)
-      for (Model* m : c.listeners()) co_await m->afterCurrentHpChanged(r.receiver, Dec(-r.unblocked));
   std::vector<Creature*> killedCreatures;
   for (auto& r : results) c.damageHistory.push_back({c.roundNumber, c.currentSide, r.receiver, dealer, props});
   for (auto& r : results) {
     Creature* t = r.receiver;
+    if (r.blockBroken) {
+      // Hook.AfterBlockBroken iterates the listeners even while combat is ending (the killing hit).
+      bool wasEnding = c.ending;
+      c.ending = false;
+      auto ls = c.listeners();
+      c.ending = wasEnding;
+      for (Model* m : ls) co_await m->afterBlockBroken(t, dealer);
+    }
+    if (r.unblocked > 0)
+      for (Model* m : c.listeners()) co_await m->afterCurrentHpChanged(t, Dec(-r.unblocked));
     for (Model* m : c.listeners()) co_await m->afterDamageGiven(dealer, r, props, t, src);
     if (r.killed && t->dead()) {
       killedCreatures.push_back(t);
@@ -529,7 +553,7 @@ Task<> heal(Creature* cr, Dec amount) {
 // PowerCmd.Apply(PowerModel, ...) for a fresh instance.
 Task<> applyPower(std::unique_ptr<Power> power, Creature* target, Dec amount, Creature* applier, Card* src, bool silent) {
   Combat* c = target->combat;
-  if (!c || c->ending || amount == Dec(0)) co_return;
+  if (!c || c->ending || amount == Dec(0) || !c->canReceivePowers(target)) co_return;
   Power* p = power.get();
   p->applier = applier;
   for (Model* m : c->listeners()) co_await m->beforePowerAmountChanged(p, amount, target, applier, src);
@@ -567,6 +591,10 @@ Task<> applyPower(std::unique_ptr<Power> power, Creature* target, Dec amount, Cr
     co_return;
   }
   co_await p->beforeApplied(target, amount, applier, src);
+  if (!c->canReceivePowers(target)) {  // PowerCmd.Apply re-checks CanReceivePowers after BeforeApplied
+    c->graveyard.push_back(std::move(power));
+    co_return;
+  }
   if (target->power(p->id)) {
     // beforeApplied can itself stack the same power (it never does for the
     // powers in this build, but keep PowerCmd's contract).
@@ -657,6 +685,7 @@ Task<std::vector<Card*>> drawCards(Combat& c, Dec count, bool fromHandDraw) {
     result.push_back(card);
     ++c.cardsDrawnThisCombat;
     co_await wait(0.08);
+    for (Model* m : c.listeners()) co_await m->afterCardDrawnEarly(card, fromHandDraw);
     for (Model* m : c.listeners()) co_await m->afterCardDrawn(card, fromHandDraw);
   }
   co_return result;
@@ -890,8 +919,24 @@ Task<Creature*> addMonster(Combat& c, std::unique_ptr<Monster> m) {
   co_return cr;
 }
 
+Side Attack::targetSide() const {
+  if (single) return single->side;
+  return attacker && attacker->side == Side::Player ? Side::Enemy : Side::Player;
+}
+
+Task<> beginAttackContext(Combat& c, Attack& a) {
+  a.hits = 0;  // AttackContext: AttackCommand(0) counts its hits as they are added
+  for (Model* m : c.listeners()) co_await m->beforeAttack(a);
+}
+
+Task<> endAttackContext(Combat& c, Attack& a) {
+  a.hits = (int)a.results.size();
+  for (Model* m : c.listeners()) co_await m->afterAttack(a);
+}
+
 Task<> Attack::execute(Combat& c) {
   if (!attacker || attacker->dead() || c.ending) co_return;
+  for (Model* m : c.listeners()) co_await m->beforeAttack(*this);  // Hook.BeforeAttack
   for (int i = 0; i < hits; ++i) {
     if (attacker->dead() || c.ending) break;
     std::vector<Creature*> valid;
@@ -917,7 +962,7 @@ Task<> Attack::execute(Combat& c) {
     std::vector<Creature*> ts = target ? std::vector<Creature*>{target} : valid;
     results.push_back(co_await damage(ts, amount, props, attacker, source));
   }
-  for (Model* m : c.listeners()) co_await m->afterAttack(attacker);  // Hook.AfterAttack (once per Execute)
+  for (Model* m : c.listeners()) co_await m->afterAttack(*this);  // Hook.AfterAttack (once per Execute)
 }
 
 }  // namespace cmd
@@ -929,6 +974,7 @@ Task<> Combat::runCombat() {
   inProgress = true;
   for (auto* e : enemies) co_await e->monster->afterAddedToRoom();
   for (Model* m : listeners()) co_await m->beforeCombatStart();
+  for (Model* m : listeners()) co_await m->beforeCombatStartLate();
   banner = "战斗开始";
   bannerTime = 1.2f;
   co_await wait(0.8);
@@ -971,7 +1017,11 @@ Task<> Combat::runCombat() {
       if (over) break;
       co_await endPlayerTurnPhaseTwo();
       if (over) break;
+      // SwitchFromPlayerToEnemySide: Hook.ShouldTakeExtraTurn, switch, Hook.AfterTakingExtraTurn.
+      extraTurn = false;
+      for (Model* m : listeners()) if (m->shouldTakeExtraTurn()) { extraTurn = true; break; }
       switchSides();
+      if (extraTurn) for (Model* m : listeners()) co_await m->afterTakingExtraTurn();
     }
     // Enemy side: StartTurn runs the whole enemy turn and switches back.
   }
@@ -979,6 +1029,7 @@ Task<> Combat::runCombat() {
   if (won) {
     // CombatManager.EndCombatInternal: run-level hooks, relics still listen.
     for (Model* m : run->listeners()) co_await m->afterCombatEnd();
+    for (Model* m : run->listeners()) co_await m->afterCombatVictoryEarly();
     for (Model* m : run->listeners()) co_await m->afterCombatVictory();
   }
 }
@@ -996,7 +1047,7 @@ Task<> Combat::startTurn() {
     if (turnNumber > 1) { banner = "玩家回合"; bannerTime = 1.0f; }
     for (auto* e : enemies)
       // Dead creatures still in the room (Decimillipede segments) roll too: they reattach.
-      if (!e->removed) e->monster->rollMove(rng("MonsterAi"));
+      if (!e->removed && !extraTurn) e->monster->rollMove(rng("MonsterAi"));
   } else {
     banner = "敌人回合";
     bannerTime = 1.0f;
@@ -1017,6 +1068,7 @@ Task<> Combat::startTurn() {
 
   if (currentSide == Side::Player) co_await setupPlayerTurn();
   for (Model* m : listeners()) co_await m->afterSideTurnStart(currentSide, starting);
+  for (Model* m : listeners()) co_await m->afterSideTurnStartLate(currentSide, starting);
 
   if (currentSide == Side::Player) {
     // PlayerCombatState.OrbQueue.AfterTurnStart (Plasma's energy passive). Snapshot the queue
@@ -1029,7 +1081,9 @@ Task<> Combat::startTurn() {
     }
     co_await checkWinCondition();
     // CombatManager.RunAutoPrePlayPhase: Hook.AfterAutoPrePlayPhaseEntered (Imbued auto-plays).
+    if (!over) for (Model* m : listeners()) co_await m->afterAutoPrePlayPhaseEnteredEarly();
     if (!over) for (Model* m : listeners()) co_await m->afterAutoPrePlayPhaseEntered();
+    if (!over) for (Model* m : listeners()) co_await m->afterAutoPrePlayPhaseEnteredLate();
   } else {
     co_await checkWinCondition();
     if (!over) co_await executeEnemyTurn();
@@ -1041,6 +1095,7 @@ Task<> Combat::setupPlayerTurn() {
   bool resetEnergy = true;
   for (Model* m : listeners()) resetEnergy = resetEnergy && m->shouldResetEnergy();
   energy = resetEnergy ? maxEnergyNow() : energy + maxEnergyNow();
+  if (!extraTurn) {  // history counts (HappenedThisTurn = same round): an extra turn keeps the round
   cardsPlayedThisTurn = 0;
   skillPlaysStartedThisTurn = 0;
   skillsFinishedThisTurn = 0;
@@ -1049,7 +1104,9 @@ Task<> Combat::setupPlayerTurn() {
   starsGainedThisTurn = 0;
   shivPlaysFinishedThisTurn = 0;
   energySpentThisTurn = 0;
+  }
   for (Model* m : listeners()) co_await m->afterEnergyReset();
+  for (Model* m : listeners()) co_await m->afterEnergyResetLate();
   for (Model* m : listeners()) co_await m->beforeHandDraw();
   Dec handDraw = 5;
   for (Model* m : listeners()) handDraw = m->modifyHandDraw(handDraw);
@@ -1065,6 +1122,7 @@ Task<> Combat::setupPlayerTurn() {
   }
   co_await cmd::drawCards(*this, handDraw, true);
   for (Model* m : listeners()) co_await m->afterPlayerTurnStart();
+  for (Model* m : listeners()) co_await m->afterPlayerTurnStartLate();
 }
 
 Task<> Combat::executeEnemyTurn() {
@@ -1087,6 +1145,7 @@ Task<> Combat::endEnemyTurn() {
   for (Model* m : listeners()) co_await m->beforeSideTurnEndEarly(Side::Enemy, es);
   for (Model* m : listeners()) co_await m->beforeSideTurnEnd(Side::Enemy, es);
   for (Model* m : listeners()) co_await m->afterSideTurnEnd(Side::Enemy, es);
+  for (Model* m : listeners()) co_await m->afterSideTurnEndLate(Side::Enemy, es);
   co_await checkWinCondition();
   if (!over) switchSides();
 }
@@ -1146,14 +1205,15 @@ Task<> Combat::endPlayerTurnPhaseTwo() {
   }
   std::vector<Creature*> ps{player};
   for (Model* m : listeners()) co_await m->afterSideTurnEnd(Side::Player, ps);
+  for (Model* m : listeners()) co_await m->afterSideTurnEndLate(Side::Player, ps);
 }
 
 void Combat::switchSides() {
-  if (currentSide == Side::Player) {
+  if (currentSide == Side::Player && !extraTurn) {
     currentSide = Side::Enemy;
   } else {
     currentSide = Side::Player;
-    ++roundNumber;
+    if (!extraTurn) ++roundNumber;  // an extra turn only bumps the player's TurnNumber
     ++turnNumber;
   }
   for (auto* e : enemies) if (e->monster) e->monster->spawnedThisTurn = false;
@@ -1208,7 +1268,13 @@ Task<> Combat::playCard(Card* card, Creature* target, bool autoPlay, bool forceE
   if (card->type == CardType::Power) result = Pile::None;
   else if (card->has(kwExhaust) || forceExhaust) result = Pile::Exhaust;
   if (card->isDupe) result = Pile::None;
-  for (Model* m : listeners()) result = m->modifyCardPlayResultLocation(card, autoPlay, result);
+  std::vector<Model*> locationModifiers;
+  for (Model* m : listeners()) {
+    Pile before = result;
+    result = m->modifyCardPlayResultLocation(card, autoPlay, result);
+    if (result != before) locationModifiers.push_back(m);
+  }
+  for (Model* m : locationModifiers) co_await m->afterModifyingCardPlayResultLocation(card, result);
 
   // Hook.ModifyCardPlayCount
   int playCount = 1 + card->enchantedReplayCount();  // GetEnchantedReplayCount + 1

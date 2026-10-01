@@ -29,8 +29,9 @@ struct BoneFlute : Relic {
   RELIC_HEADER(BoneFlute, "BONE_FLUTE", Common)
     addVar("Block", 2);
   }
-  Task<> afterAttack(Creature* attacker) override {
-    if (!combat || attacker != combat->osty || attacker->petOwner != owner()) co_return;
+  Task<> afterAttack(const cmd::Attack& a) override {
+    Creature* attacker = a.attacker;
+    if (!combat || !attacker || attacker != combat->osty || attacker->petOwner != owner()) co_return;
     doFlash();
     co_await cmd::gainBlock(owner(), val("Block"), kUnpowered, nullptr);
   }

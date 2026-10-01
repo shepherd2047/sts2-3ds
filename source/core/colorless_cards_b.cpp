@@ -33,8 +33,7 @@ struct NoBlockPower : Power {
 // NostalgiaPower.cs: the first Amount Attacks / Skills played each turn go on top of the draw pile instead
 // of the discard pile.
 // PORT NOTE: the C# counts CardPlaysStarted entries of the turn (including plays from before the power was
-// applied); this power counts the owner's Attack / Skill plays itself, from its application on. The
-// AfterModifyingCardPlayResultLocation flash is done in the modify hook.
+// applied); this power counts the owner's Attack / Skill plays itself, from its application on.
 struct NostalgiaPower : Power {
   POWER_HEADER(NostalgiaPower, "NOSTALGIA_POWER")
   int countRound = -1, count = 0;
@@ -49,8 +48,11 @@ struct NostalgiaPower : Power {
     if (card->type != CardType::Attack && card->type != CardType::Skill) return pile;
     if (pile != Pile::Discard) return pile;
     if (playsThisTurn() >= amount) return pile;
-    flash = 1.f;
     return Pile::Draw;
+  }
+  Task<> afterModifyingCardPlayResultLocation(Card* card, Pile) override {
+    if (ownerOf(card) == owner) flash = 1.f;
+    co_return;
   }
 };
 
@@ -226,20 +228,30 @@ struct Nostalgia : IroncladT<Nostalgia> {
 
 // Omnislice.cs: 0 cost, Attack, AnyEnemy, Uncommon. Damage 8 (+3), then every other hittable enemy takes
 // the damage dealt (total + overkill) as unpowered damage from you.
-// PORT NOTE: the C# groups the hits in one AttackContext (attack-hook bookkeeping); not modelled.
+// Both damage calls are grouped in one AttackContext (one Before/AfterAttack).
 struct Omnislice : IroncladT<Omnislice> {
   CARD_HEADER(Omnislice, "OMNISLICE", 0, Attack, Uncommon, AnyEnemy)
     addVar("Damage", 8);
   }
   Task<> onPlay(CardPlay& p) override {
+    cmd::Attack ctx;
+    ctx.attacker = me();
+    ctx.source = this;
+    ctx.allOpponents = true;
+    co_await cmd::beginAttackContext(*combat, ctx);
+    co_await hits(p, ctx);
+    co_await cmd::endAttackContext(*combat, ctx);
+  }
+  Task<> hits(CardPlay& p, cmd::Attack& ctx) {
     auto list = co_await cmd::damage(p.target, val("Damage"), kMove, me(), this);
+    ctx.results.push_back(list);
     if (list.empty()) co_return;
     DamageResult first = list[0];
     int dealt = first.blocked + first.unblocked + first.overkill;  // TotalDamage + OverkillDamage
     std::vector<Creature*> others;
     for (Creature* e : combat->hittableEnemies()) if (e != p.target) others.push_back(e);
     if (others.empty()) co_return;
-    co_await cmd::damage(others, Dec(dealt), kUnpowered | kMove, me(), this);
+    ctx.results.push_back(co_await cmd::damage(others, Dec(dealt), kUnpowered | kMove, me(), this));
   }
   void onUpgrade() override { upgradeVar("Damage", 3); }
 };
