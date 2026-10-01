@@ -276,7 +276,7 @@ struct ColorfulPhilosophers : Event {
     static const char* const kColorOrder[] = {"Necrobinder", "Ironclad", "Regent", "Silent", "Defect"};
     std::vector<EventOption> list;
     for (const char* pool : kColorOrder) {
-      // PORT NOTE: UnlockState.CharacterCardPools = every character whose cards are ported.
+      // PORT NOTE (n/a: owner): UnlockState.CharacterCardPools = every character whose cards are ported (everything is unlocked).
       if (pool == run->characterId || !db::characterPlayable(pool)) continue;
       std::string ch = pool;
       // "...options." + CardPoolModel.EnergyColorName.ToUpperInvariant()

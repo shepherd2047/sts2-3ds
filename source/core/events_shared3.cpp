@@ -245,8 +245,9 @@ struct WelcomeToWongos : Event {
     o.push_back(option("INITIAL", "LEAVE", [this] { return leave(); }));
     return o;
   }
-  // Returns the finishing page. PORT NOTE: SaveManager.Progress.WongoPoints (meta) is n/a, so the
-  // stored total starts at 0 each run; the Wongo badge therefore never triggers (2000 needed).
+  // Returns the finishing page. PORT NOTE (n/a: equivalent): SaveManager.Progress.WongoPoints is only
+  // read, never incremented, in the C# (ExtraFields.WongoPoints is written and never read back), so it is 0
+  // there too: the Wongo badge (2000 points) never triggers.
   Task<std::string> checkObtainWongoBadge(int pointsEarned) {
     int wongoPoints = 0;
     int num = wongoPoints % kPointsForBadge;
