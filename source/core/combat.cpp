@@ -254,6 +254,7 @@ std::vector<Model*> Combat::listeners() {
   out.reserve(64);
   for (auto& p : player->powers) out.push_back(p.get());
   if (osty && !osty->removed) for (auto& p : osty->powers) out.push_back(p.get());
+  for (Creature* pet : pets) if (!pet->removed) for (auto& p : pet->powers) out.push_back(p.get());
   for (auto& r : run->relics) out.push_back(r.get());
   for (auto& m : run->modifiers) out.push_back(m.get());  // M11: RunState.Modifiers (after the relics)
   for (Card* c : allCards()) {
@@ -969,6 +970,21 @@ Task<Creature*> addMonster(Combat& c, std::unique_ptr<Monster> m) {
   Creature* cr = c.createEnemy(std::move(m));
   co_await afterMonsterJoined(c, cr);
   co_return cr;
+}
+
+Task<Creature*> addPet(Combat& c, const std::string& monsterId) {
+  if (!c.inProgress || c.ending) co_return nullptr;  // CreatureCmd.Add: only in a live combat
+  auto cr = std::make_unique<Creature>();
+  cr->name = monsterId;
+  cr->side = Side::Player;
+  cr->petOwner = c.player;  // PlayerCombatState.AddPetInternal
+  cr->combat = &c;
+  cr->hp = cr->maxHp = 9999;  // Byrdpip / PaelsLegion: Min/MaxInitialHp 9999, IsHealthBarVisible false
+  Creature* raw = cr.get();
+  c.pets.push_back(raw);
+  c.ownedPets.push_back(std::move(cr));
+  for (Model* l : c.listeners()) co_await l->afterCreatureAddedToCombat(raw);
+  co_return raw;
 }
 
 Task<> joinMonster(Combat& c, Creature* cr) {

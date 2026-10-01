@@ -251,6 +251,13 @@ void App::drawCombat(bool top) {
       center(cb->osty, 150);  // F7: VFX anchor (targeting only looks up enemies)
       drawCreature(cb->osty, 150, feet, false);
     }
+    // Relic pets (Combat::pets: Byrdpip, PaelsLegion) stand behind the player, body only (their
+    // MonsterModels hide the health bar). Their art is not baked yet: drawn once creature/<id> exists.
+    for (size_t i = 0; i < cb->pets.size(); ++i) {
+      Creature* p = cb->pets[i];
+      if (p->removed || !R().sprite("creature/" + p->name)) continue;
+      drawCreatureBody(p, 45 - 30.f * (float)i, feet, 1.f, true);
+    }
     // X2.5: the Defect's orb slots (Combat::orbQueue / orbCapacity), laid out like NOrbManager's
     // arc around the player but simplified to a row above the top bar for the 400px screen.
     // Filled slots show the queued orb (id "<Name>Orb" -> sprite orb/<name>), empty ones

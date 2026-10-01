@@ -1037,6 +1037,16 @@ struct Combat {
   // `enemies`. Non-null once summoned this combat, even while dead (ready for revival).
   Creature* osty = nullptr;
   std::unique_ptr<Creature> ownedOsty;
+  // PlayerCombatState.Pets other than Osty (Byrdpip, PaelsLegion: pets.cpp): player-side creatures a
+  // relic adds each combat (PlayerCmd.AddPet in BeforeCombatStart), never in `enemies`, never hit
+  // by monster attacks (AttackCommand targets PlayerCreatures). Creature::name is the MonsterModel id.
+  // They live and die with the combat; nothing is kept between rooms.
+  std::vector<Creature*> pets;
+  std::vector<std::unique_ptr<Creature>> ownedPets;
+  Creature* pet(const std::string& monsterId) const {  // PlayerCombatState.GetPet<T>
+    for (Creature* p : pets) if (p->name == monsterId) return p;
+    return nullptr;
+  }
   std::vector<std::unique_ptr<Card>> cardStore;
   std::vector<std::unique_ptr<Power>> graveyard;  // removed powers, freed with the combat
   std::vector<std::unique_ptr<Enchantment>> enchantGraveyard;  // cleared enchantments (listener snapshots may still hold them)
@@ -1175,6 +1185,9 @@ Task<> loseMaxHp(Creature* cr, int amount);
 Task<Card*> addGeneratedCard(Combat& c, std::unique_ptr<Card> card, Pile to, bool top = false);
 Task<> autoPlay(Combat& c, Card* card, Creature* target = nullptr);  // CardCmd.AutoPlay
 Task<Card*> transform(Combat& c, Card* card, std::unique_ptr<Card> into);  // CardCmd.Transform
+// PlayerCmd.AddPet<T>: a new player-side creature (`monsterId`, 9999 HP) owned by the player, then
+// CreatureCmd.Add (Hook.AfterCreatureAddedToCombat). Null outside a live combat.
+Task<Creature*> addPet(Combat& c, const std::string& monsterId);
 void upgradeCard(Card* card);  // CardCmd.Upgrade
 void downgradeCard(Card* card);  // CardCmd.Downgrade
 void completeQuest(Run& run, Card* questCard);  // PlayerCmd.CompleteQuest (quests.cpp): the map point's CompletedQuests
