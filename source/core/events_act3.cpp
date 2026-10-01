@@ -233,7 +233,6 @@ const char* const kRiderNames[] = {"None", "Sapping", "Violence", "Choking", "En
 // MadScience.cs: an attack, skill or power chosen in the event, with a rider effect.
 // The description's SmartFormat flags are exposed as 0/1 vars: "CardType" (0 Attack, 1 Skill,
 // 2 Power), "HasRider" and one per rider name.
-// PORT NOTE: App::describe needs `{CardType:choose(A|B|C):x|y|z}` and `{Flag:a|b}` support.
 struct MadScience : IroncladT<MadScience> {
   CARD_HEADER(MadScience, "MAD_SCIENCE", 1, Attack, Token, AnyEnemy)
     addVar("Damage", 12);

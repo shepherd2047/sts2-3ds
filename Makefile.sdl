@@ -185,3 +185,14 @@ clean:
 .PHONY: all sim check clean
 
 -include $(DEPS)
+
+# E9: card-text formatter check (links the preview objects except main).
+build/cardtext_test: $(CORE_OBJS) $(filter-out $(OBJ_DIR)/source/main.o,$(PREVIEW_EXTRA_OBJS)) $(OBJ_DIR)/test/cardtext_test.o
+	@mkdir -p build
+	$(CXX) $(BASE_CXXFLAGS) $^ -o $@ $(SDL_LDFLAGS)
+
+run_cardtext_test: build/cardtext_test
+	./build/cardtext_test
+
+check: run_cardtext_test
+.PHONY: run_cardtext_test
