@@ -447,7 +447,7 @@ their `clone()` must call `adoptEnchantment()`.
 | id | Package | Kind | Needs | Status |
 |---|---|---|---|---|
 | H1 | Performance on the New 3DS: frame time (Spine skinning, text layout, atlas binds), load times, hot spots | 3DS | – | todo |
-| H2 | Memory: a full run with each character on hardware and a sim soak (1000 runs per character), no leaks, linear memory within limits | 3DS | X* | in progress (subagent 2026-09-30: sim soak + sanitizers, continuing branch worktree-agent-ac817737f97ab1267; hardware part later) |
+| H2 | Memory: a full run with each character on hardware and a sim soak (1000 runs per character), no leaks, linear memory within limits | 3DS | X* | in progress: sanitizer pass done 2026-09-30 (UBSan + malloc checks, 19 configs x 100 runs, 0 errors, RSS 11-20 MB flat; ASan hangs on macOS 27); full 1000-run plain soak pending on an idle machine (`SOAK_SAN=none ... tools/soak.sh 1000 2`); hardware part later) |
 | H3 | Romfs budget with all characters and audio; texture and audio quality checks on the device | tools | U1, X* | todo |
 | H4 | Packaging: icon, banner (with its sound), title id, `.3dsx` + `.cia` builds | tools | – | done (subagent), accepted 2026-09-29: `make cia` (makerom/ctrtool/bannertool in ~/.local/bin), title id 000400000FA57200, banner + icon + 3 s banner sound baked at build time; New 3DS 124MB mode |
 | H5 | Balance and bugs: compare numbers with the C# for every character (script), fix known PORT NOTEs | content | X* | first half done (subagent), accepted 2026-09-29: tools/balance_check.py + test/model_dump.cpp in `make check` (555 cards, 286 relics, 64 potions; 71 mismatches → 53 fixed, 18 allowlisted in tools/balance_allowlist.txt); 19 PORT NOTEs fixed. Second half: the E packages below |
@@ -473,6 +473,14 @@ group is one engine package; file:line lists are in the H5 merge commit report.
 | E9 | Card-text formatter: `{CardType:choose}`, `{TargetType:choose}`, recursive string vars, Calculated* display | 4 notes + in-combat numbers; done 2026-09-30 (subagent, merged by lead) |
 
 UI/VFX-only, single-player-only, owner-decision and reviewed RNG notes stay as they are (n/a for H6).
+
+**2026-09-30 / 10-01 follow-ups (all merged):** PORT NOTE triage over every file group — 2 notes left open
+(Feral ResourceInfo, an underdocks power's DisplayAmount), 85 marked `PORT NOTE (n/a: <reason>)`
+(visual 39, owner 16, equivalent 15, single-player 14, c#-test-only 1); `grep -rn "PORT NOTE" source | grep -v n/a`
+lists the open ones for H6. Also: up-front room generation + .NET HashSet map order (seeded runs changed),
+clone link / Rarity::Event / HpDisplay / summon + hand-emptied hooks, run history choice lists (run.sav v11,
+history v5), Gremlin gold proportion, progress stats (progress.sav v4), pets (Byrdpip, PaelsLegion; no art yet),
+enchant preview, Trial abandon confirm, TeaMaster loc text, pinyin sort, text glyph pixel snapping.
 
 ## Order
 
