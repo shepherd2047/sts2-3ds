@@ -25,6 +25,17 @@ Status: **nothing below is merged yet** except where noted. Work in lanes on dis
   run build_assets, check in Azahar**. Files: combat_ui.cpp, ui.h, build_assets.py.
   WP5 builds on top of this branch.
 
+- `combat-fx` (branch on origin, on top of `ui/potion-belt`, 2026-10-03, awaiting owner OK; run
+  `python tools/build_assets.py` after merging): WP5 items 13 (playable-card outline: `card/glow_cyan|gold|red`
+  baked from `card_frame_sdf.exr` by `bake_card_glow`, behind every playable hand card and the held card; gold /
+  red from the enchantment's `shouldGlowGold/Red`), 14 (no play line or hint boxes while dragging, only the red
+  energy line), 15 (keyword tips of the raised / dragged card stack on the top screen, `drawCardTipColumn`
+  shared with the detail page), 16 (inspect chips on the hover_tip art, no repeated name), 17 (tap on a belt
+  bottle opens a Drink / Discard popup, potion text on the top screen). Also: damage numbers follow
+  NDamageNumVfx (hop with gravity, 2.5x -> 1x pop, red -> cream, 2 s fade) and the low-HP hurt vignette
+  (NLowHpBorderVfx, plays when a hit leaves the player at <= 25% HP; `STS_HURT_DEMO=1` replays it every 2 s).
+  `tools/gdpck.py` reads RGBAH textures. 3DS `make` passed on this PC (devkitPro in MSYS2).
+
 ## Issues (most visible first) and packages
 
 ### WP1 Button kit — legacy_widgets.cpp, title.cpp, custom_run.cpp, daily_run.cpp
