@@ -361,6 +361,22 @@ void App::drawCombat(bool top) {
       if (f.who && !f.who->isPlayer)
         for (int i = 0; i < (int)enemies.size(); ++i)
           if (enemies[i] == f.who) x = enemyX(i, (int)enemies.size());
+      if (f.color == col::red) {
+        // NDamageNumVfx: a hop (velocity (+-100, -700..-800), gravity 2000 in 1080p units), the scale
+        // easing from 2.5x back to 1x over 1.2 s, the colour to cream over 0.5 s, faded out over 2 s.
+        const float k = 240.f / 1080.f, t = f.t;
+        const float u = std::min(1.f, t / 1.2f), eq = 1.f - (1.f - u) * (1.f - u);
+        const float sc = 1.3f * (1.f + 1.5f * (1.f - eq));
+        const float ce = 1.f - std::pow(1.f - std::min(1.f, t / 0.5f), 3.f);
+        const float fade = std::min(1.f, t / 2.f), a = 1.f - fade * fade;
+        auto mix = [&](int sh) { return (uint32_t)(((col::red >> sh) & 0xFF) * (1 - ce) + ((0xFFF6E2FFu >> sh) & 0xFF) * ce); };
+        const uint32_t c = (mix(24) << 24) | (mix(16) << 16) | (mix(8) << 8) | (uint32_t)(a * 255);
+        TextStyle st = ts(F16, c, CENTER);
+        st.scale = sc;
+        const float px = x + f.dx * 2.2f * t, py = y + (-750.f * k) * t + 0.5f * (2000.f * k) * t * t;
+        R().text(px, py - R().lineHeight(F16) * sc / 2, f.text, st);
+        continue;
+      }
       float a = std::clamp(1.2f - f.t, 0.f, 1.f);
       TextStyle st = ts(F16, (f.color & 0xFFFFFF00) | (uint32_t)(a * 255), CENTER);
       st.scale = 1.3f;

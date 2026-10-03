@@ -296,7 +296,7 @@ void App::update(const gfx::Input& frameIn, double dt) {
   if (toastT_ > 0) toastT_ -= (float)visualDt;
   updateAchievementToast((float)visualDt);  // M5
   for (auto& f : floats_) f.t += (float)visualDt;
-  floats_.erase(std::remove_if(floats_.begin(), floats_.end(), [](const Float& f) { return f.t > 1.2f; }), floats_.end());
+  floats_.erase(std::remove_if(floats_.begin(), floats_.end(), [](const Float& f) { return f.t > (f.color == col::red ? 2.f : 1.2f); }), floats_.end());
 
   Screen scr = run_->screen;
   if (scr != lastScreen_) {
