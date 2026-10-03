@@ -281,6 +281,35 @@ void statEntry(float x, float y, float w, const char* icon, const std::string& t
   }
 }
 
+// NDeckHistory / NRelicHistory: the counts by rarity after the header ("1 Ancient, 1 Starter"), from the
+// DECK_HISTORY / RELIC_HISTORY.categories text (CardRarity / RelicRarity name + "Cards" / "Relics").
+std::string historyCategories(const history::RunRecord& r, bool relics) {
+  static const char* const kCard[] = {"Basic", "Common", "Uncommon", "Rare", "Ancient", "Event", "Token", "Status", "Curse", "Quest"};
+  static const char* const kRelic[] = {"None", "Starter", "Common", "Uncommon", "Rare", "Shop", "Event", "Ancient"};
+  std::map<std::string, int> n;
+  if (relics) {
+    for (auto& id : r.relics)
+      if (auto m = db::relic(id)) ++n[std::string(kRelic[(int)m->rarity]) + "Relics"];
+  } else {
+    for (auto& d : r.deck)
+      if (auto m = db::card(d.id)) ++n[std::string(kCard[(int)m->rarity]) + "Cards"];
+  }
+  std::vector<DynVar> vars;
+  for (auto& [k, v] : n) vars.push_back({k, Dec(v), Dec(v)});
+  const char* const* names = relics ? kRelic : kCard;
+  const int count = relics ? 8 : 10;
+  for (int i = 0; i < count; ++i) {  // absent rarities are 0, not unknown variables
+    const std::string k = std::string(names[i]) + (relics ? "Relics" : "Cards");
+    if (!n.count(k)) vars.push_back({k, Dec(0), Dec(0)});
+  }
+  const std::string key = relics ? "run_history.RELIC_HISTORY.categories" : "run_history.DECK_HISTORY.categories";
+  if (!R().hasLoc(key)) return {};
+  std::string s = expandSmart(L(key), vars, false);
+  while (!s.empty() && (s.back() == ' ' || s.back() == ',')) s.pop_back();  // GetFormattedText().Trim(',')
+  while (!s.empty() && (s.front() == ' ' || s.front() == ',')) s.erase(0, 1);
+  return s;
+}
+
 std::string ss(const std::string& key) { return L("stats_screen." + key); }
 }  // namespace
 
@@ -465,10 +494,8 @@ void App::drawHistoryList(bool top) {
   State& s = S();
   const int n = (int)s.runs.size();
   if (top) {
-    TextStyle ht = ts(F16, col::gold, CENTER, 0, 1.15f);
-    ht.outline = 0x000000FF;
-    R().text(kTop / 2, 7, L("main_menu_ui.RUN_HISTORY.title"), ht);
-    const float px = 12, py = 30, pw = kTop - 24, ph = kH - py - 8;
+    widgets::title(kTop / 2.f, 2, L("main_menu_ui.RUN_HISTORY.title"), 0.62f);  // the ribbon, clear of the panel
+    const float px = 12, py = 38, pw = kTop - 24, ph = kH - py - 8;
     widgets::panel("ui/hover_tip", px, py, pw, ph);
     if (n == 0) {
       R().text(kTop / 2, py + ph / 2 - 8, tr("还没有完成的游戏", "No finished runs yet"), ts(F16, col::gray, CENTER));
@@ -508,9 +535,14 @@ void App::drawHistoryList(bool top) {
     }
     // Deck / relic counts and the badges.
     y = std::max(y + 4, py + ph - 48);
-    R().text(px + 12, y, fill(L("run_history.DECK_HISTORY.header"), "totalCards", num((int)r.deck.size())) + "   " +
-                             fill(L("run_history.RELIC_HISTORY.header"), "totalRelics", num((int)r.relics.size())),
-             ts(F12, col::white));
+    R().text(px + 12, y, fill(L("run_history.DECK_HISTORY.header"), "totalCards", num((int)r.deck.size())) + " " +
+                             historyCategories(r, false),
+             ts(F12, col::white, LEFT, pw - 24));
+    y -= 16;
+    R().text(px + 12, y, fill(L("run_history.RELIC_HISTORY.header"), "totalRelics", num((int)r.relics.size())) + " " +
+                             historyCategories(r, true),
+             ts(F12, col::white, LEFT, pw - 24));
+    y += 16;
     float bx = px + 12;
     for (auto& b : r.badges) {
       if (bx > px + pw - 30) break;
@@ -544,7 +576,6 @@ void App::drawHistoryList(bool top) {
     if (focus) outline(rx, y, rw, kListRowH - 2);
     hits_.push_back({rx, y, rw, kListRowH - 2, kRunRow0 + i});
   }
-  if (n == 0) R().text(kBot / 2, 90, tr("还没有完成的游戏", "No finished runs yet"), ts(F16, col::gray, CENTER));
   widgets::panel("ui/btn_back", 8, kBarY, 96, kBarH);
   R().text(8 + 48, kBarY + (kBarH - R().lineHeight(F16)) / 2, tr("返回", "Back"), ts(F16, col::white, CENTER));
   hits_.push_back({8, kBarY, 96, kBarH, kBackId});

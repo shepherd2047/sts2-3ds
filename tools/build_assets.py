@@ -1448,7 +1448,8 @@ def bake_text(g, args, CARDS, POWERS, MONSTERS, RELICS, EVENTS, POTIONS, ENCHANT
     take('encounters', lambda k: k.endswith(('.title', '.loss')))
     take('stats_screen')  # M6: NGeneralStatsGrid / NCharacterStats entries
     take('run_history', lambda k: k.startswith(('MAP_POINT_HISTORY.', 'INFO.SEED', 'DECK_HISTORY.header',
-                                               'RELIC_HISTORY.header', 'DEFAULT_EVENT_LOSS_MESSAGE')))  # M6
+                                               'RELIC_HISTORY.header', 'DEFAULT_EVENT_LOSS_MESSAGE',
+                                               'DECK_HISTORY.categories', 'RELIC_HISTORY.categories')))  # M6
     take('merchant_room')
     take('card_library')  # M8: the card library's filters, counts and the unseen card's title / text
     take('relic_collection')  # M9: the relic collection's category headers

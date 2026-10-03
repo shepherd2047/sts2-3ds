@@ -169,6 +169,7 @@ void App::updateAchievementToast(float dt) {
       openStats(1);
       openAchievements();
     }
+    if (getenv("STS_OPEN_HISTORY")) openStats(2);  // preview: the run history list
   }
   if (s.toastActive) {
     s.toastT += dt;
