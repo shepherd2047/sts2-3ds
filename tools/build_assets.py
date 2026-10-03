@@ -898,6 +898,11 @@ def add_ui_art(g, a, packer, known):
     put('ui/end_turn_glow', 'packed/combat_ui/end_turn_button_glow.png', (84, 42))
     put('ui/exhaust_pile', 'packed/combat_ui/exhaust_pile.png', (30, 30))
     put('ui/pile_count', 'packed/combat_ui/pile_button_count.png', (24, 20))
+    # Combat potion belt (top_bar.tscn PotionContainer): the PotionBg 9-slice (32 px margins) and
+    # the empty holder's potion_placeholder (60 px holder, 4 px inset), scaled by 26/60 to the
+    # bottom screen's 26 px bottles: margins 14, placeholder 22 px.
+    put('ui/potion_belt', 'top_bar/top_bar_char_backdrop.tres', (39, 37), (14, 14, 14, 14))
+    put('ui/potion_empty', 'packed/potions/potion_placeholder.png', (22, 22))
     # Panels, frames, banners
     put('ui/panel_popup', 'popup_vertical.tres', (143, 163), (14, 14, 14, 14))
     put('ui/panel_reward', 'ui/reward_screen/reward_panel.png', (169, 215), (14, 14, 14, 14))

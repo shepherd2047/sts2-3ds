@@ -80,40 +80,37 @@ uint32_t energyOutline(const std::string& color) {
 
 inline float expoOut(float t) { return t >= 1 ? 1.f : 1.f - std::pow(2.f, -10.f * std::max(0.f, t)); }
 
-// ---- Potion belt on the combat bottom screen: the bottles bottom centre between the piles,
-// 信息 to their right. Used like cards: drag a bottle above the play line and let go.
-constexpr float kBeltY = 207.f, kBeltH = 30.f, kInfoW = 44.f, kBeltGap = 8.f;
-constexpr float kPotionDragSize = 40.f;  // the held bottle, a little larger than in the belt
+// ---- Potion belt on the combat bottom screen, laid out like the C# top bar's PotionContainer
+// (top_bar.tscn): the PotionBg 9-slice (ui/potion_belt), a margin of 18/5/19/6 around the
+// PotionHolders row (separation 2) of 60 px holders, all scaled by 26/60 to 26 px bottles. It
+// sits bottom centre between the piles with 信息 to its right. Used like cards: drag a bottle
+// above the play line and let go.
+constexpr float kHolder = 26.f, kBeltK = kHolder / 60.f;
+constexpr float kBeltML = 18 * kBeltK, kBeltMT = 5 * kBeltK, kBeltMR = 19 * kBeltK, kBeltMB = 6 * kBeltK;
+constexpr float kBeltSep = 2 * kBeltK;
+constexpr float kBeltY = 207.f, kBeltH = kBeltMT + kHolder + kBeltMB, kInfoW = 44.f, kBeltGap = 6.f;
+constexpr float kPotionDragSize = 34.f;  // the held bottle, a little larger than in the belt
 struct BeltLayout {
-  float x0, pitch, size, infoX;
-  float cx(int i) const { return x0 + pitch * (i + 0.5f); }
-  float cy() const { return kBeltY + kBeltH / 2; }
+  float x0, w, size, infoX;  // x0 / w: the backdrop; size: one holder
+  float cx(int i) const { return x0 + kBeltML + (size + kBeltSep) * i + size / 2; }
+  float cy() const { return kBeltY + kBeltMT + size / 2; }
+  float pitch() const { return size + kBeltSep; }
 };
 BeltLayout beltLayout(int n) {
   n = std::max(1, n);
-  const float pitch = std::min(32.f, 130.f / n);  // 3 slots: 32 px each; more slots squeeze
-  const float w = pitch * n, x0 = (kBot - (w + kBeltGap + kInfoW)) / 2;
-  return {x0, pitch, std::min(kBeltH, pitch - 2), x0 + w + kBeltGap};
+  // 3 holders: 26 px each; bigger belts squeeze into 130 px so 信息 stays clear of the exhaust pile.
+  const float size = std::min(kHolder, (130.f - kBeltML - kBeltMR - kBeltSep * (n - 1)) / n);
+  const float w = kBeltML + size * n + kBeltSep * (n - 1) + kBeltMR;
+  const float x0 = std::round((kBot - (w + kBeltGap + kInfoW)) / 2);
+  return {x0, w, size, x0 + w + kBeltGap};
 }
 
-// An empty belt slot: a faint flask outline (round body, neck, lip).
-void drawEmptyBottle(float cx, float cy, float s, uint32_t c = 0xFFFFFF40) {
-  const float r = s * 0.27f, by = cy + s * 0.13f, nw = s * 0.09f, top = cy - s * 0.32f;
-  gfx::circle(cx, by, r, 0x00000038);
-  const float a0 = std::asin(std::clamp(nw / r, 0.f, 1.f));  // the neck's gap at the top
-  const int seg = 20;
-  float px = 0, py = 0;
-  for (int i = 0; i <= seg; ++i) {
-    float a = a0 + (2 * 3.14159265f - 2 * a0) * i / seg;  // clockwise from the neck's right side
-    float x = cx + r * std::sin(a), y = by - r * std::cos(a);
-    if (i) gfx::line(px, py, x, y, 1.2f, c);
-    px = x;
-    py = y;
-  }
-  const float ny = by - r * std::cos(a0);
-  gfx::line(cx - nw, ny, cx - nw, top, 1.2f, c);
-  gfx::line(cx + nw, ny, cx + nw, top, 1.2f, c);
-  gfx::line(cx - nw - 2, top, cx + nw + 2, top, 1.6f, c);
+// An empty holder (NPotionHolder.EmptyIcon): the game's potion_placeholder, inset 4 of 60 px.
+void drawEmptyHolder(float cx, float cy, float holder) {
+  const float s = holder * 52.f / 60.f;
+  Sprite e = R().sprite("ui/potion_empty");
+  if (e) spr(e, cx - s / 2, cy - s / 2, s, s);
+  else gfx::circle(cx, cy, s * 0.36f, 0xFFFFFF28);
 }
 
 // A used potion flying from where it was let go to its target (virtual two-screen coordinates).
@@ -624,12 +621,7 @@ void App::drawCombat(bool top) {
     const int pn = (int)run_->potions.size();
     const BeltLayout bl = beltLayout(pn);
     const bool holding = drag_.down && drag_.moved && drag_.potion >= 0;
-    if (pn > 0) {
-      const float plx = bl.x0 - 2, plw = bl.pitch * pn + 4;
-      panel(plx, kBeltY - 1, plw, kBeltH + 2, 0x140E0AB8, 0x6A5638D0);
-      for (int i = 1; i < pn; ++i)  // slot dividers
-        gfx::rect(bl.x0 + bl.pitch * i, kBeltY + 5, 1, kBeltH - 10, 0xB89A6040);
-    }
+    if (pn > 0) widgets::panel("ui/potion_belt", bl.x0, kBeltY, bl.w, kBeltH);  // PotionBg, untinted
     for (int i = 0; i < pn; ++i) {
       Potion* q = run_->potions[i].get();
       const float cx = bl.cx(i), cy = bl.cy(), sz = bl.size;
@@ -639,9 +631,10 @@ void App::drawCombat(bool top) {
         drawPotionIcon(q, cx - sz / 2, cy - sz / 2, sz);
         if (!usable) gfx::popAlpha();
       } else {
-        drawEmptyBottle(cx, cy, sz, q ? 0xFFD87070 : 0xFFFFFF40);  // a held bottle leaves a gold outline
+        drawEmptyHolder(cx, cy, sz);  // empty, or the bottle is in the player's hand
       }
-      if (canAct) hits_.push_back({cx - bl.pitch / 2, kBeltY - 4, bl.pitch, kBeltH + 8, ID_POTION0 + i});
+      const float hx = i == 0 ? bl.x0 : cx - bl.pitch() / 2, hw = i == 0 || i == pn - 1 ? bl.pitch() + kBeltML : bl.pitch();
+      if (canAct) hits_.push_back({hx, kBeltY - 4, hw, kBeltH + 8, ID_POTION0 + i});
     }
     // S10: 信息 (combat inspect, also ↑) beside it; open on either side's turn.
     const float ix = pn > 0 ? bl.infoX : (kBot - kInfoW) / 2, ih = 22, iy = kBeltY + (kBeltH - ih) / 2;
