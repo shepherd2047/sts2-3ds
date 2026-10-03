@@ -895,9 +895,44 @@ def add_ui_art(g, a, packer, known):
             put('ach/' + m.group(1), f'packed/achievements/unlocked/{m.group(1)}.png', (64, 64))
     put('ach/border', 'packed/achievements/achievement_border.png', (64, 64))
     put('ach/lock', 'packed/achievements/achievement_lock.png', (32, 32))
+    # Playable-card outline (NCardHighlight, shaders/card_ripple.gdshader): the shader keeps the thin band
+    # of the card SDF just outside the card (alpha = smoothstep(1 - width, 1, sdf)), plus a faint halo.
+    def bake_card_glow(rgb):
+        def bake(img):
+            a = np.asarray(img)[..., 3].astype(np.float32) / 255.0
+            w = 0.05
+            t = np.clip((a - (1 - w)) / w, 0, 1)
+            band = t * t * (3 - 2 * t)
+            h = np.clip((a - 0.7) / 0.3, 0, 1) ** 2 * 0.25
+            out = np.zeros(a.shape + (4,), np.uint8)
+            out[..., 0], out[..., 1], out[..., 2] = rgb  # pre-coloured: citro2d tint blend is not usable
+            out[..., 3] = (np.clip(np.maximum(band, h), 0, 1) * 255 + 0.5).astype(np.uint8)
+            return Image.fromarray(out, 'RGBA')
+        return bake
+    # NHandCardHolder colours: playable cyan, gold (enchantment glow), red.
+    for gname, grgb in (('cyan', (0, 244, 252)), ('gold', (255, 200, 0)), ('red', (212, 0, 84))):
+        put('card/glow_' + gname, 'packed/card_template/card_frame_sdf.exr', (128, 128), bake=bake_card_glow(grgb))
+    # NLowHpBorderVfx (vfx_ui_low_hp_border_shader): alpha = smoothstep(0.1, 0.9, polar falloff + noise mean) from the
+    # screen centre outwards, inner radius 0.5, outer 1.75; main colour fades red -> dark red. Noise left out.
+    if 'ui/hurt_vignette' not in known:
+        vw, vh = 100, 60
+        yy, xx = np.mgrid[0:vh, 0:vw].astype(np.float32)
+        vx, vy = np.abs((xx + 0.5) / vw - 0.5) * 2, np.abs((yy + 0.5) / vh - 0.5) * 2
+        vq = 1 - (1 - np.sqrt(vx * vx + vy * vy) / 1.75) / (1 - 0.5)
+        vt = np.clip((vq + 0.12 - 0.1) / 0.8, 0, 1)
+        vim = np.zeros((vh, vw, 4), np.uint8)
+        vim[..., 0], vim[..., 1], vim[..., 2] = 150, 8, 8
+        vim[..., 3] = (vt * vt * (3 - 2 * vt) * 255 + 0.5).astype(np.uint8)
+        packer.add('ui/hurt_vignette', Image.fromarray(vim, 'RGBA'))
+        known.add('ui/hurt_vignette')
     put('ui/end_turn_glow', 'packed/combat_ui/end_turn_button_glow.png', (84, 42))
     put('ui/exhaust_pile', 'packed/combat_ui/exhaust_pile.png', (30, 30))
     put('ui/pile_count', 'packed/combat_ui/pile_button_count.png', (24, 20))
+    # Combat potion belt (top_bar.tscn PotionContainer): the PotionBg 9-slice (32 px margins) and
+    # the empty holder's potion_placeholder (60 px holder, 4 px inset), scaled by 20/60 to the
+    # bottom screen's 20 px bottles: art 30x28, margins 11, placeholder 17 px.
+    put('ui/potion_belt', 'top_bar/top_bar_char_backdrop.tres', (30, 28), (11, 11, 11, 11))
+    put('ui/potion_empty', 'packed/potions/potion_placeholder.png', (17, 17))
     # Panels, frames, banners
     put('ui/panel_popup', 'popup_vertical.tres', (143, 163), (14, 14, 14, 14))
     put('ui/panel_reward', 'ui/reward_screen/reward_panel.png', (169, 215), (14, 14, 14, 14))
@@ -1168,7 +1203,9 @@ def build(args):
             path = f'images/relics/{key.lower()}_ironclad.png'
         packer.add('relic/' + key, fit(g.image(path), (RELIC_ICON, RELIC_ICON)))
     for key in POTIONS:  # PotionModel.ImagePath (potion_atlas)
-        packer.add('potion/' + key, fit(a.sprite(f'images/atlases/potion_atlas.sprites/{key.lower()}.tres'), (48, 48)))
+        img = a.sprite(f'images/atlases/potion_atlas.sprites/{key.lower()}.tres')
+        packer.add('potion/' + key, fit(img, (48, 48)))
+        packer.add('potion_s/' + key, fit(img, (20, 20)))  # the combat belt's 20 px bottles, baked crisp
     for key in EVENTS:  # event art for the top screen (RGDSplus U21)
         path = f'images/events/{key.lower()}.png'
         if path + '.import' in g.pck.files:

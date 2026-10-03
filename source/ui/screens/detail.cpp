@@ -10,6 +10,7 @@
 // detailCard_ / detailRelic_ directly still works (no list).
 #include "../ui_common.h"
 
+#include <functional>
 #include <unordered_map>
 
 namespace ui {
@@ -260,6 +261,52 @@ void App::drawRelicDetail(Relic* r, float cy) {
   R().text(kTop / 2.f, cy + 78, describeRelic(r), ts(F12, col::white, CENTER, kTop - 60));
 }
 
+// CardModel.HoverTips for a card, in the game's order. Shared by the detail page and the combat top screen.
+static void collectCardTips(std::vector<Tip>& tips, Card* s, const std::function<std::string(Card*)>& desc) {
+  // CardModel.HoverTips: ExtraHoverTips, enchantment, replays, Block, keywords (Ethereal adds Exhaust).
+  tableTips(tips, "card:" + s->id, s->vars, desc);
+  if (Enchantment* e = s->enchantment.get()) {
+    std::string k = "enchantments." + e->locKey;
+    if (R().hasLoc(k + ".title")) {
+      auto v = withAmount(e->vars, e->amount);
+      addTip(tips, L(k + ".title"), R().hasLoc(k + ".description") ? expandSmart(L(k + ".description"), v, false) : "");
+    }
+    tableTips(tips, "ench:" + e->id, withAmount(e->vars, e->amount), desc);
+  }
+  // A4: AfflictionModel.HoverTips: its own tip (title + description with Amount), then its
+  // ExtraHoverTips (Hexed: Ethereal; Tainted: the Tainted power).
+  if (Affliction* a = s->affliction.get()) {
+    std::string k = "afflictions." + a->locKey;
+    auto v = withAmount({}, a->amount);
+    if (R().hasLoc(k + ".title"))
+      addTip(tips, L(k + ".title"), R().hasLoc(k + ".description") ? expandSmart(L(k + ".description"), v, false) : "");
+    if (a->id == "Hexed" && R().hasLoc("card_keywords.ETHEREAL.title"))
+      addTip(tips, L("card_keywords.ETHEREAL.title"), L("card_keywords.ETHEREAL.description"));
+    if (a->id == "Tainted" && R().hasLoc("powers.TAINTED_POWER.title"))
+      addTip(tips, expandSmart(L("powers.TAINTED_POWER.title"), v, false),
+             R().hasLoc("powers.TAINTED_POWER.description") ? expandSmart(L("powers.TAINTED_POWER.description"), v, false) : "");
+  }
+  if (int times = s->enchantedReplayCount(); times > 0 && R().hasLoc("static_hover_tips.REPLAY_DYNAMIC.title")) {
+    std::vector<DynVar> v{{"Times", Dec(times), Dec(times)}};
+    addTip(tips, expandSmart(L("static_hover_tips.REPLAY_DYNAMIC.title"), v, false),
+           expandSmart(L("static_hover_tips.REPLAY_DYNAMIC.description"), v, false));
+  }
+  if (s->gainsBlock() && R().hasLoc("static_hover_tips.BLOCK.title"))
+    addTip(tips, L("static_hover_tips.BLOCK.title"), L("static_hover_tips.BLOCK.description"));
+  static const std::pair<int, const char*> kws[] = {{kwExhaust, "EXHAUST"}, {kwEthereal, "ETHEREAL"}, {kwInnate, "INNATE"},
+                                                    {kwUnplayable, "UNPLAYABLE"}, {kwRetain, "RETAIN"}, {kwSly, "SLY"},
+                                                    {kwEternal, "ETERNAL"}};
+  auto kw = [&](const char* k) {
+    std::string base = std::string("card_keywords.") + k;
+    if (R().hasLoc(base + ".title")) addTip(tips, L(base + ".title"), L(base + ".description"));
+  };
+  for (auto& [bit, k] : kws) {
+    if (!s->has(bit)) continue;
+    kw(k);
+    if (bit == kwEthereal) kw("EXHAUST");
+  }
+}
+
 void App::refreshDetail() {
   Popup& p = P();
   const void* key = detailCard_ ? (const void*)detailCard_ : detailRelic_ ? (const void*)detailRelic_ : (const void*)detailPotion_;
@@ -284,48 +331,7 @@ void App::refreshDetail() {
       }
     }
     Card* s = p.shown ? p.shown.get() : c;
-    // CardModel.HoverTips: ExtraHoverTips, enchantment, replays, Block, keywords (Ethereal adds Exhaust).
-    tableTips(p.tips, "card:" + s->id, s->vars, desc);
-    if (Enchantment* e = s->enchantment.get()) {
-      std::string k = "enchantments." + e->locKey;
-      if (R().hasLoc(k + ".title")) {
-        auto v = withAmount(e->vars, e->amount);
-        addTip(p.tips, L(k + ".title"), R().hasLoc(k + ".description") ? expandSmart(L(k + ".description"), v, false) : "");
-      }
-      tableTips(p.tips, "ench:" + e->id, withAmount(e->vars, e->amount), desc);
-    }
-    // A4: AfflictionModel.HoverTips: its own tip (title + description with Amount), then its
-    // ExtraHoverTips (Hexed: Ethereal; Tainted: the Tainted power).
-    if (Affliction* a = s->affliction.get()) {
-      std::string k = "afflictions." + a->locKey;
-      auto v = withAmount({}, a->amount);
-      if (R().hasLoc(k + ".title"))
-        addTip(p.tips, L(k + ".title"), R().hasLoc(k + ".description") ? expandSmart(L(k + ".description"), v, false) : "");
-      if (a->id == "Hexed" && R().hasLoc("card_keywords.ETHEREAL.title"))
-        addTip(p.tips, L("card_keywords.ETHEREAL.title"), L("card_keywords.ETHEREAL.description"));
-      if (a->id == "Tainted" && R().hasLoc("powers.TAINTED_POWER.title"))
-        addTip(p.tips, expandSmart(L("powers.TAINTED_POWER.title"), v, false),
-               R().hasLoc("powers.TAINTED_POWER.description") ? expandSmart(L("powers.TAINTED_POWER.description"), v, false) : "");
-    }
-    if (int times = s->enchantedReplayCount(); times > 0 && R().hasLoc("static_hover_tips.REPLAY_DYNAMIC.title")) {
-      std::vector<DynVar> v{{"Times", Dec(times), Dec(times)}};
-      addTip(p.tips, expandSmart(L("static_hover_tips.REPLAY_DYNAMIC.title"), v, false),
-             expandSmart(L("static_hover_tips.REPLAY_DYNAMIC.description"), v, false));
-    }
-    if (s->gainsBlock() && R().hasLoc("static_hover_tips.BLOCK.title"))
-      addTip(p.tips, L("static_hover_tips.BLOCK.title"), L("static_hover_tips.BLOCK.description"));
-    static const std::pair<int, const char*> kws[] = {{kwExhaust, "EXHAUST"}, {kwEthereal, "ETHEREAL"}, {kwInnate, "INNATE"},
-                                                      {kwUnplayable, "UNPLAYABLE"}, {kwRetain, "RETAIN"}, {kwSly, "SLY"},
-                                                      {kwEternal, "ETERNAL"}};
-    auto kw = [&](const char* k) {
-      std::string base = std::string("card_keywords.") + k;
-      if (R().hasLoc(base + ".title")) addTip(p.tips, L(base + ".title"), L(base + ".description"));
-    };
-    for (auto& [bit, k] : kws) {
-      if (!s->has(bit)) continue;
-      kw(k);
-      if (bit == kwEthereal) kw("EXHAUST");
-    }
+    collectCardTips(p.tips, s, desc);
   } else if (Relic* r = detailRelic_) {
     tableTips(p.tips, "relic:" + r->id, r->vars, desc);
   } else if (Potion* q = detailPotion_) {
@@ -498,6 +504,14 @@ void App::updateDetail(const gfx::Input& in) {
   Popup& p = P();
   if ((d & (gfx::BTN_Y | gfx::BTN_DOWN)) && p.pages.size() > 1) p.page = (p.page + 1) % (int)p.pages.size();
   if ((d & gfx::BTN_UP) && p.pages.size() > 1) p.page = (p.page + (int)p.pages.size() - 1) % (int)p.pages.size();
+}
+
+// Combat top screen: the keyword tips of the card being held / raised, stacked down from (x, y).
+float drawCardTipColumn(Card* c, float x, float y, float w, const std::function<std::string(Card*)>& desc) {
+  std::vector<Tip> tips;
+  collectCardTips(tips, c, desc);
+  for (auto& t : tips) y += drawTip(t, x, y, w) + kTipGap;
+  return y;
 }
 
 }  // namespace ui

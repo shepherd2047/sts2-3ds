@@ -50,6 +50,7 @@ class App {
     bool down = false, moved = false, armed = false;
     int index = -1;
     sts::Card* card = nullptr;
+    int potion = -1;  // a belt slot dragged like a card (card == nullptr then)
     float grabDX = 0, grabDY = 0, originY = 0, x = 0, y = 0, startTx = 0, startTy = 0, lastTx = 0, accum = 0;
     sts::Creature* target = nullptr;
   };
@@ -283,8 +284,8 @@ class App {
   void updateEnd(const gfx::Input& in);
   void updateRelicOffer(const gfx::Input& in);
   void updateRelics(const gfx::Input& in);
-  // Potions (package 8): the belt as a list on the bottom screen (opened with 药水 in
-  // combat or on the map), the picked potion described on top; enemy-targeted potions
+  // Potions (package 8): the belt as a list on the bottom screen (opened by tapping a bottle of
+  // the combat belt, 药水 on the map, or the top bar), the picked potion described on top; enemy-targeted potions
   // then pick a target with ◀ ▶ (the reticle shows on the top screen).
   void drawPotions(bool top);
   void updatePotions(const gfx::Input& in);
@@ -297,6 +298,7 @@ class App {
   bool potionsOpen_ = false;
   bool potionAim_ = false;
   int potionSel_ = -1;
+  int beltPopup_ = -1;  // combat: belt slot whose Drink / Discard popup is open
 
   // pieces
   // RGDSplus B02-B06: pages show the current scene's own background (room, or the map
@@ -402,6 +404,7 @@ class App {
   float leaveQueue_ = 0;    // stagger for cards leaving it
   bool aiming_ = false;     // controller: choosing a target for the selected card
   float arrowRot_ = 0;
+  float hurtT_ = 99;        // seconds since the low-HP hurt vignette started (NLowHpBorderVfx, plays for 1 s)
   float clock_ = 0;         // seconds, drives pulsing UI      // NTargetingArrow head rotation carried between frames
   bool autoplay_ = false;
   double autoT_ = 0;

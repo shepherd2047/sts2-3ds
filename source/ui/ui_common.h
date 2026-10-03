@@ -211,4 +211,7 @@ inline float easeIn(float t) { return t * t; }
 inline float approach(float v, float to, float k, float dt) { return v + (to - v) * (1 - std::exp(-k * dt)); }
 }  // namespace
 
+// detail.cpp: the stacked keyword tips of a card (combat top screen); returns the y below the last tip.
+float drawCardTipColumn(Card* c, float x, float y, float w, const std::function<std::string(Card*)>& desc);
+
 }  // namespace ui

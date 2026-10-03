@@ -53,6 +53,7 @@ struct HudAnim {
   int lastEnergy = -1, lastDraw = -1, lastDiscard = -1, lastExhaust = 0;
   float energyPop = 0, drawBump = 0, discardBump = 0, exhaustBump = 0;
   float glow = 0, etSink = 0;
+  std::map<const Card*, float> cardGlow;  // playable-card highlight fade (NCardHighlight AnimShow / AnimHide)
   // Turn banner: the one showing and the one queued after it (combat start -> player turn 1).
   enum Kind { None, Start, Player, Enemy, Other };
   Kind banner = None, next = None;
@@ -79,6 +80,65 @@ uint32_t energyOutline(const std::string& color) {
 }
 
 inline float expoOut(float t) { return t >= 1 ? 1.f : 1.f - std::pow(2.f, -10.f * std::max(0.f, t)); }
+
+// ---- Potion belt on the combat bottom screen, laid out like the C# top bar's PotionContainer
+// (top_bar.tscn): the PotionBg 9-slice (ui/potion_belt), a margin of 18/5/19/6 around the
+// PotionHolders row (separation 2) of 60 px holders, all scaled by 20/60 to 20 px bottles and
+// rounded to whole pixels so the baked art (ui/potion_belt, ui/potion_empty, potion_s/*) stays
+// crisp. Small and quiet on purpose: the cards are the focus. It sits bottom centre between the
+// piles with 信息 to its right. Used like cards: drag a bottle above the play line and let go.
+constexpr float kHolder = 20.f;
+constexpr float kBeltML = 6, kBeltMT = 2, kBeltMR = 6, kBeltMB = 2, kBeltSep = 1;  // 18/5/19/6, 2 at 1/3
+constexpr float kBeltY = 212.f, kBeltH = kBeltMT + kHolder + kBeltMB, kInfoW = 40.f, kBeltGap = 6.f;
+constexpr float kPotionDragSize = 28.f;  // the held bottle, a little larger than in the belt
+struct BeltLayout {
+  float x0, w, size, infoX;  // x0 / w: the backdrop; size: one holder
+  float cx(int i) const { return x0 + kBeltML + (size + kBeltSep) * i + size / 2; }
+  float cy() const { return kBeltY + kBeltMT + size / 2; }
+  float pitch() const { return size + kBeltSep; }
+};
+BeltLayout beltLayout(int n) {
+  n = std::max(1, n);
+  // 3 holders: 20 px each; bigger belts squeeze into 130 px so 信息 stays clear of the exhaust pile.
+  const float size = std::min(kHolder, (130.f - kBeltML - kBeltMR - kBeltSep * (n - 1)) / n);
+  const float w = kBeltML + size * n + kBeltSep * (n - 1) + kBeltMR;
+  const float x0 = std::round((kBot - (w + kBeltGap + kInfoW)) / 2);
+  return {x0, w, size, x0 + w + kBeltGap};
+}
+
+// An empty holder (NPotionHolder.EmptyIcon): the game's potion_placeholder, inset 4 of 60 px.
+void drawEmptyHolder(float cx, float cy, float holder) {
+  const float s = std::round(holder * 52.f / 60.f);  // 17 px at 20 px holders, as baked
+  Sprite e = R().sprite("ui/potion_empty");
+  if (e) spr(e, std::round(cx - s / 2), std::round(cy - s / 2), s, s);
+  else gfx::circle(cx, cy, s * 0.36f, 0xFFFFFF28);
+}
+
+// A used potion flying from where it was let go to its target (virtual two-screen coordinates).
+struct PotionFlight {
+  std::string key;
+  float t, x0, y0, x1, y1;
+};
+std::vector<PotionFlight>& potionFlights() {
+  static std::vector<PotionFlight> v;
+  return v;
+}
+constexpr float kPotionFlightTime = 0.38f;
+void drawPotionFlights(bool top) {
+  for (auto& f : potionFlights()) {
+    Sprite s = R().sprite("potion/" + f.key);
+    if (!s) continue;
+    const float t = std::min(1.f, f.t / kPotionFlightTime), e = easeIn(t);
+    float x = f.x0 + (f.x1 - f.x0) * e, y = f.y0 + (f.y1 - f.y0) * e - std::sin(t * 3.14159265f) * 40;
+    toLocal(top, x, y);
+    const float sz = kPotionDragSize * (1.f - 0.5f * t);
+    gfx::pushAlpha(t < 0.75f ? 1.f : (1.f - t) / 0.25f);
+    gfx::pushTransform(gfx::Affine::rotateAround(x, y, t * 6.f));
+    spr(s, x - sz / 2, y - sz / 2, sz, sz);
+    gfx::popTransform();
+    gfx::popAlpha();
+  }
+}
 
 std::string locOr(const char* key, const std::string& fallback) {
   return R().hasLoc(key) ? L(key) : fallback;
@@ -207,6 +267,15 @@ void App::drawCombat(bool top) {
     if (drag_.card->target == TargetType::AnyEnemy && drag_.target) { tgt = drag_.target; arrow = true; }
     else if (drag_.card->target == TargetType::Self) { tgt = cb->player; arrow = arrowAlly = true; }
     else if (drag_.card->target == TargetType::AllEnemies || drag_.card->target == TargetType::RandomEnemy) markAll = arrowValid;
+  } else if (drag_.down && drag_.moved && drag_.armed && drag_.potion >= 0 && drag_.potion < (int)run_->potions.size() &&
+             run_->potions[drag_.potion]) {
+    // A belt potion held above the play line aims like a card: arrow from the bottle's top.
+    const TargetType pt = run_->potions[drag_.potion]->target;
+    afx = drag_.x + kBotOX;
+    afy = drag_.y - kPotionDragSize / 2 + kBotOY;
+    if (pt == TargetType::AnyEnemy && drag_.target) { tgt = drag_.target; arrow = true; }
+    else if (pt == TargetType::Self) { tgt = cb->player; arrow = arrowAlly = true; }
+    else if (pt == TargetType::AllEnemies || pt == TargetType::RandomEnemy) markAll = true;
   } else if (potionsOpen_ && potionAim_ && !alive.empty()) {
     if (target_ >= (int)alive.size()) target_ = 0;
     tgt = alive[target_];
@@ -292,10 +361,52 @@ void App::drawCombat(bool top) {
       if (f.who && !f.who->isPlayer)
         for (int i = 0; i < (int)enemies.size(); ++i)
           if (enemies[i] == f.who) x = enemyX(i, (int)enemies.size());
+      if (f.color == col::red) {
+        // NDamageNumVfx: a hop (velocity (+-100, -700..-800), gravity 2000 in 1080p units), the scale
+        // easing from 2.5x back to 1x over 1.2 s, the colour to cream over 0.5 s, faded out over 2 s.
+        const float k = 240.f / 1080.f, t = f.t;
+        const float u = std::min(1.f, t / 1.2f), eq = 1.f - (1.f - u) * (1.f - u);
+        const float sc = 1.3f * (1.f + 1.5f * (1.f - eq));
+        const float ce = 1.f - std::pow(1.f - std::min(1.f, t / 0.5f), 3.f);
+        const float fade = std::min(1.f, t / 2.f), a = 1.f - fade * fade;
+        auto mix = [&](int sh) { return (uint32_t)(((col::red >> sh) & 0xFF) * (1 - ce) + ((0xFFF6E2FFu >> sh) & 0xFF) * ce); };
+        const uint32_t c = (mix(24) << 24) | (mix(16) << 16) | (mix(8) << 8) | (uint32_t)(a * 255);
+        TextStyle st = ts(F16, c, CENTER);
+        st.scale = sc;
+        const float px = x + f.dx * 2.2f * t, py = y + (-750.f * k) * t + 0.5f * (2000.f * k) * t * t;
+        R().text(px, py - R().lineHeight(F16) * sc / 2, f.text, st);
+        continue;
+      }
       float a = std::clamp(1.2f - f.t, 0.f, 1.f);
       TextStyle st = ts(F16, (f.color & 0xFFFFFF00) | (uint32_t)(a * 255), CENTER);
       st.scale = 1.3f;
       R().text(x + f.dx, y - f.t * 40, f.text, st);
+    }
+    {
+      // The original lists the keyword tips of the card under the cursor beside it. The raised card is on the
+      // bottom screen, so its tips stack on this one, in the empty sky left of the creatures.
+      Card* tipCard = drag_.down && drag_.moved && drag_.card ? drag_.card : selCard;
+      if (tipCard && !cb->choice.active && !selecting) {
+        const bool orbs = run_->character().orbSlots > 0 || cb->orbCapacity > 0;
+        drawCardTipColumn(tipCard, 6, orbs ? 50.f : 26.f, 170, [this](Card* k) { return describe(k); });
+      }
+    }
+    if (hurtT_ < 1.f) {
+      const float t = hurtT_, m = t < 0.2551724f ? 1.f : std::max(0.f, 1.f - (t - 0.2551724f) / (1.f - 0.2551724f));
+      Sprite hv = R().sprite("ui/hurt_vignette");
+      if (hv) spr(hv, 0, 0, kTop, kH, 0xFFFFFF00u | (uint32_t)(255 * 0.75f * m));
+    }
+    if (beltPopup_ >= 0 && beltPopup_ < (int)run_->potions.size() && run_->potions[beltPopup_]) {
+      Potion* q = run_->potions[beltPopup_].get();
+      const float x = 6, y = 26, w = 190;
+      std::string title = L("potions." + q->locKey + ".title"), text = describePotion(q);
+      float dh = 0;
+      R().measure(text, ts(F12, col::white, LEFT, w - 16), &dh);
+      const float h = 30 + dh;
+      gfx::rect(x + 2, y + 2, w - 4, h - 4, 0x0B0B12D0);
+      widgets::panel("ui/hover_tip", x, y, w, h);
+      R().text(x + 8, y + 6, title, ts(F12, col::gold));
+      R().text(x + 8, y + 22, text, ts(F12, col::white, LEFT, w - 16));
     }
     if (selecting) {
       // S12 top screen: the battlefield dimmed under the prompt, the k / N counter at the left,
@@ -362,6 +473,7 @@ void App::drawCombat(bool top) {
     drawTurnBanner(*cb);
     if (arrow) drawArrow(true, afx, afy, atx, aty, arrowValid, arrowAlly);
     drawFlights(true);
+    drawPotionFlights(true);
     if (cb->choice.active && combatChooseOne()) {  // S13: the focused offer over the fight
       gfx::rect(0, 0, kTop, kH, 0x000000B0);
       chooseOneDraw(combatChooseOneSpec(), true);
@@ -544,19 +656,36 @@ void App::drawCombat(bool top) {
     R().text(ex + ew / 2, ey + eh / 2 - lh * lt.scale * inkMid, tr("结束", "End"), lt);
   }
   if (canAct) hits_.push_back({ex, ey - 4, ew, eh + 8, ID_END_TURN});
-  // Potions: a small button bottom centre, between the piles (opens the belt list).
+  // Potion belt (C# NPotionContainer, here on the bottom screen): the bottles bottom centre between
+  // the piles, empty slots as faint flask outlines. Used like cards (updateCombat): drag one above
+  // the play line and let go; tap one for its page (description, 使用 / 丢弃). Bottles that cannot
+  // be used now are dimmed.
   {
-    const float pw = 58, ph = 22, px = (kBot - pw) / 2, py = 214;
-    panel(px, py, pw, ph, canAct ? 0x3A2E24E8 : 0x2A2A2AC0, canAct ? 0xB89A60FF : 0x555555FF);
-    int filled = 0;
-    for (auto& pt : run_->potions) filled += pt != nullptr;
-    R().text(px + pw / 2, py + (ph - R().lineHeight(F12)) / 2, tr("药水 ", "Potions ") + num(filled), ts(F12, canAct ? col::white : col::gray, CENTER));
-    if (canAct) hits_.push_back({px, py - 2, pw, ph + 4, ID_POTIONS});
+    const int pn = (int)run_->potions.size();
+    const BeltLayout bl = beltLayout(pn);
+    const bool holding = drag_.down && drag_.moved && drag_.potion >= 0;
+    if (pn > 0) widgets::panel("ui/potion_belt", bl.x0, kBeltY, bl.w, kBeltH);  // PotionBg, untinted
+    for (int i = 0; i < pn; ++i) {
+      Potion* q = run_->potions[i].get();
+      const float cx = bl.cx(i), cy = bl.cy(), sz = bl.size;
+      const bool usable = q && canAct && run_->canUsePotion(i);
+      if (q && !(holding && drag_.potion == i && usable)) {
+        if (!usable) gfx::pushAlpha(0.45f);
+        Sprite small = R().sprite("potion_s/" + q->locKey);  // baked at 20 px: crisp at belt size
+        if (small) spr(small, std::round(cx - sz / 2), std::round(cy - sz / 2), sz, sz);
+        else drawPotionIcon(q, cx - sz / 2, cy - sz / 2, sz);
+        if (!usable) gfx::popAlpha();
+      } else {
+        drawEmptyHolder(cx, cy, sz);  // empty, or the bottle is in the player's hand
+      }
+      const float hx = i == 0 ? bl.x0 : cx - bl.pitch() / 2, hw = i == 0 || i == pn - 1 ? bl.pitch() + kBeltML : bl.pitch();
+      if (canAct) hits_.push_back({hx, kBeltY - 6, hw, kH - (kBeltY - 6), ID_POTION0 + i});  // down to the edge
+    }
     // S10: 信息 (combat inspect, also ↑) beside it; open on either side's turn.
-    const float ix = px + pw + 6, iw = 44;
-    panel(ix, py, iw, ph, 0x22323BE8, 0x4F8790FF);
-    R().text(ix + iw / 2, py + (ph - R().lineHeight(F12)) / 2, tr("信息", "Info"), ts(F12, col::white, CENTER));
-    hits_.push_back({ix, py - 4, iw, ph + 8, ID_INSPECT});
+    const float ix = pn > 0 ? bl.infoX : (kBot - kInfoW) / 2, ih = 20, iy = kBeltY + (kBeltH - ih) / 2;
+    widgets::panel("ui/btn_confirm", ix, iy, kInfoW, ih);
+    R().text(ix + kInfoW / 2, iy + (ih - R().lineHeight(F12)) / 2, tr("信息", "Info"), ts(F12, col::white, CENTER));
+    hits_.push_back({ix, iy - 4, kInfoW, ih + 8, ID_INSPECT});
   }
   // Piles (C# NCombatCardPile): the pile art in the corners with the count on the game's
   // pile_button_count plate at the bottom corner; the icon bumps when its count changes. The
@@ -607,6 +736,19 @@ void App::drawCombat(bool top) {
       const Pose& p = it->second;
       if ((p.drawT < 1) != (pass == 1)) continue;
       gfx::pushTransform(gfx::Affine::rotateAround(p.x, p.y, p.angle));
+      {
+        // NCardHighlight: the card_frame_sdf outline in cyan (playable), gold or red, fading in over 0.5 s.
+        const bool gold = c->enchantment && c->enchantment->shouldGlowGold(),
+                   red = !gold && c->enchantment && c->enchantment->shouldGlowRed();
+        float& gt = ha.cardGlow[c];
+        gt = std::clamp(gt + ((canAct && (cb->canPlay(c) || gold || red)) ? dtv : -dtv) / 0.5f, 0.f, 1.f);
+        Sprite gs = gt > 0 ? R().sprite(gold ? "card/glow_gold" : red ? "card/glow_red" : "card/glow_cyan") : Sprite{};
+        if (gs) {
+          const float pulse = 0.85f + 0.15f * std::sin(clock_ * 4.f + i);
+          const float gw = 302.7f * p.s;
+          spr(gs, p.x - gw / 2, p.y - gw / 2, gw, gw, 0xFFFFFF00u | (uint32_t)(250 * easeOut(gt) * pulse));
+        }
+      }
       drawCard(c, p.x - kCardW * p.s / 2, p.y - kCardH * p.s / 2, p.s, !cb->canPlay(c) && canAct, true, false);
       gfx::popTransform();
     }
@@ -621,50 +763,69 @@ void App::drawCombat(bool top) {
       R().text(cx, kPreviewY + kCardH * kPreviewS + 2, msg, ts(F12, col::red, CENTER));
     }
   }
-  // Play line and cancel zone while dragging; the hint sits between the energy orb and
-  // end turn, below the hand, where neither the finger nor the card covers it.
-  if (drag_.down && drag_.moved && drag_.card && !flying(drag_.card)) {
-    float pulse = 0.5f + 0.5f * std::sin(clock_ * 6.f);
-    std::string hint;
-    uint32_t hc;
-    if (drag_.armed) {
-      gfx::rect(0, kPlayLine, kBot, kH - kPlayLine, 0x00000060);
-      gfx::rect(0, kPlayLine, kBot, 1, 0xFFFFFF60);
-      std::string why;
-      if (!cb->canPlay(drag_.card, &why)) {
-        hint = why == "ENERGY" ? L("combat_messages.NOT_ENOUGH_ENERGY") : L("combat_messages.UNPLAYABLE");
-        for (auto& ch : hint) if (ch == '\n') ch = ' ';
-        hc = col::red;
-      } else {
-        hint = drag_.card->target == TargetType::AnyEnemy && alive.size() > 1 ? tr("松手打出 · 左右拖动换目标", "Release to play · drag sideways to retarget") : tr("松手打出 · 拖回手牌取消", "Release to play · drag back to cancel");
-        hc = 0x90FF90FF;
-      }
-    } else {
-      gfx::rect(0, 0, kBot, kPlayLine, 0x60C0FF00 | (uint32_t)(0x10 + pulse * 0x18));
-      for (float x = 4; x < kBot; x += 12) gfx::rect(x, kPlayLine, 6, 2, 0x60C0FFC0);
-      hint = tr("↑ 拖过虚线出牌 · 松手取消", "↑ Drag past the line to play · release to cancel");
-      hc = 0x90D0FFFF;
-    }
-    TextStyle st = ts(F12, hc, CENTER);
-    float w = R().measure(hint, st);
-    gfx::rect(kBot / 2 - w / 2 - 6, 200, w + 12, 16, 0x000000B0);
-    R().text(kBot / 2, 201, hint, st);
-  } else if (aiming_ && selCard && canAct) {
-    // S09 D-pad targeting: the arrow runs from the raised card to the enemy picked with ←→.
-    std::string hint = alive.size() > 1 ? tr("←→ 选择目标 · A 打出 · B 取消", "←→ Target · A Play · B Cancel") : tr("A 打出 · B 取消", "A Play · B Cancel");
-    TextStyle st = ts(F12, 0x90FF90FF, CENTER);
-    float w = R().measure(hint, st);
-    gfx::rect(kBot / 2 - w / 2 - 6, 200, w + 12, 16, 0x000000B0);
-    R().text(kBot / 2, 201, hint, st);
-  }
-  // Card being dragged, following the finger; glows when it is in the play zone.
+  // The original shows no play line or hint boxes while a card is held: just the card, its outline and the
+  // targeting arrow. The only text is the red "not enough energy" line when an unplayable card is armed.
+  auto glowSprite = [&](float cxx, float cyy, float sc, float a) {
+    Sprite gs = R().sprite("card/glow_cyan");
+    if (!gs) return;
+    const float gw = 302.7f * sc;
+    spr(gs, cxx - gw / 2, cyy - gw / 2, gw, gw, 0xFFFFFF00u | (uint32_t)(250 * a));
+  };
   if (drag_.down && drag_.moved && drag_.card && !flying(drag_.card)) {
     float s = kDragS;
-    if (drag_.armed) gfx::rect(drag_.x - kCardW * s / 2 - 3, drag_.y - kCardH * s / 2 - 3, kCardW * s + 6, kCardH * s + 6, 0x60D0FF90);
+    if (drag_.armed) {
+      std::string why;
+      if (!cb->canPlay(drag_.card, &why)) {
+        std::string hint = why == "ENERGY" ? L("combat_messages.NOT_ENOUGH_ENERGY") : L("combat_messages.UNPLAYABLE");
+        for (auto& ch : hint) if (ch == '\n') ch = ' ';
+        R().text(kBot / 2, 192, hint, ts(F12, col::red, CENTER));
+      }
+    }
+    glowSprite(drag_.x, drag_.y, s, drag_.armed ? 1.f : 0.6f);
     drawCard(drag_.card, drag_.x - kCardW * s / 2, drag_.y - kCardH * s / 2, s, false, true, false);
+  }
+  // A belt potion being dragged: the same outline-free look; only an unusable potion gets a red line.
+  if (drag_.down && drag_.moved && drag_.potion >= 0 && drag_.potion < (int)run_->potions.size() &&
+      run_->potions[drag_.potion]) {
+    Potion* q = run_->potions[drag_.potion].get();
+    const bool usable = run_->canUsePotion(drag_.potion);
+    if (!usable) R().text(kBot / 2, 192, tr("这瓶药水现在不能使用", "This potion can't be used now"), ts(F12, col::red, CENTER));
+    if (usable) {
+      const float sz = kPotionDragSize;
+      if (drag_.armed) {
+        gfx::circle(drag_.x, drag_.y, sz * 0.62f, 0x60D0FF40);
+        gfx::circle(drag_.x, drag_.y, sz * 0.5f, 0x60D0FF50);
+      }
+      drawPotionIcon(q, drag_.x - sz / 2, drag_.y - sz / 2, sz);
+    }
+  }
+  // Belt potion popup (the original's potion holder popup): Drink / Discard beside the bottle; the potion's
+  // description is on the top screen.
+  if (beltPopup_ >= 0 && beltPopup_ < (int)run_->potions.size() && run_->potions[beltPopup_]) {
+    const BeltLayout bl = beltLayout((int)run_->potions.size());
+    const float pw = 58, ph = 22, gap = 3, px = std::clamp(bl.cx(beltPopup_) - pw / 2, 4.f, kBot - pw - 4);
+    const float py = kBeltY - 2 * ph - gap - 6;
+    const bool usable = canAct && run_->canUsePotion(beltPopup_);
+    const bool canDiscard = run_->canUseOrRemovePotions;
+    gfx::pushAlpha(1.f);
+    widgets::panel("ui/hover_tip", px - 4, py - 4, pw + 8, 2 * ph + gap + 8);
+    widgets::panel("ui/btn_confirm", px, py, pw, ph, usable ? 0xFFFFFFFF : 0x909090FF);
+    R().text(px + pw / 2, py + (ph - R().lineHeight(F12)) / 2, tr("饮用", "Drink"), ts(F12, usable ? col::white : col::gray, CENTER));
+    widgets::panel("ui/btn_confirm", px, py + ph + gap, pw, ph, canDiscard ? 0xFFFFFFFF : 0x909090FF);
+    R().text(px + pw / 2, py + ph + gap + (ph - R().lineHeight(F12)) / 2, tr("丢弃", "Discard"), ts(F12, canDiscard ? col::red : col::gray, CENTER));
+    gfx::popAlpha();
+    if (usable) hits_.push_back({px, py, pw, ph, ID_USE});
+    if (canDiscard) hits_.push_back({px, py + ph + gap, pw, ph, ID_DISCARD});
+  }
+  if (hurtT_ < 1.f) {
+    // NLowHpBorderVfx: alpha multiplier 1 until 25% of the second, then 0 at the end; self modulate 0.75.
+    const float t = hurtT_, m = t < 0.2551724f ? 1.f : std::max(0.f, 1.f - (t - 0.2551724f) / (1.f - 0.2551724f));
+    Sprite hv = R().sprite("ui/hurt_vignette");
+    if (hv) spr(hv, 0, 0, kBot, kH, 0xFFFFFF00u | (uint32_t)(255 * 0.75f * m));
   }
   if (arrow) drawArrow(false, afx, afy, atx, aty, arrowValid, arrowAlly);
   drawFlights(false);
+  drawPotionFlights(false);
 }
 
 void App::updateCombat(const gfx::Input& in) {
@@ -672,10 +833,16 @@ void App::updateCombat(const gfx::Input& in) {
   if (!cb) return;
   float visualDt = (float)gfx::dt() * (fastMode_ ? 1.75f : 1.f);
   clock_ += visualDt;
+  if (static const bool demo = getenv("STS_HURT_DEMO") != nullptr; demo && clock_ > 4.f && hurtT_ > 2.f) hurtT_ = 0;  // preview aid
   animateHand(visualDt);
   for (auto& f : flights_) f.t += visualDt;
   flights_.erase(std::remove_if(flights_.begin(), flights_.end(), [](const Flight& f) { return f.t > 0.42f; }),
                  flights_.end());
+  {
+    auto& pf = potionFlights();
+    for (auto& f : pf) f.t += visualDt;
+    pf.erase(std::remove_if(pf.begin(), pf.end(), [](const PotionFlight& f) { return f.t > kPotionFlightTime; }), pf.end());
+  }
   auto alive = cb->aliveEnemies();
   int n = (int)cb->hand.size();
 
@@ -843,16 +1010,136 @@ void App::updateCombat(const gfx::Input& in) {
     return true;
   };
 
-  // ---- touch: drag to play (RGDSplus R4 drag-lock rules)
-  if (in.touchDown && hitAt(in.tx, in.ty) == ID_POTIONS) {
-    potionsOpen_ = true;
-    potionAim_ = false;
-    potionSel_ = -1;
-    drag_ = {};
-    aiming_ = false;
-    sel_ = -1;
+  // Drag targeting shared by cards and belt potions (RGDSplus R4 drag-lock rules): arming locks the
+  // enemy nearest to the held object in the two-screen space; sideways travel switches it.
+  auto lockNearest = [&] {
+    float vx = drag_.x + kBotOX, vy = drag_.y + kBotOY, best = 1e9f;
+    drag_.target = nullptr;
+    for (auto* e : alive) {
+      if (!centers_.count(e)) continue;
+      float d = std::hypot(centers_[e].first - vx, centers_[e].second - vy);
+      if (d < best) { best = d; drag_.target = e; }
+    }
+  };
+  auto dragRetarget = [&] {
+    drag_.accum += in.tx - drag_.lastTx;
+    drag_.lastTx = in.tx;
+    std::vector<Creature*> order = alive;
+    std::sort(order.begin(), order.end(), [&](Creature* a, Creature* b) { return centers_[a].first < centers_[b].first; });
+    int idx = (int)(std::find(order.begin(), order.end(), drag_.target) - order.begin());
+    while (drag_.accum >= kSwitch && idx + 1 < (int)order.size()) { ++idx; drag_.accum -= kSwitch; }
+    while (drag_.accum <= -kSwitch && idx > 0) { --idx; drag_.accum += kSwitch; }
+    if (idx < (int)order.size()) drag_.target = order[idx];
+    drag_.accum = std::clamp(drag_.accum, -kSwitch, kSwitch);
+  };
+
+  // ---- touch: a belt potion, used like a card. Press a bottle, drag it above the play line and
+  // let go: Self / untargeted potions are used, enemy potions at the locked enemy (sideways
+  // switches, as for cards). Released below the line, at the screen edge or with B: back in the
+  // belt. A tap (no drag) opens the potion page (description, 使用 / 丢弃). Bottles that cannot be
+  // used now do not lift.
+  if (beltPopup_ >= 0 && (beltPopup_ >= (int)run_->potions.size() || !run_->potions[beltPopup_] || !cb->playerPhase)) beltPopup_ = -1;
+  if (beltPopup_ >= 0 && in.touchDown) {
+    const int pid = hitAt(in.tx, in.ty);
+    const int ps = beltPopup_;
+    if (pid == ID_USE || pid == ID_DISCARD) {
+      sfx::click();
+      beltPopup_ = -1;
+      if (pid == ID_DISCARD) {
+        run_->discardPotion(ps);
+      } else if (run_->canUsePotion(ps)) {
+        Potion* q = run_->potions[ps].get();
+        if (q->target == TargetType::AnyEnemy && alive.size() > 1) {  // pick the enemy on the potion page
+          potionsOpen_ = true;
+          potionAim_ = true;
+          potionSel_ = ps;
+          target_ = 0;
+        } else {
+          PlayerAction a;
+          a.kind = PlayerAction::UsePotion;
+          a.potionSlot = ps;
+          a.target = q->target == TargetType::AnyEnemy && !alive.empty() ? alive[0] : nullptr;
+          sfx::potionUsed();
+          cb->actions.fire(a);
+        }
+      }
+      drag_ = {};
+      return;
+    }
+    if (pid < ID_POTION0 || pid >= ID_POTION0 + (int)run_->potions.size()) beltPopup_ = -1;  // tapping elsewhere closes it
+  }
+  if (in.touchDown) {
+    int id = hitAt(in.tx, in.ty);
+    int slot = id - ID_POTION0;
+    if (slot >= 0 && slot < (int)run_->potions.size()) {
+      drag_ = {};
+      drag_.down = true;
+      drag_.potion = slot;
+      drag_.originY = in.ty;
+      const BeltLayout bl = beltLayout((int)run_->potions.size());
+      drag_.x = bl.cx(slot);
+      drag_.y = bl.cy();
+      drag_.startTx = drag_.lastTx = in.tx;
+      drag_.startTy = in.ty;
+      sel_ = -1;
+      aiming_ = false;
+    }
+  }
+  if (drag_.down && drag_.potion >= 0) {
+    const int slot = drag_.potion;
+    Potion* q = slot < (int)run_->potions.size() ? run_->potions[slot].get() : nullptr;
+    const bool usable = q && run_->canUsePotion(slot);
+    if (in.touching) {
+      if (!drag_.moved && std::hypot(in.tx - drag_.startTx, in.ty - drag_.startTy) > kTapSlop) drag_.moved = true;
+      if (drag_.moved && usable) {
+        drag_.x = (float)in.tx;
+        drag_.y = (float)in.ty;
+        float lift = drag_.originY - in.ty;
+        const bool needsTarget = q->target == TargetType::AnyEnemy;
+        if (!drag_.armed && lift >= kArm && in.ty < kPlayLine) {
+          drag_.armed = true;
+          drag_.accum = 0;
+          drag_.lastTx = in.tx;
+          if (needsTarget) lockNearest();
+        } else if (drag_.armed && (lift <= 0 || in.ty > kPlayLine + 6)) {
+          drag_.armed = false;
+          drag_.target = nullptr;
+        }
+        if (drag_.armed && needsTarget && drag_.target) dragRetarget();
+      }
+    }
+    if (in.touchUp) {
+      if (!drag_.moved) {
+        if (q) {  // tap: the Drink / Discard popup (a second tap on the same bottle closes it)
+          sfx::click();
+          beltPopup_ = beltPopup_ == slot ? -1 : slot;
+        }
+      } else {
+        bool edge = in.tx <= 2 || in.ty <= 2 || in.tx >= kBot - 3 || in.ty >= kH - 3;
+        Creature* t = q && q->target == TargetType::AnyEnemy ? drag_.target : nullptr;
+        bool ok = drag_.armed && !edge && usable && (q->target != TargetType::AnyEnemy || (t && !t->dead()));
+        if (ok) {
+          auto it = std::find(alive.begin(), alive.end(), t);
+          if (it != alive.end()) target_ = (int)(it - alive.begin());
+          float x1 = kTop / 2.f, y1 = 110.f;  // battlefield centre for untargeted potions
+          Creature* to = q->target == TargetType::Self ? cb->player : t;
+          if (to && centers_.count(to)) { x1 = centers_[to].first; y1 = centers_[to].second; }
+          potionFlights().push_back({q->locKey, 0.f, drag_.x + kBotOX, drag_.y + kBotOY, x1, y1});
+          sfx::potionUsed();
+          PlayerAction a;
+          a.kind = PlayerAction::UsePotion;
+          a.potionSlot = slot;
+          a.target = t;
+          cb->actions.fire(a);
+        }
+      }
+      drag_ = {};
+    }
+    if (in.down & gfx::BTN_B) drag_ = {};
     return;
   }
+
+  // ---- touch: drag to play (RGDSplus R4 drag-lock rules)
   if (in.touchDown) {
     int i = hitHandCard(in.tx, in.ty);
     if (i >= 0) {
@@ -904,31 +1191,12 @@ void App::updateCombat(const gfx::Input& in) {
         drag_.armed = true;
         drag_.accum = 0;
         drag_.lastTx = in.tx;
-        if (needsTarget) {
-          // Lock the enemy nearest to the card in the two-screen space.
-          float vx = drag_.x + kBotOX, vy = drag_.y + kBotOY, best = 1e9f;
-          drag_.target = nullptr;
-          for (auto* e : alive) {
-            if (!centers_.count(e)) continue;
-            float d = std::hypot(centers_[e].first - vx, centers_[e].second - vy);
-            if (d < best) { best = d; drag_.target = e; }
-          }
-        }
+        if (needsTarget) lockNearest();  // the enemy nearest to the card
       } else if (drag_.armed && (lift <= 0 || in.ty > kPlayLine + 6)) {
         drag_.armed = false;  // dragged back: unlock, gesture continues
         drag_.target = nullptr;
       }
-      if (drag_.armed && needsTarget && drag_.target) {
-        drag_.accum += in.tx - drag_.lastTx;
-        drag_.lastTx = in.tx;
-        std::vector<Creature*> order = alive;
-        std::sort(order.begin(), order.end(), [&](Creature* a, Creature* b) { return centers_[a].first < centers_[b].first; });
-        int idx = (int)(std::find(order.begin(), order.end(), drag_.target) - order.begin());
-        while (drag_.accum >= kSwitch && idx + 1 < (int)order.size()) { ++idx; drag_.accum -= kSwitch; }
-        while (drag_.accum <= -kSwitch && idx > 0) { --idx; drag_.accum += kSwitch; }
-        if (idx < (int)order.size()) drag_.target = order[idx];
-        drag_.accum = std::clamp(drag_.accum, -kSwitch, kSwitch);
-      }
+      if (drag_.armed && needsTarget && drag_.target) dragRetarget();
     }
   }
   if (drag_.down && in.touchUp) {
