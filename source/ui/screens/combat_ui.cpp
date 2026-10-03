@@ -366,6 +366,15 @@ void App::drawCombat(bool top) {
       st.scale = 1.3f;
       R().text(x + f.dx, y - f.t * 40, f.text, st);
     }
+    {
+      // The original lists the keyword tips of the card under the cursor beside it. The raised card is on the
+      // bottom screen, so its tips stack on this one, in the empty sky left of the creatures.
+      Card* tipCard = drag_.down && drag_.moved && drag_.card ? drag_.card : selCard;
+      if (tipCard && !cb->choice.active && !selecting) {
+        const bool orbs = run_->character().orbSlots > 0 || cb->orbCapacity > 0;
+        drawCardTipColumn(tipCard, 6, orbs ? 50.f : 26.f, 170, [this](Card* k) { return describe(k); });
+      }
+    }
     if (selecting) {
       // S12 top screen: the battlefield dimmed under the prompt, the k / N counter at the left,
       // the focused hand card large in the middle, the picked cards listed at the right.
