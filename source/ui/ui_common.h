@@ -60,7 +60,7 @@ constexpr float kMapS = 0.17f;
 constexpr float kMapY0 = 337.f;
 constexpr float kMapBgW = 260.f, kMapBgH = 552.f;  // bg_map.t3t parchment strip (1527x3240 * kMapS)
 constexpr float kMapBgX = (gfx::kTopW - kMapBgW) / 2.f;
-constexpr float kNodeScale = kMapS * 0.8f;  // node icons: ~9 px, as small as on RGDSplus
+constexpr float kNodeScale = kMapS * 1.28f;  // node icons: ~14 px (1.6x the first port, easy to tap)
 constexpr float kBossSize = 352.f * kMapS;
 constexpr float kMapTapSlop = 5.f;       // 12 px of 768 on RGDSplus, rounded up for a stylus
 
