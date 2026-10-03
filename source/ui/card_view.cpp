@@ -47,12 +47,13 @@ void App::drawCard(Card* c, float x, float y, float s, bool dim, bool desc, bool
   // CardModel.FramePath: a Quest card has its own frame (card_frame_quest), the skill portrait border.
   const bool quest = c->type == CardType::Quest;
   bool ancient = c->rarity == Rarity::Ancient;
-  uint32_t tint = dim ? 0x000000FF : 0xFFFFFFFF;
-  float blend = dim ? 0.45f : 0.f;
+  // Dimming is an overlay drawn after the face (citro2d's tint blend is not drawn by Azahar), so the art is untinted.
+  const uint32_t tint = 0xFFFFFFFF;
+  const float blend = 0.f;
   if (selected) gfx::rect(x - 3 * s - 1, y - 3 * s - 1, 126 * s + 2, 175 * s + 2, 0xFFE070C0);
   // NotSeen (NCard: card_portrait_blur_material): no blur shader here, the art is darkened instead.
-  spr(R().sprite("portrait/" + c->locKey), x + 8 * s, y + 16 * s, 104 * s, 78 * s, unseen ? 0x181820FF : tint,
-      unseen ? 0.85f : blend);
+  spr(R().sprite("portrait/" + c->locKey), x + 8 * s, y + 16 * s, 104 * s, 78 * s, tint, blend);
+  if (unseen) gfx::rect(x + 8 * s, y + 16 * s, 104 * s, 78 * s, 0x181820D8);
   // X1.5-X4.5 (NCard.UpdateVisuals): the frame takes the colour of the card's own pool
   // (VisualCardPool.FrameMaterial), the portrait border and title banner that of its rarity
   // (CardModel.BannerMaterial). build_assets bakes each combination.
@@ -147,10 +148,12 @@ void App::drawCard(Card* c, float x, float y, float s, bool dim, bool desc, bool
     float bs = std::max(s, 0.5f);
     float bw = 28 * bs, bh = 22 * bs, bx = x - 4 * s, by = y + 164 * s - bh;
     bool off = e->disabled();
-    spr(R().sprite("card/enchant_badge"), bx, by, bw, bh, off ? 0x808080FF : tint, off ? 0.4f : blend);
+    if (off) gfx::pushAlpha(0.5f);
+    spr(R().sprite("card/enchant_badge"), bx, by, bw, bh, tint, blend);
     Sprite icon = R().sprite("enchant/" + e->locKey);
     float is = bh * 0.72f;
-    spr(icon, bx + (bw - is) / 2, by + bh * 0.12f, is, is, off ? 0x808080FF : tint, off ? 0.4f : blend);
+    spr(icon, bx + (bw - is) / 2, by + bh * 0.12f, is, is, tint, blend);
+    if (off) gfx::popAlpha();
     if (e->showAmount()) {
       TextStyle et = ts(F12, off ? col::gray : col::white, CENTER);
       et.scale = std::max(0.6f, bs * 0.8f);
@@ -158,6 +161,7 @@ void App::drawCard(Card* c, float x, float y, float s, bool dim, bool desc, bool
     }
   }
 
+  if (dim) gfx::rect(x + 1 * s, y + 1 * s, 118 * s, 167 * s, 0x00000080);  // unplayable / unpickable: darkened
   if (desc) {
     TextStyle dt = ts(F12, dim ? col::gray : col::white, CENTER, 104 * s);
     dt.scale = s >= 0.95f ? 1.f : s < 0.6f ? std::max(0.5f, s * 1.15f) : std::max(0.75f, s);  // grid minis: a texture of tiny text, as on the real card
