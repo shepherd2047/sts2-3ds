@@ -281,6 +281,15 @@ void statEntry(float x, float y, float w, const char* icon, const std::string& t
   }
 }
 
+// NRunHistory.LoadGameModeDetails: "Singleplayer: Standard / Daily / Custom" (top right of the run).
+std::string gameModeText(const history::RunRecord& r) {
+  if (!R().hasLoc("run_history.GAME_MODE.title")) return {};
+  const char* mode = !r.dailyDate.empty() ? "daily" : r.custom ? "custom" : "standard";
+  std::string s = L("run_history.GAME_MODE.title");
+  s = fill(s, "PlayerCount", L("run_history.PLAYER_COUNT.singleplayer"));
+  return fill(s, "GameMode", L(std::string("run_history.GAME_MODE.") + mode));
+}
+
 // NDeckHistory / NRelicHistory: the counts by rarity after the header ("1 Ancient, 1 Starter"), from the
 // DECK_HISTORY / RELIC_HISTORY.categories text (CardRarity / RelicRarity name + "Cards" / "Relics").
 std::string historyCategories(const history::RunRecord& r, bool relics) {
@@ -549,6 +558,7 @@ void App::drawHistoryList(bool top) {
       drawBadge(b, bx, y + 16, 24);
       bx += 26;
     }
+    R().text(px + pw - 12, y + 20, gameModeText(r), ts(F12, col::white, RIGHT));  // bottom right: clear of long seeds
     if (r.badges.empty()) R().text(px + 12, y + 20, r.abandoned ? tr("放弃的游戏没有徽章", "Abandoned runs earn no badges") : tr("没有徽章", "No badges"), ts(F12, col::gray));
     return;
   }
