@@ -46,10 +46,10 @@ struct SkittishPower : Power {
 // SkulkingColony: at most Amount HP can be lost per turn; the rest of every hit is ignored.
 // The counter resets when any side's turn starts.
 // Once the cap is reached the owner's HpDisplay turns InfiniteWithNumbers until the next turn.
-// PORT NOTE: the power's DisplayAmount (remaining cap) has no counterpart.
 struct HardenedShellPower : Power {
   POWER_HEADER(HardenedShellPower, "HARDENED_SHELL_POWER")
   int damageReceivedThisTurn = 0;
+  int displayAmount() const override { return std::max(0, amount - damageReceivedThisTurn); }  // the cap left this turn
   Dec modifyHpLostBeforeOstyLate(Creature* target, Dec a, int, Creature*, Card*) override {
     if (target != owner || a == Dec(0)) return a;
     Dec cap = Dec(amount - damageReceivedThisTurn);

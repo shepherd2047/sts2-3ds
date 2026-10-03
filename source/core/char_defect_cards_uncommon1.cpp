@@ -10,12 +10,13 @@ namespace {
 
 // FeralPower (Models.Powers): the first N attacks each turn that cost 0 energy return to the
 // top of the hand instead of being discarded.
-// PORT NOTE: the hook has no ResourceInfo, so "energy spent == 0" is derived as autoPlay || (X-cost ?
-// xValue == 0 : energyCost(card) == 0), which gives the same result; DisplayAmount is UI only.
+// PORT NOTE (n/a: equivalent): the hook has no ResourceInfo, so "energy spent == 0" is derived as autoPlay ||
+// (X-cost ? xValue == 0 : energyCost(card) == 0), which gives the same result.
 // AfterApplied seeds the counter from the Attack CardPlaysStarted this turn that spent no energy.
 struct FeralPower : Power {
   POWER_HEADER(FeralPower, "FERAL_POWER")
   int zeroCostAttacksPlayed = 0;
+  int displayAmount() const override { return std::max(0, amount - zeroCostAttacksPlayed); }  // returns left this turn
   Task<> afterApplied(Creature*, Card*) override {
     Combat* c = owner->combat;
     zeroCostAttacksPlayed = c->history.countThisTurn(*c, CombatHistoryEntry::CardPlayStarted, [](const CombatHistoryEntry& e) {

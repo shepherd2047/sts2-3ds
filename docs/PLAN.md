@@ -477,7 +477,8 @@ group is one engine package; file:line lists are in the H5 merge commit report.
 UI/VFX-only, single-player-only, owner-decision and reviewed RNG notes stay as they are (n/a for H6).
 
 **2026-09-30 / 10-01 follow-ups (all merged):** PORT NOTE triage over every file group — 2 notes left open
-(Feral ResourceInfo, an underdocks power's DisplayAmount), 85 marked `PORT NOTE (n/a: <reason>)`
+(Feral ResourceInfo, an underdocks power's DisplayAmount; both closed 2026-10-03: the DisplayAmounts are ported, Feral's
+ResourceInfo is n/a: equivalent), 85 marked `PORT NOTE (n/a: <reason>)`
 (visual 39, owner 16, equivalent 15, single-player 14, c#-test-only 1); `grep -rn "PORT NOTE" source | grep -v n/a`
 lists the open ones for H6. Also: up-front room generation + .NET HashSet map order (seeded runs changed),
 clone link / Rarity::Event / HpDisplay / summon + hand-emptied hooks, run history choice lists (run.sav v11,
