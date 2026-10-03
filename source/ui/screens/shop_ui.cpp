@@ -39,6 +39,8 @@ struct Slot { float x, y, w, h; };  // hit box: the art plus its price tag
 int lastStocked_ = -1;
 float thanksT_ = 0;
 int thanksLine_ = 0;
+int welcomedFloor_ = -1;    // the shop whose merchant_welcome has played (one per visit)
+std::string lastMessage_;  // the refusal shown last frame (merchant_dissapointment on a new one)
 }  // namespace
 
 namespace {
@@ -117,10 +119,20 @@ void App::drawShop(bool top) {
     // Purchase feedback (bookkeeping on the top pass, once per frame).
     int stocked = 0;
     for (auto& s : r.shop) stocked += s.stocked() ? 1 : 0;
+    if (welcomedFloor_ != r.floor) {  // NMerchantInventory.Open: merchant_welcome
+      welcomedFloor_ = r.floor;
+      lastStocked_ = -1;
+      lastMessage_.clear();
+      sfx::play("event:/sfx/npcs/merchant/merchant_welcome");
+    }
     if (lastStocked_ >= 0 && stocked < lastStocked_ && r.shopMessage.empty()) {
       thanksT_ = 2.5f;
       thanksLine_ = thanksLine_ % 3 + 1;
+      sfx::play("event:/sfx/npcs/merchant/merchant_thank_yous");  // OnPurchaseCompleted
     }
+    if (!r.shopMessage.empty() && r.shopMessage != lastMessage_)
+      sfx::play("event:/sfx/npcs/merchant/merchant_dissapointment");  // NMerchantSlot.OnPurchaseFailed
+    lastMessage_ = r.shopMessage;
     lastStocked_ = stocked;
     if (thanksT_ > 0) thanksT_ -= 1.f / 60;
     if (!r.shopMessage.empty()) thanksT_ = 0;
