@@ -298,6 +298,7 @@ class App {
   bool potionsOpen_ = false;
   bool potionAim_ = false;
   int potionSel_ = -1;
+  int beltPopup_ = -1;  // combat: belt slot whose Drink / Discard popup is open
 
   // pieces
   // RGDSplus B02-B06: pages show the current scene's own background (room, or the map

@@ -375,6 +375,18 @@ void App::drawCombat(bool top) {
         drawCardTipColumn(tipCard, 6, orbs ? 50.f : 26.f, 170, [this](Card* k) { return describe(k); });
       }
     }
+    if (beltPopup_ >= 0 && beltPopup_ < (int)run_->potions.size() && run_->potions[beltPopup_]) {
+      Potion* q = run_->potions[beltPopup_].get();
+      const float x = 6, y = 26, w = 190;
+      std::string title = L("potions." + q->locKey + ".title"), text = describePotion(q);
+      float dh = 0;
+      R().measure(text, ts(F12, col::white, LEFT, w - 16), &dh);
+      const float h = 30 + dh;
+      gfx::rect(x + 2, y + 2, w - 4, h - 4, 0x0B0B12D0);
+      widgets::panel("ui/hover_tip", x, y, w, h);
+      R().text(x + 8, y + 6, title, ts(F12, col::gold));
+      R().text(x + 8, y + 22, text, ts(F12, col::white, LEFT, w - 16));
+    }
     if (selecting) {
       // S12 top screen: the battlefield dimmed under the prompt, the k / N counter at the left,
       // the focused hand card large in the middle, the picked cards listed at the right.
@@ -650,7 +662,7 @@ void App::drawCombat(bool top) {
     }
     // S10: 信息 (combat inspect, also ↑) beside it; open on either side's turn.
     const float ix = pn > 0 ? bl.infoX : (kBot - kInfoW) / 2, ih = 20, iy = kBeltY + (kBeltH - ih) / 2;
-    panel(ix, iy, kInfoW, ih, 0x22323BE8, 0x4F8790FF);
+    widgets::panel("ui/btn_confirm", ix, iy, kInfoW, ih);
     R().text(ix + kInfoW / 2, iy + (ih - R().lineHeight(F12)) / 2, tr("信息", "Info"), ts(F12, col::white, CENTER));
     hits_.push_back({ix, iy - 4, kInfoW, ih + 8, ID_INSPECT});
   }
@@ -765,6 +777,24 @@ void App::drawCombat(bool top) {
       }
       drawPotionIcon(q, drag_.x - sz / 2, drag_.y - sz / 2, sz);
     }
+  }
+  // Belt potion popup (the original's potion holder popup): Drink / Discard beside the bottle; the potion's
+  // description is on the top screen.
+  if (beltPopup_ >= 0 && beltPopup_ < (int)run_->potions.size() && run_->potions[beltPopup_]) {
+    const BeltLayout bl = beltLayout((int)run_->potions.size());
+    const float pw = 58, ph = 22, gap = 3, px = std::clamp(bl.cx(beltPopup_) - pw / 2, 4.f, kBot - pw - 4);
+    const float py = kBeltY - 2 * ph - gap - 6;
+    const bool usable = canAct && run_->canUsePotion(beltPopup_);
+    const bool canDiscard = run_->canUseOrRemovePotions;
+    gfx::pushAlpha(1.f);
+    widgets::panel("ui/hover_tip", px - 4, py - 4, pw + 8, 2 * ph + gap + 8);
+    widgets::panel("ui/btn_confirm", px, py, pw, ph, usable ? 0xFFFFFFFF : 0x909090FF);
+    R().text(px + pw / 2, py + (ph - R().lineHeight(F12)) / 2, tr("饮用", "Drink"), ts(F12, usable ? col::white : col::gray, CENTER));
+    widgets::panel("ui/btn_confirm", px, py + ph + gap, pw, ph, canDiscard ? 0xFFFFFFFF : 0x909090FF);
+    R().text(px + pw / 2, py + ph + gap + (ph - R().lineHeight(F12)) / 2, tr("丢弃", "Discard"), ts(F12, canDiscard ? col::red : col::gray, CENTER));
+    gfx::popAlpha();
+    if (usable) hits_.push_back({px, py, pw, ph, ID_USE});
+    if (canDiscard) hits_.push_back({px, py + ph + gap, pw, ph, ID_DISCARD});
   }
   if (arrow) drawArrow(false, afx, afy, atx, aty, arrowValid, arrowAlly);
   drawFlights(false);
@@ -980,6 +1010,36 @@ void App::updateCombat(const gfx::Input& in) {
   // switches, as for cards). Released below the line, at the screen edge or with B: back in the
   // belt. A tap (no drag) opens the potion page (description, 使用 / 丢弃). Bottles that cannot be
   // used now do not lift.
+  if (beltPopup_ >= 0 && (beltPopup_ >= (int)run_->potions.size() || !run_->potions[beltPopup_] || !cb->playerPhase)) beltPopup_ = -1;
+  if (beltPopup_ >= 0 && in.touchDown) {
+    const int pid = hitAt(in.tx, in.ty);
+    const int ps = beltPopup_;
+    if (pid == ID_USE || pid == ID_DISCARD) {
+      sfx::click();
+      beltPopup_ = -1;
+      if (pid == ID_DISCARD) {
+        run_->discardPotion(ps);
+      } else if (run_->canUsePotion(ps)) {
+        Potion* q = run_->potions[ps].get();
+        if (q->target == TargetType::AnyEnemy && alive.size() > 1) {  // pick the enemy on the potion page
+          potionsOpen_ = true;
+          potionAim_ = true;
+          potionSel_ = ps;
+          target_ = 0;
+        } else {
+          PlayerAction a;
+          a.kind = PlayerAction::UsePotion;
+          a.potionSlot = ps;
+          a.target = q->target == TargetType::AnyEnemy && !alive.empty() ? alive[0] : nullptr;
+          sfx::potionUsed();
+          cb->actions.fire(a);
+        }
+      }
+      drag_ = {};
+      return;
+    }
+    if (pid < ID_POTION0 || pid >= ID_POTION0 + (int)run_->potions.size()) beltPopup_ = -1;  // tapping elsewhere closes it
+  }
   if (in.touchDown) {
     int id = hitAt(in.tx, in.ty);
     int slot = id - ID_POTION0;
@@ -1022,11 +1082,9 @@ void App::updateCombat(const gfx::Input& in) {
     }
     if (in.touchUp) {
       if (!drag_.moved) {
-        if (q) {  // tap: the potion's page (description, use / discard), as A on the top bar
+        if (q) {  // tap: the Drink / Discard popup (a second tap on the same bottle closes it)
           sfx::click();
-          potionsOpen_ = true;
-          potionAim_ = false;
-          potionSel_ = slot;
+          beltPopup_ = beltPopup_ == slot ? -1 : slot;
         }
       } else {
         bool edge = in.tx <= 2 || in.ty <= 2 || in.tx >= kBot - 3 || in.ty >= kH - 3;
