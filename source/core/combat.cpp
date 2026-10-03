@@ -932,6 +932,9 @@ Task<> addStatusCards(Combat& c, std::string cardId, Pile to, int count, bool by
 
 Task<std::vector<Card*>> selectCards(Combat& c, std::string prompt, std::vector<Card*> options, int minCount, int maxCount) {
   if (options.empty()) co_return std::vector<Card*>{};
+  // CardSelectCmd.FromHand & co: no screen when the options can only all be taken (combat
+  // selections never set RequireManualConfirmation), e.g. "discard 1" with one card in hand.
+  if ((int)options.size() <= minCount) co_return options;
   if (c.autoSelectFirst) {  // VakuuCardSelector: options.Take(maxSelect)
     if ((int)options.size() > maxCount) options.resize(maxCount);
     co_return options;
