@@ -484,10 +484,9 @@ void App::drawEvent(bool top) {
 
   if (top) {
     drawTopBar();
-    // Title (UI_STYLE: F16 x 1.25, gold, teal line under it).
-    TextStyle tt = ts(F16, col::gold, LEFT, kTop - 2 * style::kMargin, 1.25f);
-    R().text(style::kMargin + 4, 22, L("events." + e->locKey + ".title"), tt);
-    gfx::rect(style::kMargin, 49, kTop - 2 * style::kMargin, 2, style::kPanelHi);
+    // As in the original: the title in gold, centred over the text column, no rule under it.
+    TextStyle tt = ts(F16, col::gold, CENTER, kColW, 1.25f);
+    R().text(kColX + kColW / 2, 24, L("events." + e->locKey + ".title"), tt);
 
     // Story text (measured every frame: the page count feeds the bottom paginator).
     std::string text = expandSmart(L("events." + e->descKey), e->vars, false, &e->strVars);
