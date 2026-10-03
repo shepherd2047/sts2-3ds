@@ -260,6 +260,8 @@ void App::drawRelicDetail(Relic* r, float cy) {
   R().text(kTop / 2.f, cy + 78, describeRelic(r), ts(F12, col::white, CENTER, kTop - 60));
 }
 
+std::string cardTypeLabel(CardType t) { return cardTypeName(t); }  // card_view.cpp's type plaque
+
 void App::refreshDetail() {
   Popup& p = P();
   const void* key = detailCard_ ? (const void*)detailCard_ : detailRelic_ ? (const void*)detailRelic_ : (const void*)detailPotion_;

@@ -211,4 +211,7 @@ inline float easeIn(float t) { return t * t; }
 inline float approach(float v, float to, float k, float dt) { return v + (to - v) * (1 - std::exp(-k * dt)); }
 }  // namespace
 
+// detail.cpp: the localized card type name (Attack / Skill / ...), for the card face's type plaque.
+std::string cardTypeLabel(sts::CardType t);
+
 }  // namespace ui
