@@ -124,10 +124,9 @@ struct SwordOfStone : Relic {
     doFlash();
     if (elitesDefeated < val("Elites").toInt()) co_return;
     // RelicCmd.Replace: this object's coroutine is running, so park it instead of freeing it.
-    static std::vector<std::unique_ptr<Relic>> retired;
     for (size_t i = 0; i < run->relics.size(); ++i)
       if (run->relics[i].get() == this) {
-        retired.push_back(std::move(run->relics[i]));
+        run->graveyard.push_back(std::move(run->relics[i]));
         run->relics.erase(run->relics.begin() + (long)i);
         break;
       }

@@ -1647,6 +1647,10 @@ struct Run {
   // Hook effects started from synchronous code (Lucky Fysh's gold, potion hooks) run as
   // side tasks; the save point waits for them so none is cut in half.
   int pendingSide = 0;
+  // Deck cards / relics taken out of the run: a side task (spawnSide) may still hold them in a
+  // listeners() snapshot, e.g. Lucky Fysh's gainGold suspended in Dragon Fruit's max-HP gain while the
+  // deck changes. Freed on the map once no side task is pending (like Combat::graveyard).
+  std::vector<std::unique_ptr<Model>> graveyard;
   void spawnSide(Task<> t);
   std::string save();
   bool load(const std::string& data);  // on a fresh Run; then spawn main()

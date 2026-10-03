@@ -55,9 +55,10 @@ std::unique_ptr<Relic> pullRelic(Run& r) {
 // RelicCmd.Remove. RelicModel.AfterRemoved has no overrides in the C# (max HP relics etc. keep their
 // bonus there too), so there is nothing to call after taking it off.
 void removeRelic(Run& r, Relic* rel) {
-  r.relics.erase(std::remove_if(r.relics.begin(), r.relics.end(),
-                                [&](const std::unique_ptr<Relic>& x) { return x.get() == rel; }),
-                 r.relics.end());
+  auto it = std::find_if(r.relics.begin(), r.relics.end(), [&](const std::unique_ptr<Relic>& x) { return x.get() == rel; });
+  if (it == r.relics.end()) return;
+  r.graveyard.push_back(std::move(*it));
+  r.relics.erase(it);
 }
 
 // CardSelectCmd over generated cards (SelectCardsToAddToDeckFromGrid): the picked cards join the deck.

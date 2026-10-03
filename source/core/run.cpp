@@ -320,7 +320,10 @@ Card* Run::addCardToDeck(std::unique_ptr<Card> c) {
 
 void Run::removeCardFromDeck(Card* c) {
   for (Model* m : listeners()) m->beforeCardRemoved(c);  // Hook.BeforeCardRemoved (E2)
-  deck.erase(std::remove_if(deck.begin(), deck.end(), [&](const std::unique_ptr<Card>& d) { return d.get() == c; }), deck.end());
+  auto it = std::find_if(deck.begin(), deck.end(), [&](const std::unique_ptr<Card>& d) { return d.get() == c; });
+  if (it == deck.end()) return;
+  graveyard.push_back(std::move(*it));
+  deck.erase(it);
 }
 
 // CardCmd.Transform (deck pile): RemoveFromCurrentPile, Hook.ModifyCardBeingAddedToDeck (the eggs),
@@ -336,6 +339,7 @@ Card* Run::transformCard(Card* c, std::unique_ptr<Card> into) {
   hoarding = true;
   Card* added = addCardToDeck(std::move(into));
   hoarding = wasHoarding;
+  graveyard.push_back(std::move(original));
   return added;
 }
 
@@ -1104,6 +1108,7 @@ Task<> Run::main() {
       if (died) { recordRunEnd(*this, progress::RunOutcome::Loss); screen = Screen::GameOver; co_return; }
     }
     while (pendingSide > 0) co_await wait(0.05);
+    graveyard.clear();
     screen = Screen::Map;
     if (onSavePoint) onSavePoint(*this);
     int choice = co_await mapChoice.next();
