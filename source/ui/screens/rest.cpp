@@ -160,12 +160,7 @@ void App::drawRest(bool top) {
     drawTopBar();
 
     // Title (C# Header): the prompt, or the chosen option.
-    TextStyle tt = ts(F16, col::gold, CENTER);
-    tt.scale = 1.25f;
-    std::string title = result ? optName(fx.opt) : L("rest_site_ui.PROMPT");
-    R().text(kTop / 2, 24, title, tt);
-    float tw = R().measure(title, tt) + 16;
-    gfx::rect(kTop / 2 - tw / 2, 47, tw, 2, style::kPanelHi);
+    widgets::title(kTop / 2.f, 18, result ? optName(fx.opt) : L("rest_site_ui.PROMPT"), 0.7f);
 
     // The panel at the right: the focused option's description, or the result.
     const float px = 228, pw = kTop - 8 - px, py = 56;
@@ -220,10 +215,6 @@ void App::drawRest(bool top) {
       bool used = reason == tr("已使用", "Used");
       optionPanel(sel_, used ? restDescription(r, sel_, nullptr, true) : desc, valid ? col::white : col::gray,
                   valid ? "" : (used ? reason : ""));
-    } else if (r.restChoice.waiting()) {
-      widgets::panel("ui/hover_tip", px, py, pw, 44);
-      R().text(px + pw / 2, py + 7, tr("选择一项行动", "Choose an action"), ts(F12, col::white, CENTER));
-      R().text(px + pw / 2, py + 23, tr("点选一项即可选择", "Tap an option to choose it"), ts(F12, col::gray, CENTER));
     }
     return;
   }
@@ -313,9 +304,6 @@ void App::drawRest(bool top) {
       sel_ = -1;
       widgets::setFocus(-1);
     }
-  } else if (widgets::button(kConfirmId, kBot - style::kMargin - 96, style::kActionY, 96, style::kButtonH, tr("确认", "Confirm"),
-                             widgets::Kind::Primary, canAct && sel_ >= 0 && restValid(sel_))) {
-    choose = sel_;
   }
   widgets::endFrame();
 

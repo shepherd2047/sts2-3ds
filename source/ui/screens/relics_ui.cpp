@@ -74,11 +74,7 @@ void App::drawRelicOffer(bool top) {
     if (chestOpen_ && openT_ < kOpenAnim) openT_ += 1.f / 60;  // bookkeeping once per frame
     drawSceneBg(true, 0.55f);
     drawTopBar();
-    TextStyle tt = ts(F16, col::gold, CENTER);
-    tt.scale = 1.25f;
-    std::string title = chest ? L("map.LEGEND_TREASURE.title") : L("gameplay_ui.CHOOSE_RELIC_HEADER");
-    R().text(kTop / 2, 28, title, tt);
-    gfx::rect(kTop / 2.f - 60, 54, 120, 2, style::kPanelHi);
+    widgets::title(kTop / 2.f, 20, chest ? L("map.LEGEND_TREASURE.title") : L("gameplay_ui.CHOOSE_RELIC_HEADER"), 0.7f);
     if (chest && !chestOpen_) {
       R().text(kTop / 2, 110, L("gameplay_ui.TREASURE_BANNER"), ts(F16, col::white, CENTER));
       R().text(kTop / 2, 136, tr("点击下方的宝箱打开", "Tap the chest below to open it"), ts(F12, col::gray, CENTER));
