@@ -395,7 +395,7 @@ bool App::drawCardLibrary(bool top) {
       if (i >= n) break;
       Entry& e = st.all[st.shown[i]];
       float x = kCellGap + c * (kCW + kCellGap), y = kGridY0 + 6 + r * kRowH - st.scroll;
-      drawCard(shownCard(e), x, y, kS, false, false, i == st.sel && st.zone == 1, !e.seen);
+      drawCard(shownCard(e), x, y, kS, false, true, i == st.sel && st.zone == 1, !e.seen);
     }
   }
   gfx::popClip();

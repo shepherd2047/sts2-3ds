@@ -261,7 +261,7 @@ void App::drawShop(bool top) {
     switch (s.kind) {
       case ShopItem::CardItem:
         if (s.card) {
-          drawCard(s.card.get(), b.x, b.y, kCardS);
+          drawCard(s.card.get(), b.x, b.y, kCardS, false, true);
           if (s.onSale) spr(R().sprite("ui/sale_tag"), b.x + b.w - 14, b.y - 5, 20, 20);
         } else {
           gfx::rect(b.x, b.y, b.w, kShopCardH, 0xFFFFFF10);

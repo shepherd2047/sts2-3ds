@@ -160,14 +160,14 @@ void App::drawCard(Card* c, float x, float y, float s, bool dim, bool desc, bool
 
   if (desc) {
     TextStyle dt = ts(F12, dim ? col::gray : col::white, CENTER, 104 * s);
-    dt.scale = s >= 0.95f ? 1.f : std::max(0.75f, s);
+    dt.scale = s >= 0.95f ? 1.f : s < 0.6f ? std::max(0.5f, s * 1.15f) : std::max(0.75f, s);  // grid minis: a texture of tiny text, as on the real card
     dt.maxWidth = 104 * s;
     float dh;
     std::string d = unseen ? L("card_library.UNKNOWN.description") : describe(c);
     R().measure(d, dt, &dh);
     float top = y + 100 * s, bottom = y + 164 * s;
     // Long texts shrink until they fit the text box.
-    for (int k = 0; k < 6 && dh > bottom - top && dt.scale > 0.5f; ++k) {
+    for (int k = 0; k < 8 && dh > bottom - top && dt.scale > (s < 0.6f ? 0.46f : 0.5f); ++k) {
       dt.scale *= 0.9f;
       R().measure(d, dt, &dh);
     }
@@ -181,7 +181,9 @@ void App::drawCard(Card* c, float x, float y, float s, bool dim, bool desc, bool
         if (dh1 < dh - lh * 0.5f) { dt = t2; dh = dh1; break; }
       }
     }
+    gfx::pushClip(x + 8 * s, top - 2 * s, 104 * s, bottom - top + 4 * s);  // a long text never reaches the price below
     R().text(x + 60 * s, top + std::max(0.f, (bottom - top - dh) / 2), d, dt);
+    gfx::popClip();
   }
 }
 
@@ -194,7 +196,7 @@ void App::drawCardGrid(const std::vector<Card*>& cards, int sel, float y0, float
     float x = gap + colI * (cw + gap);
     float y = y0 + 6 + row * (ch + 8);
     if (y + ch < y0 || y > y1) continue;
-    drawCard(cards[i], x, y, s, false, false, i == sel);
+    drawCard(cards[i], x, y, s, false, true, i == sel);
     hits_.push_back({x, y, cw, ch, ID_GRID0 + i});
   }
 }

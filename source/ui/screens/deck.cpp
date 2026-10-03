@@ -342,7 +342,7 @@ void App::gridSelectDraw(const GridSelectSpec& s, bool top) {
     float x = gridCellX(i), y = gridCellY(i, g.scroll);
     if (y + kGH < kGY0 || y > kGY1) continue;
     bool picked = std::find(g.picks.begin(), g.picks.end(), i) != g.picks.end();
-    drawCard((*s.cards)[i], x, y, kGS, false, false, i == g.sel && !picked);
+    drawCard((*s.cards)[i], x, y, kGS, false, true, i == g.sel && !picked);
     if (picked) {
       outlineBox(x, y, kGW, kGH, style::kFocus);
       Sprite tick = R().sprite("ui/checkbox_on");
@@ -808,7 +808,7 @@ void App::drawDeck(bool top) {
   for (int i = 0; i < n; ++i) {
     float x = gridCellX(i), y = gridCellY(i, v.scroll, kVY0);
     if (y + kGH < kVY0 || y > kVY1) continue;
-    drawCard(viewCard(cards[i]), x, y, kGS, false, false, i == v.sel);
+    drawCard(viewCard(cards[i]), x, y, kGS, false, true, i == v.sel);
   }
   gfx::popClip();
   if (n == 0) R().text(kBot / 2, (kVY0 + kVY1) / 2 - 8, tr("（空）", "(empty)"), ts(F16, col::gray, CENTER));
