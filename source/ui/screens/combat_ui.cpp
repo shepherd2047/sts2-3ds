@@ -53,6 +53,7 @@ struct HudAnim {
   int lastEnergy = -1, lastDraw = -1, lastDiscard = -1, lastExhaust = 0;
   float energyPop = 0, drawBump = 0, discardBump = 0, exhaustBump = 0;
   float glow = 0, etSink = 0;
+  std::map<const Card*, float> cardGlow;  // playable-card highlight fade (NCardHighlight AnimShow / AnimHide)
   // Turn banner: the one showing and the one queued after it (combat start -> player turn 1).
   enum Kind { None, Start, Player, Enemy, Other };
   Kind banner = None, next = None;
@@ -693,6 +694,19 @@ void App::drawCombat(bool top) {
       const Pose& p = it->second;
       if ((p.drawT < 1) != (pass == 1)) continue;
       gfx::pushTransform(gfx::Affine::rotateAround(p.x, p.y, p.angle));
+      {
+        // NCardHighlight: the card_frame_sdf outline in cyan (playable), gold or red, fading in over 0.5 s.
+        const bool gold = c->enchantment && c->enchantment->shouldGlowGold(),
+                   red = !gold && c->enchantment && c->enchantment->shouldGlowRed();
+        float& gt = ha.cardGlow[c];
+        gt = std::clamp(gt + ((canAct && (cb->canPlay(c) || gold || red)) ? dtv : -dtv) / 0.5f, 0.f, 1.f);
+        Sprite gs = gt > 0 ? R().sprite(gold ? "card/glow_gold" : red ? "card/glow_red" : "card/glow_cyan") : Sprite{};
+        if (gs) {
+          const float pulse = 0.85f + 0.15f * std::sin(clock_ * 4.f + i);
+          const float gw = 302.7f * p.s;
+          spr(gs, p.x - gw / 2, p.y - gw / 2, gw, gw, 0xFFFFFF00u | (uint32_t)(250 * easeOut(gt) * pulse));
+        }
+      }
       drawCard(c, p.x - kCardW * p.s / 2, p.y - kCardH * p.s / 2, p.s, !cb->canPlay(c) && canAct, true, false);
       gfx::popTransform();
     }
@@ -707,75 +721,33 @@ void App::drawCombat(bool top) {
       R().text(cx, kPreviewY + kCardH * kPreviewS + 2, msg, ts(F12, col::red, CENTER));
     }
   }
-  // Play line and cancel zone while dragging; the hint sits between the energy orb and
-  // end turn, below the hand, where neither the finger nor the card covers it.
-  if (drag_.down && drag_.moved && drag_.card && !flying(drag_.card)) {
-    float pulse = 0.5f + 0.5f * std::sin(clock_ * 6.f);
-    std::string hint;
-    uint32_t hc;
-    if (drag_.armed) {
-      gfx::rect(0, kPlayLine, kBot, kH - kPlayLine, 0x00000060);
-      gfx::rect(0, kPlayLine, kBot, 1, 0xFFFFFF60);
-      std::string why;
-      if (!cb->canPlay(drag_.card, &why)) {
-        hint = why == "ENERGY" ? L("combat_messages.NOT_ENOUGH_ENERGY") : L("combat_messages.UNPLAYABLE");
-        for (auto& ch : hint) if (ch == '\n') ch = ' ';
-        hc = col::red;
-      } else {
-        hint = drag_.card->target == TargetType::AnyEnemy && alive.size() > 1 ? tr("松手打出 · 左右拖动换目标", "Release to play · drag sideways to retarget") : tr("松手打出 · 拖回手牌取消", "Release to play · drag back to cancel");
-        hc = 0x90FF90FF;
-      }
-    } else {
-      gfx::rect(0, 0, kBot, kPlayLine, 0x60C0FF00 | (uint32_t)(0x10 + pulse * 0x18));
-      for (float x = 4; x < kBot; x += 12) gfx::rect(x, kPlayLine, 6, 2, 0x60C0FFC0);
-      hint = tr("↑ 拖过虚线出牌 · 松手取消", "↑ Drag past the line to play · release to cancel");
-      hc = 0x90D0FFFF;
-    }
-    TextStyle st = ts(F12, hc, CENTER);
-    float w = R().measure(hint, st);
-    gfx::rect(kBot / 2 - w / 2 - 6, 200, w + 12, 16, 0x000000B0);
-    R().text(kBot / 2, 201, hint, st);
-  } else if (aiming_ && selCard && canAct) {
-    // S09 D-pad targeting: the arrow runs from the raised card to the enemy picked with ←→.
-    std::string hint = alive.size() > 1 ? tr("←→ 选择目标 · A 打出 · B 取消", "←→ Target · A Play · B Cancel") : tr("A 打出 · B 取消", "A Play · B Cancel");
-    TextStyle st = ts(F12, 0x90FF90FF, CENTER);
-    float w = R().measure(hint, st);
-    gfx::rect(kBot / 2 - w / 2 - 6, 200, w + 12, 16, 0x000000B0);
-    R().text(kBot / 2, 201, hint, st);
-  }
-  // Card being dragged, following the finger; glows when it is in the play zone.
+  // The original shows no play line or hint boxes while a card is held: just the card, its outline and the
+  // targeting arrow. The only text is the red "not enough energy" line when an unplayable card is armed.
+  auto glowSprite = [&](float cxx, float cyy, float sc, float a) {
+    Sprite gs = R().sprite("card/glow_cyan");
+    if (!gs) return;
+    const float gw = 302.7f * sc;
+    spr(gs, cxx - gw / 2, cyy - gw / 2, gw, gw, 0xFFFFFF00u | (uint32_t)(250 * a));
+  };
   if (drag_.down && drag_.moved && drag_.card && !flying(drag_.card)) {
     float s = kDragS;
-    if (drag_.armed) gfx::rect(drag_.x - kCardW * s / 2 - 3, drag_.y - kCardH * s / 2 - 3, kCardW * s + 6, kCardH * s + 6, 0x60D0FF90);
+    if (drag_.armed) {
+      std::string why;
+      if (!cb->canPlay(drag_.card, &why)) {
+        std::string hint = why == "ENERGY" ? L("combat_messages.NOT_ENOUGH_ENERGY") : L("combat_messages.UNPLAYABLE");
+        for (auto& ch : hint) if (ch == '\n') ch = ' ';
+        R().text(kBot / 2, 192, hint, ts(F12, col::red, CENTER));
+      }
+    }
+    glowSprite(drag_.x, drag_.y, s, drag_.armed ? 1.f : 0.6f);
     drawCard(drag_.card, drag_.x - kCardW * s / 2, drag_.y - kCardH * s / 2, s, false, true, false);
   }
-  // A belt potion being dragged: the same play line, hints and glow as a card.
+  // A belt potion being dragged: the same outline-free look; only an unusable potion gets a red line.
   if (drag_.down && drag_.moved && drag_.potion >= 0 && drag_.potion < (int)run_->potions.size() &&
       run_->potions[drag_.potion]) {
     Potion* q = run_->potions[drag_.potion].get();
     const bool usable = run_->canUsePotion(drag_.potion);
-    float pulse = 0.5f + 0.5f * std::sin(clock_ * 6.f);
-    std::string hint;
-    uint32_t hc;
-    if (!usable) {
-      hint = tr("这瓶药水现在不能使用", "This potion can't be used now");
-      hc = col::red;
-    } else if (drag_.armed) {
-      gfx::rect(0, kPlayLine, kBot, kH - kPlayLine, 0x00000060);
-      gfx::rect(0, kPlayLine, kBot, 1, 0xFFFFFF60);
-      hint = q->target == TargetType::AnyEnemy && alive.size() > 1 ? tr("松手使用 · 左右拖动换目标", "Release to use · drag sideways to retarget")
-                                                                   : tr("松手使用 · 拖回取消", "Release to use · drag back to cancel");
-      hc = 0x90FF90FF;
-    } else {
-      gfx::rect(0, 0, kBot, kPlayLine, 0x60C0FF00 | (uint32_t)(0x10 + pulse * 0x18));
-      for (float x = 4; x < kBot; x += 12) gfx::rect(x, kPlayLine, 6, 2, 0x60C0FFC0);
-      hint = tr("↑ 拖过虚线使用 · 松手取消", "↑ Drag past the line to use · release to cancel");
-      hc = 0x90D0FFFF;
-    }
-    TextStyle st = ts(F12, hc, CENTER);
-    float w = R().measure(hint, st);
-    gfx::rect(kBot / 2 - w / 2 - 6, 186, w + 12, 16, 0x000000B0);
-    R().text(kBot / 2, 187, hint, st);
+    if (!usable) R().text(kBot / 2, 192, tr("这瓶药水现在不能使用", "This potion can't be used now"), ts(F12, col::red, CENTER));
     if (usable) {
       const float sz = kPotionDragSize;
       if (drag_.armed) {

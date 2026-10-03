@@ -895,6 +895,23 @@ def add_ui_art(g, a, packer, known):
             put('ach/' + m.group(1), f'packed/achievements/unlocked/{m.group(1)}.png', (64, 64))
     put('ach/border', 'packed/achievements/achievement_border.png', (64, 64))
     put('ach/lock', 'packed/achievements/achievement_lock.png', (32, 32))
+    # Playable-card outline (NCardHighlight, shaders/card_ripple.gdshader): the shader keeps the thin band
+    # of the card SDF just outside the card (alpha = smoothstep(1 - width, 1, sdf)), plus a faint halo.
+    def bake_card_glow(rgb):
+        def bake(img):
+            a = np.asarray(img)[..., 3].astype(np.float32) / 255.0
+            w = 0.05
+            t = np.clip((a - (1 - w)) / w, 0, 1)
+            band = t * t * (3 - 2 * t)
+            h = np.clip((a - 0.7) / 0.3, 0, 1) ** 2 * 0.25
+            out = np.zeros(a.shape + (4,), np.uint8)
+            out[..., 0], out[..., 1], out[..., 2] = rgb  # pre-coloured: citro2d tint blend is not usable
+            out[..., 3] = (np.clip(np.maximum(band, h), 0, 1) * 255 + 0.5).astype(np.uint8)
+            return Image.fromarray(out, 'RGBA')
+        return bake
+    # NHandCardHolder colours: playable cyan, gold (enchantment glow), red.
+    for gname, grgb in (('cyan', (0, 244, 252)), ('gold', (255, 200, 0)), ('red', (212, 0, 84))):
+        put('card/glow_' + gname, 'packed/card_template/card_frame_sdf.exr', (128, 128), bake=bake_card_glow(grgb))
     put('ui/end_turn_glow', 'packed/combat_ui/end_turn_button_glow.png', (84, 42))
     put('ui/exhaust_pile', 'packed/combat_ui/exhaust_pile.png', (30, 30))
     put('ui/pile_count', 'packed/combat_ui/pile_button_count.png', (24, 20))

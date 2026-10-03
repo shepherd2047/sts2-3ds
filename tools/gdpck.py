@@ -41,6 +41,10 @@ class Game:
             return Image.frombytes('RGBA', (w, h), d[52:52 + w * h * 4])
         if fmt == 4:
             return Image.frombytes('RGB', (w, h), d[52:52 + w * h * 3]).convert('RGBA')
+        if fmt == 15:  # RGBAH (half float, e.g. the card SDF): clamp to 8 bit
+            import numpy as np
+            a = np.frombuffer(d, dtype='<f2', count=w * h * 4, offset=52).astype(np.float32).reshape(h, w, 4)
+            return Image.fromarray((np.clip(a, 0, 1) * 255 + 0.5).astype(np.uint8), 'RGBA')
         raise ValueError(f'unsupported texture format {fmt} in {res}')
 
     def spine(self, skel_data_tres):
