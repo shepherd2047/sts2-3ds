@@ -86,7 +86,8 @@ void App::drawCharacterSelect(bool top) {
       float oh = bh * 207 / 195, ow = oh * 144 / 207;
       spr(R().sprite("ui/char_select_outline"), x - (ow - bw) / 2, yy - (oh - bh) / 2, ow, oh);
     }
-    spr(R().sprite(art), x, yy, bw, bh, i == titleChar_ ? 0xFFFFFFFF : 0x000000FF, i == titleChar_ ? 0.f : 0.35f);
+    spr(R().sprite(art), x, yy, bw, bh);
+    if (i != titleChar_) gfx::rect(x, yy, bw, bh, 0x00000060);  // dimmed without the tint blend Azahar drops
     hits_.push_back({x, yy, bw, bh, ID_CHAR0 + i});
   }
   // Ascension panel: arrows around the level icon, the level's title and description beside it.
@@ -99,7 +100,18 @@ void App::drawCharacterSelect(bool top) {
   char lk[32];
   snprintf(lk, sizeof lk, "ascension.LEVEL_%02d", titleAsc_);
   R().text(122, ay + 6, L(std::string(lk) + ".title"), ts(F12, col::gold));
-  R().text(122, ay + 24, L(std::string(lk) + ".description"), ts(F12, col::white, LEFT, kBot - 20 - 118));
+  {
+    // A lone last character ("玩。") reads badly: shrink a little when that saves a line.
+    TextStyle dt = ts(F12, col::white, LEFT, kBot - 20 - 118);
+    const std::string d = L(std::string(lk) + ".description");
+    float h0 = 0, h1 = 0;
+    R().measure(d, dt, &h0);
+    TextStyle t2 = dt;
+    t2.scale = 0.9f;
+    R().measure(d, t2, &h1);
+    if (h1 < h0 - R().lineHeight(F12) * 0.5f) dt = t2;
+    R().text(122, ay + 24, d, dt);
+  }
   // Seed (tap or Y: a new one).
   panel(10, ay + 80, kBot - 20, 24);
   R().text(18, ay + 84, tr("种子  ", "Seed  ") + titleSeed_, ts(F12, col::white));

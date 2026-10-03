@@ -153,11 +153,12 @@ bool button(int id, float x, float y, float w, float h, const std::string& label
                     : kind == Kind::Row ? "ui/btn_row" : kind == Kind::Event ? "ui/btn_event"
                     : kind == Kind::Ancient ? "ui/btn_ancient" : "ui/btn_confirm";
   Sprite s = R().sprite(art);
-  uint32_t tint = !enabled ? 0x808080FF : padMode && id == focusId ? 0xFFFFFFFF : 0xF0F0F0FF;
-  float blend = !enabled ? 0.55f : 0.f;
+  // Disabled: faded with the alpha stack (citro2d's tint blend is not drawn by Azahar).
   if (s && s.nl + s.nt + s.nr + s.nb > 0) {
+    if (!enabled) gfx::pushAlpha(0.5f);
     gfx::nineSlice(s.tex, s.x, s.y, s.w, s.h, (float)s.nl, (float)s.nt, (float)s.nr, (float)s.nb, x, y + oy, w, h,
-                  tint, blend);
+                  0xFFFFFFFF, 0.f);
+    if (!enabled) gfx::popAlpha();
   } else {
     uint32_t fill = !enabled ? kPlateOff : kind == Kind::Primary ? kPrimary : kind == Kind::Danger ? kDanger : kPlate;
     gfx::rect(x, y + oy, w, h, fill);

@@ -271,7 +271,11 @@ void App::drawRest(bool top) {
     }
     float ih = rh - 8, iw = ih * 64 / 42;
     if (bright || chosen) spr(R().sprite(std::string("ui/rest_") + kOptIcons[o]), x + 4, y + 4, iw, ih);
-    else spr(R().sprite(std::string("ui/rest_") + kOptIcons[o]), x + 4, y + 4, iw, ih, 0x202020FF, 0.55f);
+    else {
+      gfx::pushAlpha(0.35f);
+      spr(R().sprite(std::string("ui/rest_") + kOptIcons[o]), x + 4, y + 4, iw, ih);
+      gfx::popAlpha();
+    }
     float tx = x + iw + 10, tw = cw - (tx - x) - 6;
     uint32_t nameColor = chosen ? col::gold : bright ? col::white : col::gray;
     R().text(tx, y + (rh - 32) / 2, optName(o), ts(F16, nameColor, LEFT, 0, rh < 44 ? 0.9f : 1.f));

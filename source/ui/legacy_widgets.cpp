@@ -14,6 +14,18 @@ void App::panel(float x, float y, float w, float h, uint32_t fill, uint32_t bord
 }
 
 bool App::button(float x, float y, float w, float h, const std::string& label, int id, bool enabled, bool highlight) {
+  // "<" / ">" (ascension, pagers): the game's yellow triangle (settings_tiny_*_arrow), no plate.
+  if (label == "<" || label == ">") {
+    Sprite a = R().sprite(label == "<" ? "ui/arrow_left" : "ui/arrow_right");
+    if (a) {
+      const float k = std::min(w / a.w, h / a.h), aw = a.w * k, ah = a.h * k;
+      if (!enabled) gfx::pushAlpha(0.3f);
+      spr(a, x + (w - aw) / 2, y + (h - ah) / 2, aw, ah);
+      if (!enabled) gfx::popAlpha();
+      if (enabled) hits_.push_back({x, y, w, h, id});
+      return enabled;
+    }
+  }
   // Original art: back = blue arrow plate, highlighted = red proceed plate, the rest = confirm plate.
   bool back = id == ID_BACK || label == "返回" || label == "取消" || label == "关闭";
   Sprite sp = R().sprite(back ? "ui/btn_back" : highlight ? "ui/btn_proceed" : "ui/btn_confirm");
