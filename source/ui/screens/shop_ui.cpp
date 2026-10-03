@@ -180,7 +180,7 @@ void App::drawShop(bool top) {
       return;
     }
     // Relic / potion / removal: a panel with the big icon, name, rarity and description.
-    const float px = 10, pw = 232, py = 28;
+    const float px = 10, pw = 232, py = 28 + relicRowH();
     std::string title, sub, desc;
     if (it->kind == ShopItem::RelicItem) {
       const char* rarities[] = {"", tr("初始", "Starter"), tr("普通", "Common"), tr("罕见", "Uncommon"), tr("稀有", "Rare"), tr("商店", "Shop"), tr("事件", "Event"), tr("先古", "Ancient")};

@@ -388,7 +388,7 @@ void App::drawCombat(bool top) {
       Card* tipCard = drag_.down && drag_.moved && drag_.card ? drag_.card : selCard;
       if (tipCard && !cb->choice.active && !selecting) {
         const bool orbs = run_->character().orbSlots > 0 || cb->orbCapacity > 0;
-        drawCardTipColumn(tipCard, 6, orbs ? 50.f : 26.f, 170, [this](Card* k) { return describe(k); });
+        drawCardTipColumn(tipCard, 6, (orbs ? 50.f : 26.f) + relicRowH(), 170, [this](Card* k) { return describe(k); });
       }
     }
     if (hurtT_ < 1.f) {
@@ -398,7 +398,7 @@ void App::drawCombat(bool top) {
     }
     if (beltPopup_ >= 0 && beltPopup_ < (int)run_->potions.size() && run_->potions[beltPopup_]) {
       Potion* q = run_->potions[beltPopup_].get();
-      const float x = 6, y = 26, w = 190;
+      const float x = 6, y = 26 + relicRowH(), w = 190;
       std::string title = L("potions." + q->locKey + ".title"), text = describePotion(q);
       float dh = 0;
       R().measure(text, ts(F12, col::white, LEFT, w - 16), &dh);
