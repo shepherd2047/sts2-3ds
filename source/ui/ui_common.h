@@ -214,4 +214,7 @@ inline float approach(float v, float to, float k, float dt) { return v + (to - v
 // detail.cpp: the stacked keyword tips of a card (combat top screen); returns the y below the last tip.
 float drawCardTipColumn(Card* c, float x, float y, float w, const std::function<std::string(Card*)>& desc);
 
+// detail.cpp: the localized card type name (Attack / Skill / ...), for the card face's type plaque.
+std::string cardTypeLabel(sts::CardType t);
+
 }  // namespace ui

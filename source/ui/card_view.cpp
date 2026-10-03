@@ -89,6 +89,25 @@ void App::drawCard(Card* c, float x, float y, float s, bool dim, bool desc, bool
   float th = lh * tt.scale;
   R().text(x + 60 * s, artTop - th, title, tt);
 
+  // Type plaque under the portrait (NCard TypePlaque): the rarity-coloured 3-slice sized to the type name
+  // (width max(label + 17, 61), height 37 of the game's 300x422 card). Grid-mini cards are too small for it.
+  if (!ancient && !unseen && s >= 0.6f) {
+    Sprite pq = R().sprite(std::string("card/plaque_") + bannerRarity(c->rarity));
+    if (pq) {
+      TextStyle pt = ts(F12, 0x000000C0, CENTER);
+      pt.scale = 0.75f * std::max(1.f, s);
+      const std::string tn = cardTypeLabel(c->type);
+      const float lw = R().measure(tn, pt), ph = 14.8f * s, pw = std::max(lw + 6.8f * s, 24.4f * s);
+      const float px = x + 60 * s - pw / 2, py = y + 84.8f * s;
+      const float ml = 13.f / 123 * pq.w, mr = 12.f / 123 * pq.w;  // margins in sprite pixels
+      const float dl = ml / pq.w * (pq.w / pq.h) * ph, dr = mr / pq.w * (pq.w / pq.h) * ph;
+      gfx::image(pq.tex, px, py, dl, ph, pq.x, pq.y, ml, pq.h, tint, blend);
+      gfx::image(pq.tex, px + dl, py, pw - dl - dr, ph, pq.x + ml, pq.y, pq.w - ml - mr, pq.h, tint, blend);
+      gfx::image(pq.tex, px + pw - dr, py, dr, ph, pq.x + pq.w - mr, pq.y, mr, pq.h, tint, blend);
+      R().text(x + 60 * s, py + (ph - R().lineHeight(F12) * pt.scale) / 2, tn, pt);
+    }
+  }
+
   // Cost orb, or the unplayable icon in its place.
   if (c->has(kwUnplayable) && !unseen) {
     float os = 26 * std::max(s, 0.6f);
@@ -116,7 +135,7 @@ void App::drawCard(Card* c, float x, float y, float s, bool dim, bool desc, bool
     at.scale = std::max(0.6f, s * 0.9f);
     at.outline = 0x3A0A5AFF;
     float lh = R().lineHeight(F12) * at.scale;
-    R().text(x + 60 * s, y + 93 * s - lh, tag, at);
+    R().text(x + 60 * s, y + 82 * s - lh, tag, at);
   }
 
   // Enchantment badge (F5, NCard.UpdateEnchantmentVisuals): the enchantment's icon in a small

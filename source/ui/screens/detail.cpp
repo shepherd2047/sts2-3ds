@@ -307,6 +307,8 @@ static void collectCardTips(std::vector<Tip>& tips, Card* s, const std::function
   }
 }
 
+std::string cardTypeLabel(CardType t) { return cardTypeName(t); }  // card_view.cpp's type plaque
+
 void App::refreshDetail() {
   Popup& p = P();
   const void* key = detailCard_ ? (const void*)detailCard_ : detailRelic_ ? (const void*)detailRelic_ : (const void*)detailPotion_;

@@ -1143,6 +1143,12 @@ def build(args):
         for r in CARD_BANNER_RARITIES:
             hsv = material_hsv(g, f'materials/cards/banners/card_banner_{r}_mat.tres')
             packer.add(f'card/border_{kind}_{r}', hsv_shader(border, *hsv))
+    # Type plaque (NCard: TypePlaque, card_portrait_border_plaque_s, a horizontal 9-patch with 13 / 12 margins)
+    # coloured by the rarity's banner material like the portrait border (NCard.UpdateTypePlaque).
+    plaque = fit(a.sprite('images/atlases/ui_atlas.sprites/card/card_portrait_border_plaque_s.tres'), (49, 30))
+    for r in CARD_BANNER_RARITIES:
+        hsv = material_hsv(g, f'materials/cards/banners/card_banner_{r}_mat.tres')
+        packer.add(f'card/plaque_{r}', hsv_shader(plaque, *hsv))
     packer.add('card/frame_ancient', fit(a.sprite('images/atlases/ui_atlas.sprites/card/card_frame_ancient_s.tres'), (120, 169)))
     banner = fit_height(a.sprite('images/atlases/ui_atlas.sprites/card/card_banner.tres'), 28)
     packer.add('card/banner', banner)
