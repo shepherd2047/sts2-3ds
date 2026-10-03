@@ -912,6 +912,19 @@ def add_ui_art(g, a, packer, known):
     # NHandCardHolder colours: playable cyan, gold (enchantment glow), red.
     for gname, grgb in (('cyan', (0, 244, 252)), ('gold', (255, 200, 0)), ('red', (212, 0, 84))):
         put('card/glow_' + gname, 'packed/card_template/card_frame_sdf.exr', (128, 128), bake=bake_card_glow(grgb))
+    # NLowHpBorderVfx (vfx_ui_low_hp_border_shader): alpha = smoothstep(0.1, 0.9, polar falloff + noise mean) from the
+    # screen centre outwards, inner radius 0.5, outer 1.75; main colour fades red -> dark red. Noise left out.
+    if 'ui/hurt_vignette' not in known:
+        vw, vh = 100, 60
+        yy, xx = np.mgrid[0:vh, 0:vw].astype(np.float32)
+        vx, vy = np.abs((xx + 0.5) / vw - 0.5) * 2, np.abs((yy + 0.5) / vh - 0.5) * 2
+        vq = 1 - (1 - np.sqrt(vx * vx + vy * vy) / 1.75) / (1 - 0.5)
+        vt = np.clip((vq + 0.12 - 0.1) / 0.8, 0, 1)
+        vim = np.zeros((vh, vw, 4), np.uint8)
+        vim[..., 0], vim[..., 1], vim[..., 2] = 150, 8, 8
+        vim[..., 3] = (vt * vt * (3 - 2 * vt) * 255 + 0.5).astype(np.uint8)
+        packer.add('ui/hurt_vignette', Image.fromarray(vim, 'RGBA'))
+        known.add('ui/hurt_vignette')
     put('ui/end_turn_glow', 'packed/combat_ui/end_turn_button_glow.png', (84, 42))
     put('ui/exhaust_pile', 'packed/combat_ui/exhaust_pile.png', (30, 30))
     put('ui/pile_count', 'packed/combat_ui/pile_button_count.png', (24, 20))

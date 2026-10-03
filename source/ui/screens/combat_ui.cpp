@@ -391,6 +391,11 @@ void App::drawCombat(bool top) {
         drawCardTipColumn(tipCard, 6, orbs ? 50.f : 26.f, 170, [this](Card* k) { return describe(k); });
       }
     }
+    if (hurtT_ < 1.f) {
+      const float t = hurtT_, m = t < 0.2551724f ? 1.f : std::max(0.f, 1.f - (t - 0.2551724f) / (1.f - 0.2551724f));
+      Sprite hv = R().sprite("ui/hurt_vignette");
+      if (hv) spr(hv, 0, 0, kTop, kH, 0xFFFFFF00u | (uint32_t)(255 * 0.75f * m));
+    }
     if (beltPopup_ >= 0 && beltPopup_ < (int)run_->potions.size() && run_->potions[beltPopup_]) {
       Potion* q = run_->potions[beltPopup_].get();
       const float x = 6, y = 26, w = 190;
@@ -812,6 +817,12 @@ void App::drawCombat(bool top) {
     if (usable) hits_.push_back({px, py, pw, ph, ID_USE});
     if (canDiscard) hits_.push_back({px, py + ph + gap, pw, ph, ID_DISCARD});
   }
+  if (hurtT_ < 1.f) {
+    // NLowHpBorderVfx: alpha multiplier 1 until 25% of the second, then 0 at the end; self modulate 0.75.
+    const float t = hurtT_, m = t < 0.2551724f ? 1.f : std::max(0.f, 1.f - (t - 0.2551724f) / (1.f - 0.2551724f));
+    Sprite hv = R().sprite("ui/hurt_vignette");
+    if (hv) spr(hv, 0, 0, kBot, kH, 0xFFFFFF00u | (uint32_t)(255 * 0.75f * m));
+  }
   if (arrow) drawArrow(false, afx, afy, atx, aty, arrowValid, arrowAlly);
   drawFlights(false);
   drawPotionFlights(false);
@@ -822,6 +833,7 @@ void App::updateCombat(const gfx::Input& in) {
   if (!cb) return;
   float visualDt = (float)gfx::dt() * (fastMode_ ? 1.75f : 1.f);
   clock_ += visualDt;
+  if (static const bool demo = getenv("STS_HURT_DEMO") != nullptr; demo && clock_ > 4.f && hurtT_ > 2.f) hurtT_ = 0;  // preview aid
   animateHand(visualDt);
   for (auto& f : flights_) f.t += visualDt;
   flights_.erase(std::remove_if(flights_.begin(), flights_.end(), [](const Flight& f) { return f.t > 0.42f; }),

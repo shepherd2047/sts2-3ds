@@ -404,6 +404,7 @@ class App {
   float leaveQueue_ = 0;    // stagger for cards leaving it
   bool aiming_ = false;     // controller: choosing a target for the selected card
   float arrowRot_ = 0;
+  float hurtT_ = 99;        // seconds since the low-HP hurt vignette started (NLowHpBorderVfx, plays for 1 s)
   float clock_ = 0;         // seconds, drives pulsing UI      // NTargetingArrow head rotation carried between frames
   bool autoplay_ = false;
   double autoT_ = 0;
