@@ -47,6 +47,13 @@ Status: **nothing below is merged yet** except where noted. Work in lanes on dis
    duplicate the top bar; stray "敌人" label on a black box bottom-right (map.cpp ~316-320, 347-351).
 4. Nodes ~8-10 px, too small to tap; original zooms to a few rows. ~1.6x nodes, more scrolling,
    touch targets >= 20 px. Legend icons are black ink and stick out of the panel; original is coloured.
+   Findings: SELECT already opens the dev menu (ui.cpp ~364), so just delete the Deck/Relics/Dev
+   buttons (map.cpp:316-318) and their ID_DECK / ID_RELICS / ID_DEVMENU handlers; keep Potions until
+   the belt lands. Delete the focus label box (map.cpp:347-352). Room icons are already coloured: the
+   legend draws them with ink 0x2E241A at **blend 1** (map.cpp:333) — draw white at blend 0 (another
+   Azahar tint case). Legend panel art has ~10 px transparent margin: start icons at kLegendX+14, widen
+   the panel to ~70 px. kMapS / kNodeScale live in ui_common.h but only map.cpp uses them: a local
+   ~1.6x zoom in mapPos, the parchment draw, mapScrollRange and the auto-scroll target; tap radius >= 20 px.
 
 ### WP3 Card face — card_view.cpp (+ drawCard calls in card_library.cpp, shop_ui.cpp)
 5. Grid mini-cards (deck, smith grid, shop, library; s ~0.42-0.46, body ~48x29 px) have an empty grey
