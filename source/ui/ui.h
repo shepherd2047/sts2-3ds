@@ -311,6 +311,9 @@ class App {
   // map, pause menu), B / ZL / ZR / L+R / a touch leave.
   // Pages opened from it return to it. Layout and relic-strip scroll live in topbar.cpp.
   void drawTopBar();
+  // Height (px) of the relic row under the top bar: 18 on room screens that own relics, else 0 (the pages
+  // over a room keep the relics inside the bar). Scene art that starts under the bar moves down by it.
+  float relicRowH() const;
   bool updateTopBar(const gfx::Input& in);  // true while the top bar owns the input
   bool topBarActive() const;                // focus mode on and no page open over it
   bool topBarFocus_ = false;

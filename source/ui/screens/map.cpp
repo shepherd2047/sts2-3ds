@@ -363,7 +363,7 @@ void App::drawBossPreview() {
   if (b < 0) return;
   bool onlySecond = b2 >= 0 && r.currentNode == b;
   const std::string& first = onlySecond ? r.secondBossId : r.bossId;
-  const float x = 6, y = 22, s = 40;
+  const float x = 6, y = 22 + relicRowH(), s = 40;
   auto icon = [&](const std::string& id, float ix, float iy, float size, uint32_t ink) {
     Sprite ic = roomIcon(RoomType::Boss, id);
     if (!ic) return;
