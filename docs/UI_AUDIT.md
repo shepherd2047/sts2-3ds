@@ -114,3 +114,23 @@ Status: **nothing below is merged yet** except where noted. Work in lanes on dis
     `STS_RELICS=<ClassNames>` gives relics for screenshots.
 
 Not covered by the audit: game over / victory, treasure, in-combat power tooltips.
+
+## Original-game observations (PC, 2026-10-03, Ironclad A1 new run; shots kept in ../sts2-ref-shots, not in git)
+
+- Operating the original on the PC (computer-use): see memory `operate-original-game-pc`. Card plays by synthetic
+  mouse were unreliable while a build was using the CPU; button clicks and number keys (select card) work.
+- Top bar (items 18): portrait+ascension badge, HP, gold, 3 potion slots in a dark rounded plate, floor/act
+  counters, run timer, map and deck(count) buttons, settings gear. Relics sit in their **own row under the bar
+  at the left** (icons ~28 px at 1456 wide, ~34 px gap), no "+N" chip seen with 2 relics.
+- Map (items 3-4): parchment fills most of the screen; only ~4 rows visible; nodes are large (~7% of the
+  screen height), coloured for the next choices, grey/faint for others; Legend panel (blue paper, coloured icons,
+  English labels) on the right; back arrow bottom-left, a "Share" button and 3 drawing tools bottom-right/left.
+- Combat (13-15): playable cards have a cyan outline glow; hovering a card lifts it and shows the keyword tip
+  (e.g. Vulnerable) as a dark panel to its right; aiming draws a segmented grey arrow ending in a big
+  arrowhead at the enemy and the card stays raised in the hand; enemy name appears under its HP bar on hover;
+  intent icon + number above the enemy; draw pile bottom-left, discard bottom-right, energy orb left,
+  End Turn plate right.
+- Character select (2): big portrait, HP/gold line, relic text, yellow triangle arrow beside the ascension
+  line, row of 5 portraits + "?" below, back (red) bottom-left, check (blue) bottom-right.
+- Card library (5): 5 columns of full-size cards (type plaque visible), left filter panel with search, card
+  type, rarity, cost, A-Z; red back arrow bottom-left; click opens a large card with yellow side arrows.

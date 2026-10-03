@@ -14,13 +14,18 @@ void App::panel(float x, float y, float w, float h, uint32_t fill, uint32_t bord
 }
 
 bool App::button(float x, float y, float w, float h, const std::string& label, int id, bool enabled, bool highlight) {
-  uint32_t fill = !enabled ? 0x2A2A2AE0 : highlight ? 0x8A5A20F0 : 0x3A2E24F0;
-  uint32_t border = !enabled ? 0x555555FF : highlight ? 0xFFD870FF : 0xB89A60FF;
-  panel(x, y, w, h, fill, border);
-  gfx::rect(x + 1, y + 1, w - 2, 2, 0xFFFFFF22);
+  // Original art: back = blue arrow plate, highlighted = red proceed plate, the rest = confirm plate.
+  bool back = id == ID_BACK || label == "返回" || label == "取消" || label == "关闭";
+  Sprite sp = R().sprite(back ? "ui/btn_back" : highlight ? "ui/btn_proceed" : "ui/btn_confirm");
+  uint32_t tint = !enabled ? 0x808080FF : 0xFFFFFFFF;  // multiply tint only; never citro2d blend
+  if (sp && sp.nl + sp.nt + sp.nr + sp.nb > 0)
+    gfx::nineSlice(sp.tex, sp.x, sp.y, sp.w, sp.h, (float)sp.nl, (float)sp.nt, (float)sp.nr, (float)sp.nb, x, y, w, h,
+                   tint, 0.f);
+  else
+    panel(x, y, w, h, !enabled ? 0x2A2A2AE0 : 0x3A2E24F0, !enabled ? 0x555555FF : 0xB89A60FF);
   float th;
   // Large font when it fits on one line, otherwise the small one, then shrink.
-  TextStyle st = ts(F16, enabled ? col::white : col::gray, CENTER);
+  TextStyle st = ts(F16, !enabled ? col::gray : highlight && !back ? col::gold : col::white, CENTER);
   float tw = R().measure(label, st, &th);
   if (tw > w - 6 || th > h - 2) {
     st.size = F12;
