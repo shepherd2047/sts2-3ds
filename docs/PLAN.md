@@ -26,6 +26,8 @@ Everything accepted is on `main`. State:
 - Leftover worktrees on the PC (`.claude/worktrees/agent-*`, `../sts2-3ds-engine`, `../sts2-3ds-ui`) are all
   merged (the visuals one too); they can be deleted.
 
+> **2026-10-03 UI pass in progress:** see docs/UI_AUDIT.md (19 issues in 6 work packages, potion belt on branch `ui/potion-belt` awaiting owner OK, playable-card glow requested by the owner).
+
 ## Goal
 
 A **finished product**: the complete Slay the Spire 2 on the New 3DS. That means

@@ -171,6 +171,11 @@ Preview automation (env vars): `STS_HIDDEN=1 STS_FIXED_STEP=1 STS_SEED=42`,
 Headless checks: `SIM_FIGHTS=1 ./build/sim N` prints each fight; add a second
 argument for a verbose event log.
 
+3DS rendering: never rely on citro2d tint `blend` (Azahar drops it: the grey HP-bar art showed
+silver). Bake pre-coloured sprites in build_assets (e.g. `ui/hp_fill_<RRGGBB>`) or use blend 0, and
+check 3DS-visible changes in Azahar before handing a build over. UI work in progress and the audit
+backlog: docs/UI_AUDIT.md.
+
 On 3DS/Azahar the same keys go in `sdmc:/sts2-debug.txt` (KEY=VALUE lines);
 shots land in `sdmc:/sts2-shots/<name>.bmp`. Emulator timing is real-time, so
 scripts drift; delete the debug file afterwards. Azahar ignores SIGTERM, so `timeout` does not
