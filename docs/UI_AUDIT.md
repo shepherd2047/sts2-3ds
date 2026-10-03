@@ -118,7 +118,7 @@ Not covered by the audit: game over / victory, treasure, in-combat power tooltip
 ## Original-game observations (PC, 2026-10-03, Ironclad A1 new run; shots kept in ../sts2-ref-shots, not in git)
 
 - Operating the original on the PC (computer-use): see memory `operate-original-game-pc`. Card plays by synthetic
-  mouse were unreliable while a build was using the CPU; button clicks and number keys (select card) work.
+  mouse never worked; the dev console (settings.save `"full_console": true`, backtick) jumps rooms: `win`, `room Shop|RestSite|Treasure|Event|Elite`.
 - Top bar (items 18): portrait+ascension badge, HP, gold, 3 potion slots in a dark rounded plate, floor/act
   counters, run timer, map and deck(count) buttons, settings gear. Relics sit in their **own row under the bar
   at the left** (icons ~28 px at 1456 wide, ~34 px gap), no "+N" chip seen with 2 relics.
@@ -134,3 +134,20 @@ Not covered by the audit: game over / victory, treasure, in-combat power tooltip
   line, row of 5 portraits + "?" below, back (red) bottom-left, check (blue) bottom-right.
 - Card library (5): 5 columns of full-size cards (type plaque visible), left filter panel with search, card
   type, rarity, cost, A-Z; red back arrow bottom-left; click opens a large card with yellow side arrows.
+- Reward list (item 8): "Loot!" ribbon over a dark teal panel with rows (gold, potion, "Add a card to your deck."), each a
+  full-width teal plate with a small icon; red "Skip" arrow bottom-right. Card choice: "Choose a Card" ribbon, three
+  full cards side by side, hovered card enlarged with cyan glow, **no Details/Select buttons**, one teal "Skip" plate
+  centred under the cards.
+- Rest site (item 9): only two big square option cards (Rest, Smith) with captions; no empty box, no confirm button.
+- Shop: merchant scene with a red "Proceed" arrow bottom-right; clicking the merchant opens the inventory over the
+  whole screen: cards (price under each, % sale badge), potions and relics in a loose grid, card removal coin; red back
+  arrow bottom-left; the relic row stays visible under the top bar.
+- Treasure: "What's Inside?" ribbon, relic floating over the open chest, red Skip arrow. Event: illustration on the
+  left, title + text + choice plates on the right (gold name, effects coloured).
+- Top bar with many relics (item 18): 9 relics fit in one row, ~34 px apart (at 1019 px width), tooltips open
+  below the hovered relic with keyword tips stacked under it. Potion tap opens a small popup under the belt slot:
+  Drink (disabled out of combat) / Discard, plus the potion tooltip to its right (item 17).
+- Combat: block shown as a shield+number on the left end of the HP bar; powers as small icons under the HP bar
+  (hover shows a tooltip beside it); sleeping elite shows "zz".
+- Deck view (item 11): sort header bar (Obtained / Card Type / Cost / A-Z), 5 columns of full cards, red back arrow
+  bottom-left, "View Upgrades" tick bottom-left, hint line at the bottom centre.
