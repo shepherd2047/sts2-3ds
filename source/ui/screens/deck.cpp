@@ -749,6 +749,7 @@ void App::openCardList(CardListMode mode) {
   const int zone = DV().zone;
   DV() = DeckView{};
   if (keepZone) DV().zone = zone;
+  DV().sel = 0;  // the first card is focused at once: the top screen shows it instead of an empty overview
   cardListMode_ = mode;
   deckOpen_ = true;
   sel_ = -1;
