@@ -93,11 +93,18 @@ void App::startFlight(Card* c, float x, float y, float s, Creature* target) {
 
 void App::drawFlights(bool top) {
   for (auto& f : flights_) {
+    // NCardFlyVfx: a straight run, the card turning its top towards where it is heading (rotation eased at
+    // 12 / s), the body shrinking to 10% in the first third and to nothing over the rest.
     float t = std::min(1.f, f.t / 0.42f);
     float x = f.x0 + (f.x1 - f.x0) * t, y = f.y0 + (f.y1 - f.y0) * t;
-    float s = f.s0 * (1.f - 0.94f * t);  // shrink to 6%
+    const float u = std::clamp((t - 1.f / 3) / (2.f / 3), 0.f, 1.f);
+    float s = f.s0 * (t < 1.f / 3 ? 1.f - 0.9f * (3.f * t) : std::max(0.f, 0.1f - 0.25f * u));
+    const float ang = std::atan2(f.y1 - f.y0, f.x1 - f.x0) + 3.14159265f / 2;
+    const float rot = std::remainder(ang, 6.2831853f) * (1.f - std::exp(-12.f * f.t));
     toLocal(top, x, y);
+    gfx::pushTransform(gfx::Affine::rotateAround(x, y, rot));
     drawCard(f.card, x - kCardW * s / 2, y - kCardH * s / 2, s);
+    gfx::popTransform();
   }
 }
 
