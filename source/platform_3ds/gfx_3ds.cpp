@@ -511,6 +511,9 @@ int texWidth(Texture* t) { return t ? t->w : 0; }
 int texHeight(Texture* t) { return t ? t->h : 0; }
 
 
+// Tint blend for the triangles queued next (rawImage sets it around texQuad; 0 = plain modulate).
+static float meshMix = 0.f;
+
 // Vertex colour that reproduces image()'s tint/blend on the triangle path.
 static uint32_t tintColor(uint32_t tint, float blend) {
   auto mix = [&](int sh) { int v = (tint >> sh) & 255; return (uint32_t)(255 + (v - 255) * blend + 0.5f) & 255; };
@@ -520,6 +523,16 @@ static uint32_t tintColor(uint32_t tint, float blend) {
 void detail::rawImage(Texture* t, float sx, float sy, float sw, float sh, float dx, float dy, float dw, float dh, uint32_t tint,
            float blend) {
   if (!t) return;
+  // A tint with blend > 0 goes through our mesh with an INTERPOLATE stage (flushMesh) instead of
+  // citro2d: citro2d carries the blend factor in a procedural-texture unit, which Azahar renders as
+  // blend 0 (the grey HP-bar art showed untinted, silver). The mesh also does the mix on the
+  // transformed path, where vertex-colour modulation alone could not.
+  if (blend > 0.f) {
+    meshMix = std::min(blend, 1.f);
+    detail::texQuad(t, sx, sy, sw, sh, dx, dy, dw, dh, tint);
+    meshMix = 0.f;
+    return;
+  }
   if (detail::transformed()) { detail::texQuad(t, sx, sy, sw, sh, dx, dy, dw, dh, tintColor(tint, blend)); return; }
   flushMesh();
   Tex3DS_SubTexture sub;
@@ -568,7 +581,7 @@ Texture* whiteTexture() {
 
 // Pending mesh batch: consecutive triangles() calls with the same texture and
 // blend are drawn with one citro3d call; any citro2d draw flushes it first.
-static struct { Texture* tex = nullptr; bool additive = false; int vStart = 0, iStart = 0, iCount = 0; } batch;
+static struct { Texture* tex = nullptr; bool additive = false; float mix = 0.f; int vStart = 0, iStart = 0, iCount = 0; } batch;
 
 void flushMesh() {
   if (!batch.tex || batch.iCount == 0) { batch.tex = nullptr; return; }
@@ -584,8 +597,17 @@ void flushMesh() {
   C3D_TexBind(0, &batch.tex->tex);
   C3D_TexEnv* env = C3D_GetTexEnv(0);
   C3D_TexEnvInit(env);
-  C3D_TexEnvSrc(env, C3D_Both, GPU_TEXTURE0, GPU_PRIMARY_COLOR);
-  C3D_TexEnvFunc(env, C3D_Both, GPU_MODULATE);
+  if (batch.mix > 0.f) {  // tinted image: rgb = mix(texture, vertex colour, blend), alpha modulated
+    const u32 b = (u32)(batch.mix * 255.f + 0.5f);
+    C3D_TexEnvSrc(env, C3D_RGB, GPU_PRIMARY_COLOR, GPU_TEXTURE0, GPU_CONSTANT);
+    C3D_TexEnvFunc(env, C3D_RGB, GPU_INTERPOLATE);
+    C3D_TexEnvSrc(env, C3D_Alpha, GPU_TEXTURE0, GPU_PRIMARY_COLOR);
+    C3D_TexEnvFunc(env, C3D_Alpha, GPU_MODULATE);
+    C3D_TexEnvColor(env, b | b << 8 | b << 16 | b << 24);
+  } else {
+    C3D_TexEnvSrc(env, C3D_Both, GPU_TEXTURE0, GPU_PRIMARY_COLOR);
+    C3D_TexEnvFunc(env, C3D_Both, GPU_MODULATE);
+  }
   for (int i = 1; i < 6; ++i) C3D_TexEnvInit(C3D_GetTexEnv(i));
   C3D_DepthTest(false, GPU_ALWAYS, GPU_WRITE_COLOR);
   C3D_CullFace(GPU_CULL_NONE);
@@ -605,11 +627,12 @@ void flushMesh() {
 
 void detail::rawTriangles(Texture* t, const Vert* verts, int count, const uint16_t* indices, int indexCount, bool additive) {
   if (!t || count == 0 || indexCount == 0) return;
-  if (batch.tex && (batch.tex != t || batch.additive != additive || meshVertUsed - batch.vStart + count > 65000)) flushMesh();
+  if (batch.tex && (batch.tex != t || batch.additive != additive || batch.mix != meshMix || meshVertUsed - batch.vStart + count > 65000)) flushMesh();
   if (meshVertUsed + count > kMeshVerts || meshIndexUsed + indexCount > kMeshIndices) return;
   if (!batch.tex) {
     batch.tex = t;
     batch.additive = additive;
+    batch.mix = meshMix;
     batch.vStart = meshVertUsed;
     batch.iStart = meshIndexUsed;
     batch.iCount = 0;
