@@ -2,7 +2,7 @@
 
 Audit of the SDL preview against screenshots of the original game, taken on the Mac from the owner's
 copy (kept locally only, never committed). Owner feedback from the same session is folded in.
-Status: **nothing below is merged yet** except where noted. Work in lanes on disjoint files.
+Status (2026-10-03): the branches below, the potion belt and the details after them are **merged into main** (`ui-integration`), checked in Azahar (combat, shop, rest, map). Still open: items 10, 12, 14's arrow tip. The text below is the original backlog. Work in lanes on disjoint files.
 
 ## Owner feedback / rules learned this session
 
