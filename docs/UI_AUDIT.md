@@ -36,6 +36,13 @@ Status: **nothing below is merged yet** except where noted. Work in lanes on dis
   (NLowHpBorderVfx, plays when a hit leaves the player at <= 25% HP; `STS_HURT_DEMO=1` replays it every 2 s).
   `tools/gdpck.py` reads RGBAH textures. 3DS `make` passed on this PC (devkitPro in MSYS2).
 
+- More branches on origin, each from `main`, awaiting owner OK (2026-10-03, preview-checked only):
+  `map-ui` (WP2 items 3-4: no Dev button or stray label, art Back button, coloured legend, nodes 1.6x),
+  `choice-ui` (WP4 items 7-9: ribbon titles via `widgets::title`, card reward without Details/Select,
+  rest site without empty box / Confirm), `relic-row` (WP6 item 18: relics in a row under the bar on room
+  screens except events; boss preview and Defect orbs move down by `relicRowH()`). Merging them will
+  conflict slightly in rest.cpp / combat_ui.cpp titles: keep the ribbon title and the `+ relicRowH()` offsets.
+
 ## Issues (most visible first) and packages
 
 ### WP1 Button kit — legacy_widgets.cpp, title.cpp, custom_run.cpp, daily_run.cpp
