@@ -63,11 +63,25 @@ void play(const std::string& name) {
   if (logOn()) printf("SFX %s%s\n", name.c_str(), ok ? "" : " (silent)");
 }
 
+static Creature* movePlayedFor = nullptr;  // the enemy whose current move already played its own sound
+
 void combatEvent(const VisualEvent& e, Combat& c, Run& r) {
   Creature* who = e.who;
   bool enemy = who && !who->isPlayer && who->side == Side::Enemy && who->monster;
   switch (e.kind) {
+    case VisualEvent::MoveStart:  // the move method's own SfxCmd.Play, replacing the generic attack / cast sound
+      movePlayedFor = nullptr;
+      if (enemy)
+        if (const char* s = lookup(MON_MOVE, monsterId(who) + "/" + e.text)) {
+          play(s);
+          movePlayedFor = who;
+        }
+      break;
     case VisualEvent::Anim: {
+      if (enemy && who == movePlayedFor) {  // the move already played its own sound
+        movePlayedFor = nullptr;
+        break;
+      }
       bool attack = e.text == "Attack" || e.text == "AttackHeavy";
       bool cast = e.text == "Cast" || e.text == "Debuff";
       if (who && who->isPlayer) {  // CreatureCmd.TriggerAnim: the character's attack / cast sound

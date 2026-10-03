@@ -77,6 +77,7 @@ Task<> Monster::performMove() {
   if (combat->player->alive()) targets.push_back(combat->player);
   // Moves without an attack play the creature's cast animation up front;
   // attacks trigger theirs from Attack::execute. A stunned creature does nothing visible.
+  combat->push({VisualEvent::MoveStart, creature, 0, move->id});  // the move's own SfxCmd.Play (audio router)
   bool attacks = false, onlyStun = !move->intents.empty();
   for (auto& in : move->intents) { attacks |= in.kind == Intent::Attack; onlyStun &= in.kind == Intent::Stun; }
   if (!attacks && !onlyStun) {

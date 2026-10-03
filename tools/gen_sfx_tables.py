@@ -42,7 +42,22 @@ def read(d, f):
 
 
 rows = {k: [] for k in ('CARD_HIT', 'CARD_PLAY', 'MON_ATTACK', 'MON_HIT', 'MON_CAST', 'MON_DMG', 'MON_DEATH',
-                        'MON_HURT')}
+                        'MON_HURT', 'MON_MOVE')}
+
+
+def move_sounds(n, s):
+    """MON_MOVE: "Class/MOVE_ID" -> the first SfxCmd.Play literal in that move's method (new MoveState("ID", Method, ...))."""
+    out = []
+    for mid, meth in re.findall(r'new MoveState\(\s*"([A-Z0-9_]+)"\s*,\s*(\w+)', s):
+        m = re.search(r'(?:async\s+)?Task\s+' + meth + r'\s*\([^)]*\)\s*\{', s)
+        if not m:
+            continue
+        nxt = re.search(r'\n\t(?:public|private|protected|internal)\s', s[m.end():])
+        body = s[m.end():m.end() + (nxt.start() if nxt else len(s))]
+        lit = re.search(r'SfxCmd\.Play\(\s*"([^"]+)"', body)
+        if lit:
+            out.append((n + '/' + mid, lit.group(1)))
+    return out
 for f in sorted(os.listdir(CARDS)):
     if not f.endswith('.cs'):
         continue
@@ -64,6 +79,7 @@ for f in sorted(os.listdir(MONS)):
                      ('MON_CAST', (plays(s) or [None])[0])):
         if val:
             rows[key].append((n, val))
+    rows['MON_MOVE'].extend(move_sounds(n, s))
     m = re.search(r'TakeDamageSfxType => DamageSfxType\.(\w+)', s)
     if m:
         rows['MON_DMG'].append((n, snake(m.group(1))))
