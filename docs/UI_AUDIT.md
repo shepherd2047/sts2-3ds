@@ -43,6 +43,13 @@ Status: **nothing below is merged yet** except where noted. Work in lanes on dis
   screens except events; boss preview and Defect orbs move down by `relicRowH()`). Merging them will
   conflict slightly in rest.cpp / combat_ui.cpp titles: keep the ribbon title and the `+ relicRowH()` offsets.
 
+- **Review `ui-integration` first** (origin, 2026-10-03): `main` + potion-belt + combat-fx + map-ui + choice-ui +
+  relic-row + card-face (type plaque) + shop-fix, conflicts resolved, preview-checked on combat / rest / shop / map,
+  3DS `make` passed. Needs `python tools/build_assets.py` (new glow / vignette / plaque art). Not done: item 5
+  (grid mini-card text; the body stays empty below s 0.6), 10 (relic page columns: unclear which art is the
+  parchment), 11-12 (deck view first focus, history titles), 14's arrow tip (the C# aims the arrow at the mouse; the
+  port already matches its head offset). Combat debug: `STS_HURT_DEMO=1` replays the hurt vignette.
+
 ## Issues (most visible first) and packages
 
 ### WP1 Button kit — legacy_widgets.cpp, title.cpp, custom_run.cpp, daily_run.cpp
