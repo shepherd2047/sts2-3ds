@@ -11,6 +11,8 @@ Only files newer than their romfs_3ds copy are converted, so rerun it after
 build_assets.py (the Makefile does). Other files are copied unchanged.
 """
 import os
+import json
+import hashlib
 import shutil
 import struct
 import subprocess
@@ -110,16 +112,33 @@ def convert(tex3ds, rel):
     return rel, os.path.getsize(src), os.path.getsize(dst)
 
 
+HASHES = os.path.join(os.path.dirname(DST), 'romfs_3ds.hashes.json')
+
+
+def sha(path):
+    with open(path, 'rb') as f:
+        return hashlib.sha256(f.read()).hexdigest()
+
+
 def main():
     tex3ds = find_tex3ds()
-    jobs, keep = [], set()
+    # Up-to-date check by content hash: build_assets rewrites every .t3t (new mtimes, same bytes), and
+    # re-encoding all of them with tex3ds took minutes. Without a recorded hash, fall back to mtime.
+    try:
+        with open(HASHES) as f:
+            hashes = json.load(f)
+    except (OSError, ValueError):
+        hashes = {}
+    jobs, keep, cur = [], set(), {}
     for dp, _, files in os.walk(SRC):
         for fn in files:
             rel = os.path.relpath(os.path.join(dp, fn), SRC).replace(os.sep, '/')
             keep.add(rel)
             s, d = os.path.join(SRC, rel), os.path.join(DST, rel)
             os.makedirs(os.path.dirname(d), exist_ok=True)
-            if os.path.exists(d) and os.path.getmtime(d) >= os.path.getmtime(s):
+            cur[rel] = sha(s)
+            if os.path.exists(d) and (hashes.get(rel) == cur[rel] if rel in hashes
+                                      else os.path.getmtime(d) >= os.path.getmtime(s)):
                 continue
             jobs.append(rel)
     # drop files that no longer exist in romfs/
@@ -132,9 +151,13 @@ def main():
     for j in jobs:
         if j not in tex:
             shutil.copyfile(os.path.join(SRC, j), os.path.join(DST, j))
-    with ThreadPoolExecutor(max_workers=os.cpu_count() or 4) as ex:
+    # 3 workers: each tex3ds runs ~2 threads, and the Mac has 8 GB (more only swaps).
+    with ThreadPoolExecutor(max_workers=min(3, os.cpu_count() or 3)) as ex:
         for rel, a, b in ex.map(lambda j: convert(tex3ds, j), tex):
             print(f'{rel}: {a // 1024} KB -> {b // 1024} KB')
+    with open(HASHES + '.tmp', 'w') as f:
+        json.dump(cur, f)
+    os.replace(HASHES + '.tmp', HASHES)
     total = sum(os.path.getsize(os.path.join(dp, f)) for dp, _, fs in os.walk(DST) for f in fs)
     print(f'romfs_3ds: {total / 1048576:.1f} MB ({len(tex)} textures converted)')
 

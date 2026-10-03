@@ -807,7 +807,7 @@ def add_ui_art(g, a, packer, known):
             return a.sprite(UI_ATLAS + path)
         return g.image('images/' + path)
 
-    def put(name, path, size, nine=None):
+    def put(name, path, size, nine=None, bake=None):
         if name in known:
             return
         try:
@@ -815,7 +815,10 @@ def add_ui_art(g, a, packer, known):
         except Exception as e:  # a missing source must not break the whole build
             print('  ui art missing', name, path, e)
             return
-        packer.add(name, fit(img, size))
+        img = fit(img, size)
+        if bake:
+            img = bake(img.convert('RGBA'))
+        packer.add(name, img)
         known.add(name)
         if nine:
             NINE.append((name,) + tuple(nine))
@@ -934,6 +937,26 @@ def add_ui_art(g, a, packer, known):
     put('ui/locked_model', 'packed/common_ui/locked_model.png', (32, 32))
     put('ui/hp_bg', 'ui/combat/health_bar_bg.png', (10, 8), (3, 3, 3, 3))
     put('ui/hp_fill', 'ui/combat/health_bar_fill.png', (8, 8), (3, 3, 3, 3))
+    # HP bar pieces pre-coloured and drawn untinted: Azahar drops citro2d's tint blend (proctex) and
+    # showed the grey art. Fills are multiplied by the colour like the C# SelfModulate, so the art's
+    # shading stays. Colours: combat_scene.cpp.
+    def recolour(rgb, keep=0.0, multiply=False):
+        def f(img):
+            px = img.load()
+            for y in range(img.height):
+                for x in range(img.width):
+                    r, g_, b, al = px[x, y]
+                    if multiply:
+                        px[x, y] = (r * rgb[0] // 255, g_ * rgb[1] // 255, b * rgb[2] // 255, al)
+                    else:
+                        px[x, y] = (round(r * keep + rgb[0] * (1 - keep)), round(g_ * keep + rgb[1] * (1 - keep)),
+                                    round(b * keep + rgb[2] * (1 - keep)), al)
+            return img
+        return f
+    for hexc in ('F1373E', '3B6FA3', 'FFC9A8', '5FC23A', '8F4FC9', 'C5BBED'):
+        rgb = tuple(int(hexc[i:i + 2], 16) for i in (0, 2, 4))
+        put('ui/hp_fill_' + hexc, 'ui/combat/health_bar_fill.png', (8, 8), (3, 3, 3, 3), recolour(rgb, multiply=True))
+    put('ui/hp_bg_dark', 'ui/combat/health_bar_bg.png', (10, 8), (3, 3, 3, 3), recolour((16, 16, 16), 0.4))
     put('ui/hp_stroke', 'ui/combat/health_bar_stroke.png', (11, 8), (3, 3, 3, 3))
     put('ui/infinity_hp', 'ui/combat/combat_infinity_hp.png', (50, 28))
     # Top bar: the strip, stat icons and the three icon buttons

@@ -173,7 +173,8 @@ argument for a verbose event log.
 
 On 3DS/Azahar the same keys go in `sdmc:/sts2-debug.txt` (KEY=VALUE lines);
 shots land in `sdmc:/sts2-shots/<name>.bmp`. Emulator timing is real-time, so
-scripts drift; delete the debug file afterwards.
+scripts drift; delete the debug file afterwards. Azahar ignores SIGTERM, so `timeout` does not
+stop it: run it in the background and `pkill -9 -f Azahar.app/Contents/MacOS/azahar` once the shots exist.
 
 ## Architecture
 

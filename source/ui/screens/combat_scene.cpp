@@ -1,4 +1,6 @@
 // Split from ui.cpp (F3).
+#include <cstdio>
+#include <cstring>
 #include "../ui_common.h"
 #include "combat_internal.h"
 #include "../../core/char_necrobinder.h"
@@ -19,10 +21,21 @@ constexpr uint32_t kHpOutline = 0x900000FF;     // _defaultFontOutlineColor
 constexpr uint32_t kBlockOutline = 0x1B3045FF;  // _blockOutlineColor
 constexpr float kBarH = 8;
 
-// A 9-slice bar piece from the game's health_bar_* art, flat-tinted.
+// A 9-slice bar piece from the game's health_bar_* art, flat-tinted. The fills and the background
+// come pre-coloured from build_assets (ui/hp_fill_<RRGGBB>, ui/hp_bg_dark) and are drawn untinted:
+// Azahar ignores citro2d's tint blend and showed the grey art.
 void barPiece(const char* name, float x, float y, float w, float h, uint32_t tint, float blend) {
-  Sprite sp = R().sprite(name);
   if (w <= 0) return;
+  char baked[32];
+  if (std::strcmp(name, "ui/hp_fill") == 0 && blend >= 1.f)
+    std::snprintf(baked, sizeof baked, "ui/hp_fill_%06X", (unsigned)(tint >> 8));
+  else if (std::strcmp(name, "ui/hp_bg") == 0 && tint == 0x101010FF && blend == 0.6f)
+    std::snprintf(baked, sizeof baked, "ui/hp_bg_dark");
+  else
+    baked[0] = 0;
+  Sprite sp = baked[0] ? R().sprite(baked) : Sprite{};
+  if (sp) { tint = 0xFFFFFFFF; blend = 0.f; }
+  else sp = R().sprite(name);
   if (!sp) { gfx::rect(x, y, w, h, tint); return; }
   if (w < sp.nl + sp.nr) { gfx::image(sp.tex, sp.x, sp.y, sp.w, sp.h, x, y, w, h, tint, blend); return; }
   gfx::nineSlice(sp.tex, sp.x, sp.y, sp.w, sp.h, sp.nl, sp.nt, sp.nr, sp.nb, x, y, w, h, tint, blend);
