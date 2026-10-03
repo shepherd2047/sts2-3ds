@@ -173,8 +173,7 @@ void App::drawSettings(bool top) {
 
   if (top) {
     noteT_ = std::max(0.f, noteT_ - 1.f / 60);
-    R().text(kTop / 2, 14, L("gameplay_ui.PAUSE_MENU.SETTINGS"), ts(F16, col::gold, CENTER, 0, 1.25f));
-    gfx::rect(kTop / 2.f - 60, 40, 120, 2, style::kPanelHi);
+    widgets::title(kTop / 2.f, 4, L("gameplay_ui.PAUSE_MENU.SETTINGS"), 0.62f);
     const float px = 24, pw = kTop - 48, py = 52, ph = 130;
     widgets::panel("ui/panel_popup", px, py, pw, ph);
     const Def* d = focusedDef();

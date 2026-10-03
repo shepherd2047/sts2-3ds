@@ -96,6 +96,8 @@ void drawToasts(float dt);
 
 // A ribbon banner (reward screen headers, act transitions).
 void banner(float cx, float y, const std::string& text, float scale = 1.f);
+// A screen title on the ribbon (deck, reward, rest, relics, settings): the label fitted to the ribbon.
+void title(float cx, float y, const std::string& text, float scale = 0.62f);
 
 // A keyword glossary popover (F4): `ui/hover_tip` sized to fit title + description, anchored
 // above/right of (anchorX, anchorY) and flipped to stay on screen (screen is kTopW wide on the

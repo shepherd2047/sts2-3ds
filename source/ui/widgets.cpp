@@ -367,4 +367,14 @@ void banner(float cx, float y, const std::string& text, float scale) {
   R().text(cx, y + (b ? b.h * scale : 20) / 2 - R().lineHeight(F16) * scale / 2, text, ts(F16, col::dark, CENTER, 0, scale));
 }
 
+void title(float cx, float y, const std::string& text, float scale) {
+  Sprite b = R().sprite("ui/reward_banner");
+  const float w = b ? b.w * scale : 180 * scale, h = b ? b.h * scale : 33 * scale;
+  if (b) spr(b, cx - w / 2, y, w, h);
+  TextStyle t = ts(F16, col::dark, CENTER, 0, std::min(1.f, 1.45f * scale));
+  const float tw = R().measure(text, t);
+  if (tw > w * 0.66f) t.scale *= w * 0.66f / tw;
+  R().text(cx, y + h / 2 - R().lineHeight(F16) * t.scale / 2, text, t);
+}
+
 }  // namespace ui::widgets

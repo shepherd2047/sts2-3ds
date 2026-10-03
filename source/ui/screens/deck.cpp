@@ -142,13 +142,9 @@ void outlineBox(float x, float y, float w, float h, uint32_t c, float t = 2) {
   gfx::rect(x + w, y, t, h, c);
 }
 
-// Screen title (UI_STYLE): F16 x 1.25, gold, a 2 px teal line under it.
-void screenTitle(float cx, float y, const std::string& text) {
-  TextStyle t = ts(F16, col::gold, CENTER, kTop - 20, 1.25f);
-  R().text(cx, y, text, t);
-  float w = std::min(kTop - 40.f, R().measure(text, t) + 24);
-  gfx::rect(cx - w / 2, y + 23, w, 2, style::kPanelHi);
-}
+// Screen title: the game's ribbon banner with the label on it (the old gold text with a teal underline
+// was crossed by its own rule).
+void screenTitle(float cx, float y, const std::string& text) { widgets::title(cx, y - 6, text, 0.62f); }
 
 // The widget kit's input for this frame: in the grid zone the D-pad / A / B belong to the grid
 // (App::gridSelectUpdate), in the bar zone UP leads back to the grid.
@@ -512,7 +508,10 @@ int App::chooseOneUpdate(const ChooseOneSpec& s, const gfx::Input& in) {
     else if (d & gfx::BTN_RIGHT) o.sel = std::min(n - 1, o.sel + 1);
     else o.sel = std::max(0, o.sel - 1);
   }
-  if (d & gfx::BTN_DOWN) { o.zone = 1; widgets::setFocus(o.sel >= 0 ? kOnePick : s.canSkip ? kOneSkip : kOnePick); }
+  if ((d & gfx::BTN_DOWN) && (s.canSkip || !s.alts.empty())) {
+    o.zone = 1;
+    widgets::setFocus(s.canSkip ? kOneSkip : kOneAlt0);
+  }
   if ((d & gfx::BTN_UP) && o.sel < 0) o.sel = 0;
   if ((d & gfx::BTN_A) && o.sel >= 0) return take(o.sel);
   return -2;
@@ -530,8 +529,7 @@ void App::chooseOneDraw(const ChooseOneSpec& s, bool top) {
              ts(F12, col::gray, CENTER));
     return;
   }
-  widgets::banner(kBot / 2, 1, "", 0.62f);  // the ribbon; its label at a readable size
-  R().text(kBot / 2, 7, L("gameplay_ui.CHOOSE_CARD_HEADER"), ts(F16, col::dark, CENTER, 0, 0.9f));
+  widgets::title(kBot / 2, 1, L("gameplay_ui.CHOOSE_CARD_HEADER"), 0.62f);
   gfx::Input in = takeFrameInput();
   if (o.zone == 0) in.down &= ~(gfx::BTN_LEFT | gfx::BTN_RIGHT | gfx::BTN_UP | gfx::BTN_DOWN | gfx::BTN_A);
   else in.down &= ~gfx::BTN_UP;
@@ -549,24 +547,19 @@ void App::chooseOneDraw(const ChooseOneSpec& s, bool top) {
     if (s.cards[i]) drawCard(s.cards[i], x, y, sc, false, true, sel);
   }
   gfx::rect(0, kGY1, kBot, kH - kGY1, style::kScrim);
-  if (s.canSkip && widgets::button(kOneSkip, style::kMargin, style::kActionY, 84, style::kButtonH,
-                                   L("gameplay_ui.CHOOSE_CARD_SKIP_BUTTON")))
-    o.pending = kOneSkip;
-  float dx = style::kMargin + (s.canSkip ? 84 + style::kGap : 0);
-  if (widgets::button(kOneDetail, dx, style::kActionY, 60, style::kButtonH, tr("详情", "Details"), widgets::Kind::Secondary,
-                      o.sel >= 0 && o.sel < n))
-    o.pending = kOneDetail;
-  if (!s.alts.empty()) {  // E8: CardRewardAlternatives (REROLL, SACRIFICE) between 详情 and 选择
-    const float ax = dx + 60 + style::kGap, aw = kBot - style::kMargin - 90 - style::kGap - ax;
-    const int na = (int)s.alts.size();
-    const float bw = (aw - (na - 1) * style::kGap) / na;
-    for (int i = 0; i < na; ++i)
-      if (widgets::button(kOneAlt0 + i, ax + i * (bw + style::kGap), style::kActionY, bw, style::kButtonH, s.alts[i]))
-        o.pending = kOneAlt0 + i;
+  // As in the original: no Details / Select buttons (one tap takes the card, X inspects it); the skip plate and any
+  // alternatives (REROLL, SACRIFICE) sit centred below the cards.
+  std::vector<std::pair<int, std::string>> btns;
+  if (s.canSkip) btns.push_back({kOneSkip, L("gameplay_ui.CHOOSE_CARD_SKIP_BUTTON")});
+  for (int i = 0; i < (int)s.alts.size(); ++i) btns.push_back({kOneAlt0 + i, s.alts[i]});
+  if (!btns.empty()) {
+    const float bw = btns.size() > 2 ? 90.f : 110.f, gap = style::kGap;
+    float x0 = (kBot - (bw * btns.size() + gap * (btns.size() - 1))) / 2;
+    for (auto& [id, label] : btns) {
+      if (widgets::button(id, x0, style::kActionY, bw, style::kButtonH, label)) o.pending = id;
+      x0 += bw + gap;
+    }
   }
-  if (widgets::button(kOnePick, kBot - style::kMargin - 90, style::kActionY, 90, style::kButtonH, tr("选择", "Select"),
-                      widgets::Kind::Primary, o.sel >= 0 && o.sel < n))
-    o.pending = kOnePick;
   widgets::endFrame();
 }
 
