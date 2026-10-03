@@ -899,10 +899,10 @@ def add_ui_art(g, a, packer, known):
     put('ui/exhaust_pile', 'packed/combat_ui/exhaust_pile.png', (30, 30))
     put('ui/pile_count', 'packed/combat_ui/pile_button_count.png', (24, 20))
     # Combat potion belt (top_bar.tscn PotionContainer): the PotionBg 9-slice (32 px margins) and
-    # the empty holder's potion_placeholder (60 px holder, 4 px inset), scaled by 26/60 to the
-    # bottom screen's 26 px bottles: margins 14, placeholder 22 px.
-    put('ui/potion_belt', 'top_bar/top_bar_char_backdrop.tres', (39, 37), (14, 14, 14, 14))
-    put('ui/potion_empty', 'packed/potions/potion_placeholder.png', (22, 22))
+    # the empty holder's potion_placeholder (60 px holder, 4 px inset), scaled by 20/60 to the
+    # bottom screen's 20 px bottles: art 30x28, margins 11, placeholder 17 px.
+    put('ui/potion_belt', 'top_bar/top_bar_char_backdrop.tres', (30, 28), (11, 11, 11, 11))
+    put('ui/potion_empty', 'packed/potions/potion_placeholder.png', (17, 17))
     # Panels, frames, banners
     put('ui/panel_popup', 'popup_vertical.tres', (143, 163), (14, 14, 14, 14))
     put('ui/panel_reward', 'ui/reward_screen/reward_panel.png', (169, 215), (14, 14, 14, 14))
@@ -1173,7 +1173,9 @@ def build(args):
             path = f'images/relics/{key.lower()}_ironclad.png'
         packer.add('relic/' + key, fit(g.image(path), (RELIC_ICON, RELIC_ICON)))
     for key in POTIONS:  # PotionModel.ImagePath (potion_atlas)
-        packer.add('potion/' + key, fit(a.sprite(f'images/atlases/potion_atlas.sprites/{key.lower()}.tres'), (48, 48)))
+        img = a.sprite(f'images/atlases/potion_atlas.sprites/{key.lower()}.tres')
+        packer.add('potion/' + key, fit(img, (48, 48)))
+        packer.add('potion_s/' + key, fit(img, (20, 20)))  # the combat belt's 20 px bottles, baked crisp
     for key in EVENTS:  # event art for the top screen (RGDSplus U21)
         path = f'images/events/{key.lower()}.png'
         if path + '.import' in g.pck.files:

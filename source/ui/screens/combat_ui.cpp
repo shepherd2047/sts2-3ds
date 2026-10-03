@@ -82,14 +82,14 @@ inline float expoOut(float t) { return t >= 1 ? 1.f : 1.f - std::pow(2.f, -10.f 
 
 // ---- Potion belt on the combat bottom screen, laid out like the C# top bar's PotionContainer
 // (top_bar.tscn): the PotionBg 9-slice (ui/potion_belt), a margin of 18/5/19/6 around the
-// PotionHolders row (separation 2) of 60 px holders, all scaled by 26/60 to 26 px bottles. It
-// sits bottom centre between the piles with 信息 to its right. Used like cards: drag a bottle
-// above the play line and let go.
-constexpr float kHolder = 26.f, kBeltK = kHolder / 60.f;
-constexpr float kBeltML = 18 * kBeltK, kBeltMT = 5 * kBeltK, kBeltMR = 19 * kBeltK, kBeltMB = 6 * kBeltK;
-constexpr float kBeltSep = 2 * kBeltK;
-constexpr float kBeltY = 207.f, kBeltH = kBeltMT + kHolder + kBeltMB, kInfoW = 44.f, kBeltGap = 6.f;
-constexpr float kPotionDragSize = 34.f;  // the held bottle, a little larger than in the belt
+// PotionHolders row (separation 2) of 60 px holders, all scaled by 20/60 to 20 px bottles and
+// rounded to whole pixels so the baked art (ui/potion_belt, ui/potion_empty, potion_s/*) stays
+// crisp. Small and quiet on purpose: the cards are the focus. It sits bottom centre between the
+// piles with 信息 to its right. Used like cards: drag a bottle above the play line and let go.
+constexpr float kHolder = 20.f;
+constexpr float kBeltML = 6, kBeltMT = 2, kBeltMR = 6, kBeltMB = 2, kBeltSep = 1;  // 18/5/19/6, 2 at 1/3
+constexpr float kBeltY = 212.f, kBeltH = kBeltMT + kHolder + kBeltMB, kInfoW = 40.f, kBeltGap = 6.f;
+constexpr float kPotionDragSize = 28.f;  // the held bottle, a little larger than in the belt
 struct BeltLayout {
   float x0, w, size, infoX;  // x0 / w: the backdrop; size: one holder
   float cx(int i) const { return x0 + kBeltML + (size + kBeltSep) * i + size / 2; }
@@ -98,7 +98,7 @@ struct BeltLayout {
 };
 BeltLayout beltLayout(int n) {
   n = std::max(1, n);
-  // 3 holders: 26 px each; bigger belts squeeze into 130 px so 信息 stays clear of the exhaust pile.
+  // 3 holders: 20 px each; bigger belts squeeze into 130 px so 信息 stays clear of the exhaust pile.
   const float size = std::min(kHolder, (130.f - kBeltML - kBeltMR - kBeltSep * (n - 1)) / n);
   const float w = kBeltML + size * n + kBeltSep * (n - 1) + kBeltMR;
   const float x0 = std::round((kBot - (w + kBeltGap + kInfoW)) / 2);
@@ -107,9 +107,9 @@ BeltLayout beltLayout(int n) {
 
 // An empty holder (NPotionHolder.EmptyIcon): the game's potion_placeholder, inset 4 of 60 px.
 void drawEmptyHolder(float cx, float cy, float holder) {
-  const float s = holder * 52.f / 60.f;
+  const float s = std::round(holder * 52.f / 60.f);  // 17 px at 20 px holders, as baked
   Sprite e = R().sprite("ui/potion_empty");
-  if (e) spr(e, cx - s / 2, cy - s / 2, s, s);
+  if (e) spr(e, std::round(cx - s / 2), std::round(cy - s / 2), s, s);
   else gfx::circle(cx, cy, s * 0.36f, 0xFFFFFF28);
 }
 
@@ -628,16 +628,18 @@ void App::drawCombat(bool top) {
       const bool usable = q && canAct && run_->canUsePotion(i);
       if (q && !(holding && drag_.potion == i && usable)) {
         if (!usable) gfx::pushAlpha(0.45f);
-        drawPotionIcon(q, cx - sz / 2, cy - sz / 2, sz);
+        Sprite small = R().sprite("potion_s/" + q->locKey);  // baked at 20 px: crisp at belt size
+        if (small) spr(small, std::round(cx - sz / 2), std::round(cy - sz / 2), sz, sz);
+        else drawPotionIcon(q, cx - sz / 2, cy - sz / 2, sz);
         if (!usable) gfx::popAlpha();
       } else {
         drawEmptyHolder(cx, cy, sz);  // empty, or the bottle is in the player's hand
       }
       const float hx = i == 0 ? bl.x0 : cx - bl.pitch() / 2, hw = i == 0 || i == pn - 1 ? bl.pitch() + kBeltML : bl.pitch();
-      if (canAct) hits_.push_back({hx, kBeltY - 4, hw, kBeltH + 8, ID_POTION0 + i});
+      if (canAct) hits_.push_back({hx, kBeltY - 6, hw, kH - (kBeltY - 6), ID_POTION0 + i});  // down to the edge
     }
     // S10: 信息 (combat inspect, also ↑) beside it; open on either side's turn.
-    const float ix = pn > 0 ? bl.infoX : (kBot - kInfoW) / 2, ih = 22, iy = kBeltY + (kBeltH - ih) / 2;
+    const float ix = pn > 0 ? bl.infoX : (kBot - kInfoW) / 2, ih = 20, iy = kBeltY + (kBeltH - ih) / 2;
     panel(ix, iy, kInfoW, ih, 0x22323BE8, 0x4F8790FF);
     R().text(ix + kInfoW / 2, iy + (ih - R().lineHeight(F12)) / 2, tr("信息", "Info"), ts(F12, col::white, CENTER));
     hits_.push_back({ix, iy - 4, kInfoW, ih + 8, ID_INSPECT});
