@@ -2,7 +2,7 @@
 
 Audit of the SDL preview against screenshots of the original game, taken on the Mac from the owner's
 copy (kept locally only, never committed). Owner feedback from the same session is folded in.
-Status (2026-10-03): the branches below, the potion belt and the details after them are **merged into main** (`ui-integration`), checked in Azahar (combat, shop, rest, map). Item 2 done (yellow triangle arrows = settings_tiny_*_arrow, no lone last character, portraits / disabled buttons / rest icons dimmed without tint blend). Item 12 done (ribbon title, rarity counts as NDeckHistory / NRelicHistory); 10 and 14's arrow tip: no change needed (the owned-relic page has no parchment; the C# arrow tip follows the cursor). The text below is the original backlog. Work in lanes on disjoint files.
+Status (2026-10-03): the branches below, the potion belt and the details after them are **merged into main** (`ui-integration`), checked in Azahar (combat, shop, rest, map). Tint-blend users left: only the map's ink icons (map.cpp, they read fine in Azahar). Card dimming is an overlay since 79cf59e. Item 2 done (yellow triangle arrows = settings_tiny_*_arrow, no lone last character, portraits / disabled buttons / rest icons dimmed without tint blend). Item 12 done (ribbon title, rarity counts as NDeckHistory / NRelicHistory); 10 and 14's arrow tip: no change needed (the owned-relic page has no parchment; the C# arrow tip follows the cursor). The text below is the original backlog. Work in lanes on disjoint files.
 
 ## Owner feedback / rules learned this session
 
