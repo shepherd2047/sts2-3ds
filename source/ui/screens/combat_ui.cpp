@@ -332,7 +332,7 @@ void App::drawCombat(bool top) {
     // Filled slots show the queued orb (id "<Name>Orb" -> sprite orb/<name>), empty ones
     // orb/empty; orbCapacity can exceed the queue (Defect starts with 3, relics/Focus add more).
     if (run_->character().orbSlots > 0 || cb->orbCapacity > 0) {
-      const float os = 20, ogap = 4, oy2 = 24;
+      const float os = 20, ogap = 4, oy2 = 24 + relicRowH();
       float ox2 = 4;
       for (int i = 0; i < cb->orbCapacity; ++i) {
         std::string name = "orb/empty";
