@@ -3,6 +3,7 @@
 // SpoilsMap + SpoilsActMap, ByrdonisEgg, DowsingRod, WingedBoots, ScrollBoxes).
 // Build: make -f Makefile.sdl build/quests_test ; run: ./build/quests_test
 #include <cstdio>
+#include "portable_env.h"
 #include <cstdlib>
 #include <set>
 

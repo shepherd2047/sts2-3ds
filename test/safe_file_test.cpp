@@ -5,6 +5,7 @@
 //
 // Never touches a real save: every file lives under build/safe_file_fixtures/.
 #include <cstdio>
+#include "portable_env.h"
 #include <cstdlib>
 #include <string>
 #ifdef _WIN32

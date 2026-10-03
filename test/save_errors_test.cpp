@@ -4,6 +4,7 @@
 //
 // Never touches a real save: every file lives under build/save_errors_fixtures/.
 #include <cstdio>
+#include "portable_env.h"
 #include <cstdlib>
 #include <sstream>
 #include <sys/stat.h>

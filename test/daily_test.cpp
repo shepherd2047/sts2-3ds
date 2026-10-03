@@ -5,6 +5,7 @@
 // Never touches a real save (no profiles::init, no progress::save).
 // Build: make -f Makefile.sdl build/daily_test ; run: ./build/daily_test
 #include <cstdio>
+#include "portable_env.h"
 #include <cstdlib>
 
 #include "../source/core/daily.h"

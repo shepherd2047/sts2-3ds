@@ -5,6 +5,7 @@
 //
 // Never touches a real save: every profiles::init() below uses a root under build/.
 #include <cstdio>
+#include "portable_env.h"
 #include <cstdlib>
 #include <sys/stat.h>
 #ifdef _WIN32

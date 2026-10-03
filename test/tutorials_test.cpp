@@ -5,6 +5,7 @@
 // Never touches a real save: STS_NO_SAVE keeps tutorials.cpp from writing settings.sav, and the
 // explicit file round trip below uses a path under build/.
 #include <cstdio>
+#include "portable_env.h"
 #include <cstdlib>
 #include <string>
 #include <sys/stat.h>

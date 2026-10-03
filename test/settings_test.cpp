@@ -5,6 +5,7 @@
 // passes an explicit path under build/, and the in-memory settings::state() (and
 // sts::progress::state(), touched by eraseAllData) is reset between sections.
 #include <cstdio>
+#include "portable_env.h"
 #include <cstdlib>
 #include <sys/stat.h>
 #ifdef _WIN32

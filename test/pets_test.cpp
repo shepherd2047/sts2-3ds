@@ -2,6 +2,7 @@
 // Hatch rest option, a pet every combat) and PaelsLegion (double block, then two turns asleep).
 // Build: make -f Makefile.sdl build/pets_test ; run: ./build/pets_test
 #include <cstdio>
+#include "portable_env.h"
 #include <cstdlib>
 
 #include "../source/core/game.h"
