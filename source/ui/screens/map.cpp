@@ -15,7 +15,7 @@ constexpr int kLegendCount = 6;
 constexpr int ID_PAUSE = 2400;   // 暂停: opens the pause menu (Y2), like START
 constexpr int ID_LEGEND = 7000;  // + item index (touch targets local to the map)
 // Legend panel on the right of the lower screen (as on RGDSplus), clear of the paths.
-constexpr float kLegendX = 320 - 64, kLegendY = 60, kLegendW = 60, kLegendRow = 17, kLegendTop = 21;
+constexpr float kLegendX = 320 - 72, kLegendY = 56, kLegendW = 68, kLegendRow = 17, kLegendTop = 21;
 
 // EncounterModel.Title: encounters.<ID_IN_UPPER_SNAKE>.title, e.g. VantomBoss -> VANTOM_BOSS.
 std::string encounterTitle(const std::string& id) {
@@ -306,17 +306,11 @@ void App::drawMap(bool top) {
   // Bottom HUD in the corners, clear of row 0. Looking at the map from another room
   // (the pause menu's 地图) shows only the red 返回 in the bottom-left corner, as on RGDSplus.
   if (mapView_) {
-    const float bx = 4, by = 208, bw = 72, bh = 26;
-    gfx::rect(bx, by, bw, bh, 0xB83A3AF0);
-    gfx::rect(bx, by, bw, 2, 0xFF8A8AFF);
-    gfx::rect(bx + bw - 8, by, 8, bh, 0x8A2020F0);
-    R().text(bx + (bw - 8) / 2, by + (bh - R().lineHeight(F16)) / 2, tr("返回", "Back"), ts(F16, col::white, CENTER));
-    hits_.push_back({bx, by, bw, bh, ID_BACK});
+    button(4, 208, 72, 26, tr("返回", "Back"), ID_BACK);
   } else {
     button(4, 210, 64, 26, tr("牌组", "Deck"), ID_DECK);
     button(72, 210, 64, 26, tr("遗物", "Relics"), ID_RELICS);
-    button(140, 210, 56, 26, tr("开发", "Dev"), ID_DEVMENU);
-    button(200, 210, 56, 26, tr("药水", "Potions"), ID_POTIONS);
+    button(140, 210, 56, 26, tr("药水", "Potions"), ID_POTIONS);
     button(kBot - 52, 4, 48, 24, tr("暂停", "Pause"), ID_PAUSE);  // top-right, clear of the nodes and the legend
   }
   // Legend (NMapScreen MapLegend: LEGEND_HEADER over the six NMapLegendItems) on the right, as
@@ -330,12 +324,12 @@ void App::drawMap(bool top) {
       float y = kLegendY + kLegendTop + i * kLegendRow;
       Sprite ic = roomIcon(kLegendTypes[i]);
       float s = mapLegend_ == i ? 17.f : 14.f;  // NMapLegendItem: the icon at 1.25x while focused
-      if (ic) spr(ic, kLegendX + 11 - ic.w / ic.h * s / 2, y + 8 - s / 2, ic.w / ic.h * s, s, 0x2E241AFF, 1.f);
+      if (ic) spr(ic, kLegendX + 17 - ic.w / ic.h * s / 2, y + 8 - s / 2, ic.w / ic.h * s, s);  // coloured, as in the original
       TextStyle lt = ts(F12, mapLegend_ == i ? 0x7A1E12FF : col::dark, LEFT, 0, 0.85f);
       const std::string name = L(std::string("map.") + kLegendKeys[i] + ".title");
       float nw = R().measure(name, lt);  // Y3: English names are wider; shrink to the panel
-      if (nw > kLegendW - 23) lt.scale *= (kLegendW - 23) / nw;
-      R().text(kLegendX + 21, y + 2 + (0.85f - lt.scale) * R().lineHeight(F12) / 2, name, lt);
+      if (nw > kLegendW - 31) lt.scale *= (kLegendW - 31) / nw;
+      R().text(kLegendX + 28, y + 2 + (0.85f - lt.scale) * R().lineHeight(F12) / 2, name, lt);
       hits_.push_back({kLegendX, y, kLegendW, kLegendRow, ID_LEGEND + i});
     }
     if (mapLegend_ >= 0) {
@@ -343,12 +337,6 @@ void App::drawMap(bool top) {
       widgets::keywordTip(L(k + "title"), L(k + "description"), kLegendX - 100,  // left of the legend
                           kLegendY + kLegendTop + mapLegend_ * kLegendRow + 20, false);
     }
-  }
-  if (focus >= 0) {
-    std::string label = roomName(r.nodes[focus].type);
-    float w = R().measure(label, ts(F12)) + 12;
-    gfx::rect(kBot - w - 4, 214, w, 20, 0x000000A0);
-    R().text(kBot - 10, 217, label, ts(F12, col::gold, RIGHT));
   }
 }
 
@@ -363,7 +351,7 @@ void App::drawBossPreview() {
   if (b < 0) return;
   bool onlySecond = b2 >= 0 && r.currentNode == b;
   const std::string& first = onlySecond ? r.secondBossId : r.bossId;
-  const float x = 6, y = 22, s = 40;
+  const float x = 6, y = 22 + relicRowH(), s = 40;
   auto icon = [&](const std::string& id, float ix, float iy, float size, uint32_t ink) {
     Sprite ic = roomIcon(RoomType::Boss, id);
     if (!ic) return;
@@ -457,7 +445,6 @@ void App::updateMap(const gfx::Input& in) {
     if (!choosing) hud = ID_NONE;
     if (hud == ID_DECK) { openCardList(CardListMode::Deck); mapTouch_ = {}; return; }
     if (hud == ID_RELICS) { relicsOpen_ = true; sel_ = run_->relics.empty() ? -1 : 0; scroll_ = 0; mapTouch_ = {}; return; }
-    if (hud == ID_DEVMENU) { devOpen_ = true; devPage_ = 0; sel_ = -1; scroll_ = 0; mapTouch_ = {}; return; }
     if (hud == ID_PAUSE) { openPause(); return; }
     if (hud == ID_POTIONS) { potionsOpen_ = true; potionAim_ = false; potionSel_ = -1; mapTouch_ = {}; return; }
     mapTouch_ = {};

@@ -148,9 +148,12 @@ void App::drawShop(bool top) {
 
     if (!it || !it->stocked()) {
       if (sel_ < 0) {
+        // A small hint in the corner away from the merchant (the old full-width bar covered him).
         TextStyle ht = ts(F12, col::white, CENTER);
-        widgets::panel("ui/hover_tip", 60, kH - 34, kTop - 120, 26);
-        R().text(kTop / 2, kH - 28, tr("点选商品即可购买", "Tap an item to buy it"), ht);
+        const std::string hint = tr("点选商品即可购买", "Tap an item to buy it");
+        const float hw = R().measure(hint, ht) + 16;
+        widgets::panel("ui/hover_tip", 8, kH - 32, hw, 24);
+        R().text(8 + hw / 2, kH - 27, hint, ht);
       }
       return;
     }
@@ -177,7 +180,7 @@ void App::drawShop(bool top) {
       return;
     }
     // Relic / potion / removal: a panel with the big icon, name, rarity and description.
-    const float px = 10, pw = 232, py = 28;
+    const float px = 10, pw = 232, py = 28 + relicRowH();
     std::string title, sub, desc;
     if (it->kind == ShopItem::RelicItem) {
       const char* rarities[] = {"", tr("初始", "Starter"), tr("普通", "Common"), tr("罕见", "Uncommon"), tr("稀有", "Rare"), tr("商店", "Shop"), tr("事件", "Event"), tr("先古", "Ancient")};
@@ -206,7 +209,7 @@ void App::drawShop(bool top) {
     widgets::panel("ui/hover_tip", px, py, pw, ph);
     const float cx = px + pw / 2;
     gfx::circle(cx, py + 8 + big / 2, big * 0.62f, 0xFFE07030);
-    if (it->kind == ShopItem::RelicItem) drawRelicIcon(it->relic.get(), cx - big / 2, py + 8, big);
+    if (it->kind == ShopItem::RelicItem) spr(R().sprite("relic/" + it->relic->icon), cx - big / 2, py + 8, big, big);  // no counter over the price
     else if (it->kind == ShopItem::PotionItem) drawPotionIcon(it->potion.get(), cx - big / 2, py + 8, big);
     else spr(R().sprite("ui/card_removal"), cx - big / 2, py + 8, big, big);
     TextStyle tt = ts(F16, col::gold, CENTER, pw - 16);
@@ -267,7 +270,7 @@ void App::drawShop(bool top) {
       case ShopItem::RelicItem:
       case ShopItem::PotionItem: {
         float ic = b.w >= 50 ? 40 : kIcon, ix = b.x + (b.w - ic) / 2, iy = b.y + 2;
-        if (s.relic) drawRelicIcon(s.relic.get(), ix, iy, ic);
+        if (s.relic) spr(R().sprite("relic/" + s.relic->icon), ix, iy, ic, ic);
         else if (s.potion) drawPotionIcon(s.potion.get(), ix, iy, ic);
         else gfx::circle(ix + ic / 2, iy + ic / 2, ic * 0.36f, 0xFFFFFF18);
         break;

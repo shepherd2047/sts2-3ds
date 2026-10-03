@@ -81,7 +81,7 @@ bool barScreen(Screen s) {
   }
 }
 
-Layout layout(Run& r, int shownHp, int shownGold, bool timerShown) {
+Layout layout(Run& r, int shownHp, int shownGold, bool timerShown, bool row) {
   Layout L;
   Res& res = R();
   L.hp = num(shownHp) + "/" + num(r.player->maxHp);
@@ -122,8 +122,8 @@ Layout layout(Run& r, int shownHp, int shownGold, bool timerShown) {
     L.timerX = rx;
     rx -= res.measure(L.timer, smallText(col::gray)) + 13;  // text + the timer icon
   }
-  L.stripX = left;
-  L.stripW = std::max(0.f, rx - 5 - left);
+  L.stripX = row ? 3.f : left;  // the relic row under the bar spans the screen; else the middle of the bar
+  L.stripW = row ? kTop - 6.f : std::max(0.f, rx - 5 - left);
   // Relics go between the stats and the right cluster (strip-content coordinates).
   std::vector<Item> right(L.items.end() - 3, L.items.end());
   L.items.resize(L.items.size() - 3);
@@ -157,6 +157,14 @@ bool App::topBarActive() const {
          !run_->deckChoice.active && !mapView_ && !relicsOpen_ && !deckOpen_ && !potionsOpen_ && !pauseOpen_;
 }
 
+float App::relicRowH() const {
+  // Events and Ancients draw their title and art right under the bar: their relics stay in the bar's strip.
+  if (!run_ || !run_->player || run_->relics.empty() || !barScreen(run_->screen) || run_->screen == Screen::Event) return 0;
+  if (settingsOpen_ || devOpen_ || detailOpen() || run_->deckChoice.active || relicsOpen_ || deckOpen_ || potionsOpen_ || pauseOpen_)
+    return 0;
+  return kBarH;
+}
+
 void App::drawTopBar() {
   Run& r = *run_;
   Creature* p = r.player.get();
@@ -166,7 +174,9 @@ void App::drawTopBar() {
   int shownGold = shownGold_ >= 0 ? (int)std::lround(shownGold_) : r.gold;
   const bool timerShown = settings::state().runTimerEnabled || r.screen == Screen::Map || mapView_ || pauseOpen_ ||
                           deckOpen_ || relicsOpen_;
-  Layout L = layout(r, shownHp, shownGold, timerShown);
+  const float rowH = relicRowH();
+  const bool row = rowH > 0;
+  Layout L = layout(r, shownHp, shownGold, timerShown, row);
   const bool active = topBarActive();
   const int n = (int)r.relics.size();
 
@@ -239,17 +249,19 @@ void App::drawTopBar() {
 
   // Relic strip (clipped); "+N" chips over either end while relics are scrolled out that way.
   if (L.stripW > 0 && n > 0) {
-    gfx::pushClip(L.stripX, 0, L.stripW, kBarH);
+    const float ry = row ? kBarH : 0;  // the strip's top: its own row under the bar, or inside it
+    if (row) gfx::rectGradient(0, kBarH, kTop, kBarH, 0x00000090, 0x00000000);  // keeps the icons readable on bright rooms
+    gfx::pushClip(L.stripX, ry, L.stripW, kBarH);
     for (int i = 0; i < n; ++i) {
       float x = L.stripX + i * kRelicPitch - scroll;
       if (x + kRelicPitch < L.stripX || x > L.stripX + L.stripW) continue;
-      drawRelicIcon(r.relics[i].get(), x + 1, 0.5f, kIcon);
+      drawRelicIcon(r.relics[i].get(), x + 1, ry + (row ? 1.5f : 0.5f), kIcon);
     }
     gfx::popClip();
     const float maxScroll = std::max(0.f, n * kRelicPitch - L.stripW);
     auto chip = [&](float x, int count) {
-      gfx::rect(x, 0, kChipW, kBarH - 1, 0x000000E0);
-      R().text(x + kChipW / 2, sty, "+" + num(count), ts(F12, col::gold, CENTER, 0, 0.8f));
+      gfx::rect(x, ry, kChipW, kBarH - 1, 0x000000E0);
+      R().text(x + kChipW / 2, ry + sty, "+" + num(count), ts(F12, col::gold, CENTER, 0, 0.8f));
     };
     if (scroll > 0.5f) chip(L.stripX, std::max(1, (int)((scroll + kChipW) / kRelicPitch)));
     if (scroll < maxScroll - 0.5f)
@@ -268,10 +280,11 @@ void App::drawTopBar() {
   // Focus ring (style::kFocus, pulsing like the widget kit's) inside the bar.
   float pulse = 0.75f + 0.25f * std::sin((float)time_ * 6.2831853f / style::kFocusPulse);
   uint32_t c = (style::kFocus & 0xFFFFFF00u) | (uint32_t)(0xFF * pulse);
-  gfx::rect(fx - 1, 0, fw + 1, 1.5f, c);
-  gfx::rect(fx - 1, kBarH - 2, fw + 1, 1.5f, c);
-  gfx::rect(fx - 1, 0, 1.5f, kBarH - 1, c);
-  gfx::rect(fx + fw - 1.5f, 0, 1.5f, kBarH - 1, c);
+  const float ringY = it.kind == Kind::Relic && row ? kBarH : 0;
+  gfx::rect(fx - 1, ringY, fw + 1, 1.5f, c);
+  gfx::rect(fx - 1, ringY + kBarH - 2, fw + 1, 1.5f, c);
+  gfx::rect(fx - 1, ringY, 1.5f, kBarH - 1, c);
+  gfx::rect(fx + fw - 1.5f, ringY, 1.5f, kBarH - 1, c);
 
   // Its hover tip, under the bar (NHoverTipSet at the control's bottom + 20).
   std::string title, desc, hint = tr("[gold]A[/gold] 打开    [gold]B[/gold] 返回", "[gold]A[/gold] Open    [gold]B[/gold] Back");
@@ -320,7 +333,8 @@ void App::drawTopBar() {
   }
   // Every hint names the way out: B, or L+R (the chord every 3DS has; ZL / ZR on a New 3DS).
   if (size_t b = hint.find("[gold]B[/gold]"); b != std::string::npos) hint.insert(b + 14, " / [gold]L+R[/gold]");
-  widgets::keywordTip(title, desc.empty() ? hint : desc + "\n" + hint, fx + fw / 2, 0, true);
+  widgets::keywordTip(title, desc.empty() ? hint : desc + "\n" + hint, fx + fw / 2,
+                      it.kind == Kind::Relic && row ? kBarH : 0.f, true);
 }
 
 bool App::updateTopBar(const gfx::Input& in) {
@@ -343,7 +357,7 @@ bool App::updateTopBar(const gfx::Input& in) {
     return true;
   }
   int shownHp = shownHp_ >= 0 ? (int)std::lround(shownHp_) : r.player->hp;
-  Layout L = layout(r, shownHp, r.gold, false);
+  Layout L = layout(r, shownHp, r.gold, false, relicRowH() > 0);
   const int m = (int)L.items.size();
   if (sel < 0 || sel >= m || !L.items[sel].focusable) sel = firstFocusable(L, 3) >= 0 ? firstFocusable(L, 3) : firstFocusable(L, 1);
   if (sel < 0) sel = 0;

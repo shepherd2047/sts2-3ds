@@ -60,7 +60,7 @@ constexpr float kMapS = 0.17f;
 constexpr float kMapY0 = 337.f;
 constexpr float kMapBgW = 260.f, kMapBgH = 552.f;  // bg_map.t3t parchment strip (1527x3240 * kMapS)
 constexpr float kMapBgX = (gfx::kTopW - kMapBgW) / 2.f;
-constexpr float kNodeScale = kMapS * 0.8f;  // node icons: ~9 px, as small as on RGDSplus
+constexpr float kNodeScale = kMapS * 1.28f;  // node icons: ~14 px (1.6x the first port, easy to tap)
 constexpr float kBossSize = 352.f * kMapS;
 constexpr float kMapTapSlop = 5.f;       // 12 px of 768 on RGDSplus, rounded up for a stylus
 
@@ -210,5 +210,11 @@ inline float easeOut(float t) { t = 1 - t; return 1 - t * t * t; }
 inline float easeIn(float t) { return t * t; }
 inline float approach(float v, float to, float k, float dt) { return v + (to - v) * (1 - std::exp(-k * dt)); }
 }  // namespace
+
+// detail.cpp: the stacked keyword tips of a card (combat top screen); returns the y below the last tip.
+float drawCardTipColumn(Card* c, float x, float y, float w, const std::function<std::string(Card*)>& desc);
+
+// detail.cpp: the localized card type name (Attack / Skill / ...), for the card face's type plaque.
+std::string cardTypeLabel(sts::CardType t);
 
 }  // namespace ui

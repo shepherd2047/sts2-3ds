@@ -54,10 +54,7 @@ void App::drawReward(bool top) {
     gfx::Texture* bg = R().texture(actTexture(*run_, "bg_"));
     gfx::image(bg, 0, 0, kTop, kH, 0, 0, kTop, kH, 0x000000FF, 0.55f);
     drawTopBar();
-    TextStyle t = ts(F16, col::gold, CENTER);
-    t.scale = 1.6f;
-    R().text(kTop / 2, 60, tr("战斗胜利！", "Victory!"), t);
-    gfx::rect(kTop / 2.f - 70, 84, 140, 2, style::kPanelHi);
+    widgets::title(kTop / 2.f, 40, tr("战斗胜利！", "Victory!"), 0.9f);
     R().text(kTop / 2, 112, n > 0 ? tr("点选下方的奖励，领取后继续", "Tap a reward below to take it, then continue") : tr("没有更多奖励了", "No more rewards"), ts(F16, col::white, CENTER));
     return;
   }

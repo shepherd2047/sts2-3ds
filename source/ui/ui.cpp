@@ -296,7 +296,8 @@ void App::update(const gfx::Input& frameIn, double dt) {
   if (toastT_ > 0) toastT_ -= (float)visualDt;
   updateAchievementToast((float)visualDt);  // M5
   for (auto& f : floats_) f.t += (float)visualDt;
-  floats_.erase(std::remove_if(floats_.begin(), floats_.end(), [](const Float& f) { return f.t > 1.2f; }), floats_.end());
+  hurtT_ += (float)visualDt;
+  floats_.erase(std::remove_if(floats_.begin(), floats_.end(), [](const Float& f) { return f.t > (f.color == col::red ? 2.f : 1.2f); }), floats_.end());
 
   Screen scr = run_->screen;
   if (scr != lastScreen_) {
@@ -415,6 +416,8 @@ void App::consumeEvents() {
     switch (e.kind) {
       case VisualEvent::Damage:
         floats_.push_back({e.who, num(e.amount), col::red, 0, dx});
+        // CreatureCmd.Damage: the player's hurt vignette plays when the hit leaves them at 25% HP or less.
+        if (e.amount > 0 && e.who && e.who->isPlayer && e.who->hp * 4 <= e.who->maxHp) hurtT_ = 0;
         if (e.amount > 0 && e.who && e.who->alive()) trigger(e.who, "Hit", 0);
         break;
       case VisualEvent::Anim:

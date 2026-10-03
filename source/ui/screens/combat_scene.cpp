@@ -713,7 +713,15 @@ void App::drawCombatInspect(bool top) {
   for (int i = 0; i < n; ++i, x += cw + gap) {
     Creature* e = list[i];
     const bool cur = i == inspect_;
-    panel(x, y, cw, ch, cur ? 0x3B6272F0 : 0x22323BE0, cur ? style::kFocus : 0x4F8790FF);
+    if (!cur) gfx::pushAlpha(0.7f);
+    widgets::panel("ui/hover_tip", x, y, cw, ch);
+    if (!cur) gfx::popAlpha();
+    if (cur) {  // the shown creature: the focus colour traced around the plate
+      gfx::rect(x - 1, y - 1, cw + 2, 2, style::kFocus);
+      gfx::rect(x - 1, y + ch - 1, cw + 2, 2, style::kFocus);
+      gfx::rect(x - 1, y - 1, 2, ch + 2, style::kFocus);
+      gfx::rect(x + cw - 1, y - 1, 2, ch + 2, style::kFocus);
+    }
     gfx::pushClip(x + 2, y, cw - 4, ch);
     R().text(x + cw / 2, y + 4, creatureName(*run_, e), ts(F12, cur ? col::gold : col::white, CENTER));
     gfx::popClip();
@@ -726,11 +734,6 @@ void App::drawCombatInspect(bool top) {
       sfx::click();
     }
   }
-  // The shown creature's name and what the pages hold.
-  R().text(kBot / 2, 92, creatureName(*run_, c), ts(F16, col::gold, CENTER, kBot - 16));
-  std::string sub = c->isPlayer ? tr("玩家", "Player") : c == cb->osty ? tr("召唤物", "Summon") : tr("敌人", "Enemy");
-  sub += "  ·  " + num((int)c->powers.size()) + tr(" 个能力", " powers");
-  R().text(kBot / 2, 112, sub, ts(F12, col::gray, CENTER));
   if (inspectPages_ > 1) {
     if (widgets::button(kInsPgUpId, kBot / 2 - 110, 138, 72, style::kButtonH, tr("上一页", "Prev"), widgets::Kind::Secondary, inspectPage_ > 0))
       inspectPage_ = std::max(0, inspectPage_ - 1);
