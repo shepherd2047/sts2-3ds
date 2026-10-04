@@ -542,10 +542,7 @@ void App::drawCombat(bool top) {
     }
     R().text(kBot / 2, 4, handSelectPrompt(cb->choice, minN, maxN), ts(F12, col::white, CENTER, kBot - 16));
 
-    auto flying = [&](Card* c) {
-      for (auto& f : flights_) if (f.card == c) return true;
-      return false;
-    };
+    auto flying = [&](Card* c) { return cardInFlight(c); };
     drawGhosts();
     const bool padOnHand = widgets::usingPad() && widgets::focused() < 0;
     // Left to right (right cards overlap left ones), arriving cards next, the focused card last.
@@ -742,10 +739,7 @@ void App::drawCombat(bool top) {
     ha.lastExhaust = 0;
   }
 
-  auto flying = [&](Card* c) {
-    for (auto& f : flights_) if (f.card == c) return true;
-    return false;
-  };
+  auto flying = [&](Card* c) { return cardInFlight(c); };
   drawGhosts();
   // Fan, left to right so right cards overlap left ones (native order); cards still
   // arriving from the draw pile go on top.
@@ -857,9 +851,7 @@ void App::updateCombat(const gfx::Input& in) {
   clock_ += visualDt;
   if (static const bool demo = getenv("STS_HURT_DEMO") != nullptr; demo && clock_ > 4.f && hurtT_ > 2.f) hurtT_ = 0;  // preview aid
   animateHand(visualDt);
-  for (auto& f : flights_) f.t += visualDt;
-  flights_.erase(std::remove_if(flights_.begin(), flights_.end(), [](const Flight& f) { return f.t > 0.42f; }),
-                 flights_.end());
+  updateFlights(visualDt);
   {
     auto& pf = potionFlights();
     for (auto& f : pf) f.t += visualDt;

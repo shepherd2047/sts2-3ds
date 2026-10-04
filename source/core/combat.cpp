@@ -695,6 +695,7 @@ Task<> tickDownDuration(Power* p) {
 Task<> shuffle(Combat& c) {
   // CardPileCmd.Shuffle: discard + draw, StableShuffle (sort, then Fisher-Yates).
   std::vector<Card*> list = c.discard;
+  const int moved = (int)c.discard.size();
   list.insert(list.end(), c.draw.begin(), c.draw.end());
   std::stable_sort(list.begin(), list.end(), [](Card* a, Card* b) { return a->id < b->id; });
   c.rng("Shuffle").shuffle(list);
@@ -702,7 +703,9 @@ Task<> shuffle(Combat& c) {
   c.discard.clear();
   c.draw = list;
   c.push({VisualEvent::Shuffle, nullptr, (int)list.size()});
-  co_await wait(0.3);
+  // The discard pile's cards leave one after another, min(0.045, 0.8 / n) s apart (Cmd.Wait per card), then
+  // CustomScaledWait(0.2, 0.5): the UI flies them as fire comets meanwhile (ui/card_fly.h, ANIM_DIFF C13).
+  co_await wait(std::min(0.045 * moved, 0.8) + 0.5);
   for (Model* m : c.listeners()) co_await m->afterShuffle();
 }
 

@@ -54,10 +54,18 @@ class App {
     float grabDX = 0, grabDY = 0, originY = 0, x = 0, y = 0, startTx = 0, startTy = 0, lastTx = 0, accum = 0;
     sts::Creature* target = nullptr;
   };
+  // A played card (ANIM_DIFF C1): it eases to the play spot (centre of the top screen) and holds there while it
+  // is in the play pile; then a discarded card becomes a fire comet (card_fly.h) and anything else (exhaust,
+  // power, ...) takes the short shrinking flight to its target (`hold` false, t restarted).
   struct Flight {
     sts::Card* card;
     float t, x0, y0, x1, y1, s0;
+    float a0 = 0;
+    bool hold = true;
+    sts::Creature* target = nullptr;
   };
+  void updateFlights(float dt);
+  bool cardInFlight(const sts::Card* c) const;
   HandSlot handSlot(int n, int i) const;
   int hitHandCard(float tx, float ty);
   void drawArrow(bool top, float fx, float fy, float tx, float ty, bool locked, bool ally);
@@ -403,6 +411,7 @@ class App {
   std::vector<Flight> flights_;
   std::map<sts::Card*, Pose> poses_;
   std::vector<Ghost> ghosts_;
+  std::vector<sts::Card*> lastDiscard_;  // C13: the discard pile last frame, to see a shuffle
   float drawQueue_ = 0;     // stagger for cards entering the hand
   float leaveQueue_ = 0;    // stagger for cards leaving it
   bool aiming_ = false;     // controller: choosing a target for the selected card
