@@ -149,6 +149,10 @@ Soak on macOS 27: ASan hangs at start-up, so it falls back to UBSan + libmalloc 
 3DSGuy/Project_CTR releases, bannertool built from diasurgical/bannertool). Banner art/sound come
 from `python3 tools/build_assets.py --packaging` (run automatically when missing). Test: Azahar → File → Install CIA.
 
+Mac 3DS build in one step: `bash tools/build_3ds_mac.sh` (`--assets` also reruns build_assets): it
+syncs the repo into `~/dev/sts2-3ds-build`, runs make there and copies the 3dsx to the Desktop. Never
+run `make` in the build copy without syncing first: it rebuilds the old source and says "up to date".
+
 At the end of every conversation with the owner, push all ready project
 changes (do not create an empty commit when there are none), then rebuild the
 pushed revision in the ASCII-path copy and copy the new
