@@ -179,6 +179,8 @@ argument for a verbose event log.
 silver). Bake pre-coloured sprites in build_assets (e.g. `ui/hp_fill_<RRGGBB>`) or use blend 0, and
 check 3DS-visible changes in Azahar before handing a build over. UI work in progress and the audit
 backlog: docs/UI_AUDIT.md.
+Animation/detail comparison against the original (drive + record the Steam game, STS_RECORD in the
+preview, film strips): tools/ref/ and docs/ANIM_DIFF.md (findings and status).
 
 On 3DS/Azahar the same keys go in `sdmc:/sts2-debug.txt` (KEY=VALUE lines);
 shots land in `sdmc:/sts2-shots/<name>.bmp`. Emulator timing is real-time, so
