@@ -739,7 +739,7 @@ def bake_treasure_chests(g, packer):
 def add_vfx_art(g, packer, known):
     """F7 light combat VFX (source/ui/vfx.cpp): a handful of tiny white/tintable particle sprites
     from the game's own single-image VFX textures, plus two procedural shapes (arrow, ring). They
-    are composed into one small sheet (104x66, ~27 KB RGBA8) packed as a single atlas entry so all
+    are composed into one small sheet (104x~240, ~100 KB RGBA8, with the block shield's six frames) packed as a single atlas entry so all
     of them share one page (one texture per particle batch); each keeps its own vfx/<name> entry
     pointing into the sheet."""
     if 'vfx/sheet' in known:
@@ -761,6 +761,16 @@ def add_vfx_art(g, packer, known):
             print('  vfx art missing', name, path, e)
             img = Image.new('RGBA', size, (255, 255, 255, 0))
         cells.append((name, fit(img, size)))
+    # CreatureCmd.GainBlock -> vfx/vfx_block.tscn: an NSpriteAnimator of six 209x239 frames at
+    # 15 fps on the creature's centre, at the top screen's 240/1080 scale.
+    for i in range(6):
+        path = f'images/vfx/vfx_block/vfx_block_{i:02d}.png'
+        try:
+            img = g.image(path).convert('RGBA')
+        except Exception as e:
+            print('  vfx art missing', path, e)
+            img = Image.new('RGBA', (46, 53), (255, 255, 255, 0))
+        cells.append((f'vfx/block{i}', fit(img, (46, 53))))
     ss = 4  # procedural shapes are drawn at 4x, then downsampled (anti-aliasing)
     # NPowerAppliedBuff/DebuffVfx arrow: white with a dark rim, tinted per use.
     w, h = 16, 19  # shape designed on a 12x14 grid

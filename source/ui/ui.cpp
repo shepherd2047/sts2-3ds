@@ -429,8 +429,7 @@ void App::consumeEvents() {
       case VisualEvent::Blocked:
         floats_.push_back({e.who, L("gameplay_ui.BLOCKED").find("gameplay_ui") == 0 ? tr("格挡", "Blocked") : L("gameplay_ui.BLOCKED"), col::blue, 0, dx});
         break;
-      case VisualEvent::Block:
-        floats_.push_back({e.who, "+" + num(e.amount), col::blue, 0, dx});
+      case VisualEvent::Block:  // no floating number: CreatureCmd.GainBlock plays only vfx_block (vfxEvent)
         break;
       case VisualEvent::Heal:
         if (e.amount > 0) floats_.push_back({e.who, "+" + num(e.amount), col::green, 0, dx});

@@ -10,11 +10,15 @@ namespace {
 
 constexpr float kPi = 3.14159265f;
 
-// Sprite slots. vfx/* come from add_vfx_art (one sheet on one atlas page); the block shield and
-// the Regent's star reuse the combat HUD's own icons.
-enum Spr : uint8_t { kSlash, kGlow, kRing, kStar, kSpark, kFlame, kArrow, kBubble, kDot, kShield, kUiStar, kSprCount };
-const char* const kNames[kSprCount] = {"vfx/slash", "vfx/glow", "vfx/ring",   "vfx/star", "vfx/spark", "vfx/flame",
-                                       "vfx/arrow", "vfx/bubble", "vfx/dot", "ui/block", "ui/star"};
+// Sprite slots. vfx/* come from add_vfx_art (one sheet on one atlas page, with the six frames of
+// the block shield, vfx_block.tscn); the Regent's star reuses the combat HUD's own icon.
+enum Spr : uint8_t {
+  kSlash, kGlow, kRing, kStar, kSpark, kFlame, kArrow, kBubble, kDot, kBlock0, kBlock1, kBlock2, kBlock3, kBlock4,
+  kBlock5, kUiStar, kSprCount
+};
+const char* const kNames[kSprCount] = {"vfx/slash",  "vfx/glow",   "vfx/ring",   "vfx/star",   "vfx/spark", "vfx/flame",
+                                       "vfx/arrow",  "vfx/bubble", "vfx/dot",    "vfx/block0", "vfx/block1",
+                                       "vfx/block2", "vfx/block3", "vfx/block4", "vfx/block5", "ui/star"};
 
 enum : uint8_t {
   kAdd = 1,      // additive blend (sparks, glows)
@@ -22,6 +26,7 @@ enum : uint8_t {
   kHold = 4,     // full alpha until 60 % of the life, then fade (default: fades from the start)
   kPop = 8,      // no fade-in
   kStretch = 16, // length grows with speed (streaks)
+  kFrames = 32,  // NSpriteAnimator: spr advances one slot per 1/15 s, alpha stays (the frames fade)
 };
 
 struct P {
@@ -168,11 +173,12 @@ void draw() {
     for (int i = 0; i < count; ++i) {
       const P& p = pool[i];
       if (p.delay > 0 || ((p.flags & kAdd) != 0) != additive) continue;
-      const Uv& u = uv[p.spr];
+      const int fr = (p.flags & kFrames) ? (int)(p.t * 15.f) : 0;
+      const Uv& u = uv[p.spr + fr];
       if (!u.tex) continue;
       const float f = p.t / p.life;
       float a = p.alpha * ((p.flags & kPop) ? 1.f : std::min(1.f, f / 0.12f));
-      a *= (p.flags & kHold) ? (f < 0.6f ? 1.f : (1.f - f) / 0.4f) : 1.f - f * f;
+      if (!(p.flags & kFrames)) a *= (p.flags & kHold) ? (f < 0.6f ? 1.f : (1.f - f) / 0.4f) : 1.f - f * f;
       if (a <= 0.004f) continue;
       if (u.tex != cur) {
         flush();
@@ -236,17 +242,11 @@ void blockBroken(float x, float y) {
   }
 }
 
+// CreatureCmd.GainBlock: VfxCmd.PlayOnCreatureCenter(creature, "vfx/vfx_block"), an NSpriteAnimator
+// (six frames at 15 fps, freed after the last: 0.4 s) the size of the creature, the shield swinging in
+// and fading. No floating number (the block badge on the HP bar shows the amount).
 void blockGain(float x, float y) {
-  P& sh = spawn(kShield, x, y, 24, 24, 0.5f, 0xFFFFFF00, kHold | kPop);
-  sh.grow = 1.45f;
-  sh.alpha = 0.9f;
-  ring(x, y, 20, 0.4f, 0x8CC4F000, 2.8f);
-  glow(x, y, 34, 0.3f, 0x5A9EE000, 1.2f);
-  for (int i = 0; i < 4; ++i) {
-    P& p = spawn(kDot, x + rr(-16, 16), y + rr(-4, 12), 4, 4, rr(0.4f, 0.6f), 0xB8E0FF00, kAdd);
-    p.vy = rr(-60, -35);
-    p.delay = rr(0, 0.12f);
-  }
+  spawn(kBlock0, x, y, 46, 53, 6.f / 15.f - 0.001f, 0xFFFFFF00, kPop | kFrames);
 }
 
 void poisonTick(float x, float y, float h) {

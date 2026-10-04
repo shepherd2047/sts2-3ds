@@ -254,18 +254,21 @@ void App::drawCombat(bool top) {
   if (cb->choice.active) inspect_ = -1;  // a choice takes the screens over
 
   // Which card aims where this frame (S09, NTargetManager + NTargetingArrow): the locked creature
-  // shows its reticle; the arrow is red on an enemy, green on the player, and white (the C#
-  // unhighlighted arrow) while the card cannot be played; a card hitting every enemy (or a random
-  // one) marks them all.
+  // shows its reticle; the arrow is red on an enemy and white (the C#
+  // unhighlighted arrow) while the card cannot be played. Only AnyEnemy cards get the arrow
+  // (NMouseCardPlay.TargetSelection: SingleCreatureTargeting for AnyEnemy / AnyAlly); every other
+  // card takes MultiCreatureTargeting: no arrow, the card itself follows the stylus, and once it is
+  // above the play line ShowMultiCreatureTargetingVisuals puts the reticle on what it hits (every
+  // enemy for AllEnemies / RandomEnemy, the player for Self, nothing for None).
   Creature* tgt = nullptr;
-  bool arrow = false, arrowAlly = false, arrowValid = true, markAll = false;
+  bool arrow = false, arrowValid = true, markAll = false;
   float afx = 0, afy = 0;
   if (drag_.down && drag_.moved && drag_.armed && drag_.card) {
     afx = drag_.x + kBotOX;
     afy = drag_.y - kCardH * kDragS / 2 + kBotOY;
     arrowValid = cb->canPlay(drag_.card);
     if (drag_.card->target == TargetType::AnyEnemy && drag_.target) { tgt = drag_.target; arrow = true; }
-    else if (drag_.card->target == TargetType::Self) { tgt = cb->player; arrow = arrowAlly = true; }
+    else if (drag_.card->target == TargetType::Self) tgt = arrowValid ? cb->player : nullptr;  // reticle only
     else if (drag_.card->target == TargetType::AllEnemies || drag_.card->target == TargetType::RandomEnemy) markAll = arrowValid;
   } else if (drag_.down && drag_.moved && drag_.armed && drag_.potion >= 0 && drag_.potion < (int)run_->potions.size() &&
              run_->potions[drag_.potion]) {
@@ -273,8 +276,9 @@ void App::drawCombat(bool top) {
     const TargetType pt = run_->potions[drag_.potion]->target;
     afx = drag_.x + kBotOX;
     afy = drag_.y - kPotionDragSize / 2 + kBotOY;
+    // NPotionHolder.UsePotion: only AnyEnemy potions target; a Self potion is used on its owner.
     if (pt == TargetType::AnyEnemy && drag_.target) { tgt = drag_.target; arrow = true; }
-    else if (pt == TargetType::Self) { tgt = cb->player; arrow = arrowAlly = true; }
+    else if (pt == TargetType::Self) tgt = cb->player;  // reticle only
     else if (pt == TargetType::AllEnemies || pt == TargetType::RandomEnemy) markAll = true;
   } else if (potionsOpen_ && potionAim_ && !alive.empty()) {
     if (target_ >= (int)alive.size()) target_ = 0;
@@ -299,7 +303,7 @@ void App::drawCombat(bool top) {
     if (drag_.down && drag_.moved && drag_.armed && drag_.card) drag_.card->previewTarget = tgt;
     else if (aiming_ && selCard) selCard->previewTarget = tgt;
   }
-  const uint32_t reticleTint = !arrowValid ? 0xB0B0B0C0 : arrowAlly ? 0x9CFFC8FF : 0xFFFFFFFF;
+  const uint32_t reticleTint = !arrowValid ? 0xB0B0B0C0 : 0xFFFFFFFF;
 
   if (top) {
     gfx::Texture* bg = R().texture(actTexture(*run_, "bg_"));
@@ -384,8 +388,9 @@ void App::drawCombat(bool top) {
     }
     {
       // The original lists the keyword tips of the card under the cursor beside it. The raised card is on the
-      // bottom screen, so its tips stack on this one, in the empty sky left of the creatures.
-      Card* tipCard = drag_.down && drag_.moved && drag_.card ? drag_.card : selCard;
+      // bottom screen, so its tips stack on this one, in the empty sky left of the creatures. Picking the
+      // card up removes them (NMouseCardPlay / NControllerCardPlay: NHoverTipSet.Remove on drag / aim).
+      Card* tipCard = (drag_.down && drag_.moved) || aiming_ ? nullptr : selCard;
       if (tipCard && !cb->choice.active && !selecting) {
         const bool orbs = run_->character().orbSlots > 0 || cb->orbCapacity > 0;
         drawCardTipColumn(tipCard, 6, (orbs ? 50.f : 26.f) + relicRowH(), 170, [this](Card* k) { return describe(k); });
@@ -471,7 +476,7 @@ void App::drawCombat(bool top) {
     }
     drawTopBar();
     drawTurnBanner(*cb);
-    if (arrow) drawArrow(true, afx, afy, atx, aty, arrowValid, arrowAlly);
+    if (arrow) drawArrow(true, afx, afy, atx, aty, arrowValid, false);
     drawFlights(true);
     drawPotionFlights(true);
     if (cb->choice.active && combatChooseOne()) {  // S13: the focused offer over the fight
@@ -823,7 +828,7 @@ void App::drawCombat(bool top) {
     Sprite hv = R().sprite("ui/hurt_vignette");
     if (hv) spr(hv, 0, 0, kBot, kH, 0xFFFFFF00u | (uint32_t)(255 * 0.75f * m));
   }
-  if (arrow) drawArrow(false, afx, afy, atx, aty, arrowValid, arrowAlly);
+  if (arrow) drawArrow(false, afx, afy, atx, aty, arrowValid, false);
   drawFlights(false);
   drawPotionFlights(false);
 }

@@ -20,7 +20,7 @@ int live();              // particles alive (tests / debug)
 void hit(float x, float y, int amount, uint32_t rgb);  // NHitSparkVfx + slash streak
 void blocked(float x, float y);                         // NBlockSparkVfx (attack fully blocked)
 void blockBroken(float x, float y);                     // NBlockBrokenVfx
-void blockGain(float x, float y);                       // shield flash when block is gained
+void blockGain(float x, float y);                       // vfx_block: the shield swings in and fades (0.4 s)
 void poisonTick(float x, float y, float h);             // NPoisonImpactVfx bubbles
 void burnTick(float x, float y, float h);               // Burn at the end of the turn
 void heal(float x, float y, float h);                   // green sparkles rising
