@@ -3,7 +3,7 @@
 #   bash tools/build_3ds_mac.sh            # source + 3DS build
 #   bash tools/build_3ds_mac.sh --assets   # also rebuild romfs first (after a pull that touched
 #                                          # tools/build_assets.py or UI strings)
-# devkitPro's make can't handle this repo's path (spaces / non-ASCII), so the build runs in an ASCII
+# devkitPro's make can't handle the space in this repo's path ("sts2 3ds"), so the build runs in a
 # copy at ~/dev/sts2-3ds-build. Running `make` there without syncing first rebuilds the OLD source
 # ("is up to date") — this script always syncs.
 set -e

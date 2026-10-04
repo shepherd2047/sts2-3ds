@@ -77,9 +77,9 @@ assets); devkitPro and Azahar are manual installs it links to.
 - 3DS: devkitPro with `3ds-dev` (Windows: devkitPro installer, or — as on the
   current PC — the dkp pacman repos added to a plain MSYS2 at `C:\msys64`,
   toolchain in `/opt/devkitpro`; macOS: pkg + `sudo dkp-pacman -S 3ds-dev`). devkitPro's make breaks on paths with spaces
-  (and is unreliable with non-ASCII); on the Mac the repo lives under a Chinese
-  path, so 3DS builds are done from an ASCII-path copy (rsync source over to
-  `~/dev/sts2-3ds-build`, excluding build/ and .git).
+  (and is unreliable with non-ASCII); on the Mac the repo lives at
+  `/Users/m/projects/sts2 3ds/sts2-3ds` (a space in the path), so 3DS builds are done from a copy
+  without spaces, `~/dev/sts2-3ds-build` (`bash tools/build_3ds_mac.sh` syncs and builds).
 - Desktop preview: SDL2 + clang/g++. `Makefile.sdl` uses `sdl2-config`
   (macOS: `brew install sdl2`; Windows: MSYS2 UCRT64 with
   `mingw-w64-ucrt-x86_64-{gcc,SDL2,pkgconf}` + `make`, built from the UCRT64
