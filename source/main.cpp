@@ -9,6 +9,7 @@ int main() {
   ui::App app;
   bool ok = app.init();
   audio::init();  // silent no-op when the audio folder is missing
+  gfx::memoryLog("startup");  // 3DS: linear heap left after the UI atlas, fonts and audio
   // Y5: HOME menu / lid closed. The loop itself is blocked in gfx::running() (aptMainLoop) while
   // suspended, and the suspended time never reaches gfx::dt(), so the run timer and the
   // scheduler just stop; only the audio (streamed by a background thread) needs pausing.

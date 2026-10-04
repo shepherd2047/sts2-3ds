@@ -1,7 +1,8 @@
-// 3DS backend on citro2d. Textures are T3T1 files (linear RGBA) swizzled into
-// the GPU's 8x8 Morton tiles at load time.
+// 3DS backend on citro2d. Textures are T3T1 files: GPU-ready tiles from tools/compress_romfs.py
+// (unpacked into texture memory), or linear RGBA swizzled into 8x8 Morton tiles at load time.
 #include <3ds.h>
 #include <citro2d.h>
+#include <malloc.h>
 #include <sys/stat.h>
 
 #include <cstdio>
@@ -13,6 +14,24 @@
 #include "../core/safe_file.h"
 #include "../gfx/gfx.h"
 #include "mesh_shbin.h"
+
+// Memory split (New 3DS only). libctru's __system_allocateHeaps (2.x) takes what the process may
+// still map (124MB app memory minus code/stack: ~120MB for the CIA with SystemModeExt 124MB; a
+// 3dsx gets whatever its hbmenu host has) and, left at the defaults, caps the linear heap at
+// 32MB and gives the rest to the main heap. All textures live in the linear heap, and the
+// lossless formats need far more than 32MB (UI atlas pages alone: 12 x 4MB RGBA8). Fixing the
+// main heap size instead of the linear one makes libctru hand everything else to the linear heap
+// (linear = available - heap), so a smaller memory mode still starts (only with less texture
+// memory), whereas a fixed linear size larger than what is free there makes libctru svcBreak at
+// startup. Measured in Azahar (New 3DS, 3dsx, 2026-10): ~120MB available; the main heap peaked at
+// 4.4MB in the Kaiser Crab boss fight, while the linear heap held ~56MB after boot (12 UI atlas
+// pages = 48MB) plus ~37MB in that fight (ROCKET + CRUSHER = 8 Spine pages, the largest pair).
+// With a 40MB heap the second claw did not load; 24MB left 2MB free with the Ironclad (1.8MB
+// of Spine pages; Necrobinder has 4.3MB). 16MB (still 3.6x the measured peak) gives linear
+// ~103MB. gfx::memoryLog prints both to re-check.
+extern "C" {
+u32 __ctru_heap_size = 16 * 1024 * 1024;
+}
 
 namespace gfx {
 
@@ -456,8 +475,26 @@ bool unpackGpuData(const u8* in, size_t inSize, u8* out, size_t outSize) {
 }
 }  // namespace
 
-// T3T1 fmt byte: 0 = RGBA8 (linear, swizzled here), 1 = ETC1A4, 2 = ETC1, 3 = RGBA4444 (tools/compress_romfs.py;
-// the GPU formats are stored ready to upload).
+void memoryLog(const char* where) {
+  struct mallinfo mi = mallinfo();
+  char line[256];
+  snprintf(line, sizeof line, "mem %s: linear free %lu KB of %lu KB, heap used %lu KB (peak %lu) of %lu KB\n", where,
+           (unsigned long)(linearSpaceFree() >> 10), (unsigned long)(envGetLinearHeapSize() >> 10),
+           (unsigned long)((u32)mi.uordblks >> 10), (unsigned long)((u32)mi.arena >> 10),
+           (unsigned long)(envGetHeapSize() >> 10));
+  printf("%s", line);
+  if (!getenv("STS_MEM_LOG")) return;
+  if (FILE* f = fopen("sdmc:/sts2-mem.txt", "a")) {
+    fputs(line, f);
+    fclose(f);
+  }
+}
+
+// T3T1 fmt byte (tools/compress_romfs.py): 0 = RGBA8 linear (swizzled here), then GPU-ready tiles:
+// 1 = ETC1A4, 2 = ETC1, 3 = RGBA4444, 4 = RGBA8, 5 = RGB8, 6 = A8 uploaded as LA8 with L = 255.
+// tex3ds -r writes the PICA's byte order (RGBA8: A B G R, RGB8: B G R, LA8: A L) and tile rows
+// top-down like the fmt 0 swizzle below, so fmt 4 and fmt 0 give identical textures
+// (test/compress_romfs_test.py checks that).
 Texture* loadTexture(const std::string& path) {
   std::string data;
   if (!readFile(path, data) || data.size() < 12 || memcmp(data.data(), "T3T1", 4) != 0) return nullptr;
@@ -468,18 +505,29 @@ Texture* loadTexture(const std::string& path) {
   auto* t = new Texture{};
   t->w = w;
   t->h = h;
-  static const GPU_TEXCOLOR kFormats[] = {GPU_RGBA8, GPU_ETC1A4, GPU_ETC1, GPU_RGBA4};
-  if (fmt > 3 || !C3D_TexInit(&t->tex, w, h, kFormats[fmt])) {
+  static const GPU_TEXCOLOR kFormats[] = {GPU_RGBA8, GPU_ETC1A4, GPU_ETC1, GPU_RGBA4, GPU_RGBA8, GPU_RGB8, GPU_LA8};
+  if (fmt >= sizeof kFormats / sizeof kFormats[0] || !C3D_TexInit(&t->tex, w, h, kFormats[fmt])) {
+    memoryLog(("no texture for " + path).c_str());  // usually: linear heap full
     delete t;
     return nullptr;
   }
   const u8* src = (const u8*)data.data() + 12;
   if (fmt != 0) {
-    if (!unpackGpuData(src, data.size() - 12, (u8*)t->tex.data, t->tex.size)) {
+    u8* out = (u8*)t->tex.data;
+    // fmt 6: the A8 tiles go into the second half of the LA8 texture, then spread forwards into
+    // (A, L = 255) pairs; pair i overwrites bytes 2i, 2i + 1 < n + i + 1, all already read.
+    const size_t n = fmt == 6 ? t->tex.size / 2 : t->tex.size;
+    if (!unpackGpuData(src, data.size() - 12, out + (t->tex.size - n), n)) {
       C3D_TexDelete(&t->tex);
       delete t;
       return nullptr;
     }
+    if (fmt == 6)
+      for (size_t i = 0; i < n; ++i) {
+        u8 a = out[n + i];
+        out[2 * i] = a;
+        out[2 * i + 1] = 0xFF;
+      }
     C3D_TexFlush(&t->tex);
     C3D_TexSetFilter(&t->tex, GPU_LINEAR, GPU_LINEAR);
     C3D_TexSetWrap(&t->tex, GPU_CLAMP_TO_EDGE, GPU_CLAMP_TO_EDGE);

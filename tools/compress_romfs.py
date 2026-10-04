@@ -1,14 +1,22 @@
 #!/usr/bin/env python3
-"""Make romfs_3ds/ (what the 3DS build packs) from romfs/ (lossless, used by the preview).
+"""Make romfs_3ds/ (what the 3DS build packs) from romfs/ (RGBA8, used by the preview).
 
-Every RGBA8 .t3t is re-encoded with devkitPro's tex3ds into a GPU-native format so the
-3DS uses 1/4 (ETC1A4), 1/8 (ETC1, opaque images) or 1/2 (RGBA4444) of the memory and
-romfs size. Container stays T3T1: u16 w, u16 h, u8 fmt, 3 pad, then the GPU data with tex3ds'
-4-byte compression header (0x00 raw, 0x11 LZ11) that the loader unpacks.
-    fmt 0 = RGBA8 (linear, swizzled by the loader), 1 = ETC1A4, 2 = ETC1, 3 = RGBA4444
+Every RGBA8 .t3t is re-encoded with devkitPro's tex3ds into the GPU-native layout (8x8 Morton
+tiles, PICA byte order) so the 3DS loader only unpacks it. Lossless by default (New 3DS only,
+124MB); the old blurry ETC rules remain for the prefixes listed in LOSSY:
+    font/ pages          -> fmt 6: A8 on disk, uploaded as LA8 with L = 255 (2 B/px in memory)
+    fully opaque images  -> fmt 5: RGB8 (3 B/px)
+    everything else      -> fmt 4: RGBA8, pre-tiled (4 B/px)
+Container stays T3T1: u16 w, u16 h, u8 fmt, 3 pad, then the GPU data with tex3ds' 4-byte
+compression header (0x00 raw, 0x11 LZ11) that the loader unpacks.
+    fmt 0 = RGBA8 (linear, swizzled by the loader; what build_assets writes), 1 = ETC1A4,
+        2 = ETC1, 3 = RGBA4444, 4 = RGBA8 tiled, 5 = RGB8 tiled, 6 = A8 tiled (-> GPU LA8)
+tex3ds writes RGB 0 into fully transparent texels (every format); build_assets' pages already
+hold black in ~94% of those, so this changes nothing visible.
 
-Only files newer than their romfs_3ds copy are converted, so rerun it after
+Only files whose source bytes (or RULES_VERSION) changed are converted, so rerun it after
 build_assets.py (the Makefile does). Other files are copied unchanged.
+Usage: compress_romfs.py [SRC DST]   (default romfs/ -> romfs_3ds/; cache in DST.hashes.json)
 """
 import os
 import json
@@ -27,10 +35,26 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, 'romfs')
 DST = os.path.join(ROOT, 'romfs_3ds')
 
-# Font glyphs are thin white strokes: ETC1 blocks smear them, so they use 4444.
-KEEP_RGBA8 = ()
-RGBA4_PREFIXES = ('font/',)
-FMT_ETC1A4, FMT_ETC1, FMT_RGBA4 = 1, 2, 3
+# Part of every texture's cache key: bump it whenever the rules below change, so the next run
+# converts everything again (no need to delete romfs_3ds.hashes.json by hand).
+RULES_VERSION = 2
+
+KEEP_RGBA8 = ()  # copied as fmt 0 (linear RGBA8, swizzled by the loader)
+FONT_PREFIXES = ('font/',)
+# Lossy fallback if linear memory runs short: textures under these prefixes get the old rules
+# (ETC1 when opaque = 1/8 of RGBA8, else ETC1A4 = 1/4), e.g. ('spine/',) or ('gfx/bg_',).
+LOSSY = ()
+FMT_ETC1A4, FMT_ETC1, FMT_RGBA4, FMT_RGBA8, FMT_RGB8, FMT_A8 = 1, 2, 3, 4, 5, 6
+TEX3DS_NAME = {FMT_ETC1A4: 'etc1a4', FMT_ETC1: 'etc1', FMT_RGBA4: 'rgba4',
+               FMT_RGBA8: 'rgba8', FMT_RGB8: 'rgb8', FMT_A8: 'a8'}
+
+
+def pick_format(rel, opaque):
+    if rel.startswith(LOSSY):
+        return FMT_ETC1 if opaque else FMT_ETC1A4
+    if rel.startswith(FONT_PREFIXES):
+        return FMT_A8  # white glyphs: only alpha is stored, the loader sets L = 255
+    return FMT_RGB8 if opaque else FMT_RGBA8
 
 
 def find_tex3ds():
@@ -82,26 +106,21 @@ def bleed(img, rounds=6):
     return Image.fromarray(a, 'RGBA')
 
 
-def convert(tex3ds, rel):
-    src = os.path.join(SRC, rel)
-    dst = os.path.join(DST, rel)
+def convert(tex3ds, rel, src_root=SRC, dst_root=DST):
+    src = os.path.join(src_root, rel)
+    dst = os.path.join(dst_root, rel)
     img = read_t3t(src)
     if img is None or rel in KEEP_RGBA8:
         shutil.copyfile(src, dst)
         return rel, os.path.getsize(src), os.path.getsize(dst)
     opaque = int(np.asarray(img)[..., 3].min()) == 255
-    if rel.startswith(RGBA4_PREFIXES):
-        fmt, name = FMT_RGBA4, 'rgba4'
-    elif opaque:
-        fmt, name = FMT_ETC1, 'etc1'
-    else:
-        fmt, name = FMT_ETC1A4, 'etc1a4'
-    if fmt != FMT_RGBA4:
+    fmt = pick_format(rel, opaque)
+    if fmt in (FMT_ETC1, FMT_ETC1A4):
         img = bleed(img)
     with tempfile.TemporaryDirectory() as tmp:
         png, raw = os.path.join(tmp, 'i.png'), os.path.join(tmp, 'o.bin')
         img.save(png)
-        r = subprocess.run([tex3ds, '-f', name, '-q', 'high', '-z', 'lz11', '-r', '-o', raw, png],
+        r = subprocess.run([tex3ds, '-f', TEX3DS_NAME[fmt], '-q', 'high', '-z', 'lz11', '-r', '-o', raw, png],
                            capture_output=True, text=True)
         if r.returncode != 0:
             sys.exit(f'tex3ds failed on {rel}: {r.stderr}')
@@ -112,55 +131,62 @@ def convert(tex3ds, rel):
     return rel, os.path.getsize(src), os.path.getsize(dst)
 
 
-HASHES = os.path.join(os.path.dirname(DST), 'romfs_3ds.hashes.json')
-
-
 def sha(path):
     with open(path, 'rb') as f:
         return hashlib.sha256(f.read()).hexdigest()
 
 
-def main():
+def cache_key(rel, path):
+    return f'r{RULES_VERSION}:{sha(path)}' if rel.endswith('.t3t') else sha(path)
+
+
+def main(src_root=SRC, dst_root=DST):
     tex3ds = find_tex3ds()
+    hashes_path = dst_root.rstrip('/\\') + '.hashes.json'  # romfs_3ds.hashes.json
     # Up-to-date check by content hash: build_assets rewrites every .t3t (new mtimes, same bytes), and
     # re-encoding all of them with tex3ds took minutes. Without a recorded hash, fall back to mtime.
     try:
-        with open(HASHES) as f:
+        with open(hashes_path) as f:
             hashes = json.load(f)
     except (OSError, ValueError):
         hashes = {}
     jobs, keep, cur = [], set(), {}
-    for dp, _, files in os.walk(SRC):
+    for dp, _, files in os.walk(src_root):
         for fn in files:
-            rel = os.path.relpath(os.path.join(dp, fn), SRC).replace(os.sep, '/')
+            rel = os.path.relpath(os.path.join(dp, fn), src_root).replace(os.sep, '/')
             keep.add(rel)
-            s, d = os.path.join(SRC, rel), os.path.join(DST, rel)
+            s, d = os.path.join(src_root, rel), os.path.join(dst_root, rel)
             os.makedirs(os.path.dirname(d), exist_ok=True)
-            cur[rel] = sha(s)
+            cur[rel] = cache_key(rel, s)
             if os.path.exists(d) and (hashes.get(rel) == cur[rel] if rel in hashes
                                       else os.path.getmtime(d) >= os.path.getmtime(s)):
                 continue
             jobs.append(rel)
     # drop files that no longer exist in romfs/
-    for dp, _, files in os.walk(DST):
+    for dp, _, files in os.walk(dst_root):
         for fn in files:
-            rel = os.path.relpath(os.path.join(dp, fn), DST).replace(os.sep, '/')
+            rel = os.path.relpath(os.path.join(dp, fn), dst_root).replace(os.sep, '/')
             if rel not in keep:
                 os.remove(os.path.join(dp, fn))
     tex = [j for j in jobs if j.endswith('.t3t')]
     for j in jobs:
         if j not in tex:
-            shutil.copyfile(os.path.join(SRC, j), os.path.join(DST, j))
+            shutil.copyfile(os.path.join(src_root, j), os.path.join(dst_root, j))
     # 3 workers: each tex3ds runs ~2 threads, and the Mac has 8 GB (more only swaps).
     with ThreadPoolExecutor(max_workers=min(3, os.cpu_count() or 3)) as ex:
-        for rel, a, b in ex.map(lambda j: convert(tex3ds, j), tex):
+        for rel, a, b in ex.map(lambda j: convert(tex3ds, j, src_root, dst_root), tex):
             print(f'{rel}: {a // 1024} KB -> {b // 1024} KB')
-    with open(HASHES + '.tmp', 'w') as f:
+    with open(hashes_path + '.tmp', 'w', newline='\n') as f:
         json.dump(cur, f)
-    os.replace(HASHES + '.tmp', HASHES)
-    total = sum(os.path.getsize(os.path.join(dp, f)) for dp, _, fs in os.walk(DST) for f in fs)
+    os.replace(hashes_path + '.tmp', hashes_path)
+    total = sum(os.path.getsize(os.path.join(dp, f)) for dp, _, fs in os.walk(dst_root) for f in fs)
     print(f'romfs_3ds: {total / 1048576:.1f} MB ({len(tex)} textures converted)')
 
 
 if __name__ == '__main__':
-    main()
+    if len(sys.argv) == 3:
+        main(os.path.abspath(sys.argv[1]), os.path.abspath(sys.argv[2]))
+    elif len(sys.argv) == 1:
+        main()
+    else:
+        sys.exit('usage: compress_romfs.py [SRC DST]')

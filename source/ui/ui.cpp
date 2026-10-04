@@ -324,8 +324,19 @@ void App::update(const gfx::Input& frameIn, double dt) {
     if (scr == Screen::Title) hasSave_ = hasSave();
   }
   updateActTitle((float)visualDt);
+  // 3DS texture memory: logged one update after a fight starts / a new act begins, so the textures
+  // the first frame drew (monster Spine pages, act backgrounds) are already loaded.
+  static const char* memLogAt = nullptr;
+  static int memLogAct = -1;
+  if (memLogAt) gfx::memoryLog(memLogAt);
+  memLogAt = nullptr;
+  if (run_->actIndex != memLogAct) {
+    memLogAct = run_->actIndex;
+    memLogAt = "act";
+  }
   if (run_->combat.get() != lastCombat_) {
     lastCombat_ = run_->combat.get();
+    if (lastCombat_) memLogAt = "combat";
     visuals_.clear();
     // Only the player stays cached across fights; each monster's Spine pages
     // are a few MB of linear memory on the 3DS.
