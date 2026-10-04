@@ -164,7 +164,7 @@ void App::drawCard(Card* c, float x, float y, float s, bool dim, bool desc, bool
   if (dim) gfx::rect(x + 1 * s, y + 1 * s, 118 * s, 167 * s, 0x00000080);  // unplayable / unpickable: darkened
   if (desc) {
     TextStyle dt = ts(F12, dim ? col::gray : col::white, CENTER, 104 * s);
-    dt.scale = s >= 0.95f ? 1.f : s < 0.6f ? std::max(0.5f, s * 1.15f) : std::max(0.75f, s);  // grid minis: a texture of tiny text, as on the real card
+    dt.scale = s >= 0.95f ? 1.f : s < 0.6f ? std::max(0.5f, s * 1.35f) : std::max(0.75f, s);  // grid minis: a texture of tiny text, as on the real card
     dt.maxWidth = 104 * s;
     float dh;
     std::string d = unseen ? L("card_library.UNKNOWN.description") : describe(c);

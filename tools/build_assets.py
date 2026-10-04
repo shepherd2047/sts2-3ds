@@ -1582,10 +1582,14 @@ def font_cmap(path):
 
 
 def build_font(chars, font_path, prefix, fallback=None):
-    """<prefix>_<size index>.t3t (one page per size: 12 and 16 px) + <prefix>.txt. With a fallback
+    """<prefix>_<size index>.t3t (one page per size) + <prefix>.txt. With a fallback
     font, characters the primary font does not have (CJK in the English page) are drawn with it,
-    baseline-aligned to the primary font."""
-    sizes = [12, 16]
+    baseline-aligned to the primary font.
+
+    Index 0/1 are the F12/F16 styles the layout measures with; 2.. are smaller pixel sizes the
+    runtime draws scaled text with (hand-card descriptions are ~7 px: a 12 px glyph minified that
+    far smears on the 3DS, which has no mipmaps)."""
+    sizes = [12, 16, 7, 8, 9, 10]
     page_size = 1024
     lines = []
     cmap = font_cmap(font_path) if fallback else None

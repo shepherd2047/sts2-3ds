@@ -106,8 +106,14 @@ class Res {
   std::unordered_map<std::string, Sprite> sprites_;
   std::map<std::string, gfx::Texture*> textures_;
   std::map<std::string, std::unique_ptr<spine::SkeletonData>> skeletons_;
-  gfx::Texture* fontTex_[2] = {nullptr, nullptr};  // per size
-  Font fonts_[2];
+  // Glyph pages per baked size: 0 = F12 and 1 = F16 (the layout metrics), 2.. = smaller pixel sizes
+  // that text() draws with when a scaled style lands near them (a 12 px glyph minified to 7 px
+  // smears into a blur on the 3DS: no mipmaps).
+  static constexpr int kFontPages = 6;
+  gfx::Texture* fontTex_[kFontPages] = {};
+  Font fonts_[kFontPages];
+  void freeFonts();
+  int renderFont(FontSize f, float scale) const;
   std::unordered_map<std::string, std::string> strings_;
   std::string missing_;
   int lang_ = 0;

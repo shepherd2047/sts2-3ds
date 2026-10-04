@@ -80,9 +80,10 @@ bool Res::loadText(int lang, const std::function<void(float)>& step) {
   lang = lang_;
   // One glyph page per size (<prefix>_<index>.t3t); only the active language's pages are loaded.
   const std::string prefix = lang == 1 ? "font/eng" : "font/font";
-  for (int i = 0; i < 2; ++i) {
+  for (int i = 0; i < kFontPages; ++i) {
+    // The small sizes are optional (an older romfs has only 12 and 16 px): text() then scales F12.
     fontTex_[i] = gfx::loadTexture(prefix + "_" + std::to_string(i) + ".t3t");
-    step(1);
+    if (i < 2) step(1);
   }
   if (!fontTex_[1]) fontTex_[1] = fontTex_[0];
   if (!gfx::readFile(prefix == "font/eng" ? "font/eng.txt" : "font/font.txt", data)) return false;
@@ -93,6 +94,7 @@ bool Res::loadText(int lang, const std::function<void(float)>& step) {
       if (tag == "size") {
         int idx, px, lh, asc;
         in >> idx >> px >> lh >> asc;
+        if (idx < 0 || idx >= kFontPages) continue;
         fonts_[idx].px = px;
         fonts_[idx].lineHeight = (float)lh;
         fonts_[idx].ascent = (float)asc;
@@ -101,7 +103,7 @@ bool Res::loadText(int lang, const std::function<void(float)>& step) {
         uint32_t cp;
         Glyph g;
         in >> idx >> cp >> g.x >> g.y >> g.w >> g.h >> g.ox >> g.oy >> g.adv;
-        fonts_[idx].glyphs[cp] = g;
+        if (idx >= 0 && idx < kFontPages) fonts_[idx].glyphs[cp] = g;
       }
     }
   }
@@ -134,23 +136,25 @@ bool Res::loadText(int lang, const std::function<void(float)>& step) {
   return fontTex_[0] != nullptr;
 }
 
-bool Res::setLanguage(int lang) {
-  if (lang == lang_ && fontTex_[0]) return true;
-  gfx::Texture* old[2] = {fontTex_[0], fontTex_[1]};
-  for (int i = 0; i < 2; ++i) {
+void Res::freeFonts() {
+  for (int i = 0; i < kFontPages; ++i) {
+    bool shared = false;
+    for (int j = 0; j < i; ++j) shared |= fontTex_[j] == fontTex_[i];
+    if (fontTex_[i] && !shared) gfx::freeTexture(fontTex_[i]);
+  }
+  for (int i = 0; i < kFontPages; ++i) {
     fontTex_[i] = nullptr;
     fonts_[i] = Font{};
   }
-  if (old[0]) gfx::freeTexture(old[0]);
-  if (old[1] && old[1] != old[0]) gfx::freeTexture(old[1]);
+}
+
+bool Res::setLanguage(int lang) {
+  if (lang == lang_ && fontTex_[0]) return true;
+  freeFonts();
   strings_.clear();
   bool ok = loadText(lang, [](float) {});
   if (!ok && lang != 0) {  // missing English files: back to Chinese rather than no text at all
-    for (int i = 0; i < 2; ++i) {
-      if (fontTex_[i] && (i == 0 || fontTex_[i] != fontTex_[0])) gfx::freeTexture(fontTex_[i]);
-      fontTex_[i] = nullptr;
-      fonts_[i] = Font{};
-    }
+    freeFonts();
     strings_.clear();
     ok = loadText(0, [](float) {});
   }
@@ -368,8 +372,28 @@ float Res::measure(const std::string& s, const TextStyle& st, float* outHeight) 
   return w * st.scale;
 }
 
+int Res::renderFont(FontSize size, float scale) const {
+  // The baked size closest (in ratio) to the drawn pixel size; drawing within ~10 % of it is
+  // snapped to 1:1 by text(). Ties prefer the larger size (minifying beats magnifying).
+  const float target = fonts_[size].px * scale;
+  int best = size;
+  float bestErr = 1e9f;
+  for (int i = 0; i < kFontPages; ++i) {
+    if (!fontTex_[i] || fonts_[i].glyphs.empty()) continue;
+    float err = std::fabs(std::log(target / fonts_[i].px));
+    if (err < bestErr - 1e-4f || (err < bestErr + 1e-4f && fonts_[i].px > fonts_[best].px)) {
+      bestErr = err;
+      best = i;
+    }
+  }
+  return best;
+}
+
 float Res::text(float x, float y, const std::string& s, const TextStyle& st) {
   const Font& f = fonts_[st.size];
+  const Font* rf = &fonts_[renderFont(st.size, st.scale)];
+  float rs = f.px * st.scale / rf->px;
+  if (std::fabs(rs - 1.f) < 0.1f) rs = 1.f;
   auto lines = layout(s, st);
   float lh = f.lineHeight * st.lineGap * st.scale;
   float cy = y;
@@ -391,25 +415,34 @@ float Res::text(float x, float y, const std::string& s, const TextStyle& st) {
       }
       auto it = f.glyphs.find(cp);
       if (it == f.glyphs.end()) { cx += f.px * 0.5f * st.scale; continue; }
-      const Glyph& g = it->second;
-      if (g.w > 0) {
+      // Layout advances come from the style's own size; the glyph image from the baked size nearest
+      // the on-screen pixel size, baseline-aligned.
+      const Glyph* g = &it->second;
+      const Font* gf = &f;
+      if (rf != &f) {
+        auto rit = rf->glyphs.find(cp);
+        if (rit != rf->glyphs.end()) { g = &rit->second; gf = rf; }
+      }
+      float gs = gf == &f ? st.scale : rs;
+      if (g->w > 0) {
         // Snap each glyph to whole pixels: font pages are sampled with linear filtering, so a glyph
         // at a fractional position smears over two pixels and its drop shadow smears with it, which
         // reads as ghosted text on the 3DS (the SDL preview hid it). At scale 1 this is texel-exact.
-        float gx = std::floor(cx + g.ox * st.scale + 0.5f), gy = std::floor(cy + g.oy * st.scale + 0.5f);
+        float baseline = cy + f.ascent * st.scale;
+        float gx = std::floor(cx + g->ox * gs + 0.5f), gy = std::floor(baseline + (g->oy - gf->ascent) * gs + 0.5f);
+        gfx::Texture* tex = fontTex_[gf - fonts_];
         if (st.outline) {
           const float o = st.scale;
           const float offs[4][2] = {{-o, 0}, {o, 0}, {0, -o}, {0, o}};
           for (auto& d : offs)
-            gfx::image(fontTex_[st.size], g.x, g.y, g.w, g.h, gx + d[0], gy + d[1], g.w * st.scale, g.h * st.scale,
-                       st.outline, 1.f);
+            gfx::image(tex, g->x, g->y, g->w, g->h, gx + d[0], gy + d[1], g->w * gs, g->h * gs, st.outline, 1.f);
         }
         if (st.shadow)
-          gfx::image(fontTex_[st.size], g.x, g.y, g.w, g.h, gx + st.shadowDx * st.scale, gy + st.shadowDy * st.scale,
-                     g.w * st.scale, g.h * st.scale, st.shadowColor, 1.f);
-        gfx::image(fontTex_[st.size], g.x, g.y, g.w, g.h, gx, gy, g.w * st.scale, g.h * st.scale, color, 1.f);
+          gfx::image(tex, g->x, g->y, g->w, g->h, gx + st.shadowDx * st.scale, gy + st.shadowDy * st.scale,
+                     g->w * gs, g->h * gs, st.shadowColor, 1.f);
+        gfx::image(tex, g->x, g->y, g->w, g->h, gx, gy, g->w * gs, g->h * gs, color, 1.f);
       }
-      cx += g.adv * st.scale;
+      cx += it->second.adv * st.scale;
     }
     cy += lh;
   }
