@@ -49,6 +49,11 @@ bool scriptHeld = false;
 int heldX = 0, heldY = 0;
 std::vector<Scripted> script;
 std::vector<std::pair<int, std::string>> shots;  // STS_SHOTS="120:a.bmp,300:b.bmp"
+// STS_RECORD="from-to:out.mkv" pipes frames from..to (inclusive) to ffmpeg at 60 fps, for the
+// animation comparison against the original (tools/ref). With STS_FIXED_STEP, frame f is f/60 s.
+int recFrom = -1, recTo = -1;
+std::string recPath;
+FILE* recPipe = nullptr;
 
 // Button names for STS_SCRIPT; "L+R" (any names joined by '+') presses them in the same frame.
 uint32_t scriptButtons(const std::string& keys) {
@@ -99,6 +104,42 @@ void parseScript() {
       size_t c = item.find(':');
       if (c != std::string::npos) shots.push_back({atoi(item.c_str()), item.substr(c + 1)});
     }
+  }
+  if (const char* s = getenv("STS_RECORD")) {
+    char path[512] = {0};
+    if (sscanf(s, "%d-%d:%511s", &recFrom, &recTo, path) == 3) recPath = path;
+  }
+}
+
+void recordFrame() {
+  if (recPath.empty() || frameCount < recFrom || frameCount > recTo) return;
+  int w, h;
+  SDL_GetRendererOutputSize(ren, &w, &h);
+  if (!recPipe) {
+    char cmd[1024];
+    snprintf(cmd, sizeof cmd,
+             "ffmpeg -hide_banner -loglevel error -y -f rawvideo -pixel_format rgba -video_size %dx%d "
+             "-framerate 60 -i - -c:v libx264 -preset ultrafast -crf 12 -pix_fmt yuv444p \"%s\"",
+             w, h, recPath.c_str());
+#ifdef _WIN32
+    recPipe = _popen(cmd, "wb");
+#else
+    recPipe = popen(cmd, "w");
+#endif
+    if (!recPipe) { recPath.clear(); return; }
+  }
+  std::vector<uint8_t> px((size_t)w * h * 4);
+  SDL_RenderSetClipRect(ren, nullptr);
+  SDL_RenderReadPixels(ren, nullptr, SDL_PIXELFORMAT_ABGR8888, px.data(), w * 4);
+  fwrite(px.data(), 1, px.size(), recPipe);
+  if (frameCount == recTo) {
+#ifdef _WIN32
+    _pclose(recPipe);
+#else
+    pclose(recPipe);
+#endif
+    recPipe = nullptr;
+    recPath.clear();
   }
 }
 
@@ -245,10 +286,11 @@ void endFrame() {
     SDL_SaveBMP(surf, shotPath.c_str());
     SDL_FreeSurface(surf);
   }
+  recordFrame();
   SDL_RenderPresent(ren);
-  // Scripted runs (STS_SHOTS) end after the last screenshot.
-  if (!shots.empty() && !getenv("STS_KEEP_OPEN")) {
-    int last = 0;
+  // Scripted runs (STS_SHOTS / STS_RECORD) end after the last screenshot or recorded frame.
+  if ((!shots.empty() || recTo >= 0) && !getenv("STS_KEEP_OPEN")) {
+    int last = recTo;
     for (auto& sh : shots) last = std::max(last, sh.first);
     if (frameCount > last) quit = true;
   }
