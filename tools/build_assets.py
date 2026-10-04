@@ -195,6 +195,23 @@ def fit(img, size):
     return img.resize(size, Image.LANCZOS)
 
 
+def cover(img, size, focus=(0.5, 0.5)):
+    """Scale `img` to cover `size` (keep aspect) and crop the overflow. `focus` is the point of
+    the image (0..1 of its width / height) kept as close to the centre as the crop allows."""
+    W, H = size
+    s = max(W / img.width, H / img.height)
+    sw, sh = max(W, round(img.width * s)), max(H, round(img.height * s))
+    img = img.resize((sw, sh), Image.LANCZOS)
+    x = min(max(0, round(focus[0] * sw - W / 2)), sw - W)
+    y = min(max(0, round(focus[1] * sh - H / 2)), sh - H)
+    return img.crop((x, y, x + W, y + H))
+
+
+# Event art crop focus (fraction of the image), for wide images whose subject is off-centre.
+# Default: the centre. Tune per event after looking at build/preview_event_<KEY>.png (--preview).
+EVENT_ART_FOCUS = {}
+
+
 def fit_height(img, h):
     return img.resize((max(1, round(img.width * h / img.height)), h), Image.LANCZOS)
 
@@ -1230,12 +1247,21 @@ def build(args):
         img = a.sprite(f'images/atlases/potion_atlas.sprites/{key.lower()}.tres')
         packer.add('potion/' + key, fit(img, (48, 48)))
         packer.add('potion_s/' + key, fit(img, (20, 20)))  # the combat belt's 20 px bottles, baked crisp
-    for key in EVENTS:  # event art for the top screen (RGDSplus U21)
+    # Event art: full-bleed behind the event page (as in the original), one texture per event
+    # (gfx/event_<KEY>.t3t, loaded only while that event is open; not in the resident atlas).
+    # Cover-cropped to the top screen's 5:3 on a 512x256 canvas like the bg_* rooms. Events
+    # without art (DARV, FAKE_MERCHANT, NEOW today) get no file: the UI falls back to the room.
+    for key in EVENTS:
         path = f'images/events/{key.lower()}.png'
-        if path + '.import' in g.pck.files:
-            packer.add('event/' + key, fit(g.image(path), (200, 112)))
-        else:
+        if path + '.import' not in g.pck.files:
             print('  missing event art', key)
+            continue
+        canvas = Image.new('RGBA', (512, 256), (0, 0, 0, 255))
+        canvas.paste(cover(g.image(path).convert('RGBA'), (400, 240), EVENT_ART_FOCUS.get(key, (0.5, 0.5))), (0, 0))
+        write_t3t(os.path.join(OUT, 'gfx', f'event_{key}.t3t'), canvas)
+        if args.preview:
+            os.makedirs(os.path.join(ROOT, 'build'), exist_ok=True)
+            canvas.save(os.path.join(ROOT, 'build', f'preview_event_{key}.png'))
     for i in range(1, 6):
         packer.add(f'intent/attack_{i}', fit(g.image(f'images/packed/intents/attack/intent_attack_{i}.png'), (30, 30)))
     for name, path in [('buff', 'buff/intent_buff_00'), ('defend', 'defend/intent_defend_00'),

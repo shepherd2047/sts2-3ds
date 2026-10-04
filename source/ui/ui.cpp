@@ -470,6 +470,7 @@ void App::consumeEvents() {
 void App::draw() {
   hits_.clear();
   Screen scr = run_->screen;
+  if (scr != Screen::Event) releaseEventArt();  // one-off textures: only while in their room
   for (int pass = 0; pass < 2; ++pass) {
     bool top = pass == 0;
     gfx::screen(top ? gfx::TOP : gfx::BOTTOM, 0x0B0B12FF);

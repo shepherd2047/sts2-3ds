@@ -26,8 +26,15 @@ bool ancientTalking(const Event* e) { return !e->finished && e->dialogueLine + 1
 namespace {
 constexpr int kOptId = 2100;              // widget id of option i: kOptId + i
 constexpr int kProceedId = 2090, kPageId = 2080;  // 继续 on a finished event; paginator (+1)
-constexpr float kColX = 216, kColW = kTop - kColX - style::kMargin;  // top: text column
+// Top screen: the event art fills it (C# NEventLayout: full-bleed art, text over a dark shade).
+// Story page: a wide text column at the right over a soft dark gradient, the art's left part
+// left clear. Option page: the offered card(s) over the art at the left (kArtX..kArtX+kArtW),
+// the option's text panel and tips in the narrower right column (kOptColX).
+constexpr float kColX = 156, kColW = kTop - kColX - style::kMargin;           // story text column
+constexpr float kOptColX = 216, kOptColW = kTop - kOptColX - style::kMargin;  // option page column
 constexpr float kArtX = style::kMargin, kArtW = 200, kBodyY = 54;
+constexpr float kShadeFade = 56;  // the shade's soft left edge
+constexpr float kPageLineH = 16;  // the page indicator under a paged story text
 constexpr float kPrevCardW = 120, kPrevCardH = 169;                 // drawCard at s = 1
 constexpr float kOptMaxH = 56, kOptMinDescS = 0.85f;
 
@@ -84,6 +91,13 @@ Potion* previewPotion(const std::string& id) {
   auto& p = cache[id];
   if (!p) p = db::potion(id);
   return p.get();
+}
+
+// The readability shade behind a text column starting at x: transparent at x - kShadeFade,
+// dark from x to the right edge (a little darker towards the bottom right, never a flat block).
+void textShade(float x) {
+  gfx::gradient(x - kShadeFade, 0, kShadeFade, kH, 0x00000000, 0x000000A8, 0x00000000, 0x000000B8);
+  gfx::gradient(x, 0, kTop - x, kH, 0x000000A8, 0x000000C0, 0x000000B8, 0x000000D0);
 }
 
 struct OptionText { std::string title, desc; bool locked = false; };
@@ -472,50 +486,76 @@ void App::drawAncient(bool top) {
   }
 }
 
+// gfx/event_<KEY>.t3t (build_assets): the open event's art, the only one loaded at a time; freed
+// when another event opens or the run leaves the event room (App::draw -> releaseEventArt).
+namespace {
+std::string eventArtLoaded_;
+gfx::Texture* eventArt(const Event& e) {
+  std::string path = "gfx/event_" + e.locKey + ".t3t";
+  if (eventArtLoaded_ != path) {
+    releaseEventArt();
+    eventArtLoaded_ = path;
+  }
+  return R().texture(path);
+}
+}  // namespace
+
+void releaseEventArt() {
+  if (eventArtLoaded_.empty()) return;
+  R().releaseTexture(eventArtLoaded_);
+  eventArtLoaded_.clear();
+}
+
 void App::drawEvent(bool top) {
   Event* e = run_->currentEvent.get();
   if (e && e->ancient) { drawAncient(top); return; }
   if (e && crystalSphereGame(*run_)) { drawCrystalSphere(top); return; }
-  drawSceneBg(top, 0.6f);
+  gfx::Texture* art = top && e ? eventArt(*e) : nullptr;
+  if (art) gfx::image(art, 0, 0, kTop, kH, 0, 0, kTop, kH);  // full-bleed, undimmed
+  else drawSceneBg(top, 0.6f);  // no art baked for this event: the room, dimmed
   if (!e) return;
   int n = e->finished ? 1 : (int)e->options.size();
   if (sel_ >= n || (sel_ >= 0 && !e->finished && e->options[sel_].locked())) sel_ = -1;
   bool optionMode = sel_ >= 0 && !e->finished;
 
   if (top) {
+    textShade(optionMode ? kOptColX : kColX);
     drawTopBar();
     // As in the original: the title in gold, centred over the text column, no rule under it.
-    TextStyle tt = ts(F16, col::gold, CENTER, kColW, 1.25f);
-    R().text(kColX + kColW / 2, 24, L("events." + e->locKey + ".title"), tt);
+    const float colX = optionMode ? kOptColX : kColX, colW = optionMode ? kOptColW : kColW;
+    // One line: a long title shrinks to the column (the second line would run under the body).
+    const std::string& title = L("events." + e->locKey + ".title");
+    float titleS = std::clamp((colW - 4) / std::max(1.f, R().measure(title, ts(F16))), 0.8f, 1.25f);
+    R().text(colX + colW / 2, 24 + (1.25f - titleS) * R().lineHeight(F16) / 2, title,
+             ts(F16, col::gold, CENTER, colW, titleS));
 
-    // Story text (measured every frame: the page count feeds the bottom paginator).
+    // Story text (measured every frame: the page count feeds the bottom paginator). A text that
+    // needs more than one page gives up the column's last line to the page indicator.
     std::string text = expandSmart(L("events." + e->descKey), e->vars, false, &e->strVars);
     TextStyle dt = ts(F12, col::white, LEFT, kColW);
     float th = 0;
     R().measure(text, dt, &th);
     float lh = R().lineHeight(F12) * dt.lineGap * dt.scale;
-    int linesPerPage = std::max(1, (int)((kH - 2 - kBodyY) / lh));
-    float pageH = linesPerPage * lh;
+    auto pageHeight = [&](float room) { return std::max(1, (int)(room / lh)) * lh; };
+    float pageH = pageHeight(kH - 4 - kBodyY);
+    if (th > pageH + 0.5f) pageH = pageHeight(kH - 4 - kBodyY - kPageLineH);
     if (pageEvent_ != e || pageKey_ != e->descKey) { pageEvent_ = e; pageKey_ = e->descKey; evPage_ = 0; }
     evPages_ = std::max(1, (int)std::ceil(th / pageH - 0.01f));
     evPage_ = std::clamp(evPage_, 0, evPages_ - 1);
 
-    auto drawArt = [&] {
-      Sprite art = R().sprite("event/" + e->locKey);
-      if (art) spr(art, kArtX + (kArtW - art.w) / 2, kBodyY, art.w, art.h);
-      if (evPages_ > 1 && !optionMode) {  // where the text continues
-        float py = kBodyY + (art ? art.h : 0) + 10;
-        R().text(kArtX + kArtW / 2, py, tr("第 ", "Page ") + num(evPage_ + 1) + " / " + num(evPages_) + tr(" 页", ""),
-                 ts(F12, col::gold, CENTER));
-        R().text(kArtX + kArtW / 2, py + 16, tr("L / R 翻页", "L / R Page"), ts(F12, col::gray, CENTER, 0, 0.85f));
-      }
-    };
-
     if (!optionMode) {
-      drawArt();
       gfx::pushClip(kColX, kBodyY, kColW, pageH);
       R().text(kColX, kBodyY - evPage_ * pageH, text, dt);
       gfx::popClip();
+      if (evPages_ > 1) {  // where the text continues
+        std::string page = tr("第 ", "Page ") + num(evPage_ + 1) + " / " + num(evPages_) + tr(" 页", "");
+        std::string keys = tr("   L / R 翻页", "   L / R Page");
+        TextStyle pt = ts(F12, col::gold, LEFT), kt = ts(F12, col::gray, LEFT, 0, 0.85f);
+        float pw = R().measure(page, pt), kw = R().measure(keys, kt);
+        float px = kColX + (kColW - pw - kw) / 2, py = kH - 2 - kPageLineH;
+        R().text(px, py, page, pt);
+        R().text(px + pw, py + 1.5f, keys, kt);
+      }
       return;
     }
 
@@ -571,8 +611,7 @@ void App::drawEvent(bool top) {
       if (f.kind == Offer::CardK && cards.size() < 2) { if (Card* c = previewCard(f.id)) cards.push_back(c); }
       else tips.push_back(f);
     }
-    // Left column: the offered card(s) large, else the event art; the other tips go under the
-    // option's text.
+    // Left: the offered card(s) large over the art; the other tips go under the option's text.
     const float colH = kH - 6 - kBodyY;
     if (cards.size() == 1) {
       float s = std::min(1.f, colH / kPrevCardH);
@@ -580,28 +619,26 @@ void App::drawEvent(bool top) {
     } else if (cards.size() == 2) {
       float s = std::min(0.8f, (kArtW - 4) / 2 / kPrevCardW);
       for (int k = 0; k < 2; ++k) drawCard(cards[k], kArtX + k * (kArtW / 2 + 2), kBodyY + 8, s, false, true);
-    } else {
-      drawArt();
     }
     // Right column: the option's full text, then the other tips, then the controls hint.
-    TextStyle ht = ts(F16, col::gold, LEFT, kColW - 6);
-    TextStyle bt = ts(F12, col::white, LEFT, kColW - 6);
+    TextStyle ht = ts(F16, col::gold, LEFT, kOptColW - 6);
+    TextStyle bt = ts(F12, col::white, LEFT, kOptColW - 6);
     float hh = 0, bh = 0;
     R().measure(ot.title, ht, &hh);
     if (!ot.desc.empty()) R().measure(ot.desc, bt, &bh);
     float ph = 10 + hh + (bh > 0 ? 4 + bh : 0);
     ph = std::min(ph, kH - 26 - kBodyY);
-    widgets::panel("ui/hover_tip", kColX - 4, kBodyY - 4, kColW + 4, ph + 4);
-    gfx::pushClip(kColX - 4, kBodyY - 4, kColW + 4, ph + 4);
-    R().text(kColX + 2, kBodyY + 1, ot.title, ht);
-    if (bh > 0) R().text(kColX + 2, kBodyY + 5 + hh, ot.desc, bt);
+    widgets::panel("ui/hover_tip", kOptColX - 4, kBodyY - 4, kOptColW + 4, ph + 4);
+    gfx::pushClip(kOptColX - 4, kBodyY - 4, kOptColW + 4, ph + 4);
+    R().text(kOptColX + 2, kBodyY + 1, ot.title, ht);
+    if (bh > 0) R().text(kOptColX + 2, kBodyY + 5 + hh, ot.desc, bt);
     gfx::popClip();
     float y = kBodyY + ph + 6;
     for (size_t k = 0; k < tips.size() && y < kH - 50; ++k)
-      y = drawTip(tips[k], kColX - 4, y, kColW + 4, kH - 24) + 4;
+      y = drawTip(tips[k], kOptColX - 4, y, kOptColW + 4, kH - 24) + 4;
     std::string hint = tr("A 选择   B 返回", "A Select   B Back");  // only the D-pad focuses (a tap picks)
     if (!cards.empty() || (!tips.empty() && tips[0].kind == Offer::RelicK)) hint += tr("   X 详情", "   X Details");
-    R().text(kColX + kColW / 2, kH - 18, hint, ts(F12, col::gray, CENTER, 0, 0.85f));
+    R().text(kOptColX + kOptColW / 2, kH - 18, hint, ts(F12, col::gray, CENTER, 0, 0.85f));
     return;
   }
 
