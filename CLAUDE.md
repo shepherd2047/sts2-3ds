@@ -32,7 +32,7 @@ The RGDSplus reference repo is cloned next to this one as `../rgds-ref`
 - Install every dev tool globally (apps in /Applications or Program Files,
   CLIs via Homebrew / winget / dkp-pacman / `dotnet tool install -g`), never
   in a session scratchpad, temp dir or the project. Work copies that must
-  survive go in stable paths too (Mac 3DS build copy: `~/dev/sts2-3ds-build`).
+  survive go in stable paths too (e.g. the build scheduler in `~/dev`).
 - Don't change system settings; commands that need `sudo` or passwords are
   given to the owner to run.
 - Git: `git pull` before starting, commit + `git push` when done, so the other
@@ -77,9 +77,9 @@ assets); devkitPro and Azahar are manual installs it links to.
 - 3DS: devkitPro with `3ds-dev` (Windows: devkitPro installer, or — as on the
   current PC — the dkp pacman repos added to a plain MSYS2 at `C:\msys64`,
   toolchain in `/opt/devkitpro`; macOS: pkg + `sudo dkp-pacman -S 3ds-dev`). devkitPro's make breaks on paths with spaces
-  (and is unreliable with non-ASCII); on the Mac the repo lives at
-  `/Users/m/projects/sts2 3ds/sts2-3ds` (a space in the path), so 3DS builds are done from a copy
-  without spaces, `~/dev/sts2-3ds-build` (`bash tools/build_3ds_mac.sh` syncs and builds).
+  (and is unreliable with non-ASCII), so keep the repo on a path without either: Mac
+  `/Users/m/projects/sts2-3ds-work/sts2-3ds` (renamed from `sts2 3ds` on 2026-10-03; the old
+  `~/dev/sts2-3ds-build` copy is obsolete), Windows `C:\dev\sts2-3ds`. 3DS builds run in the repo.
 - Desktop preview: SDL2 + clang/g++. `Makefile.sdl` uses `sdl2-config`
   (macOS: `brew install sdl2`; Windows: MSYS2 UCRT64 with
   `mingw-w64-ucrt-x86_64-{gcc,SDL2,pkgconf}` + `make`, built from the UCRT64
@@ -149,14 +149,14 @@ Soak on macOS 27: ASan hangs at start-up, so it falls back to UBSan + libmalloc 
 3DSGuy/Project_CTR releases, bannertool built from diasurgical/bannertool). Banner art/sound come
 from `python3 tools/build_assets.py --packaging` (run automatically when missing). Test: Azahar → File → Install CIA.
 
-Mac 3DS build in one step: `bash tools/build_3ds_mac.sh` (`--assets` also reruns build_assets): it
-syncs the repo into `~/dev/sts2-3ds-build`, runs make there and copies the 3dsx to the Desktop. Never
-run `make` in the build copy without syncing first: it rebuilds the old source and says "up to date".
+Mac 3DS build in one step: `bash tools/build_3ds_mac.sh` (`--assets` also reruns build_assets first):
+runs make in the repo and copies the 3dsx to the Desktop (hash checked). After a `git pull` the
+Desktop file is stale until this runs.
 
 At the end of every conversation with the owner, push all ready project
 changes (do not create an empty commit when there are none), then rebuild the
-pushed revision in the ASCII-path copy and copy the new
-`~/dev/sts2-3ds-build/sts2-3ds.3dsx` to `~/Desktop/sts2-3ds.3dsx`. Verify the
+pushed revision (`bash tools/build_3ds_mac.sh`, which copies `sts2-3ds.3dsx` to
+`~/Desktop/sts2-3ds.3dsx`). Verify the
 desktop copy matches the rebuilt file and report the push/build result. Keep
 that derived binary out of Git.
 
