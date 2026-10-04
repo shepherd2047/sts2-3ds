@@ -1,6 +1,7 @@
 // Split from ui.cpp (F3).
 #include "../ui_common.h"
 #include "combat_internal.h"
+#include "../card_fly.h"
 
 namespace ui {
 
@@ -80,6 +81,26 @@ void App::drawArrow(bool top, float fx, float fy, float tx, float ty, bool locke
   drawRotated(head, hx, hy, arrowRot_, locked ? 1.05f : 0.95f);
 }
 
+namespace {
+// ANIM_DIFF C1: the play spot. The original moves a played card in 0.25 s (ease-out cubic) to the play container's
+// centre, 100 units up, at 0.8 scale, and leaves it there until the play has resolved. Here: the centre of the top
+// screen, large enough to read.
+constexpr float kPlayX = kTop / 2.f, kPlayY = 112.f, kPlayS = 0.8f, kPlayMove = 0.25f;
+constexpr float kMinHold = 0.3f;  // a card that resolves at once still reaches the spot
+constexpr float kFlightTime = 0.42f;
+float lerpf(float a, float b, float t) { return a + (b - a) * t; }
+
+// Where a held card is shown (virtual coordinates).
+template <class F>
+void holdPose(const F& f, float& x, float& y, float& s, float& a) {
+  const float u = easeOut(std::min(1.f, f.t / kPlayMove));
+  x = lerpf(f.x0, kPlayX, u);
+  y = lerpf(f.y0, kPlayY, u);
+  s = lerpf(f.s0, kPlayS, u);
+  a = f.a0 * (1 - u);
+}
+}  // namespace
+
 void App::startFlight(Card* c, float x, float y, float s, Creature* target) {
   Combat* cb = run_->combat.get();
   float x1 = kTop / 2.f, y1 = 110.f;  // battlefield centre for untargeted cards
@@ -88,14 +109,122 @@ void App::startFlight(Card* c, float x, float y, float s, Creature* target) {
     x1 = centers_[target].first;
     y1 = centers_[target].second;
   }
-  flights_.push_back({c, 0.f, x + kBotOX, y + kBotOY, x1, y1, s});
+  for (auto it = flights_.begin(); it != flights_.end();) it = it->card == c ? flights_.erase(it) : it + 1;
+  Flight f{c, 0.f, x + kBotOX, y + kBotOY, x1, y1, s};
+  f.target = target;
+  flights_.push_back(f);
+}
+
+bool App::cardInFlight(const Card* c) const {
+  for (auto& f : flights_)
+    if (f.card == c) return true;
+  return cardfly::flying(c);
+}
+
+void App::updateFlights(float dt) {
+  Combat* cb = run_->combat.get();
+  cardfly::update(dt);
+  if (!cb) return;
+  const float discX = kDiscardX + kBotOX, discY = kDiscardY + kBotOY;
+  const float drawX = kDrawPileX + kBotOX, drawY = kDrawPileY + kBotOY;
+  // Cards played without a release from the hand (auto-play from the draw pile) come up from the draw pile.
+  for (Card* c : cb->play) {
+    bool known = false;
+    for (auto& f : flights_) known |= f.card == c;
+    if (known || poses_.count(c)) continue;
+    Flight f{c, 0.f, drawX, drawY, kTop / 2.f, 110.f, 0.12f};
+    f.a0 = -0.9f;
+    flights_.push_back(f);
+  }
+  for (auto it = flights_.begin(); it != flights_.end();) {
+    Flight& f = *it;
+    f.t += dt;
+    if (f.hold) {
+      const Pile p = cb->pileOf(f.card);
+      if (p == Pile::Play || f.t < kMinHold) { ++it; continue; }
+      float x, y, s, a;
+      holdPose(f, x, y, s, a);
+      if (p == Pile::Discard || p == Pile::Draw) {  // C2: NCardFlyVfx to the pile
+        cardfly::launch(f.card, x, y, s, a, p == Pile::Discard ? discX : drawX, p == Pile::Discard ? discY : drawY);
+        it = flights_.erase(it);
+        continue;
+      }
+      if (p == Pile::Hand) { it = flights_.erase(it); continue; }
+      // Exhaust, powers and anything else: the short flight to the target, now from the play spot.
+      f.hold = false;
+      f.t = 0;
+      f.x0 = x;
+      f.y0 = y;
+      f.s0 = s;
+      ++it;
+      continue;
+    }
+    if (f.t > kFlightTime) it = flights_.erase(it);
+    else ++it;
+  }
+  // C13: cards that left the discard pile for the draw pile (a shuffle) fly over as fire comets, staggered like
+  // CardPileCmd.Shuffle (min(0.045, 0.8 / n) apart, +-55 % random).
+  if (cb->discard.size() < lastDiscard_.size()) {
+    int n = 0;
+    for (Card* c : lastDiscard_) n += cb->pileOf(c) == Pile::Draw;
+    float delay = 0;
+    const float gap = n > 0 ? std::min(0.045f, 0.8f / n) : 0.f;
+    for (int i = 0; i < n; ++i) {
+      cardfly::launch(nullptr, discX, discY, 0.3f, 0.f, drawX, drawY, delay, true);
+      const float jitter = (float)((i * 7919 + 13) % 101) / 100.f - 0.5f;  // deterministic, -0.5..0.5
+      delay += gap + jitter * 1.11f * gap;
+    }
+  }
+  lastDiscard_ = cb->discard;
 }
 
 void App::drawFlights(bool top) {
+  Combat* cb = run_->combat.get();
+  // Comets: the trail behind the card (show_behind_parent), then the card itself shrinking and darkening.
+  cardfly::drawTrails(top);
+  cardfly::Body bodies[cardfly::kMaxComets];
+  const int nb = cardfly::bodies(bodies, cardfly::kMaxComets);
+  for (int i = 0; i < nb; ++i) {
+    const cardfly::Body& b = bodies[i];
+    float x = b.x, y = b.y;
+    toLocal(top, x, y);
+    const float w = kCardW * b.s, h = kCardH * b.s;
+    if (x < -w || x > (top ? kTop : kBot) + w || y < -h || y > kH + h) continue;
+    gfx::pushAlpha(b.alpha);
+    gfx::pushTransform(gfx::Affine::rotateAround(x, y, b.rot));
+    if (b.waiting)
+      if (Sprite gs = R().sprite("card/glow_cyan")) {  // C10: the hand flashes cyan before it is flushed
+        const float gw = 302.7f * b.s * 1.08f;
+        spr(gs, x - gw / 2, y - gw / 2, gw, gw, 0xFFFFFFFFu);
+      }
+    drawCard(b.card, x - w / 2, y - h / 2, b.s, false, b.s > 0.3f);  // the text while it is still readable
+    gfx::popTransform();
+    cardfly::shade(x, y, w, h, b.rot, b.dark);
+    gfx::popAlpha();
+  }
+  const bool covered = cb && (cb->choice.active || isHandSelect(*cb));
   for (auto& f : flights_) {
-    // NCardFlyVfx: a straight run, the card turning its top towards where it is heading (rotation eased at
-    // 12 / s), the body shrinking to 10% in the first third and to nothing over the rest.
-    float t = std::min(1.f, f.t / 0.42f);
+    if (f.hold) {
+      // C1: the card at the play spot, full size, with its playable glow, while it resolves.
+      if (covered) continue;
+      float x, y, s, a;
+      holdPose(f, x, y, s, a);
+      toLocal(top, x, y);
+      const float w = kCardW * s, h = kCardH * s;
+      if (x < -w || x > (top ? kTop : kBot) + w || y < -h || y > kH + h) continue;
+      gfx::pushTransform(gfx::Affine::rotateAround(x, y, a));
+      if (Sprite gs = R().sprite("card/glow_cyan")) {
+        const float gw = 302.7f * s;
+        spr(gs, x - gw / 2, y - gw / 2, gw, gw, 0xFFFFFFFAu);
+      }
+      drawCard(f.card, x - w / 2, y - h / 2, s, false, true, false);
+      gfx::popTransform();
+      continue;
+    }
+    // NCardFlyVfx-like exit for exhausted cards / powers (their own effects are C3 / C4): a straight run, the card
+    // turning its top towards where it is heading (rotation eased at 12 / s), the body shrinking to 10% in the first
+    // third and to nothing over the rest.
+    float t = std::min(1.f, f.t / kFlightTime);
     float x = f.x0 + (f.x1 - f.x0) * t, y = f.y0 + (f.y1 - f.y0) * t;
     const float u = std::clamp((t - 1.f / 3) / (2.f / 3), 0.f, 1.f);
     float s = f.s0 * (t < 1.f / 3 ? 1.f - 0.9f * (3.f * t) : std::max(0.f, 0.1f - 0.25f * u));
@@ -120,6 +249,7 @@ void App::animateHand(float dt) {
   auto inPile = [](const std::vector<Card*>& v, Card* c) { return std::find(v.begin(), v.end(), c) != v.end(); };
 
   // Cards that left the hand.
+  bool swooshed = false;
   for (auto it = poses_.begin(); it != poses_.end();) {
     Card* c = it->first;
     if (inPile(cb->hand, c)) { ++it; continue; }
@@ -128,9 +258,18 @@ void App::animateHand(float dt) {
     Pose from = it->second;
     it = poses_.erase(it);
     if (flying || from.delay > 0) continue;
+    if (inPile(cb->discard, c)) {
+      // C10 (and any discard from the hand): every card leaves at once as a fire comet (NCardFlyVfx); the random
+      // speeds and durations spread them out, so the hand never blinks empty.
+      const float wait = cb->phase == Combat::TurnPhase::End ? 0.15f : 0.f;  // end of turn: the cyan flash first
+      cardfly::launch(c, from.x + kBotOX, from.y + kBotOY, from.s, from.angle, kDiscardX + kBotOX, kDiscardY + kBotOY,
+                      wait);
+      if (!swooshed) sfx::cardsDiscarded();
+      swooshed = true;
+      continue;
+    }
     Ghost g{c, from, 0, leaveQueue_, 0, 0, 0.1f, false};
-    if (inPile(cb->discard, c)) { g.tx = kDiscardX; g.ty = kDiscardY; }
-    else if (inPile(cb->draw, c)) { g.tx = kDrawPileX; g.ty = kDrawPileY; }
+    if (inPile(cb->draw, c)) { g.tx = kDrawPileX; g.ty = kDrawPileY; }
     else if (inPile(cb->exhaust, c)) { g.exhaust = true; g.tx = from.x; g.ty = from.y - 40; g.ts = from.s * 0.2f; }
     else continue;
     if (leaveQueue_ <= 0) sfx::cardsDiscarded();

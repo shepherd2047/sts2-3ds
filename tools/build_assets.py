@@ -739,7 +739,7 @@ def bake_treasure_chests(g, packer):
 def add_vfx_art(g, packer, known):
     """F7 light combat VFX (source/ui/vfx.cpp): a handful of tiny white/tintable particle sprites
     from the game's own single-image VFX textures, plus two procedural shapes (arrow, ring). They
-    are composed into one small sheet (104x66, ~27 KB RGBA8) packed as a single atlas entry so all
+    are composed into one small sheet (104 px wide, RGBA8) packed as a single atlas entry so all
     of them share one page (one texture per particle batch); each keeps its own vfx/<name> entry
     pointing into the sheet."""
     if 'vfx/sheet' in known:
@@ -753,6 +753,13 @@ def add_vfx_art(g, packer, known):
         ('vfx/star', 'images/vfx/characters/regent_sparkle.png', (12, 18)),     # NRegentVfx sparkle
         ('vfx/bubble', 'images/vfx/bubble_particle.png', (12, 12)),             # NPoisonImpactVfx
         ('vfx/dot', 'images/vfx/dot.png', (8, 8)),                              # specks, embers
+        # card_trail_<character>.tscn (NCardTrailVfx, source/ui/card_fly.cpp): the two Line2D ribbon textures
+        # (stretched along the trail, so a few columns are enough), the BigSparks brush ember and the
+        # small_card_silhouette glow that becomes the comet head.
+        ('vfx/trail', 'images/packed/vfx/trail.png', (4, 32)),
+        ('vfx/trail2', 'images/packed/vfx/trail2.png', (4, 32)),
+        ('vfx/brush', 'images/vfx/brush_particle_2.png', (8, 16)),
+        ('vfx/cardsil', 'images/packed/vfx/small_card_silhouette.png', (24, 24)),
     )
     for name, path, size in sprites:
         try:

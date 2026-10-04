@@ -6,6 +6,7 @@
 #include "../core/safe_file.h"
 #include "../core/save_errors.h"
 #include "../core/settings_store.h"
+#include "card_fly.h"
 #include "confirm.h"
 #include "music_router.h"
 #include "ui_common.h"
@@ -239,6 +240,8 @@ void App::returnTitle(bool keepSave) {
   lastCombat_ = nullptr;
   centers_.clear();
   flights_.clear();
+  cardfly::clear();
+  lastDiscard_.clear();
   poses_.clear();
   ghosts_.clear();
   mapTouch_ = {};
@@ -327,6 +330,8 @@ void App::update(const gfx::Input& frameIn, double dt) {
     R().releaseSkeletons({playerArt(run_.get())});
     centers_.clear();
     flights_.clear();
+    cardfly::clear();
+    lastDiscard_.clear();
     poses_.clear();
     ghosts_.clear();
     drawQueue_ = leaveQueue_ = 0;
