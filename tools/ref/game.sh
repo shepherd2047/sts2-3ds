@@ -14,7 +14,8 @@
 #   game.sh back                   switch back to Claude (always do this after a burst)
 # The game pauses on another Space, so every command brings it to the front first.
 REF=$(cd "$(dirname "$0")" && pwd)
-CAP=${STS_REF_CAP:-$(cd "$REF/../../.." && pwd)/ref-captures}
+MAIN=$(cd "$(git -C "$REF" rev-parse --path-format=absolute --git-common-dir)/.." && pwd)  # main checkout, also from a worktree
+CAP=${STS_REF_CAP:-$(cd "$MAIN/.." && pwd)/ref-captures}
 LOG="$HOME/Library/Application Support/SlayTheSpire2/logs/godot.log"
 mkdir -p "$CAP"
 front() {
@@ -32,13 +33,20 @@ pt() { # image coords (1000 wide, content area) -> screen points
   local f; f=$(echo "$W/1000" | bc -l)
   echo "$(printf %.0f "$(echo "$X+$1*$f" | bc -l)"),$(printf %.0f "$(echo "$CY+$2*$f" | bc -l)")"
 }
+glide() { # move the cursor to screen point "x,y" in steps: the game only notices hover targets
+  # (creatures for potions, some buttons) when the pointer moves onto them, not when it jumps
+  local to=$1 from fx fy tx ty i
+  from=$(cliclick p:. 2>/dev/null | tail -1); fx=${from%,*}; fy=${from#*,}; tx=${to%,*}; ty=${to#*,}
+  [[ "$fx" =~ ^-?[0-9]+$ && "$fy" =~ ^-?[0-9]+$ ]] || { cliclick m:"$to"; return; }
+  for i in 1 2 3 4 5 6 7 8; do cliclick m:"$((fx + (tx - fx) * i / 8)),$((fy + (ty - fy) * i / 8))"; sleep 0.02; done
+}
 cmd=$1; shift
 case $cmd in
   shot)
     front; screencapture -x -R"$X,$CY,$W,$CH" "$CAP/$1.png"
     sips -Z 1000 "$CAP/$1.png" --out "$CAP/$1_s.png" >/dev/null; echo "$CAP/$1_s.png" ;;
-  click) front; p=$(pt "$1" "$2"); cliclick m:"$p"; sleep 0.12; mark click "$1" "$2"; cliclick c:"$p" ;;
-  hover) front; p=$(pt "$1" "$2"); mark move "$1" "$2"; cliclick m:"$p" ;;
+  click) front; p=$(pt "$1" "$2"); glide "$p"; sleep 0.15; mark click "$1" "$2"; cliclick dd:"$p"; sleep 0.06; cliclick du:"$p" ;;
+  hover) front; p=$(pt "$1" "$2"); mark move "$1" "$2"; glide "$p" ;;
   drag)
     front; a=$(pt "$1" "$2"); b=$(pt "$3" "$4"); ms=${5:-400}; n=12
     cliclick m:"$a"; sleep 0.25; mark press "$1" "$2"; cliclick dd:"$a"

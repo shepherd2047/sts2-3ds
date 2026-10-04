@@ -1075,6 +1075,9 @@ Task<bool> Run::fight(const std::string& encounterId) {
   // EncounterModel.GenerateMonstersWithSlots: its own Rng(seed + TotalFloor + hash(id)).
   Rng encounterRng(seed + (uint64_t)floor, enc->id);
   for (auto& m : enc->generate(encounterRng)) { progress::markMonsterSeen(m->id); c.createEnemy(std::move(m)); }
+  // Debug: STS_ENEMY_HP=N starts the first fight's enemies at N HP (animation captures, tools/ref).
+  if (const char* hp = getenv("STS_ENEMY_HP"); hp && floor == 1)
+    for (auto& e : c.enemies) e->hp = std::clamp(atoi(hp), 1, e->maxHp);
 
   screen = Screen::Combat;
   // CombatRoom.EnterInternal: Hook.AfterRoomEntered once the fight is set up.

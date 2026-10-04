@@ -50,3 +50,27 @@ anger1 pommel1 endturn1 hover1 create1`, ours `ours/{strike,skill,power,exhaust,
 | C13 | Shuffle | diff | Original: discard pile cards fly as fire comets from the discard pile to the draw pile (~5.2-5.6 s). Ours: not captured yet (no shuffle in our run). |
 | C14 | Hover, card created in hand | todo | captured in the original (hover1, create1); ours needs a matching scenario. |
 | C15 | Hit reaction, lunge, slash | ok-ish | Lunge and slash timing match; original hit adds red slash marks and shards. |
+
+### Batch 2: creatures, more cards, combat UI (2026-10-03)
+
+Original captures: `fightstart_cubex intenthover endturn_cubex hit_blockbreak death_victory enemyblock
+enemyblock_hit enemyblock_break bladedance survivor armaments(_confirm) potion_throw potion_drink noenergy
+pileview endturn_ethereal`. Ours (`ours/*.mkv`, same names): fightstart_cubex, endturn_cubex,
+hit_blockbreak, death_victory (`STS_ENEMY_HP=5`), bladedance, noenergy, pileview, endturn_ethereal.
+Not yet recorded on our side: intent hover, enemy block (needs a block-gaining move or a debug hook),
+survivor / armaments selection, potions (`STS_POTIONS=FirePotion,BlockPotion`, drag from the belt).
+Driving notes: hover targets (creatures for potions, some buttons) only register when the pointer
+glides onto them (`game.sh` now glides); the upgrade confirm button ignored synthetic clicks once.
+
+| # | Scenario | Status | Original vs ours |
+|---|---|---|---|
+| M1 | Enemy attacks the player | diff | Original: big red slash "V" mark and red shards on the player at the hit, big red number that then falls. Ours: small grey number, no slash VFX on the player. |
+| M2 | Turn pacing | diff | Same as C11 with another enemy: original "Enemy Turn" 0.3-1.6 s, enemy acts ~2.0 s, "Player Turn" ~3.4 s; ours "Player Turn" ~2.0 s. Ours is about twice as fast. |
+| M3 | Fight start | diff | Original: "Battle Start" banner with a sword icon ~0.3-2.0 s, energy orb greyed 0/3, cards drawn one by one from the draw pile at ~1.6-2.5 s, then "Player Turn / Turn 1" at ~3.0 s, End Turn button appears ~4.0 s. Ours: "战斗开始" only ~0.3 s, "玩家回合" at 0.9 s, then the draw: the order differs (original draws before the Player Turn banner) and ours is ~3x faster. |
+| M4 | Enemy death and victory | diff | Original: hit -> "Dead" label under the HP bar, the enemy collapses and its body stays on the ground (no fade), HP bar and intent go away; Burning Blood heals with green number and green particles on the player (~0.9-1.6 s); hand slides down; screen dims and the Loot panel opens at ~4.0 s. Ours: the enemy fades out by ~0.9 s (no corpse), rewards at ~2.0 s. |
+| M5 | Buff / debuff text colours | diff | Original buff names are green with green rising particles ("Strength"), debuffs red; ours buff names are yellow. |
+| M6 | Status text on exhaust | diff | Ours shows a "消耗: <card>" label over the hand when a card is exhausted (end-of-turn ethereal, Blade Dance, Tremble = C3's stray label); the original has no text, only the smoke dissolve. |
+| K2 | Card created in hand (Blade Dance) | diff | Original: Blade Dance holds in the play area, the three Shivs appear and slide into the hand (~0.4-0.6 s), then Blade Dance exhausts in place as smoke (~1.0-1.3 s). Ours: shivs enter the hand from the lower left, the played card vanishes at once (C1/C3). |
+| K5 | Ethereal at end of turn | diff | Original: Dazed dissolves into smoke at the hand while the rest fly to the discard pile. Ours: label text only (M6), no smoke. |
+| U1 | Playing without energy | diff | Original: no visible reaction to dragging an unaffordable card in 1.7 s (to recheck: the original may show a thought bubble). Ours: the card lifts with an arrow and a red "我没有足够的能量。" line appears. End Turn button glows cyan in the original once energy is 0. |
+| U2 | Draw pile view | ok-ish | Different layout by design (3DS list + detail); original opens a dimmed full-screen grid with a back button and a footer hint. |
