@@ -361,16 +361,19 @@ void App::drawCombat(bool top) {
     drawVfx(*cb);  // F7: over the creatures, under the damage numbers
     for (auto& f : floats_) {
       if (f.t < 0) continue;
-      float x = 95, y = feet - 60;
+      // Spawn height: the captures (strike4, pommel1) put the original's number ~10 px lower over the
+      // HP bar than feet - 60 did.
+      float x = 95, y = feet - 50;
       if (f.who && !f.who->isPlayer)
         for (int i = 0; i < (int)enemies.size(); ++i)
           if (enemies[i] == f.who) x = enemyX(i, (int)enemies.size());
+      const float k = 240.f / 1080.f, t = f.t;
       if (f.color == col::red) {
-        // NDamageNumVfx: a hop (velocity (+-100, -700..-800), gravity 2000 in 1080p units), the scale
-        // easing from 2.5x back to 1x over 1.2 s, the colour to cream over 0.5 s, faded out over 2 s.
-        const float k = 240.f / 1080.f, t = f.t;
+        // NDamageNumVfx: a hop (velocity (+-100, -700..-800), gravity 2000 in 1080p units), label scale
+        // 1.2..1.3, the node scale easing from 2.5x back to 1x over 1.2 s, the colour to cream over 0.5 s,
+        // faded out over 2 s. No bounce: it falls through the HP bar while fading.
         const float u = std::min(1.f, t / 1.2f), eq = 1.f - (1.f - u) * (1.f - u);
-        const float sc = 1.3f * (1.f + 1.5f * (1.f - eq));
+        const float sc = 1.25f * (1.f + 1.5f * (1.f - eq));
         const float ce = 1.f - std::pow(1.f - std::min(1.f, t / 0.5f), 3.f);
         const float fade = std::min(1.f, t / 2.f), a = 1.f - fade * fade;
         auto mix = [&](int sh) { return (uint32_t)(((col::red >> sh) & 0xFF) * (1 - ce) + ((0xFFF6E2FFu >> sh) & 0xFF) * ce); };
@@ -379,6 +382,20 @@ void App::drawCombat(bool top) {
         st.scale = sc;
         const float px = x + f.dx * 2.2f * t, py = y + (-750.f * k) * t + 0.5f * (2000.f * k) * t * t;
         R().text(px, py - R().lineHeight(F16) * sc / 2, f.text, st);
+        continue;
+      }
+      if (f.color == col::blue && f.text[0] != '+') {
+        // NDamageBlockedVfx ("Blocked"): spawned 50 px lower than the damage number, rises 250 px over 2 s
+        // (Quad Out), scale 1 -> 0.6, colour #21C0FF -> white over 2 s (Cubic Out), alpha out over 1.5 s
+        // (Sine In).
+        const float u = std::min(1.f, t / 2.f), eq = 1.f - (1.f - u) * (1.f - u);
+        const float ce = 1.f - std::pow(1.f - u, 3.f);
+        const float a = std::cos(std::min(1.f, t / 1.5f) * 1.5707963f);
+        auto mix = [&](int sh) { return (uint32_t)(((0x21C0FFFFu >> sh) & 0xFF) * (1 - ce) + 255 * ce); };
+        const uint32_t c = (mix(24) << 24) | (mix(16) << 16) | (mix(8) << 8) | (uint32_t)(a * 255);
+        TextStyle st = ts(F16, c, CENTER);
+        st.scale = 1.3f * (1.f - 0.4f * eq);
+        R().text(x + f.dx * 0.45f, y + 50.f * k - 250.f * k * eq - R().lineHeight(F16) * st.scale / 2, f.text, st);
         continue;
       }
       float a = std::clamp(1.2f - f.t, 0.f, 1.f);

@@ -297,7 +297,9 @@ void App::update(const gfx::Input& frameIn, double dt) {
   updateAchievementToast((float)visualDt);  // M5
   for (auto& f : floats_) f.t += (float)visualDt;
   hurtT_ += (float)visualDt;
-  floats_.erase(std::remove_if(floats_.begin(), floats_.end(), [](const Float& f) { return f.t > (f.color == col::red ? 2.f : 1.2f); }), floats_.end());
+  floats_.erase(std::remove_if(floats_.begin(), floats_.end(), [](const Float& f) {
+    return f.t > (f.color == col::red ? 2.f : f.color == col::blue && f.text[0] != '+' ? 1.5f : 1.2f);  // damage / Blocked / other
+  }), floats_.end());
 
   Screen scr = run_->screen;
   if (scr != lastScreen_) {
