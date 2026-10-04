@@ -51,8 +51,17 @@ case $cmd in
   # game's console. KEY is a macOS key code (36 return, 53 esc, 49 space, 51 delete).
   key) front; osascript -e "tell application \"System Events\" to key code $1" ;;
   type) front; osascript -e 'on run a' -e 'tell application "System Events" to keystroke (item 1 of a)' -e 'end run' "$1" ;;
-  con) # open (` toggles), clear the line, run CMD, close (` again)
-    front; osascript -e 'on run a' -e 'tell application "System Events"' -e 'keystroke "`"' -e 'delay 0.3' \
+  con) # the console survives an app switch with its line unfocused (keys then reach the game:
+    # space ends the turn), so: open it only if closed, click the input line, clear, run, close.
+    front; f=$(mktemp -t con).png; screencapture -x -R"$X,$CY,$W,$CH" "$f"
+    open=$(python3 -c "
+from PIL import Image; im=Image.open('$f').convert('RGB'); w,h=im.size
+px=[im.getpixel((int(w*x),int(h*y))) for x in (.3,.5,.7,.9) for y in (.19,.32,.38)]
+ok=all(max(p)<45 and p[2]-p[0]>=4 for p in px) and max(max(p) for p in px)-min(max(p) for p in px)<8
+print(1 if ok else 0)"); rm -f "$f"
+    [ "$open" = 1 ] || { osascript -e 'tell application "System Events" to keystroke "`"'; sleep 0.4; }
+    p=$(pt 300 273); cliclick c:"$p"; sleep 0.1
+    osascript -e 'on run a' -e 'tell application "System Events"' \
       -e 'repeat 80 times' -e 'key code 51' -e 'end repeat' -e 'keystroke (item 1 of a)' -e 'delay 0.15' \
       -e 'key code 36' -e 'delay 0.5' -e 'keystroke "`"' -e 'end tell' -e 'end run' "$1" ;;
   rec-start)
