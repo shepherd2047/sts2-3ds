@@ -36,6 +36,7 @@ class App {
     bool puffed = false;  // Fuzzy Wurm Crawler after Inhale
     bool dying = false;
     float fade = 1.f;
+    float deadT = 0;  // seconds since the die animation finished
   };
   struct Hit {  // touch target registered while drawing the bottom screen
     float x, y, w, h;

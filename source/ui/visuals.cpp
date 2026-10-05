@@ -53,7 +53,14 @@ void App::trigger(Creature* c, const std::string& what, int amount) {
   if (what == "Dead") {
     v->dying = true;
     std::string die = v->puffed && has("die_puffed") ? "die_puffed" : "die";
-    if (has(die)) v->anim->play(die, false);
+    if (has(die)) {
+      v->anim->play(die, false);
+      // NCombatUi.ShowRewards waits for the death animation still playing (ANIM_DIFF M4).
+      if (c->combat) {
+        const double end = Scheduler::get().now() + v->data->animation(die)->duration;
+        c->combat->deathAnimEnd = std::max(c->combat->deathAnimEnd, end);
+      }
+    }
     return;
   }
   if (what == "Hit") {

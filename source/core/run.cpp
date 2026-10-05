@@ -1086,7 +1086,10 @@ Task<bool> Run::fight(const std::string& encounterId) {
   bool won = c.won && player->alive();
   if (won || !player->alive()) progress::recordCombatEnd(c, won);  // M-stats: EnemyStats wins / losses
   if (won) achievements::afterCombatWon(*this, c);  // M5: CombatManager's achievement checks after a win
-  co_await wait(won ? 0.8 : 1.2);
+  // NCombatUi.ShowRewards: CustomScaledWait(0.5, death animation time left + 1) before the rewards
+  // (a boss: (left / 2, left + 1)).
+  if (won) co_await wait(std::max(0.0, c.deathAnimEnd - Scheduler::get().now()) + 1.0);
+  else co_await wait(1.2);
   player->block = 0;
   player->powers.clear();
   co_return won;

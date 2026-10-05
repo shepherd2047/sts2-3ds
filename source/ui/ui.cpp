@@ -368,7 +368,18 @@ void App::update(const gfx::Input& frameIn, double dt) {
   for (auto& [c, v] : visuals_) {
     if (!v.anim) continue;
     v.anim->update((float)visualDt);
-    if (v.dying && v.anim->finished()) v.fade = std::max(0.f, v.fade - (float)visualDt * 2.f);
+    // NCreature.AnimDie: 0.5 s after the die animation ends the body dissolves (NMonsterDeathVfx: shader
+    // threshold 1 -> 0 over 2.5 s, sine out; ours fades the alpha the same way). The last enemy of a won
+    // fight stays on the ground as a corpse until the rewards (as in the captures, ANIM_DIFF M4); a body
+    // already dissolving when the fight is won finishes.
+    if (v.dying && v.anim->finished()) {
+      const bool corpse = run_->combat && run_->combat->won && v.fade >= 1.f;
+      if (!corpse) {
+        v.deadT += (float)visualDt;
+        const float u = std::clamp((v.deadT - 0.5f) / 2.5f, 0.f, 1.f);
+        v.fade = u >= 1.f ? 0.f : 1.f - std::sin(u * 1.5707963f);
+      }
+    }
   }
 
   if (autoplay_) autoplay(visualDt);

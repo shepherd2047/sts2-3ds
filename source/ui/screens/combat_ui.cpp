@@ -80,6 +80,7 @@ uint32_t energyOutline(const std::string& color) {
 }
 
 inline float expoOut(float t) { return t >= 1 ? 1.f : 1.f - std::pow(2.f, -10.f * std::max(0.f, t)); }
+inline float cubicOut(float t) { t = std::clamp(t, 0.f, 1.f); return 1.f - (1.f - t) * (1.f - t) * (1.f - t); }
 
 // ---- Potion belt on the combat bottom screen, laid out like the C# top bar's PotionContainer
 // (top_bar.tscn): the PotionBg 9-slice (ui/potion_belt), a margin of 18/5/19/6 around the
@@ -145,7 +146,7 @@ std::string locOr(const char* key, const std::string& fallback) {
 }
 
 // The turn banners over the fight (C# NCombatStartBanner, NPlayerTurnBanner, NEnemyTurnBanner),
-// their tweens shortened ~40 % for the smaller screen and the port's quicker turns:
+// with the C# tween timings (ANIM_DIFF C11 / M3):
 //  - 战斗开始: a dark band fades in, the label shrinks 2x -> 1x while fading in, then fades out and
 //    hands over to the player banner for turn 1;
 //  - 玩家回合: the label rises and "第N回合" drops apart from the middle while fading in, holds, fades;
@@ -186,16 +187,22 @@ void drawTurnBanner(Combat& cb) {
   float dur = 1.3f;
   switch (h.banner) {
     case HudAnim::Start: {
-      dur = 1.2f;
-      const float in = expoOut(t / 0.8f), out = t > 0.8f ? std::clamp((t - 0.8f) / 0.4f, 0.f, 1.f) : 0.f;
-      band(expoOut(t / 0.45f) * (1 - out));
-      label(locOr("gameplay_ui.BATTLE_START", h.text), cy, big * (1 + (1 - expoOut(t / 0.45f))), col::gold, in * (1 - out), 0x2A1A08FF);
+      // NCombatStartBanner.AnimateVfx: 0.3 s pause, then the band fades in (0.75 s) while the label
+      // fades in (1.3 s) and shrinks 2x -> 1x (0.75 s); the label fades out (1 s, from 1.3 s on), and
+      // then (2.6 s) the player banner for turn 1 follows.
+      dur = 2.6f;
+      const float u = t - 0.3f;
+      if (u <= 0) break;
+      const float in = expoOut(u / 1.3f), out = u > 1.3f ? cubicOut(std::clamp((u - 1.3f) / 1.0f, 0.f, 1.f)) : 0.f;
+      band(expoOut(u / 0.75f));
+      label(locOr("gameplay_ui.BATTLE_START", h.text), cy, big * (1 + (1 - expoOut(u / 0.75f))), col::gold, in * (1 - out), 0x2A1A08FF);
       break;
     }
     case HudAnim::Player: {
-      dur = 1.4f;
-      const float in = expoOut(t / 0.6f), mv = expoOut(t / 0.9f);
-      const float a = t < 1.15f ? in : std::max(0.f, 1 - (t - 1.15f) / 0.25f);
+      // NPlayerTurnBanner.Display: fade in (1 s) while the labels move apart (1.5 s), hold 0.4 s, fade 0.3 s.
+      dur = 2.2f;
+      const float in = expoOut(t / 1.0f), mv = expoOut(t / 1.5f);
+      const float a = t < 1.9f ? in : std::max(0.f, 1 - std::sin(std::min(1.f, (t - 1.9f) / 0.3f) * 1.5707963f));
       band(a);
       label(locOr("gameplay_ui.PLAYER_TURN", h.text), cy - 12 * mv, big, col::white, a, 0x1B3045FF);
       std::string turn = locOr("gameplay_ui.TURN_COUNT", tr("第{turnNumber}回合", "Turn {turnNumber}"));
@@ -205,13 +212,15 @@ void drawTurnBanner(Combat& cb) {
       break;
     }
     case HudAnim::Enemy: {
-      dur = 1.3f;
-      const float in = expoOut(t / 0.8f), sc = 1 + (1 - expoOut(t / 0.45f));
+      // NEnemyTurnBanner.Display: the label shrinks 2x -> 1x (0.75 s) while it fades in (1.3 s), then turns
+      // red (1 s) while it fades out (1 s, cubic).
+      dur = 2.3f;
+      const float in = expoOut(t / 1.3f), sc = 1 + (1 - expoOut(t / 0.75f));
       float red = 0, a = in;
-      if (t > 0.6f) {
-        const float u = std::clamp((t - 0.6f) / 0.7f, 0.f, 1.f);
+      if (t > 1.3f) {
+        const float u = std::clamp((t - 1.3f) / 1.0f, 0.f, 1.f);
         red = expoOut(u);
-        a = std::pow(1 - u, 3.f);  // cubic ease-out fade, as the C# tween
+        a = 1 - cubicOut(u);
       }
       band(std::min(in, a));
       const uint32_t c0 = col::white, c1 = 0xFF3030FF;

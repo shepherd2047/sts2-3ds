@@ -1104,6 +1104,10 @@ struct Combat {
   std::vector<VisualEvent> events;
   std::string banner;
   float bannerTime = 0;
+  // UI -> rules, timing only: scheduler time at which the last started death animation ends (0: none).
+  // NCombatUi.ShowRewards waits for it (+1 s) before the rewards open; the sim never sets it.
+  double deathAnimEnd = 0;
+  bool setupDone = false;  // timing only: the creatures' AfterAddedToRoom ran (C# CombatManager.IsInProgress)
 
   // entry points
   Task<> runCombat();
