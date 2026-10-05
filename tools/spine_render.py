@@ -686,7 +686,10 @@ def color_of(c):
     return np.array([(c >> 24) & 255, (c >> 16) & 255, (c >> 8) & 255, c & 255], dtype=np.float32) / 255.0
 
 
-def render(skel_bytes, atlas_text, load_page, scale=1.0, skin_names=None, pad=4, animation='idle_loop', hide=()):
+def posed_triangles(skel_bytes, atlas_text, skin_names=None, animation='idle_loop', hide=()):
+    """The skeleton's textured triangles in the first frame of `animation` (setup pose otherwise):
+    (pages, regions, tris), tris = [(region name, [(u, v) x3] in original-image pixels,
+    [(x, y) x3] in skeleton units (y up), tint, slot blend mode)]."""
     sk = parse_skeleton(skel_bytes)
     sk['deform'] = {}
     sk['draw_order'] = None
@@ -695,7 +698,6 @@ def render(skel_bytes, atlas_text, load_page, scale=1.0, skin_names=None, pad=4,
         apply_frame0(sk, anim)
     world = world_transforms(sk['bones'])
     pages, regions = parse_atlas(atlas_text)
-    textures = {}
 
     skins = sk['skins']
     order = []
@@ -740,6 +742,7 @@ def render(skel_bytes, atlas_text, load_page, scale=1.0, skin_names=None, pad=4,
         if not reg:
             continue
         tint = color_of(slot['color']) * color_of(a['color'])
+        blend = slot.get('blend', 0)
         bone = world[slot['bone']]
         ba, bb, bc, bd, bx, by = bone
 
@@ -756,8 +759,8 @@ def render(skel_bytes, atlas_text, load_page, scale=1.0, skin_names=None, pad=4,
             ow, oh = reg['ow'], reg['oh']
             # bottom-left, top-left, top-right, bottom-right in image pixels
             src = [(0, oh), (0, 0), (ow, 0), (ow, oh)]
-            tris.append((path, [src[0], src[1], src[2]], [corners[0], corners[1], corners[2]], tint))
-            tris.append((path, [src[0], src[2], src[3]], [corners[0], corners[2], corners[3]], tint))
+            tris.append((path, [src[0], src[1], src[2]], [corners[0], corners[1], corners[2]], tint, blend))
+            tris.append((path, [src[0], src[2], src[3]], [corners[0], corners[2], corners[3]], tint, blend))
         else:
             verts = a['verts']
             deform = sk['deform'].get((si, key))
@@ -786,8 +789,42 @@ def render(skel_bytes, atlas_text, load_page, scale=1.0, skin_names=None, pad=4,
                 ia, ib, ic = t[i], t[i + 1], t[i + 2]
                 if max(ia, ib, ic) >= len(pts):
                     continue
-                tris.append((path, [src[ia], src[ib], src[ic]], [pts[ia], pts[ib], pts[ic]], tint))
+                tris.append((path, [src[ia], src[ib], src[ic]], [pts[ia], pts[ib], pts[ic]], tint, blend))
+    return pages, regions, tris
 
+
+def texel_density(tris, quantile=0.5):
+    """Atlas texels per skeleton unit of a posed skeleton (posed_triangles): the area-weighted
+    `quantile` of each triangle's sqrt(texel area / skeleton-unit area). Additive slots (glows,
+    usually low-res art stretched wide) and degenerate triangles are skipped. None if nothing
+    is left."""
+    samples = []
+    for t in tris:
+        src, dst = t[1], t[2]
+        if len(t) > 4 and t[4] == 1:  # BlendMode.Additive
+            continue
+        (u0, v0), (u1, v1), (u2, v2) = src
+        (x0, y0), (x1, y1), (x2, y2) = dst
+        sa = abs((u1 - u0) * (v2 - v0) - (u2 - u0) * (v1 - v0)) / 2
+        da = abs((x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0)) / 2
+        if sa <= 1e-6 or da <= 1e-6:
+            continue
+        samples.append((math.sqrt(sa / da), da))
+    if not samples:
+        return None
+    samples.sort()
+    total = sum(a for _, a in samples)
+    acc = 0.0
+    for d, a in samples:
+        acc += a
+        if acc >= total * quantile:
+            return d
+    return samples[-1][0]
+
+
+def render(skel_bytes, atlas_text, load_page, scale=1.0, skin_names=None, pad=4, animation='idle_loop', hide=()):
+    pages, regions, tris = posed_triangles(skel_bytes, atlas_text, skin_names, animation, hide)
+    textures = {}
     if not tris:
         return None
     xs = [p[0] for t in tris for p in t[2]]
@@ -799,7 +836,7 @@ def render(skel_bytes, atlas_text, load_page, scale=1.0, skin_names=None, pad=4,
     ss = 2
     canvas = np.zeros((H * ss, W * ss, 4), dtype=np.float32)
     pages_img = {}
-    for key, src, dst, tint in tris:
+    for key, src, dst, tint, _blend in tris:
         tex = textures.get(key)
         if tex is None:
             reg = regions[key]

@@ -261,3 +261,10 @@ run_cardtext_test: $(B)/cardtext_test
 
 check: run_cardtext_test
 .PHONY: run_cardtext_test
+
+# build_assets Spine atlas scaling / repacking (no game files needed).
+run_tools_test:
+	@PY=$$(command -v python3 || command -v python); if [ -n "$$PY" ] && $$PY -c "import PIL, numpy" 2>/dev/null; then $$PY tools/test_build_assets.py; else echo "tools test skipped (needs python3 with Pillow and numpy)"; fi
+
+check: run_tools_test
+.PHONY: run_tools_test

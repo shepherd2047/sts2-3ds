@@ -141,22 +141,24 @@ def write_t3t(path, img):
 
 
 class Packer:
-    """Shelf packer into power-of-two pages (3DS max 1024x1024)."""
+    """Shelf packer into power-of-two pages (3DS max 1024x1024); `height` (default: size) for
+    pages that are not square."""
 
-    def __init__(self, size=1024, pad=1):
+    def __init__(self, size=1024, pad=1, height=None):
         self.size = size
+        self.height = height or size
         self.pad = pad
         self.pages = []
         self.entries = []
 
     def _new_page(self):
-        self.pages.append({'img': Image.new('RGBA', (self.size, self.size), (0, 0, 0, 0)),
+        self.pages.append({'img': Image.new('RGBA', (self.size, self.height), (0, 0, 0, 0)),
                            'shelves': [], 'y': 0})
         return self.pages[-1]
 
     def add(self, name, img, anchor=(0, 0)):
         w, h = img.width + self.pad * 2, img.height + self.pad * 2
-        if w > self.size or h > self.size:
+        if w > self.size or h > self.height:
             raise ValueError(f'{name} too big: {img.size}')
         for pi, page in enumerate(self.pages + [None]):
             if page is None:
@@ -168,7 +170,7 @@ class Packer:
                     shelf['x'] += w
                     break
             else:
-                if page['y'] + h > self.size:
+                if page['y'] + h > self.height:
                     continue
                 shelf = {'y': page['y'], 'h': h, 'x': w}
                 page['shelves'].append(shelf)
@@ -303,7 +305,94 @@ class Assets:
         return img, origin
 
 
-def export_spine(g, key, skel_res, skel, atlas, load, scale, hide=(), shift=None, max_page=1024):
+# Spine atlas resolution (export_spine). The game's atlases are drawn for 1080p, so on the 3DS a
+# creature showed ~6 (up to 17) atlas texels per screen pixel: shimmering without mipmaps and
+# memory for nothing. Pages are scaled so that at the largest zoom a creature is shown with
+# (combat 1.0, bestiary 1.5, the inspect page 1.6: combat_scene.cpp) there are about
+# SPINE_TEXELS_PER_PIXEL texels per screen pixel; never upscaled.
+SPINE_TEXELS_PER_PIXEL = 1.25
+SPINE_MAX_ZOOM = 1.6
+# Gutter between repacked regions: bilinear sampling at a region's edge must not reach a neighbour.
+SPINE_REGION_PAD = 1
+
+
+def pow2(n, lo=8):
+    v = lo
+    while v < n:
+        v *= 2
+    return v
+
+
+def spine_atlas_scale(density, scale, max_zoom=SPINE_MAX_ZOOM, target=SPINE_TEXELS_PER_PIXEL):
+    """Factor (<= 1) for a Spine atlas whose art has `density` atlas pixels per skeleton unit,
+    drawn at `scale` screen pixels per skeleton unit, so that at `max_zoom` it shows `target`
+    texels per screen pixel. None/0 density (nothing measurable): 1."""
+    if not density or density <= 0 or scale <= 0:
+        return 1.0
+    return min(1.0, target * scale * max_zoom / density)
+
+
+def pack_spine_atlas(page_imgs, regions, factor, max_page=1024, pad=SPINE_REGION_PAD):
+    """Repack every atlas region, scaled by `factor`, into power-of-two pages of at most max_page.
+
+    page_imgs: {id(atlas page): RGBA image at the atlas's own pixel size}; regions as
+    spine_render.parse_atlas. Each region's packed rectangle (rotated ones stay rotated) is
+    resized on its own, so downscaling never blends neighbours (a region longer than max_page
+    lowers the factor). Returns (pages, maps, factor): maps[name] = (page, A, B, C, D, E, F)
+    with tu = A*u + B*v + C, tv = D*u + E*v + F (u, v over the original untrimmed image)."""
+    rects = []
+    for name, r in regions.items():
+        bw, bh = (r['h'], r['w']) if r['rot'] == 90 else (r['w'], r['h'])
+        rects.append((name, r, bw, bh))
+    longest = max([max(bw, bh) for _, _, bw, bh in rects] + [1])
+    factor = min(factor, (max_page - 2 * pad) / longest)
+    pieces = {}
+    for name, r, bw, bh in rects:
+        nw, nh = max(1, round(bw * factor)), max(1, round(bh * factor))
+        src = page_imgs[id(r['page'])].crop((r['x'], r['y'], r['x'] + bw, r['y'] + bh))
+        pieces[name] = src.resize((nw, nh), Image.LANCZOS) if (nw, nh) != (bw, bh) else src
+    # Tallest first: the shelf packer wastes less.
+    order = sorted(pieces, key=lambda n: (-pieces[n].height, -pieces[n].width, n))
+    best = None
+    w = 8
+    while w <= max_page:  # the page width that needs the least texture memory
+        packer = Packer(size=w, pad=pad, height=max_page)
+        try:
+            for name in order:
+                packer.add(name, pieces[name])
+        except ValueError:  # a region wider than this page
+            w *= 2
+            continue
+        sizes = []
+        for pi in range(len(packer.pages)):
+            ents = [e for e in packer.entries if e[1] == pi]
+            sizes.append((w, min(max_page, pow2(max(e[3] + e[5] for e in ents) + pad))))
+        cost = (sum(pw * ph for pw, ph in sizes), len(sizes), max(max(sz) for sz in sizes))
+        if best is None or cost < best[0]:
+            best = (cost, packer, sizes)
+        w *= 2
+    _, packer, sizes = best
+    pages = [page['img'].crop((0, 0) + sz) for page, sz in zip(packer.pages, sizes)]
+    maps = {}
+    for name, pi, x, y, nw, nh, _, _ in packer.entries:
+        r = regions[name]
+        bw, bh = (r['h'], r['w']) if r['rot'] == 90 else (r['w'], r['h'])
+        sx, sy = nw / bw, nh / bh
+        if r['rot'] == 90:
+            A, B, C = 0.0, r['oh'], r['x'] - (r['oh'] - r['oy'] - r['h'])
+            D, E, F = -r['ow'], 0.0, r['y'] + r['w'] + r['ox']
+        else:
+            A, B, C = r['ow'], 0.0, r['x'] - r['ox']
+            D, E, F = 0.0, r['oh'], r['y'] - (r['oh'] - r['oy'] - r['h'])
+        # Old page pixel X -> new page pixel x + (X - r.x) * sx; then over the texture size.
+        tw, th = pages[pi].size
+        maps[name] = (pi, A * sx / tw, B * sx / tw, (x + (C - r['x']) * sx) / tw,
+                      D * sy / th, E * sy / th, (y + (F - r['y']) * sy) / th)
+    return pages, maps, factor
+
+
+def export_spine(g, key, skel_res, skel, atlas, load, scale, hide=(), shift=None, max_page=1024,
+                 max_zoom=None, render_hide=()):
     """Skeleton + atlas for the runtime: romfs/spine/KEY.skel, KEY.txt, KEY_N.t3t.
 
     KEY.txt lines:
@@ -314,47 +403,81 @@ def export_spine(g, key, skel_res, skel, atlas, load, scale, hide=(), shift=None
                                     untrimmed image, v down) to texture uv:
                                     tu = A*u + B*v + C, tv = D*u + E*v + F
       mix FROM TO SECONDS
+
+    max_zoom (creatures): the regions are repacked at the resolution the largest on-screen size
+    needs (SPINE_TEXELS_PER_PIXEL at scale * max_zoom px per skeleton unit; texel density measured
+    on the posed skeleton, render_hide = its hidden slots). Without it (the boot logo) the pages
+    are kept as they are, only capped at max_page.
     """
     out = os.path.join(OUT, 'spine')
     with open(os.path.join(out, key + '.skel'), 'wb') as f:
         f.write(skel)
     pages, regions = spine_render.parse_atlas(atlas)
     lines = [f'scale {scale:.6f}']
-    page_index = {}
-    for i, page in enumerate(pages):
+    page_imgs, old_px = {}, 0
+    for page in pages:
         img = load(page['file']).convert('RGBA')
         pw, ph = [int(v) for v in page['size'].split(',')] if 'size' in page else img.size
         if img.size != (pw, ph):
             img = img.resize((pw, ph), Image.LANCZOS)
-        # Largest 3DS texture is 1024 (max_page: smaller for art shown small); pad to a power of two.
-        s = min(1.0, max_page / pw, max_page / ph)
-        sw, sh = max(1, round(pw * s)), max(1, round(ph * s))
-        if s < 1.0:
-            img = img.resize((sw, sh), Image.LANCZOS)
-        tw, th = 8, 8
-        while tw < sw:
-            tw *= 2
-        while th < sh:
-            th *= 2
-        canvas = Image.new('RGBA', (tw, th), (0, 0, 0, 0))
-        canvas.paste(img, (0, 0))
+        page_imgs[id(page)] = img
+        s0 = min(1.0, max_page / pw, max_page / ph)  # what the export wrote before (summary only)
+        old_px += pow2(max(1, round(pw * s0))) * pow2(max(1, round(ph * s0)))
+    density = None
+    if max_zoom:
+        _, _, tris = spine_render.posed_triangles(skel, atlas, hide=render_hide)
+        density = spine_render.texel_density(tris)
+        factor = spine_atlas_scale(density, scale, max_zoom)
+        new_pages, maps, factor = pack_spine_atlas(page_imgs, regions, factor, max_page)
+    else:
+        new_pages, maps = [], {}
+        page_index = {}
+        for page in pages:
+            img = page_imgs[id(page)]
+            pw, ph = img.size
+            # Largest 3DS texture is 1024 (max_page: smaller for art shown small); pad to a power of two.
+            s = min(1.0, max_page / pw, max_page / ph)
+            sw, sh = max(1, round(pw * s)), max(1, round(ph * s))
+            if s < 1.0:
+                img = img.resize((sw, sh), Image.LANCZOS)
+            canvas = Image.new('RGBA', (pow2(sw), pow2(sh)), (0, 0, 0, 0))
+            canvas.paste(img, (0, 0))
+            page_index[id(page)] = (len(new_pages), sw / pw / canvas.width, sh / ph / canvas.height)
+            new_pages.append(canvas)
+        for name, r in regions.items():
+            pi, kx, ky = page_index[id(r['page'])]
+            if r['rot'] == 90:
+                A, B, C = 0.0, r['oh'], r['x'] - (r['oh'] - r['oy'] - r['h'])
+                D, E, F = -r['ow'], 0.0, r['y'] + r['w'] + r['ox']
+            else:
+                A, B, C = r['ow'], 0.0, r['x'] - r['ox']
+                D, E, F = 0.0, r['oh'], r['y'] - (r['oh'] - r['oy'] - r['h'])
+            maps[name] = (pi, A * kx, B * kx, C * kx, D * ky, E * ky, F * ky)
+    for i, img in enumerate(new_pages):
         name = f'{key}_{i}.t3t'
-        write_t3t(os.path.join(out, name), canvas)
+        write_t3t(os.path.join(out, name), img)
         lines.append(f'page {i} spine/{name}')
-        page_index[id(page)] = (i, sw / pw / tw, sh / ph / th)
+    # Pages a previous build wrote beyond the current count.
+    for stale in glob.glob(os.path.join(out, glob.escape(key) + '_*.t3t')):
+        m = re.fullmatch(re.escape(key) + r'_(\d+)\.t3t', os.path.basename(stale))
+        if m and int(m.group(1)) >= len(new_pages):
+            os.remove(stale)
     for name, r in regions.items():
-        pi, kx, ky = page_index[id(r['page'])]
-        if r['rot'] == 90:
-            A, B, C = 0.0, r['oh'], r['x'] - (r['oh'] - r['oy'] - r['h'])
-            D, E, F = -r['ow'], 0.0, r['y'] + r['w'] + r['ox']
-        else:
-            A, B, C = r['ow'], 0.0, r['x'] - r['ox']
-            D, E, F = 0.0, r['oh'], r['y'] - (r['oh'] - r['oy'] - r['h'])
+        pi, A, B, C, D, E, F = maps[name]
         # Packed (untrimmed) part of the original image, as uv bounds.
         u0, u1 = r['ox'] / r['ow'], (r['ox'] + r['w']) / r['ow']
         v0, v1 = (r['oh'] - r['oy'] - r['h']) / r['oh'], (r['oh'] - r['oy']) / r['oh']
-        lines.append(f'region {pi} {A*kx:.7f} {B*kx:.7f} {C*kx:.7f} {D*ky:.7f} {E*ky:.7f} {F*ky:.7f} '
+        lines.append(f'region {pi} {A:.7f} {B:.7f} {C:.7f} {D:.7f} {E:.7f} {F:.7f} '
                      f'{u0:.6f} {v0:.6f} {u1:.6f} {v1:.6f} {name}')
+    new_px = sum(p.width * p.height for p in new_pages)
+    old = '+'.join(f'{p["size"].replace(",", "x")}' if 'size' in p else '?' for p in pages)
+    new = '+'.join(f'{p.width}x{p.height}' for p in new_pages)
+    dens = ''
+    if max_zoom and density:
+        # Texels per screen pixel at zoom 1: before (pages only capped at max_page) and now.
+        cap = min(min(1.0, max_page / im.width, max_page / im.height) for im in page_imgs.values())
+        dens = f'{density * cap / scale:.1f} -> {density * factor / scale:.2f} texel/px at 1x, factor {factor:.3f}, '
+    print(f'    spine {key}: {old} -> {new} ({dens}{old_px * 4 // 1024} -> {new_px * 4 // 1024} KB RGBA8)')
     tres = g.pck.read(skel_res).decode()
     for m in re.finditer(r'from = "([^"]+)"\s*\nto = "([^"]+)"\s*\nmix = ([\d.]+)', tres):
         lines.append(f'mix {m.group(1)} {m.group(2)} {m.group(3)}')
@@ -1209,7 +1332,8 @@ def build(args):
             shift = (origin[0] - img.width / 2, origin[1] - img.height)
             origin = (img.width / 2, img.height)
         packer.add('creature/' + key, img, (round(origin[0]), round(origin[1])))
-        export_spine(g, key, skel_res, skel, atlas, load, scale * f, hide if key in KAISER_CRAB_KEEP else (), shift)
+        export_spine(g, key, skel_res, skel, atlas, load, scale * f, hide if key in KAISER_CRAB_KEEP else (), shift,
+                     max_zoom=SPINE_MAX_ZOOM, render_hide=hide)
 
     print('icons')
     for key in POWERS:
