@@ -192,6 +192,7 @@ void shutdown() {
 
 bool running() { return !quit; }
 void onSystemPause(void (*)(bool)) {}  // Y5: no HOME menu / sleep on the desktop
+void memoryLog(const char*) {}  // no linear-memory limit on the desktop
 double dt() { return frameDt; }
 
 // One reading per frame: main.cpp reads it before App::update, and screens that draw kit widgets

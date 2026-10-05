@@ -243,6 +243,7 @@ check: $(B)/enchant_test $(B)/afflict_test $(B)/rewards_test $(B)/hooks_test $(B
 	@PY=$$(command -v python3 || command -v python); if [ -n "$$PY" ] && [ -d ../sts2-decompiled ]; then $$PY tools/ascension_check.py; else echo "ascension_check skipped (needs python3 and ../sts2-decompiled)"; fi
 	./$(B)/model_dump > build/model_dump.txt
 	@PY=$$(command -v python3 || command -v python); if [ -n "$$PY" ] && [ -d ../sts2-decompiled ]; then $$PY tools/balance_check.py; else echo "balance_check skipped (needs python3 and ../sts2-decompiled)"; fi
+	@PY=$$(command -v python3 || command -v python); if [ -n "$$PY" ] && $$PY -c 'import numpy, PIL' 2>/dev/null; then $$PY test/compress_romfs_test.py; else echo "compress_romfs_test skipped (needs python3 with numpy + Pillow)"; fi
 
 clean:
 	rm -rf build

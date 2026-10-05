@@ -63,6 +63,10 @@ Texture* loadTexture(const std::string& path);
 void freeTexture(Texture* t);
 int texWidth(Texture* t);
 int texHeight(Texture* t);
+// Debug log of free texture memory (3DS: linear heap free + main heap use) tagged `where`:
+// printed to stdout and, when STS_MEM_LOG is set (sts2-debug.txt), appended to
+// sdmc:/sts2-mem.txt. The preview has no such limit and ignores it.
+void memoryLog(const char* where);
 
 // Colours are 0xRRGGBBAA. The texture colour is lerped towards tint.rgb by
 // `blend` and its alpha multiplied by tint.a (citro2d's tint model).
