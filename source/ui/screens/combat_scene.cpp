@@ -252,7 +252,16 @@ std::map<Creature*, float>& reticleTimes() {
 std::vector<Creature*> App::visibleEnemies() {
   std::vector<Creature*> out;
   if (!run_->combat) return out;
-  for (auto* e : run_->combat->enemies) if (!e->removed) out.push_back(e);
+  for (auto* e : run_->combat->enemies) {
+    // A creature removed from the fight stays on screen while its death plays out (NCreature.AnimDie
+    // frees the node only after the die animation and the fade); the last one of a won fight stays.
+    bool shown = !e->removed;
+    if (!shown && e->dead()) {
+      auto it = visuals_.find(e);
+      shown = it != visuals_.end() && it->second.dying && it->second.fade > 0;
+    }
+    if (shown) out.push_back(e);
+  }
   return out;
 }
 
@@ -274,6 +283,7 @@ bool App::drawCreatureBody(Creature* c, float x, float feetY, float scale, bool 
     if (live && v->dying && c->alive()) {  // an illusion came back
       v->dying = false;
       v->fade = 1.f;
+      v->deadT = 0;
       v->anim->play(idleAnim(*v), true);
     }
     if (v->fade <= 0) return false;
