@@ -7,6 +7,7 @@
 
 #include "achievements.h"
 #include "badges.h"
+#include "debug_cmds.h"
 #include "game.h"
 #include "modifiers.h"
 
@@ -147,8 +148,10 @@ Task<> Monster::gainBlock(int amount) { co_await cmd::gainBlock(creature, amount
 
 void Monster::setMoveImmediate(MoveState* s, bool force) {
   if (!nextMove || nextMove->canTransitionAway() || force) {
+    const bool changed = nextMove != s;
     nextMove = s;
     machine.setCurrent(s);
+    if (changed && combat && creature && s) combat->push({VisualEvent::IntentChanged, creature, 0, s->id});
   }
 }
 
@@ -205,6 +208,31 @@ Pile Combat::pileOf(Card* c) {
     if (std::find(v.begin(), v.end(), c) != v.end()) return p;
   }
   return Pile::None;
+}
+
+const char* VisualEvent::name(Kind k) {
+  static const char* const kNames[] = {
+      "Damage", "Blocked", "Block", "Heal", "PowerUp", "PowerDown", "Death", "CardExhaust", "Shuffle", "Banner", "Anim",
+      "Hit", "CardPlayed", "BlockBroken", "MoveStart", "OrbChannel", "OrbEvoke", "OrbPassive", "StarsGain", "StarsSpend",
+      "Forge", "Summon", "OstyRevive", "CardGenerated", "CardUpgraded", "CardTransformed", "CardEnchanted", "CardRemoved",
+      "IntentChanged", "BlockExpired", "PowerRemoved", "PotionThrown", "Unplayable"};
+  static_assert(sizeof(kNames) / sizeof(kNames[0]) == KindCount, "VisualEvent::name table");
+  return k >= 0 && k < KindCount ? kNames[k] : "?";
+}
+
+int Combat::orbSlot(const Orb* o) const {
+  for (int i = 0; i < (int)orbQueue.size(); ++i)
+    if (orbQueue[i].get() == o) return i;
+  return -1;
+}
+
+bool Combat::notePlayRejected(Card* c) {
+  std::string why;
+  if (!c || canPlay(c, &why) || why.empty()) return false;
+  // UnplayableReason.GetPlayerDialogueLine (combat_messages keys).
+  const char* key = why == "ENERGY" ? "NOT_ENOUGH_ENERGY" : why == "STARS" ? "NOT_ENOUGH_STARS" : "UNPLAYABLE";
+  push({VisualEvent::Unplayable, player, 0, key, c, pileOf(c)});
+  return true;
 }
 
 void Combat::removeFromPiles(Card* c) {
@@ -368,6 +396,7 @@ Task<> Orb::triggerPassive(Creature* target) {
   int triggerCount = c->modifyOrbPassiveTriggerCount(this, 1);
   for (Model* m : c->listeners()) co_await m->afterModifyingOrbPassiveTriggerCount(this);
   for (int i = 0; i < triggerCount; ++i) {
+    c->push({VisualEvent::OrbPassive, c->player, 0, id, nullptr, Pile::None, c->orbSlot(this)});
     co_await passive(target);
     // PORT NOTE (n/a: single-player): CustomScaledWait(0.1, 0.25) is always the local player's wait ("IsMe").
     co_await scaledWait(0.1, 0.25);
@@ -710,6 +739,7 @@ Task<> removePower(Power* p) {
   if (!keep) co_return;
   Power* raw = keep.get();
   owner->combat->graveyard.push_back(std::move(keep));
+  owner->combat->push({VisualEvent::PowerRemoved, owner, 0, raw->locKey});
   co_await scaledWait(0.2, 0.4);
   co_await raw->afterRemoved(owner);
 }
@@ -827,6 +857,7 @@ static Task<> evokeOrbInternal(Combat& c, Orb* orbPtr, bool dequeue) {
   if (c.orbQueue.empty()) co_return;
   std::unique_ptr<Orb> holder;  // keeps `orbPtr` alive across the awaits below when dequeued
   bool removed = false;
+  c.push({VisualEvent::OrbEvoke, c.player, 0, orbPtr->id, nullptr, Pile::None, c.orbSlot(orbPtr)});
   if (dequeue) {
     auto it = std::find_if(c.orbQueue.begin(), c.orbQueue.end(), [&](auto& p) { return p.get() == orbPtr; });
     if (it != c.orbQueue.end()) { holder = std::move(*it); c.orbQueue.erase(it); removed = true; }
@@ -859,6 +890,7 @@ Task<> channelOrb(Combat& c, std::unique_ptr<Orb> orb) {
   if (c.orbCapacity == 0) co_return;  // OrbQueue.TryEnqueue: Capacity == 0 -> false, nothing else happens
   Orb* raw = orb.get();
   c.orbQueue.push_back(std::move(orb));
+  c.push({VisualEvent::OrbChannel, c.player, 0, raw->id, nullptr, Pile::None, (int)c.orbQueue.size() - 1});
   // PORT NOTE (n/a: single-player): CustomScaledWait(0.1, 0.25) is always the local player's wait ("IsMe").
   co_await scaledWait(0.1, 0.25);
   if (raw->id == "LightningOrb") ++c.lightningOrbsChanneled;
@@ -870,7 +902,10 @@ Task<> channelOrb(Combat& c, std::unique_ptr<Orb> orb) {
 Task<> orbPassive(Combat& c, Orb* orb, Creature* target, bool countAffectedByHooks) {
   if (c.over || c.ending) co_return;
   if (countAffectedByHooks) co_await orb->triggerPassive(target);
-  else co_await orb->passive(target);
+  else {
+    c.push({VisualEvent::OrbPassive, c.player, 0, orb->id, nullptr, Pile::None, c.orbSlot(orb)});
+    co_await orb->passive(target);
+  }
 }
 
 Task<> gainEnergy(Combat& c, int amount) {
@@ -885,6 +920,7 @@ Task<> gainStars(Combat& c, int amount) {
   int before = c.stars;
   c.stars = std::max(0, c.stars + amount);
   if (c.stars > before) c.starsGainedThisTurn += c.stars - before;
+  if (c.stars > before) c.push({VisualEvent::StarsGain, c.player, c.stars - before});
   if (c.stars != before) c.history.starsModified(c, c.stars - before);  // History.StarsModified
   for (Model* m : c.listeners()) co_await m->afterStarsGained(amount);
 }
@@ -895,6 +931,7 @@ Task<> loseStars(Combat& c, int amount) {
   int before = c.stars;
   c.stars = std::max(0, c.stars - amount);
   if (c.stars != before) c.history.starsModified(c, c.stars - before);  // History.StarsModified
+  if (c.stars < before) c.push({VisualEvent::StarsSpend, c.player, before - c.stars});
   co_return;
 }
 
@@ -923,6 +960,7 @@ Task<Card*> addGeneratedCard(Combat& c, std::unique_ptr<Card> card, Pile to, boo
   ++c.cardsGeneratedThisCombat;  // CombatHistory.CardGenerated
   c.history.cardGenerated(c, raw, raw->createdByPlayer);
   co_await moveCard(c, raw, to, top);
+  c.push({VisualEvent::CardGenerated, c.player, 0, raw->id, raw, c.pileOf(raw)});
   for (Model* m : c.listeners()) co_await m->afterCardEnteredCombat(raw);
   co_return raw;
 }
@@ -939,11 +977,19 @@ Task<Card*> transform(Combat& c, Card* card, std::unique_ptr<Card> into) {
   auto it = std::find(v.begin(), v.end(), card);
   if (it != v.end()) *it = raw;
   if (p != Pile::None) c.history.cardGenerated(c, raw, true);  // CardCmd.Transform (combat pile)
+  c.push({VisualEvent::CardTransformed, c.player, 0, card->id, raw, p});
   co_await wait(0.2);
   co_return raw;
 }
 
-void upgradeCard(Card* card) { card->upgrade(); }
+void upgradeCard(Card* card) {
+  const int before = card->upgradeLevel;
+  card->upgrade();
+  if (card->upgradeLevel == before) return;
+  VisualEvent e{VisualEvent::CardUpgraded, nullptr, card->upgradeLevel, card->id, card};
+  if (card->combat) { e.who = card->combat->player; e.pile = card->combat->pileOf(card); card->combat->push(std::move(e)); }
+  else if (card->run) card->run->pushVisual(std::move(e));
+}
 void downgradeCard(Card* card) { if (card) card->downgrade(); }
 
 Task<> addStatusCards(Combat& c, std::string cardId, Pile to, int count, bool byPlayer) {
@@ -955,6 +1001,7 @@ Task<> addStatusCards(Combat& c, std::string cardId, Pile to, int count, bool by
     card->createdByPlayer = byPlayer;
     co_await moveCard(c, card, to);
     c.history.cardGenerated(c, card, byPlayer);  // History.CardGenerated
+    c.push({VisualEvent::CardGenerated, c.player, 0, card->id, card, c.pileOf(card)});
     added.push_back(card);
   }
   for (Card* card : added)
@@ -1093,6 +1140,7 @@ Task<> Combat::runCombat() {
   setupDone = true;  // CombatManager: IsInProgress = true after the AfterCreatureAdded loop
   for (Model* m : listeners()) co_await m->beforeCombatStart();
   for (Model* m : listeners()) co_await m->beforeCombatStartLate();
+  if (dbg::anyCombatStartSwitch()) co_await dbg::applyCombatStart(*this);  // STS_POWERS / STS_ORBS / ... (debug_cmds.h)
   banner = "战斗开始";
   bannerTime = 1.2f;
   co_await scaledWait(0.5, 1.0);  // StartCombatInternal: CustomScaledWait(0.5, 1) after NCombatStartBanner
@@ -1185,6 +1233,7 @@ Task<> Combat::startTurn() {
     bool clear = true;
     for (Model* m : listeners()) clear = clear && m->shouldClearBlock(cr);
     if (clear) {
+      if (cr->block > 0) push({VisualEvent::BlockExpired, cr, cr->block});
       cr->block = 0;
       for (Model* m : listeners()) co_await m->afterBlockCleared(cr);
     }
@@ -1247,6 +1296,8 @@ Task<> Combat::setupPlayerTurn() {
     for (Card* c : draw) if (c->has(kwInnate) && std::find(bottom.begin(), bottom.end(), c) == bottom.end()) innate.push_back(c);
     for (Card* c : innate) { draw.erase(std::find(draw.begin(), draw.end(), c)); draw.insert(draw.begin(), c); }
     handDraw = Dec(std::min(std::max(handDraw.toInt(), (int)innate.size()), kMaxHand));
+    if (int forced = dbg::forceOpeningHand(*this)) handDraw = Dec(forced);  // STS_HAND (debug)
+    dbg::applyStartEnergy(*this);  // STS_ENERGY (debug)
   }
   co_await cmd::drawCards(*this, handDraw, true);
   for (Model* m : listeners()) co_await m->afterPlayerTurnStart();
@@ -1382,6 +1433,7 @@ Task<> Combat::playCard(Card* card, Creature* target, bool autoPlay, bool forceE
     int starsBefore = stars;
     stars = std::max(0, stars - starsSpent);
     if (stars != starsBefore) history.starsModified(*this, stars - starsBefore);  // History.StarsModified
+    if (stars < starsBefore) push({VisualEvent::StarsSpend, player, starsBefore - stars, card->id, card});
   }
   // CardCmd.AutoPlay without skipXCapture: X is the current energy (nothing is spent) and
   // LastStarsSpent the current stars (star X) or the star cost.

@@ -38,6 +38,9 @@ Input input();
 // reports them as not pressed (the L+R top-bar chord consumes L and R, so no screen also sees
 // a single L or R that frame).
 void consumeButtons(uint32_t mask);
+// STS_SCRIPT "frame:C<cmd>" items (debug commands, `_` = space): true and the next command due by the
+// current frame, in script order, until none is left. The UI hands them to dbg::startCommand.
+bool takeScriptCommand(std::string& out);
 
 void beginFrame();
 void screen(Screen s, uint32_t clearRgba);

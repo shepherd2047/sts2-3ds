@@ -95,6 +95,7 @@ Task<Creature*> summonOsty(Combat& c, int amount, Model* source) {
   amount = modified.toInt();
   if (amount == 0) co_return c.osty;
   if (c.osty && c.osty->alive()) {
+    c.push({VisualEvent::Summon, c.osty, amount, "Grow"});
     co_await cmd::gainMaxHp(c.osty, amount);
   } else {
     bool isReviving = c.osty != nullptr;
@@ -110,6 +111,8 @@ Task<Creature*> summonOsty(Combat& c, int amount, Model* source) {
       co_await applyPower<DieForYouPower>(c.osty, Dec(1), nullptr, nullptr);
     }
     c.osty->maxHp = amount;  // CreatureCmd.SetMaxHp
+    c.push({VisualEvent::Summon, c.osty, amount, isReviving ? "Revive" : "First"});
+    if (isReviving) c.push({VisualEvent::OstyRevive, c.osty, amount});
     co_await cmd::heal(c.osty, Dec(amount));
     if (isReviving)
       for (Model* m : c.listeners()) co_await m->afterOstyRevived(c.osty);

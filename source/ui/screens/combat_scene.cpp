@@ -911,13 +911,15 @@ void App::drawVfx(Combat& cb) {
   s.burnInHand = false;
   for (Card* c : cb.hand) s.burnInHand = s.burnInHand || c->id == "Burn";
 
-  // X2: an orb that left the queue was evoked; burst at the slot it sat in (combat_ui.cpp layout).
+  // X2: an orb that left the queue was evoked; burst at the slot it sat in (combat_ui.cpp layout: the
+  // row sits at 24 + relicRowH(), slots 20 px + 4 px gap from x 4).
   const int nOrbs = std::min((int)cb.orbQueue.size(), kMaxTracked);
   if (s.nOrbs >= 0) {
+    const float orbRowY = 24 + relicRowH();
     for (int i = 0; i < s.nOrbs; ++i) {
       bool still = false;
       for (int j = 0; j < nOrbs && !still; ++j) still = cb.orbQueue[j].get() == s.orbs[i];
-      if (!still) vfx::orbEvoke(4 + i * 24.f + 10, 24 + 10, s.orbRgb[i]);
+      if (!still) vfx::orbEvoke(4 + i * 24.f + 10, orbRowY + 10, s.orbRgb[i]);
     }
   }
   for (int i = 0; i < nOrbs; ++i) {

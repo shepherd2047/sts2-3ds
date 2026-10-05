@@ -176,6 +176,15 @@ Preview automation (env vars): `STS_HIDDEN=1 STS_FIXED_STEP=1 STS_SEED=42`,
 `build/sim`). From title: 40:A opens character select and 100:A (or START) starts the run; with STS_ENCOUNTER / STS_ROOM, `40:A,100:A,160:A,220:A` reaches the first room (Neow otherwise runs first).
 Headless checks: `SIM_FIGHTS=1 ./build/sim N` prints each fight; add a second
 argument for a verbose event log.
+Combat setup (`core/debug_cmds.h`, every fight; ids as class name, without suffix or SCREAMING_SNAKE):
+`STS_POWERS=Strength:3:0,Vulnerable:2:1` (id:amount:idx after the BeforeCombatStart hooks; idx = the
+console's CombatState.Creatures: 0 player, then Osty once summoned, pets, enemies in order),
+`STS_ORBS=Lightning,Frost,Dark,Plasma,Glass` (channelled), `STS_STARS=N` (gained), `STS_ENERGY=N` (turn-1 energy),
+`STS_HAND=Bash+,Zap` (exactly the opening hand; `+` upgraded; a draw-pile copy is used first, else one is made),
+`STS_PILE_DRAW=...` (on top of the draw pile, first = top), `STS_PILE_DISCARD=...`.
+STS_SCRIPT `frame:C<cmd>` runs a dev-console command, `_` for spaces (`300:Cpower_Strength_3_0`): `power <id> <n> [idx]`,
+`card <id>[+] [hand|draw|discard|exhaust]`, `kill [enemyIdx|all]`, `damage <n> [idx]` (no idx: all enemies),
+`block <n> [idx]`, `stars <n>`, `energy <n>`, `potion <id>`, `orb <kind>`. `STS_EVENT_LOG=1` prints every drained VisualEvent.
 
 3DS rendering: never rely on citro2d tint `blend` (Azahar drops it: the grey HP-bar art showed
 silver). Bake pre-coloured sprites in build_assets (e.g. `ui/hp_fill_<RRGGBB>`) or use blend 0, and

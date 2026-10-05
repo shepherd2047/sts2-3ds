@@ -33,6 +33,14 @@ Enchantment* enchant(Card* card, std::unique_ptr<Enchantment> e, int amount) {
   } else {
     card->enchantment->amount += amount;  // stacking the same enchantment
   }
+  VisualEvent ev{VisualEvent::CardEnchanted, nullptr, amount, card->enchantment->id, card};
+  if (card->combat && card->combat->inProgress) {
+    ev.who = card->combat->player;
+    ev.pile = card->combat->pileOf(card);
+    card->combat->push(std::move(ev));
+  } else if (card->run) {
+    card->run->pushVisual(std::move(ev));
+  }
   return card->enchantment.get();
 }
 

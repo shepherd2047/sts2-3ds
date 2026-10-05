@@ -44,7 +44,10 @@ int frameCount = 0;
 // screen at the given frame, for automated screenshots. Drags: P160x200 presses
 // and holds, M160x120 moves the held touch, U releases. "90:L+R" presses L and R
 // in the same frame (the top bar chord).
-struct Scripted { int frame; uint32_t btn; int tx, ty; char kind = 'T'; };
+// "300:Cpower_Strength_3_0" queues a debug command (C, `_` for spaces: items are comma separated) for
+// gfx::takeScriptCommand.
+struct Scripted { int frame; uint32_t btn; int tx, ty; char kind = 'T'; std::string cmd; };
+std::vector<std::string> pendingCmds;
 bool scriptHeld = false;
 int heldX = 0, heldY = 0;
 std::vector<Scripted> script;
@@ -87,7 +90,9 @@ void parseScript() {
       if (c == std::string::npos) continue;
       Scripted sc{atoi(item.c_str()), 0, -1, -1};
       std::string k = item.substr(c + 1);
+      if (k.empty()) continue;
       if (k[0] == 'T' || k[0] == 'P' || k[0] == 'M') { sc.kind = k[0]; sscanf(k.c_str() + 1, "%dx%d", &sc.tx, &sc.ty); }
+      else if (k[0] == 'C') { sc.kind = 'C'; sc.cmd = k.substr(1); }
       else if (k == "U") sc.kind = 'U';
       else sc.btn = scriptButtons(k);
       script.push_back(sc);
@@ -234,6 +239,7 @@ Input input() {
   for (auto& sc : script) {
     if (sc.frame == frameCount) {
       cur.down |= sc.btn;
+      if (sc.kind == 'C') pendingCmds.push_back(sc.cmd);
       if (sc.kind == 'T' && sc.tx >= 0) { cur.touchDown = true; cur.touching = true; cur.tx = sc.tx; cur.ty = sc.ty; }
       if (sc.kind == 'P') { cur.touchDown = !prevTouch; scriptHeld = true; }
       if (sc.kind == 'P' || (sc.kind == 'M' && scriptHeld)) {
@@ -244,6 +250,14 @@ Input input() {
     if (sc.frame == frameCount - 1 && sc.kind == 'T' && sc.tx >= 0) { cur.touching = false; cur.touchUp = true; }
   }
   return cur;
+}
+
+bool takeScriptCommand(std::string& out) {
+  input();  // this frame's script items are queued by the reading
+  if (pendingCmds.empty()) return false;
+  out = pendingCmds.front();
+  pendingCmds.erase(pendingCmds.begin());
+  return true;
 }
 
 void consumeButtons(uint32_t mask) {

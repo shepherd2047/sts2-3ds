@@ -1000,12 +1000,35 @@ using PotionFactoryFn = std::unique_ptr<Potion> (*)();
 // ---------------------------------------------------------------- UI plumbing
 
 // Things the renderer should animate; commands push them, the UI drains them.
+// Payload of the later kinds (who / amount / text / card / pile / slot):
+//   OrbChannel, OrbEvoke, OrbPassive: who = player, text = orb id ("LightningOrb"), slot = queue index
+//     (OrbEvoke: the index it left from).
+//   StarsGain / StarsSpend: who = player, amount = stars gained / spent (card star cost or PlayerCmd.LoseStars).
+//   Forge: card = a Sovereign Blade, amount = damage forged, text "Created" (new blade) or "Increased".
+//   Summon: who = Osty, amount = summon amount, text "First" / "Revive" / "Grow"; OstyRevive also follows a revive.
+//   CardGenerated: card, pile = where it landed (Hand / Draw / Discard / Exhaust), text = card id.
+//   CardUpgraded / CardRemoved (deck): card, text = card id. CardEnchanted: card, text = enchantment id,
+//     amount. CardTransformed: card = the new card, text = the old card's id.
+//   IntentChanged: who = monster, text = its new move id (SetMoveImmediate mid-turn).
+//   BlockExpired: who, amount = the block cleared at turn start.
+//   PowerRemoved: who = owner, text = power locKey.
+//   PotionThrown: who = single target (null for AoE / self-less), text = potion id, slot = belt slot.
+//   Unplayable: who = player, card, text = combat_messages key (NOT_ENOUGH_ENERGY / NOT_ENOUGH_STARS /
+//     UNPLAYABLE): the original's thought bubble when a play is refused.
+// `card` is only valid until the event is drained (deck events may point at a card that just left).
 struct VisualEvent {
   enum Kind { Damage, Blocked, Block, Heal, PowerUp, PowerDown, Death, CardExhaust, Shuffle, Banner, Anim,
-              Hit, CardPlayed, BlockBroken, MoveStart } kind;  // Hit/CardPlayed/BlockBroken/MoveStart (text = move id): audio only
+              Hit, CardPlayed, BlockBroken, MoveStart,  // Hit/CardPlayed/BlockBroken/MoveStart (text = move id): audio only
+              OrbChannel, OrbEvoke, OrbPassive, StarsGain, StarsSpend, Forge, Summon, OstyRevive, CardGenerated,
+              CardUpgraded, CardTransformed, CardEnchanted, CardRemoved, IntentChanged, BlockExpired, PowerRemoved,
+              PotionThrown, Unplayable, KindCount } kind;
   Creature* who = nullptr;
   int amount = 0;
   std::string text;
+  Card* card = nullptr;
+  Pile pile = Pile::None;
+  int slot = -1;
+  static const char* name(Kind k);  // "Damage", ... (debug logs; combat.cpp)
 };
 
 struct PlayerAction {
@@ -1151,6 +1174,10 @@ struct Combat {
   // cmd::joinMonster (SurprisePower creates the Fat Gremlin first, adds it last).
   Creature* createEnemy(std::unique_ptr<Monster> m, bool join = true);
   void push(VisualEvent e) { events.push_back(std::move(e)); }
+  // A refused play (UI): pushes VisualEvent::Unplayable with the reason, as NMouseCardPlay's thought
+  // bubble after CanPlay fails. False (nothing pushed) when the card is playable or there is no reason.
+  bool notePlayRejected(Card* c);
+  int orbSlot(const Orb* o) const;  // index in orbQueue, -1 if not queued
   Rng& rng(const char* stream);
 };
 
@@ -1655,6 +1682,10 @@ struct Run {
   // listeners() snapshot, e.g. Lucky Fysh's gainGold suspended in Dragon Fruit's max-HP gain while the
   // deck changes. Freed on the map once no side task is pending (like Combat::graveyard).
   std::vector<std::unique_ptr<Model>> graveyard;
+  // Out-of-combat visuals (deck upgrades / transforms / enchants / removals); pushVisual sends them to the
+  // live combat's queue instead while one is in progress. The UI drains both (App::consumeEvents).
+  std::vector<VisualEvent> events;
+  void pushVisual(VisualEvent e);
   void spawnSide(Task<> t);
   std::string save();
   bool load(const std::string& data);  // on a fresh Run; then spawn main()

@@ -117,6 +117,7 @@ Task<std::vector<Card*>> forge(Combat& c, Dec amount, Model* source) {
   // (a card that hasn't joined a pile yet, e.g. mid-creation, counts as un-exhausted too).
   for (Card* k : c.allCards())
     if (k->id == "SovereignBlade" && !k->isDupe && c.pileOf(k) != Pile::Exhaust) blades.push_back(k);
+  const bool created = blades.empty();
   if (blades.empty()) {
     Card* nb = co_await cmd::addGeneratedCard(c, db::card("SovereignBlade"), Pile::Hand);
     static_cast<SovereignBlade*>(nb)->createdThroughForge = true;
@@ -125,6 +126,7 @@ Task<std::vector<Card*>> forge(Combat& c, Dec amount, Model* source) {
   // IncreaseSovereignBladeDamage: every Sovereign Blade, including exhausted ones.
   for (Card* k : c.allCards())
     if (k->id == "SovereignBlade" && !k->isDupe) static_cast<SovereignBlade*>(k)->addDamage(amount);
+  c.push({VisualEvent::Forge, c.player, amount.toInt(), created ? "Created" : "Increased", blades[0], c.pileOf(blades[0])});
   for (Model* m : c.listeners()) co_await m->afterForge(amount, source);
   co_return blades;
 }

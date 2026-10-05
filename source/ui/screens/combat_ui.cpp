@@ -1020,7 +1020,7 @@ void App::updateCombat(const gfx::Input& in) {
 
   auto play = [&](Card* c, Creature* t, float x, float y, float s) {
     tipPlayAttempt(*cb, c);  // M13
-    if (!cb->canPlay(c)) return false;
+    if (!cb->canPlay(c)) { cb->notePlayRejected(c); return false; }  // VisualEvent::Unplayable (thought bubble)
     if (c->target == TargetType::AnyEnemy && (!t || t->dead())) return false;
     PlayerAction a;
     a.kind = PlayerAction::PlayCard;

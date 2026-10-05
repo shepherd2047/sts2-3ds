@@ -679,6 +679,10 @@ Task<> Run::usePotion(int slot, Creature* target) {
   p->run = this;
   p->combat = inCombat(this) ? combat.get() : nullptr;
   if (p->combat) p->combat->push({VisualEvent::Anim, player.get(), 0, "Cast"});
+  if (p->combat) {  // PotionModel.OnUseWrapper: NItemThrowVfx from the player to the target (or the side's centre)
+    const bool single = p->target == TargetType::AnyEnemy || p->target == TargetType::Self;
+    p->combat->push({VisualEvent::PotionThrown, single ? target : nullptr, (int)p->target, p->id, nullptr, Pile::None, slot});
+  }
   co_await wait(0.2);
   co_await p->onUse(target);
   if (p->combat && player->alive()) p->combat->history.potionUsed(*p->combat, p->id, target);  // History.PotionUsed

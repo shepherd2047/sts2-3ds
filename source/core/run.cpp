@@ -318,10 +318,16 @@ Card* Run::addCardToDeck(std::unique_ptr<Card> c) {
   return added;
 }
 
+void Run::pushVisual(VisualEvent e) {
+  if (combat && combat->inProgress) combat->push(std::move(e));
+  else events.push_back(std::move(e));
+}
+
 void Run::removeCardFromDeck(Card* c) {
   for (Model* m : listeners()) m->beforeCardRemoved(c);  // Hook.BeforeCardRemoved (E2)
   auto it = std::find_if(deck.begin(), deck.end(), [&](const std::unique_ptr<Card>& d) { return d.get() == c; });
   if (it == deck.end()) return;
+  pushVisual({VisualEvent::CardRemoved, player.get(), 0, c->id, c});
   graveyard.push_back(std::move(*it));
   deck.erase(it);
 }
@@ -339,6 +345,7 @@ Card* Run::transformCard(Card* c, std::unique_ptr<Card> into) {
   hoarding = true;
   Card* added = addCardToDeck(std::move(into));
   hoarding = wasHoarding;
+  pushVisual({VisualEvent::CardTransformed, player.get(), 0, original->id, added});
   graveyard.push_back(std::move(original));
   return added;
 }
@@ -1299,6 +1306,7 @@ Task<> Run::restSite() {
       int idx = co_await upgradeChoice.next();
       if (idx >= 0 && idx < (int)upgradeOptions.size()) {
         upgradeOptions[idx]->upgrade();
+        pushVisual({VisualEvent::CardUpgraded, player.get(), upgradeOptions[idx]->upgradeLevel, upgradeOptions[idx]->id, upgradeOptions[idx]});
         co_await wait(0.4);
         done = true;
       }

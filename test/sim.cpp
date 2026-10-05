@@ -354,11 +354,13 @@ int main(int argc, char** argv) {
           for (auto& e : cur->combat->events) {
             static const char* names[] = {"Damage", "Blocked", "Block", "Heal", "PowerUp", "PowerDown", "Death", "Exhaust", "Shuffle", "Banner", "Anim",
                                            "Hit", "CardPlayed", "BlockBroken"};  // = CombatEvent::Kind
-            printf("    [%s] %s %d %s | hp=%d blk=%d\n", names[e.kind], e.who ? e.who->name.c_str() : "-", e.amount, e.text.c_str(),
+            const char* kind = e.kind < (int)(sizeof(names) / sizeof(names[0])) ? names[e.kind] : VisualEvent::name(e.kind);
+            printf("    [%s] %s %d %s | hp=%d blk=%d\n", kind, e.who ? e.who->name.c_str() : "-", e.amount, e.text.c_str(),
                    e.who ? e.who->hp : 0, e.who ? e.who->block : 0);
           }
         cur->combat->events.clear();
       }
+      cur->events.clear();  // out-of-combat visuals (Run::pushVisual)
     }
     bool win = cur->screen == Screen::Victory;
     wins += win;

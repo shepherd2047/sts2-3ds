@@ -1,5 +1,8 @@
 // Split from ui.cpp (F3).
+#include <cstdio>
+
 #include "../core/abandon_hook.h"
+#include "../core/debug_cmds.h"
 #include "../core/events_crystal.h"
 #include "../core/modifiers.h"
 #include "../core/profiles.h"
@@ -354,6 +357,10 @@ void App::update(const gfx::Input& frameIn, double dt) {
     target_ = 0;
     vfxReset();  // F7
   }
+  {  // STS_SCRIPT "frame:C<cmd>" items: runtime debug commands (core/debug_cmds.h)
+    std::string cmd;
+    while (gfx::takeScriptCommand(cmd)) dbg::startCommand(*run_, cmd);
+  }
   consumeEvents();
   updateVfx((float)visualDt);  // F7
   sfx::frame(*run_);
@@ -435,10 +442,22 @@ void App::update(const gfx::Input& frameIn, double dt) {
   }
 }
 
+// STS_EVENT_LOG=1: every drained VisualEvent on stdout (previews; Azahar's log).
+static void logVisualEvent(const char* where, const VisualEvent& e) {
+  static const bool on = getenv("STS_EVENT_LOG") != nullptr;
+  if (!on) return;
+  printf("[event %s] %s who=%s amount=%d text=%s card=%s pile=%d slot=%d\n", where, VisualEvent::name(e.kind),
+         e.who ? e.who->name.c_str() : "-", e.amount, e.text.c_str(), e.card ? e.card->id.c_str() : "-", (int)e.pile, e.slot);
+}
+
 void App::consumeEvents() {
+  // Out-of-combat card visuals (Run::pushVisual): no animation yet, log only.
+  for (auto& e : run_->events) logVisualEvent("run", e);
+  run_->events.clear();
   Combat* c = run_->combat.get();
   if (!c) return;
   for (auto& e : c->events) {
+    logVisualEvent("combat", e);
     sfx::combatEvent(e, *c, *run_);
     vfxEvent(e);  // F7 light combat VFX
     float dx = (float)((int)(floats_.size() * 13) % 21) - 10;
@@ -482,6 +501,14 @@ void App::consumeEvents() {
         toastT_ = 1.4f;
         break;
       }
+      case VisualEvent::Unplayable:  // placeholder for NThoughtBubbleVfx: the reason as a toast
+        toast_ = L("combat_messages." + e.text);
+        for (auto& ch : toast_) if (ch == '\n') ch = ' ';
+        toastT_ = 1.0f;
+        break;
+      // OrbChannel/OrbEvoke/OrbPassive, StarsGain/StarsSpend, Forge, Summon/OstyRevive, CardGenerated,
+      // CardUpgraded/Transformed/Enchanted/Removed, IntentChanged, BlockExpired, PowerRemoved, PotionThrown:
+      // no dedicated animation yet (orb / star / Osty bursts still come from drawVfx's state diffs).
       default:
         break;
     }
