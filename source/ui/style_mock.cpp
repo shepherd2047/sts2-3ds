@@ -196,9 +196,7 @@ void mockEvent(bool top) {
   sceneBg(top, 0.4f);
   if (top) {
     topBar(false);
-    Sprite ev = R().sprite("event/AROMA_OF_CHAOS");
-    if (!ev) ev = R().sprite("event/WELLSPRING");
-    spr(ev, 20, 30, 170, 96);
+    gfx::image(R().texture("gfx/event_AROMA_OF_CHAOS.t3t"), 0, 0, 400, 240, 20, 30, 170, 96);  // event art (own texture)
     frame(20, 30, 170, 96, kPanelEdge);
     R().text(200, 34, "清泉", ts(F16, col::gold, LEFT, 0, 1.25f));
     gfx::rect(200, 58, 180, 1, kPanelHi);

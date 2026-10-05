@@ -21,6 +21,8 @@ namespace ui {
 
 // The act's room / map texture path (frees the previous act's textures on change). ui.cpp.
 std::string actTexture(const sts::Run& r, const char* kind);
+// Frees the event room's full-bleed art (gfx/event_<KEY>.t3t) once the run has left it. screens/event.cpp.
+void releaseEventArt();
 // S21: settings.sav's music / SFX / ambience volumes -> the audio buses. screens/settings.cpp.
 void applyVolumes();
 // The player character's Spine / sprite key. visuals.cpp.
