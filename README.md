@@ -2,6 +2,17 @@
 
 For personal use only: the assets and text are extracted on your own machine from your own legitimate copy of the game. Do not distribute `romfs/`, `icon.png` or a built `.3dsx`.
 
+## Screenshots
+
+Captured from the desktop preview, which stacks the 3DS top screen (400x240) over the bottom screen (320x240).
+
+| | | |
+|:-:|:-:|:-:|
+| ![Title screen](docs/screenshots/title.png) | ![Merchant](docs/screenshots/merchant.png) | ![Act 1 map](docs/screenshots/map.png) |
+| The Spire looms over the title screen | The merchant is open for business | Plotting a route through the Overgrowth |
+| ![Ceremonial Beast boss](docs/screenshots/boss-ceremonial-beast.png) | ![The Silent in combat](docs/screenshots/silent-combat.png) | ![Card reward](docs/screenshots/card-reward.png) |
+| Five cards vs. one very fancy deer | The Silent, sizing up the intents | Victory! Now pick a card |
+
 ## Current progress
 
 - The Ironclad, the three-act map, and the combats and events ported so far; cards, relics, potions, the shop, Ancients and map nodes are all wired in.
