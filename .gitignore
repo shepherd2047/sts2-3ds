@@ -1,6 +1,6 @@
 # Whitelist: only our own code goes into git.
-# Everything derived from the game (romfs/, icon.png, screenshots, .3dsx,
-# ../extracted, ../sts2-decompiled) stays local and is regenerated with
+# Everything derived from the game (romfs/, icon.png, .3dsx, ../extracted,
+# ../sts2-decompiled, screenshots other than the README ones in docs/screenshots/) stays local and is regenerated with
 # tools/build_assets.py from your own copy of the game.
 /*
 !/.gitignore

@@ -2,8 +2,10 @@
 
 Slay the Spire 2 re-implemented in C++20 for the New 3DS, translated from the
 game's decompiled C#. **Personal use only**: never commit or distribute anything
-derived from the game (`romfs/`, `icon.png`, `.3dsx`, screenshots, decompiled
-code). `.gitignore` is a whitelist; keep it that way.
+derived from the game (`romfs/`, `icon.png`, `.3dsx`, decompiled code). The one
+exception: the owner approved a few README screenshots in `docs/screenshots/`;
+other screenshots (test captures, `build/` output) stay local. `.gitignore` is a
+whitelist; keep it that way.
 
 The owner works on this from a Mac and a Windows PC.
 
