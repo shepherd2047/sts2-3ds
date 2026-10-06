@@ -431,6 +431,12 @@ def read_animation(r, sk):
                             deform = [0.0] * max(length, start + end)
                             for v in range(start, start + end):
                                 deform[v] = r.float()
+                            if verts and not verts['weighted']:
+                                # Unweighted keys are offsets from the setup vertices
+                                # (SkeletonBinary.readAttachmentTimelines); weighted ones stay
+                                # offsets that are added per bone influence when posing.
+                                for v in range(min(length, len(deform))):
+                                    deform[v] += verts['v'][v]
                         if f == 0:
                             anim['deform'][(slot, att_name)] = (t, deform)
                         if f == frames - 1:
