@@ -1,53 +1,53 @@
-# 杀戮尖塔 2 · 3DS 最小可玩版本（个人移植）
+# Slay the Spire 2 · 3DS minimal playable build (personal port)
 
-仅供个人使用：素材和文本在本机从你自己的正版游戏包里提取，请勿分发 `romfs/`、`icon.png` 或打包好的 `.3dsx`。
+For personal use only: the assets and text are extracted on your own machine from your own legitimate copy of the game. Do not distribute `romfs/`, `icon.png` or a built `.3dsx`.
 
-## 当前进度
+## Current progress
 
-- 铁甲战士、三幕地图与已移植的战斗和事件；卡牌、遗物、药水、商店、远古者和地图节点均已接入。
-- 战斗规则按反编译的 C# 移植；无界面模拟器可检查流程、随机数和存档读回。
-- 地图选择点自动存档，标题页可继续游戏；电脑预览使用上下双屏布局。
-- 各幕内容仍有未移植选项和近似实现。双屏页面逐项验收、其他角色、设置、音效与真机性能检查尚未完成。具体范围和状态见 [开发计划](docs/PLAN.md)。
+- The Ironclad, the three-act map, and the combats and events ported so far; cards, relics, potions, the shop, Ancients and map nodes are all wired in.
+- Combat rules are ported from the decompiled C#; a headless simulator checks the flow, the RNG and save/load round trips.
+- The game autosaves at each map choice and can be continued from the title screen; the desktop preview shows both screens stacked top and bottom.
+- Each act still has unported options and approximations. Screen-by-screen acceptance of the dual-screen UI, the other characters, settings, sound effects and performance checks on real hardware are not finished yet. See the [development plan](docs/PLAN.md) for the exact scope and status.
 
-## 目录
+## Layout
 
 ```
-source/core/        游戏逻辑（C++20 协程，对应原版 async/await）
-source/ui/          界面、文字排版、卡牌描述格式化
-source/gfx/gfx.h    平台接口
-source/platform_3ds 3DS 后端（citro2d）
-source/platform_sdl 电脑预览后端（SDL2，双屏上下排列，鼠标当触控笔）
-tools/              素材提取：PCK 解包、Spine 骨骼离线渲染、字体和图集生成
-test/sim.cpp        无界面自动对战，用来查崩溃和规则问题
+source/core/        game logic (C++20 coroutines, mirroring the original's async/await)
+source/ui/          screens, text layout, card description formatting
+source/gfx/gfx.h    platform interface
+source/platform_3ds 3DS backend (citro2d)
+source/platform_sdl desktop preview backend (SDL2, the two screens stacked, mouse as stylus)
+tools/              asset extraction: PCK unpacking, offline Spine skeleton rendering, font and atlas generation
+test/sim.cpp        headless automated fights, for catching crashes and rule bugs
 ```
 
-## 构建
+## Building
 
-1. 提取素材（需要 Python 3 + Pillow + numpy；自动在 Mac/Windows/Linux 的 Steam 库里找游戏，也可用 `STS2_DIR` 指定）：
+1. Extract the assets (needs Python 3 + Pillow + numpy; the game is found automatically in your Steam library on Mac/Windows/Linux, or set `STS2_DIR`):
 
    ```bash
    python3 tools/build_assets.py
    ```
 
-2. 电脑预览（需要 SDL2）：
+2. Desktop preview (needs SDL2):
 
    ```bash
    make -f Makefile.sdl && ./build/sts2-preview
    ```
 
-   键位：Z=A　X=B　S=X　A=Y　Q/W=L/R　方向键=十字键　鼠标=触控。
+   Keys: Z=A, X=B, S=X, A=Y, Q/W=L/R, arrow keys=D-pad, mouse=touch.
 
-3. 3DS（需要 devkitPro 的 `3ds-dev`）：
+3. 3DS (needs devkitPro's `3ds-dev`):
 
    ```bash
    make
    ```
 
-   把 `sts2-3ds.3dsx` 复制到 SD 卡的 `/3ds/`，用 Homebrew Launcher 启动。素材在 romfs 里，已打包进 `.3dsx`。
+   Copy `sts2-3ds.3dsx` to `/3ds/` on the SD card and start it from the Homebrew Launcher. The assets live in romfs and are packed into the `.3dsx`.
 
-## 3DS 操作
+## 3DS controls
 
-- 触摸：点手牌放大查看；按住往上拖过手牌区出牌（自动锁定最近的敌人，左右滑换目标），拖回手牌区或按 B 取消
-- ←→ 选牌 / 选目标，A 确认，B 取消，L/R 切换手牌，X 结束回合，Y 查看牌组
-- START 暂停菜单（继续、地图、牌组、设置、放弃、保存并退出）
-- START + SELECT 退出
+- Touch: tap a card in your hand to enlarge it; hold and drag it up past the hand area to play it (the nearest enemy is locked on automatically, swipe left/right to switch targets); drag it back into the hand or press B to cancel
+- ←→ select a card / target, A confirm, B cancel, L/R cycle through the hand, X end turn, Y view your deck
+- START pause menu (Continue, Map, Deck, Settings, Abandon, Save & Quit)
+- START + SELECT quit
