@@ -1,4 +1,4 @@
-# Slay the Spire 2 · 3DS minimal playable build (personal port)
+# Slay the Spire 2 · 3DS (personal port)
 
 For personal use only: the assets and text are extracted on your own machine from your own legitimate copy of the game. Do not distribute `romfs/`, `icon.png` or a built `.3dsx`.
 
